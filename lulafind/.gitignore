@@ -1,0 +1,18 @@
+node_modules/
+www/
+dist/
+out-tsc/
+.angular/
+.DS_Store
+# Native projects are in the repo. Ignore only build output.
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/capacitor-cordova-android-plugins/build/
+ios/DerivedData/
+ios/App/Pods/
+**/xcuserdata/
+*.xcuserstate
+*.keystore
+!.gitkeep
