@@ -106,7 +106,7 @@ describe('Components render', () => {
     expect(html).toContain('Comment');
   });
 
-  it('renders Snapchat style welcome and login screens', async () => {
+  it('renders the LulaFind welcome and login screens', async () => {
     const f = TestBed.createComponent(AuthComponent);
     f.detectChanges();
     await f.whenStable();
@@ -123,13 +123,13 @@ describe('Components render', () => {
     await f.whenStable();
     const loginHtml: string = (f.nativeElement as HTMLElement).innerHTML;
 
-    expect(loginHtml).toContain('USERNAME OR EMAIL');
+    expect(loginHtml).toContain('EMAIL ADDRESS');
     expect(loginHtml).toContain('PASSWORD');
     expect(loginHtml).toContain('Log in');
     expect(loginHtml).toContain('Forgot your password?');
   });
 
-  it('shows the 5-step Snapchat signup flow', async () => {
+  it('shows the five-step LulaFind signup flow', async () => {
     const f = TestBed.createComponent(AuthComponent);
     f.detectChanges();
     await f.whenStable();
@@ -197,7 +197,8 @@ describe('Components render', () => {
     f.detectChanges();
     await f.whenStable();
     const html: string = (f.nativeElement as HTMLElement).innerHTML;
-    expect(html).toContain('Category');
+    expect(html).toContain('What are you posting?');
+    expect(html).toContain('Missing person');
     expect(f.componentInstance.mySpotlights().map((s: any) => s.surname)).toEqual(['Mokoena']);
   });
 
@@ -224,6 +225,7 @@ describe('Components render', () => {
     expect(html).toContain('Who can see this story?');
     expect(html).toContain('Everyone');
     expect(html).toContain('My followers');
+    expect(html).toContain('People who follow you can view');
     expect(html).toContain('My Spotlight');
   });
 
@@ -537,6 +539,75 @@ describe('Email and Google sign-in', () => {
       .rejects.toThrow(/18 or older/i);
     await expect(auth.signUp(payload({ email: 'terms@example.co.za', acceptedTerms: false })))
       .rejects.toThrow(/Accept the terms/i);
+  });
+
+  it('completes the offline password-recovery and new-password form journey', async () => {
+    const auth = TestBed.inject(AuthService);
+    await auth.signUp(payload());
+    await auth.signOut();
+    expect(await auth.sendPasswordReset('nomvula@example.co.za')).toBe('preview');
+
+    const fixture = TestBed.createComponent(AuthComponent);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(fixture.componentInstance.mode()).toBe('newpass');
+
+    fixture.componentInstance.f.newPassword = 'new-password-123';
+    fixture.componentInstance.f.confirmPassword = 'does-not-match';
+    await fixture.componentInstance.saveNewPassword();
+    expect(fixture.componentInstance.error()).toContain('do not match');
+
+    fixture.componentInstance.f.confirmPassword = 'new-password-123';
+    await fixture.componentInstance.saveNewPassword();
+    expect(auth.passwordRecovery()).toBe(false);
+    expect(auth.viewerId).not.toBe(null);
+
+    await auth.signOut();
+    const signedIn = await auth.signIn('nomvula@example.co.za', 'new-password-123');
+    expect(signedIn.email).toBe('nomvula@example.co.za');
+  });
+
+  it('uses the Supabase Google redirect and restores the account from its OAuth callback', async () => {
+    let callback: ((event: string, session: any) => void) | undefined;
+    let oauthOptions: any;
+    const authClient = {
+      onAuthStateChange: (fn: (event: string, session: any) => void) => {
+        callback = fn;
+        return { data: { subscription: { unsubscribe: () => undefined } } };
+      },
+      getSession: async () => ({ data: { session: null }, error: null }),
+      signInWithOAuth: async (options: any) => {
+        oauthOptions = options;
+        return { data: { provider: 'google', url: 'https://accounts.google.com/' }, error: null };
+      }
+    };
+    const api = TestBed.inject(LULA_API) as MockApi & { client?: { auth: typeof authClient } };
+    api.client = { auth: authClient };
+    const auth = TestBed.inject(AuthService);
+    auth.attachApi(api);
+
+    await expect(auth.signInWithProvider('google')).rejects.toThrow('OAUTH_REDIRECT');
+    expect(oauthOptions.provider).toBe('google');
+    expect(oauthOptions.options.redirectTo).toBe(`${window.location.origin}/auth`);
+
+    const demo = (await api.user('u_demo'))!;
+    callback?.('SIGNED_IN', { user: { id: demo.id, email: demo.email, user_metadata: {} } });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(auth.user()?.id).toBe('u_demo');
+
+    callback?.('SIGNED_IN', {
+      user: {
+        id: '00000000-0000-4000-8000-000000000199',
+        email: 'oauth.new@example.com',
+        user_metadata: { full_name: 'New OAuth Member' },
+        app_metadata: { provider: 'google' }
+      }
+    });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(auth.user()).toBe(null);
+    expect(auth.pendingProvider()).toMatchObject({
+      provider: 'google', email: 'oauth.new@example.com', displayName: 'New OAuth Member'
+    });
   });
 
   it('Google: a brand new email is handed to the sign-up form, not auto-created', async () => {

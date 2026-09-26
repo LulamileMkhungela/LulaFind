@@ -103,8 +103,8 @@ The app runs on its own without touching these. Saving a new account, post, foll
 
 1. Go to **https://supabase.com/dashboard** → your project → **Authentication → Providers → Email**.
    - ✅ **Enable email provider**: ON
-   - ❌ **Confirm email**: OFF (Firebase sends the verification email instead)
-   - Leave everything else as-is. Click **Save** if the button is active.
+   - ✅ **Confirm email**: ON. New accounts finish setup from the confirmation link, which returns to `/auth`.
+   - Configure the SMTP/email sender for the project so confirmation and password-recovery messages are delivered.
 
 2. Go to **Authentication → URL Configuration → Redirect URLs**. Add each of these lines:
 
@@ -116,11 +116,12 @@ The app runs on its own without touching these. Saving a new account, post, foll
    capacitor://localhost/auth
    https://lulafind.co.za/auth
    https://lulafind.co.za/**
+   https://**.e2b.app/**
    ```
 
-   Google sign-in redirects back to the URL the app was opened from. If that URL is not in this list, Google returns an error.
+   Add the exact Arena preview origin as well if your Supabase project rejects wildcard preview URLs. In **Authentication → Providers → Google**, enable Google and add the Supabase callback URL shown on that page to the Google OAuth client's authorised redirect URIs. Google opens its own account-consent screen, then returns to LulaFind at `/auth`; it does not send the user to Gmail.
 
-3. The `records` table SQL has already been run. Do **not** run `editor.sql`, `wire-fix.sql`, or `fix-rls.sql` a second time.
+3. The base `records` table SQL has already been run. Do not rerun the old `editor.sql` or the historical `wire-fix.sql`; their broad update/read policies have been removed from the current scripts. Run `supabase/story-privacy.sql` on the existing project to migrate embedded story replies/viewers, scrub those projections from story rows, and replace the known RLS policies. It is safe to re-run if the SQL editor reports an interrupted migration.
 
 The publishable (anon) key is already in `src/environments/environment.ts`. Do not put the service-role secret, the database password, or any Firebase Admin key in the app source.
 

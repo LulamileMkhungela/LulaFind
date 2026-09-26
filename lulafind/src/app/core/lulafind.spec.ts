@@ -12,7 +12,7 @@ import { EscalationService } from './services/escalation.service';
 import { LocationService } from './services/location.service';
 import { ModerationService } from './services/moderation.service';
 import { SafetyService } from './services/safety.service';
-import { emptyFilter, Post } from './models/types';
+import { defaultPrivacy, emptyFilter, Post } from './models/types';
 import { timeAgo, compact, urgency, parseFullName, contributorLabel } from './utils/format';
 import { searchFocus } from './utils/search-focus';
 import { publicPoster } from './utils/poster';
@@ -802,12 +802,59 @@ describe('Posting rules', () => {
     await expect(data.updatePost(post.id, { title: 'Hijacked title here' })).rejects.toThrow(/Only the person/i);
   });
 
-  it('hides a followers-only story from people who do not follow', async () => {
+  it('allows up to three story photos and rejects a fourth', async () => {
+    const data = svc<DataService>(DataService);
+    await svc<AuthService>(AuthService).signInDemo();
+    const photos = [1, 2, 3].map((n) => ({
+      id: `story-photo-${n}`, kind: 'image' as const, src: `data:image/jpeg;base64,photo${n}`
+    }));
+    const story = await data.createStory({ text: 'Three photos are allowed', media: photos, bgHue: 220 });
+    expect(story.media).toHaveLength(3);
+    await expect(data.createStory({
+      text: 'Four photos are not allowed', media: [...photos, { ...photos[0], id: 'story-photo-4' }], bgHue: 220
+    })).rejects.toThrow(/up to three photos/i);
+  });
+
+  it('keeps story replies and the viewer list private to the author', async () => {
+    const data = svc<DataService>(DataService);
+    await svc<AuthService>(AuthService).signInDemo();
+    const story = await data.createStory({ text: 'Private story insights', media: [], bgHue: 10, audience: 'public' });
+
+    signInAs('u_johan');
+    await data.loadUserScoped();
+    await data.loadStatic();
+    await data.replyToStory(story.id, 'I saw this and sent a private reply.');
+    await data.markStorySeen(story.id);
+    let projected = data.stories().find((item) => item.id === story.id)!;
+    expect(projected.replies).toEqual([]);
+    expect(projected.viewers).toEqual(['u_johan']);
+
+    signInAs('u_pieter');
+    await data.loadUserScoped();
+    await data.loadStatic();
+    projected = data.stories().find((item) => item.id === story.id)!;
+    expect(projected.replies).toEqual([]);
+    expect(projected.viewers).toEqual([]);
+
+    signInAs('u_demo');
+    await data.loadUserScoped();
+    await data.loadStatic();
+    projected = data.stories().find((item) => item.id === story.id)!;
+    expect(projected.replies.map((reply) => reply.body)).toEqual(['I saw this and sent a private reply.']);
+    expect(projected.viewers).toContain('u_johan');
+  });
+
+  it('shows a followers-only story to the author’s followers, but not to non-followers', async () => {
     const data = svc<DataService>(DataService);
     await svc<AuthService>(AuthService).signInDemo();
     await data.createStory({ text: 'For my followers only', media: [], bgHue: 10, audience: 'followers' });
+
+    signInAs('u_lerato'); // accepted edge: u_lerato -> u_demo
+    await data.loadStatic();
+    await data.loadUserScoped();
     expect(data.visibleStories().some((s) => s.text === 'For my followers only')).toBe(true);
-    signInAs('u_pieter'); // does not follow the demo account
+
+    signInAs('u_johan'); // no follow edge to u_demo
     await data.loadStatic();
     await data.loadUserScoped();
     expect(data.visibleStories().some((s) => s.text === 'For my followers only')).toBe(false);
@@ -939,6 +986,10 @@ describe('I am looking', () => {
 
 describe('Safety check-ins', () => {
   beforeEach(bed);
+
+  it('keeps profile location private until the person opts in', () => {
+    expect(defaultPrivacy().showLocation).toBe(false);
+  });
 
   it('seeds a green, orange and red check-in a visitor can see', () => {
     const data = svc<DataService>(DataService);

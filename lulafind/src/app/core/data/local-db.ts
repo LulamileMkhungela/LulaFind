@@ -525,6 +525,9 @@ export class LocalDb {
   isFollowing(a: string, b: string): boolean {
     return this.db.follows.some((e) => e.followerId === a && e.followingId === b && e.status === 'accepted');
   }
+  followStatus(a: string, b: string): FollowEdge['status'] | null {
+    return this.db.follows.find((e) => e.followerId === a && e.followingId === b)?.status ?? null;
+  }
   setFollowStatus(a: string, b: string, status: FollowEdge['status']): void {
     const e = this.db.follows.find((x) => x.followerId === a && x.followingId === b);
     if (e) { e.status = status; this.persist(); }

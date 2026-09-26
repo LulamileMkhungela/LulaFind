@@ -352,7 +352,7 @@ export class MeComponent {
   form = {
     displayName: '', handle: '', surname: '', town: '',
     province: 'GP' as ProvinceCode, bio: '', findableProfile: true, safetyBeacon: false,
-    showLocation: true, showStats: true, showSpotlights: true, allowMessages: true,
+    showLocation: false, showStats: true, showSpotlights: true, allowMessages: true,
     notifyFollowersOnExpiry: true, requireFollowApproval: false
   };
 

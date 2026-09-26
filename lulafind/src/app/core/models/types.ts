@@ -105,7 +105,7 @@ export interface PrivacyPrefs {
 }
 
 export const defaultPrivacy = (): PrivacyPrefs => ({
-  showLocation: true,
+  showLocation: false,
   showStats: true,
   showSpotlights: true,
   allowMessages: true,
@@ -271,6 +271,13 @@ export interface VerificationEvent {
   note?: string;
 }
 
+export interface VehicleDetails {
+  makeModel: string;
+  registration: string;
+  colour: string;
+  bodyType: string;
+}
+
 export interface Post {
   id: string;
   type: PostType;
@@ -317,6 +324,8 @@ export interface Post {
     surname: string;
     relationship: string;
   } | null;
+  /** Vehicle-specific fields. Older records may still use subject.vehicle. */
+  vehicleDetails?: VehicleDetails | null;
 
   /* ---- reach ---- */
   audience: Audience;
@@ -437,6 +446,21 @@ export interface Spotlight {
   about: string;
 }
 
+export interface StoryReply {
+  id: string;
+  storyId: string;
+  authorId: string;
+  body: string;
+  at: number;
+}
+
+export interface StoryView {
+  id: string;
+  storyId: string;
+  viewerId: string;
+  at: number;
+}
+
 export interface Story {
   id: string;
   authorId: string;
@@ -445,8 +469,10 @@ export interface Story {
   media: MediaItem[];
   text: string;
   bgHue: number;
+  /** Projection only: visible to the author, or just the current viewer's own view. */
   viewers: string[];
-  replies: { id: string; authorId: string; body: string; at: number }[];
+  /** Projection only: reply bodies are visible to the story author alone. */
+  replies: StoryReply[];
   /** who may see this story */
   audience: Audience;
   /** required when audience is 'surname' */
@@ -497,7 +523,7 @@ export interface Notification {
   kind:
     | 'vote' | 'comment' | 'follow' | 'chat' | 'system'
     | 'escalation' | 'location_consent' | 'claim' | 'outcome' | 'spotlight'
-    | 'checkin' | 'moderation' | 'danger';
+    | 'checkin' | 'moderation' | 'danger' | 'story_reply';
   title: string;
   body: string;
   at: number;
