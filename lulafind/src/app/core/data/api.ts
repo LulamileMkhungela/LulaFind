@@ -32,12 +32,14 @@ export abstract class LulaApi {
   /* comments */
   abstract commentsFor(postId: string): Promise<Comment[]>;
   abstract saveComment(c: Comment): Promise<void>;
-  abstract deleteComment(id: string): Promise<void>;
+  /** postId is required when using FirebaseApi (nested subcollection). Always pass it. */
+  abstract deleteComment(id: string, postId?: string): Promise<void>;
 
   /* spotlights */
   abstract spotlights(): Promise<Spotlight[]>;
   abstract spotlight(id: string): Promise<Spotlight | undefined>;
   abstract saveSpotlight(s: Spotlight): Promise<void>;
+  abstract deleteSpotlight(id: string): Promise<void>;
 
   /* stories */
   abstract stories(): Promise<Story[]>;
@@ -77,7 +79,7 @@ export const LULA_API = new InjectionToken<LulaApi>('LULA_API');
 
 /** Thin adapter so the mock engine satisfies the async contract. */
 export class MockApi implements LulaApi {
-  constructor(public readonly db: LocalDb) {}
+  constructor(public readonly db: LocalDb) { }
   private readonly rx = new Subject<number>();
 
   async init(): Promise<void> {
@@ -100,11 +102,12 @@ export class MockApi implements LulaApi {
 
   async commentsFor(postId: string) { return this.db.commentsFor(postId); }
   async saveComment(c: Comment) { this.db.upsertComment(c); }
-  async deleteComment(id: string) { this.db.deleteComment(id); }
+  async deleteComment(id: string, _postId?: string) { this.db.deleteComment(id); }
 
   async spotlights() { return this.db.spotlights(); }
   async spotlight(id: string) { return this.db.spotlight(id); }
   async saveSpotlight(s: Spotlight) { this.db.upsertSpotlight(s); }
+  async deleteSpotlight(id: string) { this.db.deleteSpotlight(id); }
 
   async stories() { return this.db.stories(); }
   async saveStory(s: Story) { this.db.upsertStory(s); }

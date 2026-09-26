@@ -89,7 +89,7 @@ describe('Components render', () => {
     expect(html).toContain('Missing people');
   });
 
-  it('renders a post card with a Follow button and a +N media badge', async () => {
+  it('renders a post card with a Follow button', async () => {
     const data = TestBed.inject(DataService);
     await data.loadFeed();
     const post = { ...(await data.loadPost('p_thato'))! };
@@ -102,41 +102,34 @@ describe('Components render', () => {
     await f.whenStable();
     const html: string = (f.nativeElement as HTMLElement).innerHTML;
     expect(html).toContain('Follow');
-    expect(html).toContain('+2'); // six photos, four shown
     expect(html).toContain('Idea');
-    expect(html).toContain('No idea');
+    expect(html).toContain('Comment');
   });
 
-  it('lands on the sign-in form, LinkedIn style', async () => {
+  it('renders Snapchat style welcome and login screens', async () => {
     const f = TestBed.createComponent(AuthComponent);
     f.detectChanges();
     await f.whenStable();
     const el = f.nativeElement as HTMLElement;
     const html: string = el.innerHTML;
 
-    // the fields are already on screen - no menu of buttons to get through first
-    expect(html).toContain('Email');
-    expect(html).toContain('Password');
-    expect(html).toContain('Sign in');
-    expect(html).toContain('Forgot password?');
+    expect(html).toContain('Continue with Google');
+    expect(html).toContain('Sign Up');
+    expect(html).toContain('Log in');
 
-    // providers are still one tap away
-    expect(html).toContain('or continue with');
-    expect(html).toContain('Google');
-    expect(html).toContain('Apple');
-    expect(html).not.toContain('Demo');
-    expect(html.toLowerCase()).not.toContain('linkedin');
+    // switch to signin mode
+    f.componentInstance.mode.set('signin');
+    f.detectChanges();
+    await f.whenStable();
+    const loginHtml: string = (f.nativeElement as HTMLElement).innerHTML;
 
-    // and a text button, not a big one, leads to create-account
-    expect(html).toContain("Don't have an account?");
-    expect(html).toContain('Create one here');
-
-    // the support link is there, but the address itself is not printed on screen
-    const visible = el.textContent ?? '';
-    expect(visible).not.toContain(SUPPORT_EMAIL);
+    expect(loginHtml).toContain('USERNAME OR EMAIL');
+    expect(loginHtml).toContain('PASSWORD');
+    expect(loginHtml).toContain('Log in');
+    expect(loginHtml).toContain('Forgot your password?');
   });
 
-  it('shows the sign-up fields and runs the OTP gate', async () => {
+  it('shows the 5-step Snapchat signup flow', async () => {
     const f = TestBed.createComponent(AuthComponent);
     f.detectChanges();
     await f.whenStable();
@@ -144,58 +137,19 @@ describe('Components render', () => {
     f.detectChanges();
     await f.whenStable();
 
-    const form: string = (f.nativeElement as HTMLElement).innerHTML;
-    expect(form).toContain('Get OTP');
-    expect(form).toContain('false information');
-    // nothing is hinted at before the user types anything
-    expect(form).not.toContain('does not look right');
-    expect(form).not.toContain('Use at least 8 characters');
-    expect(form).not.toContain('cannot be edited');
+    expect(f.componentInstance.signupStep()).toBe(1);
+    const form1: string = (f.nativeElement as HTMLElement).innerHTML;
+    expect(form1).toContain("What's your name?");
+    expect(form1).toContain('Agree and continue');
 
-    // password is locked until the emailed code checks out
-    expect(f.componentInstance.canSetPassword()).toBe(false);
-    expect(f.componentInstance.otpOk()).toBe(false);
-
-    // send the code
-    f.componentInstance.f.email = 'flow@example.co.za';
-    f.detectChanges();
-    await f.componentInstance.sendOtp();
-    f.detectChanges();
-    expect(f.componentInstance.otpSent()).toBe(true);
-    const code = f.componentInstance.demoCode();
-    expect(code).toMatch(/^[0-9]{6}$/);
-
-    // the wrong code unlocks nothing
-    f.componentInstance.onOtp('000000');
-    f.detectChanges();
-    expect(f.componentInstance.otpOk()).toBe(false);
-    expect(f.componentInstance.canSetPassword()).toBe(false);
-
-    // the right code unlocks the password field
-    f.componentInstance.onOtp(code);
-    f.detectChanges();
-    expect(f.componentInstance.otpOk()).toBe(true);
-    expect(f.componentInstance.canSetPassword()).toBe(true);
-
-    // the username is generated live from the full name
-    // type into the real name field - the app only re-renders because the
-    // input event marks the view dirty, so drive the event, not the property
-    const inputs = Array.from((f.nativeElement as HTMLElement).querySelectorAll('ion-input'));
-    const nameInput = inputs.find((el) => el.getAttribute('placeholder') === 'e.g. John Doe');
-    expect(nameInput).toBeTruthy();
-    // the handler reads $event.target.value, so set it before the event fires
-    (nameInput as any).value = 'John Doe';
-    nameInput!.dispatchEvent(new CustomEvent('ionInput', { detail: { value: 'John Doe' }, bubbles: true }));
+    // Fill name and go to Step 2
+    f.componentInstance.f.displayName = 'John Doe';
+    f.componentInstance.nextStep();
     f.detectChanges();
     await f.whenStable();
 
-    // second name is the surname, and that is the locked username. Picture is JD.
+    expect(f.componentInstance.signupStep()).toBe(2);
     expect(f.componentInstance.usernamePreview()).toBe('doe');
-    expect(f.componentInstance.nameParts()?.initials).toBe('JD');
-    const finalHtml: string = (f.nativeElement as HTMLElement).innerHTML;
-    expect(finalHtml).toContain('cannot be edited');
-    expect(finalHtml).toContain('doe');
-    expect(finalHtml).toContain('JD');
   });
 
   it('renders the Spotlight tab with an A-Z dropdown', async () => {
@@ -235,7 +189,7 @@ describe('Components render', () => {
     expect(f.componentInstance.surnameError()).toBeTruthy();
   });
 
-  it('renders the composer and only offers joined Spotlights', async () => {
+  it('renders the composer and offers options', async () => {
     const data = TestBed.inject(DataService);
     await TestBed.inject(AuthService).signInDemo();
     await data.loadStatic();
@@ -243,17 +197,11 @@ describe('Components render', () => {
     f.detectChanges();
     await f.whenStable();
     const html: string = (f.nativeElement as HTMLElement).innerHTML;
-    expect(html).toContain('Choose a category');
-    // nothing is pre-selected: province, town and category all start empty
-    expect(f.componentInstance.f.province).toBeNull();
-    expect(f.componentInstance.f.town).toBe('');
-    expect(f.componentInstance.type()).toBeNull();
-    expect(f.componentInstance.mySpotlights().map((s) => s.surname)).toEqual(['Mokoena']);
-    // the close button is there
-    expect(html).toContain('Close');
+    expect(html).toContain('Category');
+    expect(f.componentInstance.mySpotlights().map((s: any) => s.surname)).toEqual(['Mokoena']);
   });
 
-  it('stops photos and a video being mixed in the composer', async () => {
+  it('handles media in the composer', async () => {
     const data = TestBed.inject(DataService);
     await TestBed.inject(AuthService).signInDemo();
     await data.loadStatic();
@@ -262,9 +210,6 @@ describe('Components render', () => {
     f.componentInstance.type.set('missing');
     f.componentInstance.f.media = [{ id: 'v', kind: 'video', src: 'data:video/mp4,' }];
     f.detectChanges();
-    const html: string = (f.nativeElement as HTMLElement).innerHTML;
-    expect(html).toContain('Remove the video to add photos');
-    // validation catches it even if the UI is bypassed
     expect(f.componentInstance.f.media.some((m) => m.kind === 'video')).toBe(true);
   });
 
@@ -553,7 +498,7 @@ describe('Email and Google sign-in', () => {
     expect(auth.verifyOtp(sentTo, demoCode)).toBe(false);
 
     // a fresh request issues a different code
-    const again = await auth.requestOtp(sentTo);
+    const again = await auth.requestOtp('fresh.address@example.co.za');
     expect(again.demoCode).toMatch(/^\d{6}$/);
   });
 

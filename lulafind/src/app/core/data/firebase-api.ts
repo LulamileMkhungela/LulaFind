@@ -34,7 +34,7 @@ export class FirebaseApi implements LulaApi {
   private rx = new Subject<number>();
   private rev = 0;
 
-  constructor(private config: Record<string, string>) {}
+  constructor(private config: Record<string, string>) { }
 
   private tick(): void {
     this.rev++;
@@ -152,12 +152,20 @@ export class FirebaseApi implements LulaApi {
     return list.sort((a, b) => b.upvotes - a.upvotes);
   }
   async saveComment(c: Comment) { await this.set(`posts/${c.postId}/comments/${c.id}`, c as unknown as Record<string, unknown>); }
-  async deleteComment(id: string) { await this.remove(`comments/${id}`); }
+  async deleteComment(id: string, postId?: string) {
+    if (postId) {
+      await this.remove(`posts/${postId}/comments/${id}`);
+    } else {
+      // Fallback: postId unknown — skip (avoids wrong-path deletion)
+      console.warn('FirebaseApi.deleteComment called without postId; deletion skipped.');
+    }
+  }
 
   /* spotlights */
   async spotlights() { return this.getList<Spotlight>(this.col('spotlights')); }
   async spotlight(id: string) { return this.getOne<Spotlight>(`spotlights/${id}`); }
   async saveSpotlight(s: Spotlight) { await this.set(`spotlights/${s.id}`, s as unknown as Record<string, unknown>); }
+  async deleteSpotlight(id: string) { await this.remove(`spotlights/${id}`); }
 
   /* stories */
   async stories() {

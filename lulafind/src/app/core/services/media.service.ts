@@ -14,9 +14,12 @@ import { PlatformService } from './platform.service';
 export class MediaService {
   private platform = inject(PlatformService);
   readonly busy = signal(false);
+  /** Last non-cancel error from pickImage / pickVideo, or null. */
+  readonly lastError = signal<string | null>(null);
 
   async pickImage(opts: { source?: 'camera' | 'gallery'; quality?: number } = {}): Promise<MediaItem | null> {
     this.busy.set(true);
+    this.lastError.set(null);
     try {
       if (this.platform.isNative) {
         const photo = await Camera.getPhoto({
@@ -33,6 +36,7 @@ export class MediaService {
       return await this.pickViaInput();
     } catch (e: any) {
       if (String(e?.message ?? '').toLowerCase().includes('cancel')) return null;
+      this.lastError.set(e?.message ?? 'Could not pick image');
       return null;
     } finally {
       this.busy.set(false);
@@ -41,10 +45,14 @@ export class MediaService {
 
   async pickVideo(): Promise<MediaItem | null> {
     this.busy.set(true);
+    this.lastError.set(null);
     try {
       const item = await this.pickViaInput('video/*');
       return item;
-    } catch {
+    } catch (e: any) {
+      if (!String(e?.message ?? '').toLowerCase().includes('cancel')) {
+        this.lastError.set(e?.message ?? 'Could not pick video');
+      }
       return null;
     } finally {
       this.busy.set(false);

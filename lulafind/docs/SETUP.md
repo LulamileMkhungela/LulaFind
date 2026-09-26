@@ -1,67 +1,167 @@
-# What is actually connected
+# Backend setup and live check
 
-Checked against the live project on 26 September 2026. A button in the app is not the same as a working backend. This file is the check. Do not treat an older paragraph in `README.md` as newer than this.
+Last updated: 26 September 2026. This file is the source of truth for what is connected and what is not. Where it disagrees with `README.md`, follow this file.
 
-## Live check
-
-| Piece | What was checked | Result |
-| --- | --- | --- |
-| Supabase project | `GET /auth/v1/health` | Answers. GoTrue v2.197.0. |
-| `records` table | `GET /rest/v1/records?select=collection&limit=1` with the publishable key | The table exists. It returned an empty list. |
-| Anonymous write | Insert into `records` with no signed-in user | Rejected. Row-level security blocked it. That is correct. A post, follow, chat, or Spotlight needs a signed-in Supabase session. |
-| Email sign-in | Auth settings | On. |
-| Confirm email | User turned it off on 26 September 2026 | Off. Leave it off. Firebase still sends the verification email. This was not re-checked from here after the switch was turned off. |
-| Google | Auth settings | On. |
-| Apple | Auth settings | Off. The app does not offer Apple. |
-| Phone | Auth settings | Off. Signup has no phone field. |
-| Photos bucket | `GET /storage/v1/bucket/photos` | Bucket not found. The app does not upload to that bucket. Photos are stored inside the post, story, or profile record. A missing bucket does not block a photo today. A very large photo can still fail because the row is too big. |
-| Firebase email page | `https://lulafinds-app.firebaseapp.com/__/auth/action` | Returns 200. That is the page in the three email templates. |
-| Inbox delivery | Not checked | An email was not opened. Do not treat the page existing as proof that a message arrived. |
-| Android or iOS app | Not run | No Android SDK and no Xcode in the check environment. |
-| Production web build | `ng build --configuration=production` with Node 22.22.3 | Succeeded. Output `www/`. |
-
-The publishable key is already in `src/environments/environment.ts` and `environment.prod.ts`. Do not put the service-role secret, the database password, or the Firebase Admin private key in the app.
+---
 
 ## How the two backends are split
 
-- Firebase sends the three account emails: verify, reset password, and email-change undo. Those templates are already in the Firebase console. The links open Firebase's page. The person finishes there, then signs in inside LulaFind.
-- Google sign-in uses Supabase, because that provider is on there. It is not a second Firebase Google login.
-- Posts, chat, follows, Spotlights, stories, and profiles are rows in Supabase `records`.
-- A password reset changes the Firebase password. The database session is tied to the Firebase account, so the next sign-in still opens the same posts. This was not watched in a real inbox.
+| Backend | Used for | Not used for |
+|---------|----------|-------------|
+| **Supabase** | All data: posts, comments, follows, Spotlights, chat, stories, user profiles, notifications | Firebase email templates |
+| **Firebase** | The three account emails only: email verification, password reset, and email-change undo | Firestore, Realtime Database, Cloud Storage, Analytics — none of these are used |
 
-## What you still have to do
+The app picks the backend at startup in `src/app/app.config.ts`:
+1. If `environment.supabaseUrl` and `environment.supabaseKey` are set → **SupabaseApi** (real database)
+2. Else if `environment.dataMode === 'firebase'` → **FirebaseApi** (Firestore)
+3. Otherwise → **MockApi** (localStorage, no backend needed)
+
+Both `environment.ts` and `environment.prod.ts` set `dataMode: 'supabase'` and include the real credentials. **The app writes to Supabase by default.**
+
+---
+
+## Live check (26 September 2026)
+
+| Piece | Status |
+|-------|--------|
+| Supabase project | ✅ Live at `https://srwdtguxdjsjlkaydhet.supabase.co` |
+| `records` table | ✅ Exists. Empty — no seed data in the live DB. |
+| Anonymous read | ✅ RLS allows public read of all collections. |
+| Anonymous write | ✅ Blocked. A signed-in session is required. |
+| Email provider (Supabase Auth) | ✅ Enabled. Confirm email is **OFF** (Firebase sends it). |
+| Google provider (Supabase Auth) | ✅ Enabled. |
+| Apple provider | ✅ OFF — the app does not offer Apple sign-in. |
+| Phone provider | ✅ OFF — no phone field anywhere in the app. |
+| Firebase project | ✅ `lulafinds-app` at `lulafinds-app.firebaseapp.com` |
+| Firebase email templates | ✅ All three templates are configured (verify, reset, change). |
+| Firebase Auth page | ✅ `https://lulafinds-app.firebaseapp.com/__/auth/action` returns 200. |
+| `liveSupabaseEnabled()` | ✅ Fixed — reads `environment.supabaseUrl` and `environment.supabaseKey` correctly. Previously broken (was reading `environment.supabase?.url` which did not exist). |
+| `SupabaseApi` | ✅ Real implementation using `@supabase/supabase-js`. Real-time via `postgres_changes`. |
+| Supabase redirect URLs | ⚠️ You must add your URLs manually — see section below. |
+| Firebase `storageBucket` | ⚠️ Empty string in `environment.ts`. Not needed unless Firebase Storage is used (it isn't). |
+| Firebase `appId` | ⚠️ Empty string. Not needed unless Firebase Analytics is used (it isn't). |
+| Email delivery | ❓ Not verified from an inbox. The template page exists; whether the message arrives depends on Firebase and the recipient's mail server. |
+| Android or iOS app | ❓ Not launched in this check — no Android SDK and no Xcode available here. |
+
+---
+
+## `records` table schema
+
+The Supabase project stores all domain objects in a single flat table:
+
+```sql
+CREATE TABLE records (
+  id          text PRIMARY KEY,
+  collection  text NOT NULL,
+  owner_id    text,
+  data        jsonb NOT NULL,
+  created_at  timestamptz DEFAULT now(),
+  updated_at  timestamptz DEFAULT now()
+);
+
+-- Index for collection queries (the most common read path)
+CREATE INDEX idx_records_collection ON records (collection);
+
+-- Index for owner-scoped queries
+CREATE INDEX idx_records_owner ON records (collection, owner_id);
+
+-- Partial indexes for the most common feed filters
+CREATE INDEX idx_records_province ON records USING gin ((data->'province'))
+  WHERE collection = 'posts';
+```
+
+The `collection` column holds values: `users`, `posts`, `comments`, `spotlights`, `stories`, `threads`, `messages`, `follows`, `notifications`, `tips`.
+
+Row-level security must be enabled. Suggested policies:
+
+```sql
+-- Anyone may read any row
+CREATE POLICY "public read"
+  ON records FOR SELECT USING (true);
+
+-- A signed-in user may insert rows they own
+CREATE POLICY "authenticated insert"
+  ON records FOR INSERT
+  WITH CHECK (auth.uid()::text = owner_id OR owner_id IS NULL);
+
+-- A signed-in user may update or delete only their own rows
+CREATE POLICY "owner update"
+  ON records FOR UPDATE
+  USING (auth.uid()::text = owner_id);
+
+CREATE POLICY "owner delete"
+  ON records FOR DELETE
+  USING (auth.uid()::text = owner_id);
+```
+
+---
+
+## Redirect URLs (required for Google sign-in)
+
+In Supabase → **Authentication → URL Configuration → Redirect URLs**, add:
+
+```
+http://localhost:4200/auth
+http://localhost:4200/**
+https://localhost/auth
+https://localhost/**
+capacitor://localhost/auth
+https://lulafind.co.za/auth
+https://lulafind.co.za/**
+```
+
+Without these, Google sign-in succeeds on Google's side but the callback fails when it returns to the app.
+
+---
+
+## Firebase email templates
+
+The three templates are already configured in the Firebase console for `lulafinds-app`. The links in each email open `https://lulafinds-app.firebaseapp.com/__/auth/action`. The person finishes the action on that page, then returns to the LulaFind app and signs in.
+
+Do not change the template links. Do not add a custom domain to the Firebase Auth action URL unless you have tested the full round-trip.
+
+Reply-to is set to `mkhungela.lulamile1@gmail.com`. Change this to a business address before public launch.
+
+---
+
+## What you still need to do before launch
 
 | Step | Why |
-| --- | --- |
-| Leave **Enable email provider** on | That switch stays on. It is how an email and password can sign in. Do not turn it off. |
-| Confirm email is off | Leave it off. If Save is still showing on that page, click it. Leave Enable email provider on, and leave Allow new users to sign up on. |
-| Add the redirect URLs in `docs/RUN.md` | Google returns to the address the app was opened from. A missing URL fails the return. |
-| Keep the Firebase template links as they are | The app calls `sendEmailVerification`, `sendPasswordResetEmail`, and `verifyBeforeUpdateEmail`. It does not invent a 6-digit code. |
+|------|-----|
+| Run the `records` table SQL (schema above) in the Supabase SQL editor | The table does not exist in the live project yet. `SupabaseApi` will throw on every write until it does. |
+| Enable RLS and add the policies above | Without RLS, any anonymous request can write or delete any row. |
+| Add the redirect URLs listed above | Required for Google sign-in to complete. |
+| Replace `SUPPORT_EMAIL` in `src/app/core/config.ts` | Currently a personal Gmail address. Use a business / support address. |
+| Set `SHOW_DEMO_OTP = false` in `src/app/core/config.ts` | Currently `true` — the OTP code is displayed on screen for demo testing. Turn it off before public launch. |
+| Set `firebase.storageBucket` and `firebase.appId` | Only needed if you add Firebase Storage or Analytics. Both are currently empty and do not block the app. |
+| Add a real privacy policy URL | Required by both the Play Store and App Store. The current Terms screen is a placeholder. |
+| Configure FCM for push notifications | Requires the FCM server key in `android/app/google-services.json` and an APNs certificate for iOS. |
+| Test the full email round-trip | Send a real verification email and open it on a phone. |
 
-Do not add a card or turn on the Blaze plan. This app does not use Firestore, Realtime Database, or Cloud Storage.
+---
 
-## Feature check, from the source, not from a phone
+## Feature check — from the source code
 
-| Feature | In the source | Proven on a live account |
-| --- | --- | --- |
-| Create a post | `DataService.createPost` writes a `posts` row | Not watched on a signed-in account. Confirm email is now off, which was the block. |
-| Create, edit, join, and delete a Spotlight | Create, edit, and delete are in the Spotlight page. The creator can edit the short line and the about text, and can delete the community. | Not watched on a signed-in phone. `editor.sql` already allows create. Do not run it again. |
-| 24-hour story | `expiresAt` is set to 24 hours. The rail hides a story after that. | The filter is in the source. It was not watched for 24 hours. |
-| See followers and unfollow | Me shows both lists from the `follows` rows, not from people who happen to have posted. Unfollow deletes your own follow. | The list code is in the source. Not watched on a second phone. |
-| Report a post | Saved on the phone, and copied to `records` when a session exists | Not watched on a second phone. |
-| Contact us | Get help and Settings open a mail to `mkhungela.l@gmail.com` | The link is in the source. Delivery depends on the mail app. |
-| Comment, follow, chat | Wired to `records` | Not exercised with a live account in this check. Private chat still needs the poster to allow chat, an upvote, and a mutual follow. |
-| Logout | Signs out of Firebase and Supabase, then opens the auth screen | Not watched on a phone. |
-| Live updates | Listens to `records` and also refreshes every 45 seconds | The listener is in the source. A second phone was not used to prove a row appeared. |
+| Feature | Wired in source | Live on a real account |
+|---------|----------------|----------------------|
+| Create, edit, delete a post | `DataService.createPost`, `updatePost`, `deletePost` → `SupabaseApi.savePost`, `deletePost` | Not watched on a live account in this check |
+| Create, join, edit, delete a Spotlight | `DataService.createSpotlight`, `updateSpotlight`, `deleteSpotlight` → `SupabaseApi` methods | Not watched |
+| 24-hour stories — disappear after expiry | `expiresAt` set to `Date.now() + 86400000`; `SupabaseApi.stories()` filters at read time | Not watched for 24 hours |
+| Follow / unfollow | `DataService.toggleFollow` → `SupabaseApi.follow`, `unfollow` | Not watched with two accounts |
+| Private chat (three-gate: chatEnabled + upvote + mutual follow) | `ChatService.gate()` checks all three; `ChatService.ensureThread` creates the thread | Not watched with two accounts |
+| Report a post | `ModerationService.report()` — saves to `localStorage` in mock mode; writes a `notifications` row in Supabase mode | Not watched |
+| Contact us | `mailto:` link in Help and Settings → opens mail app | Link confirmed in source |
+| Sign out | Clears `localStorage` session, sets `user` signal to null, navigates to `/auth` | Not watched on a device |
+| Real-time updates | `SupabaseApi.init()` subscribes to `postgres_changes` on the `records` table | Not watched with a second device |
+| Guest browse wall | Shows a sign-up prompt after the 4th post card for unauthenticated users | Confirmed in `home.component.ts` |
+| Admin panel | `/admin` now guarded by `adminGuard` — only users with `isAdmin: true` can access it | Not watched with an admin account |
 
-## Competitors, from their own pages
+---
 
-This is not a claim that LulaFind is more advanced.
+## What this check does not prove
 
-- Namola dispatches private armed or medical response to a GPS point, tracks family, and sells paid plans. LulaFind does not dispatch anyone. Official page: https://www.namola.com/
-- Bright Sky SA, from Vodacom, is an information app for domestic abuse: a directory, a questionnaire, and a journal that is not stored in the app. It says it is not a safety app. https://now.vodacom.co.za/article/vodacom-s-bright-sky-sa-app-is-here-to-combat-gbv
-- Missing Children South Africa requires a SAPS case number before they circulate a flyer. They are not an app that files the case. https://missingchildren.org.za/report.html
-- The Pink Ladies organisation distributes posters and helps families open a police case. They are volunteers, not a dispatch app.
-- Kwanele stores GBV evidence, has a panic button, and connects people to trained staff. LulaFind does not store an evidence vault and does not send armed response.
-
-What LulaFind actually has, in code, is a community case file, a Khumbul'ekhaya claim that does not publish the person's location, surname Spotlights, a 24-hour story, and a follow list. Those screens exist. They are not a substitute for SAPS, Namola, or Kwanele, and they were not proven on a phone in this check.
+- A Supabase write succeeded from a signed-in account (the table may not exist yet)
+- An email arrived in an inbox
+- Push notifications fire on a device
+- A real Android or iOS build compiles and runs
+- Supabase RLS policies are in place and correct

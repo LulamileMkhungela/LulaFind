@@ -51,7 +51,7 @@ export const appConfig: ApplicationConfig = {
       withComponentInputBinding(),
       withInMemoryScrolling({ anchorScrolling: 'enabled', scrollPositionRestoration: 'enabled' })
     ),
-    provideIonicAngular({ mode: 'ios', rippleEffect: true, swipeBackEnabled: true }),
+    provideIonicAngular({ rippleEffect: true, swipeBackEnabled: true }),
     { provide: IonicRouteStrategy, useValue: new IonicRouteStrategy() },
     { provide: LULA_API, useFactory: apiFactory },
     { provide: APP_INITIALIZER, useFactory: bootstrapCore, multi: true }

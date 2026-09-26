@@ -328,6 +328,7 @@ export class DataService {
     parentId?: string | null;
     isLead?: boolean;
     sighting?: Comment['sighting'];
+    markGuess?: string;
   }): Promise<Comment> {
     const me = this.auth.viewerId;
     if (!me) throw new Error('Sign in to comment');
@@ -341,7 +342,8 @@ export class DataService {
       createdAt: Date.now(),
       upvotes: 0,
       isLead: input.isLead ?? false,
-      sighting: input.sighting
+      sighting: input.sighting,
+      markGuess: input.markGuess || undefined
     };
     await this.api.saveComment(c);
     const p = await this.loadPost(input.postId);
@@ -367,6 +369,18 @@ export class DataService {
     return c;
   }
 
+  /**
+   * Family-only check: confirm or reject a mark (physical description detail)
+   * that a commenter named on a lead. The result becomes public so searchers
+   * know whether this lead matched; the actual words stay private.
+   */
+  async checkLeadMark(c: Comment, result: 'match' | 'no'): Promise<void> {
+    const p = this.cache()[c.postId] ?? (await this.api.post(c.postId));
+    if (!p) throw new Error('That post is not here any more');
+    if (!this.canEdit(p)) throw new Error('Only the poster can check a mark');
+    await this.api.saveComment({ ...c, markCheck: result });
+  }
+
   /** Quora-style comment upvote - toggles so a second tap removes it. */
   async voteComment(c: Comment): Promise<Comment> {
     const next: Comment = { ...c, upvotes: c.upvotes + 1 };
@@ -375,7 +389,7 @@ export class DataService {
   }
 
   async deleteComment(c: Comment): Promise<void> {
-    await this.api.deleteComment(c.id);
+    await this.api.deleteComment(c.id, c.postId);
     const p = await this.loadPost(c.postId);
     if (p) {
       const next = { ...p, commentCount: Math.max(0, p.commentCount - 1) };
@@ -728,6 +742,42 @@ export class DataService {
     await this.loadStatic();
   }
 
+  /**
+   * Edit a spotlight's mutable fields (tagline and about text).
+   * Only the owner or an admin may call this.
+   */
+  async updateSpotlight(id: string, patch: { tagline: string; about: string }): Promise<Spotlight> {
+    const me = this.auth.user();
+    const sp = await this.api.spotlight(id);
+    if (!me || !sp) throw new Error('That community is not here any more');
+    if (sp.ownerId !== me.id && !sp.adminIds.includes(me.id)) {
+      throw new Error('Only the community owner can edit this');
+    }
+    const updated: Spotlight = {
+      ...sp,
+      tagline: patch.tagline.trim() || sp.tagline,
+      about: patch.about.trim()
+    };
+    await this.api.saveSpotlight(updated);
+    await this.loadStatic();
+    return updated;
+  }
+
+  /**
+   * Permanently delete a spotlight. Only the owner may do this.
+   * Posts that referenced the spotlight remain on the feed.
+   */
+  async deleteSpotlight(id: string): Promise<void> {
+    const me = this.auth.user();
+    const sp = await this.api.spotlight(id);
+    if (!me || !sp) return;
+    if (sp.ownerId !== me.id && !me.isAdmin) {
+      throw new Error('Only the community owner can delete this');
+    }
+    await this.api.deleteSpotlight(id);
+    await this.loadStatic();
+  }
+
   /** Find a community by surname (and optionally province). */
   spotlightForSurname(surname: string, province?: string | null): Spotlight | undefined {
     const needle = surname.trim().toLowerCase();
@@ -922,10 +972,23 @@ export class DataService {
   async claimKhumbuPost(postId: string): Promise<Post | undefined> {
     const me = this.auth.viewerId;
     const p = await this.loadPost(postId);
-    if (!me || !p || !p.khumbu) return undefined;
+    if (!me || !p) return undefined;
+    if ((p.subject?.age ?? 99) < 18) {
+      throw new Error('You cannot claim a case involving a child under 18 online');
+    }
+    const khumbu = p.khumbu ?? {
+      daysOut: null,
+      leftHomeAt: null,
+      reasonGuess: '',
+      claimedByUserId: null,
+      claimedAt: null,
+      subjectResponse: 'none' as const,
+      subjectNote: '',
+      wantedAnswers: { yes: 0, no: 0, myVote: null }
+    };
     const next: Post = {
       ...p,
-      khumbu: { ...p.khumbu, claimedByUserId: me, claimedAt: Date.now() },
+      khumbu: { ...khumbu, claimedByUserId: me, claimedAt: Date.now() },
       events: [...p.events, { at: Date.now(), kind: 'claimed', byUserId: me, note: 'Person in the post says: this is me' }]
     };
     await this.api.savePost(next);
@@ -1083,6 +1146,16 @@ export class DataService {
   /* --------------------------- users --------------------------- */
   async profile(id: string): Promise<UserProfile | undefined> {
     return this.api.user(id);
+  }
+
+  /**
+   * Load multiple user profiles by id in one call.
+   * Used by the followers / following sheet in the Me tab.
+   */
+  async people(ids: string[]): Promise<UserProfile[]> {
+    if (!ids.length) return [];
+    const results = await Promise.all(ids.map((id) => this.api.user(id)));
+    return results.filter((u): u is UserProfile => u !== undefined);
   }
 
   async searchUsers(q: string): Promise<UserProfile[]> {

@@ -53,8 +53,13 @@ export class AuthService {
 
   readonly user = signal<UserProfile | null>(null);
   readonly ready = signal(false);
+  readonly guestBrowsing = signal(false);
   readonly signedIn = computed(() => !!this.user());
   readonly needsOnboarding = computed(() => !!this.user() && !this.user()!.onboarded);
+
+  setGuestBrowsing(val: boolean): void {
+    this.guestBrowsing.set(val);
+  }
   readonly userAvatar = computed(() => {
     const u = this.user();
     return u ? avatar(u.displayName, u.avatarHue) : avatar('Guest');
@@ -114,21 +119,114 @@ export class AuthService {
     this.store.set('otps', m);
   }
 
+  /* ------------------- password-recovery / email-confirm state ------------------- */
+
+  /**
+   * Set to true when the app is opened via a password-reset link.
+   * The app.component and auth.component use this to redirect to the new-password screen.
+   */
+  readonly passwordRecovery = signal(false);
+
+  /**
+   * Set to true when the app is opened via an email-confirmation link (Supabase
+   * or Firebase) so the sign-up form can skip re-sending the OTP.
+   */
+  readonly emailAlreadyConfirmed = signal(false);
+
+  /**
+   * The email address extracted from a confirmation or recovery link.
+   * Null until a deep link is processed.
+   */
+  readonly confirmedEmail = signal<string | null>(null);
+
+  /* --------------------------- email OTP (async) --------------------------- */
+
   /**
    * Send a six-digit code to the address.
    *
    * In demo mode there is no mail server, so the code is returned and shown on
-   * screen. With Firebase this becomes an email link or a Firebase custom-claim
-   * OTP and the returned value is ignored.
+   * screen. With Firebase / Supabase this becomes an email link / magic OTP and
+   * the returned demoCode is empty.
+   *
+   * The optional `password` argument is accepted (and ignored in mock mode) so
+   * Firebase-email-link flows that pre-create the account before sending the
+   * link can pass the chosen password through without changing the call site.
    */
-  async requestOtp(email: string): Promise<{ sentTo: string; demoCode: string }> {
+  async requestOtp(email: string, _password?: string): Promise<{ sentTo: string; demoCode: string }> {
     const em = email.trim().toLowerCase();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(em)) throw new Error('Enter a valid email address first');
+    const existing = await this.api.users();
+    if (existing.some((u) => u.email.toLowerCase() === em)) {
+      // Already confirmed in a previous session - tell the form so it can skip the OTP step.
+      this.emailAlreadyConfirmed.set(true);
+      this.confirmedEmail.set(em);
+      return { sentTo: em, demoCode: 'ALREADY_CONFIRMED' };
+    }
     const code = String(Math.floor(100000 + Math.random() * 900000));
     const all = this.otps();
     all[em] = { code, expiresAt: Date.now() + 10 * 60 * 1000 };
     this.saveOtps(all);
     return { sentTo: em, demoCode: code };
+  }
+
+  /**
+   * Verify an OTP asynchronously (used by the Firebase email-link path where
+   * confirmation happens server-side and is polled rather than checked locally).
+   * In mock mode this delegates to the synchronous verifyOtp.
+   */
+  async verifyEmailOtp(email: string, code: string): Promise<boolean> {
+    const ok = this.verifyOtp(email, code);
+    if (ok) {
+      this.emailAlreadyConfirmed.set(true);
+      this.confirmedEmail.set(email.trim().toLowerCase());
+    }
+    return ok;
+  }
+
+  /**
+   * Complete a password reset that was initiated via sendPasswordReset.
+   * In mock mode we look up the stored account and update the credential hash.
+   * Returns the user profile when the account is fully set up, or null when the
+   * account was just confirmed but still needs the sign-up form to finish.
+   */
+  async completePasswordReset(newPassword: string, _otp?: string): Promise<UserProfile | null> {
+    if (newPassword.length < 8) throw new Error('Password must be at least 8 characters');
+    const userId = this.store.get<string | null>('session', null);
+    if (!userId) {
+      // No live session - account may not be fully created yet.
+      return null;
+    }
+    const accs = this.accounts();
+    const idx = accs.findIndex((a) => a.userId === userId);
+    if (idx === -1) throw new Error('Account not found - sign in first');
+    accs[idx] = { ...accs[idx], secret: this.hash(newPassword) };
+    this.store.set('accounts', accs);
+    const u = await this.api.user(userId);
+    if (u) this.user.set(u);
+    return u ?? null;
+  }
+
+  /**
+   * Change the email address for the signed-in account.
+   * In production (Supabase / Firebase) this sends a confirmation to the new
+   * address. In mock mode the change is applied immediately.
+   */
+  async changeEmail(newEmail: string): Promise<void> {
+    const em = newEmail.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(em)) throw new Error('Enter a valid email address');
+    if (!this.user()) throw new Error('Sign in first');
+    const existing = await this.api.users();
+    if (existing.some((u) => u.id !== this.user()!.id && u.email.toLowerCase() === em)) {
+      throw new Error('That email is already in use by another account');
+    }
+    // Update the stored credential record so the new address works at sign-in.
+    const accs = this.accounts();
+    const idx = accs.findIndex((a) => a.userId === this.user()!.id);
+    if (idx !== -1) {
+      accs[idx] = { ...accs[idx], email: em };
+      this.store.set('accounts', accs);
+    }
+    await this.updateProfile({ email: em });
   }
 
   /** True when a valid, unexpired code has been entered for this address. */
@@ -222,7 +320,16 @@ export class AuthService {
     if (!em) throw new Error('Enter your email');
     if (!password) throw new Error('Enter your password');
     const acc = this.accounts().find((a) => a.email === em);
-    if (!acc) throw new Error('No LulaFind account with that email');
+    if (!acc) {
+      // Email is known to the OTP system (confirmed) but no profile was finished.
+      const allUsers = await this.api.users();
+      if (allUsers.some((u) => u.email.toLowerCase() === em)) {
+        this.confirmedEmail.set(em);
+        this.emailAlreadyConfirmed.set(true);
+        throw new Error('FINISH_PROFILE');
+      }
+      throw new Error('No LulaFind account with that email');
+    }
     if (acc.secret !== this.hash(password)) throw new Error('Incorrect password');
     const u = await this.api.user(acc.userId);
     if (!u) throw new Error('Account data is missing - contact support');

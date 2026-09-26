@@ -17,7 +17,7 @@ export interface Settings {
 }
 
 const DEFAULTS: Settings = {
-  theme: 'dark',
+  theme: 'light',
   haptics: true,
   pushEnabled: true,
   pushMissingOnly: true,
@@ -43,10 +43,11 @@ export class SettingsService {
 
   applyTheme(mode: ThemeMode): void {
     const root = document.documentElement;
-    const light = mode === 'light' || (mode === 'system' && window.matchMedia?.('(prefers-color-scheme: light)').matches);
-    root.classList.toggle('lf-light', !!light);
+    const dark = mode === 'dark' || (mode === 'system' && window.matchMedia?.('(prefers-color-scheme: dark)').matches);
+    root.classList.toggle('lf-dark', !!dark);
+    root.classList.toggle('lf-light', !dark);
     const meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute('content', light ? '#f5f7fb' : '#0a1024');
+    if (meta) meta.setAttribute('content', dark ? '#0a1024' : '#ffffff');
   }
 
   init(): void {

@@ -87,8 +87,38 @@
   --ion-color-light-tint: #ecf2ff;
 }
 
-/* Dark is the LulaFind default. */
+/* Facebook Light Theme by Default */
 :root {
+  --ion-background-color: #f0f2f5;
+  --ion-background-color-rgb: 240, 242, 245;
+  --ion-text-color: #050505;
+  --ion-text-color-rgb: 5, 5, 5;
+  --ion-color-step-50: #f7f8fa;
+  --ion-color-step-100: #e4e6eb;
+  --ion-color-step-150: #dadde1;
+  --ion-color-step-200: #ced0d4;
+  --ion-color-step-250: #bcc0c4;
+  --ion-color-step-300: #65676b;
+  --ion-color-step-350: #4b4c4f;
+  --ion-color-step-400: #333334;
+  --lf-card: #ffffff;
+  --lf-card-2: #f0f2f5;
+  --lf-line: #ced0d4;
+  --lf-muted: #65676b;
+  --lf-toolbar: #ffffff;
+  --lf-tabbar: #ffffff;
+  --lf-ink: #050505;
+  --lf-beacon: #1877f2;
+  --lf-night: #f0f2f5;
+  --lf-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+
+  --lf-fb-blue: #1877f2;
+  --lf-snap-yellow: #fffc00;
+  --lf-snap-blue: #0fb2ff;
+}
+
+/* Optional Dark mode (Settings -> Appearance). */
+:root.lf-dark {
   --ion-background-color: #0a1024;
   --ion-background-color-rgb: 10, 16, 36;
   --ion-text-color: #eaf0ff;
@@ -105,31 +135,9 @@
   --lf-card-2: #1a2444;
   --lf-line: rgba(234, 240, 255, .08);
   --lf-muted: #9aa6c4;
-  --lf-toolbar: rgba(13, 20, 40, .78);
-  --lf-tabbar: rgba(12, 18, 38, .72);
-}
-
-/* Opt-in light mode (Settings -> Appearance). */
-:root.lf-light {
-  --ion-background-color: #f5f7fb;
-  --ion-background-color-rgb: 245, 247, 251;
-  --ion-text-color: #10162b;
-  --ion-text-color-rgb: 16, 22, 43;
-  --ion-color-step-50: #eff1f6;
-  --ion-color-step-100: #e5e8f0;
-  --ion-color-step-150: #dbdee8;
-  --ion-color-step-200: #d1d4e1;
-  --ion-color-step-250: #c7cbda;
-  --ion-color-step-300: #bdc1d3;
-  --ion-color-step-350: #b3b8cc;
-  --ion-color-step-400: #a9aec5;
-  --lf-card: #ffffff;
-  --lf-card-2: #ffffff;
-  --lf-line: rgba(16, 22, 43, .08);
-  --lf-muted: #5c6784;
-  --lf-toolbar: rgba(255, 255, 255, .82);
-  --lf-tabbar: rgba(255, 255, 255, .78);
-  --lf-ink: #10162b;
-  --lf-night: #f5f7fb;
-  --lf-shadow: 0 1px 0 rgba(255,255,255,.9) inset, 0 12px 28px rgba(16, 22, 43, .08);
+  --lf-toolbar: rgba(13, 20, 40, .92);
+  --lf-tabbar: rgba(12, 18, 38, .92);
+  --lf-ink: #eaf0ff;
+  --lf-night: #0a1024;
+  --lf-shadow: 0 1px 0 rgba(255,255,255,.05) inset, 0 18px 40px rgba(0,0,0,.28);
 }

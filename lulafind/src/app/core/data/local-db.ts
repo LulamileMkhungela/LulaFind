@@ -284,6 +284,40 @@ export class LocalDb {
     return this.rev;
   }
 
+  /* ------------------------- generic storage helpers ------------------------- */
+  getAll<T>(collection: string): T[] {
+    const dbAny = this.db as any;
+    if (Array.isArray(dbAny[collection])) {
+      return dbAny[collection].map((x: any) => clone(x));
+    }
+    return [];
+  }
+
+  getOne<T>(collection: string, id: string): T | undefined {
+    const items = this.getAll<any>(collection);
+    const item = items.find((x: any) => x && x.id === id);
+    return item ? clone(item) : undefined;
+  }
+
+  saveOne<T extends { id: string }>(collection: string, item: T): void {
+    const dbAny = this.db as any;
+    if (!Array.isArray(dbAny[collection])) {
+      dbAny[collection] = [];
+    }
+    const idx = dbAny[collection].findIndex((x: any) => x && x.id === item.id);
+    if (idx !== -1) dbAny[collection][idx] = clone(item);
+    else dbAny[collection].unshift(clone(item));
+    this.persist();
+  }
+
+  deleteOne(collection: string, id: string): void {
+    const dbAny = this.db as any;
+    if (Array.isArray(dbAny[collection])) {
+      dbAny[collection] = dbAny[collection].filter((x: any) => x && x.id !== id);
+      this.persist();
+    }
+  }
+
   /* ------------------------- users ------------------------- */
   users(): UserProfile[] { return this.db.users.map((u) => clone(u)); }
   user(id: string): UserProfile | undefined {
@@ -408,6 +442,11 @@ export class LocalDb {
   upsertSpotlight(s: Spotlight): void {
     const i = this.db.spotlights.findIndex((x) => x.id === s.id);
     if (i >= 0) this.db.spotlights[i] = s; else this.db.spotlights.push(s);
+    this.persist();
+  }
+
+  deleteSpotlight(id: string): void {
+    this.db.spotlights = this.db.spotlights.filter((s) => s.id !== id);
     this.persist();
   }
 

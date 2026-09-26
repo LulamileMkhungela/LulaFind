@@ -1,139 +1,231 @@
-# Run LulaFind
+# Running LulaFind locally
 
-Checked on 26 September 2026. This is the run guide. `docs/SETUP.md` is the live-backend check. If those two files disagree with `README.md`, follow these two files.
+Last updated: 26 September 2026.
 
-## Do this now
+This guide covers four environments: browser preview in VS Code, Android emulator or device via Android Studio, iPhone simulator or device via Xcode, and a production build check. Read it top to bottom the first time. After that, the one-line quick reference at the top of each section is enough.
 
-1. Leave **Enable email provider** on in Supabase. Do not turn it off.
-2. **Confirm email** is off. Leave it off. If Save is still showing on that page, click it. Leave the other email switches off.
-3. Do not run `supabase/editor.sql` again. It already succeeded.
-4. On this computer, with Node 22:
+---
+
+## Prerequisites
+
+Install these before opening any IDE.
+
+| Tool | Minimum version | Where to get it |
+|------|----------------|-----------------|
+| **Node.js** | 22.14.0 (22.23.3 recommended) | https://nodejs.org — use the LTS installer |
+| **npm** | Ships with Node 22 | — |
+| **Git** | Any recent version | https://git-scm.com |
+| **VS Code** | 1.90 or newer | https://code.visualstudio.com |
+| **Android Studio** | Ladybug (2024.2) or newer | https://developer.android.com/studio |
+| **Xcode** | 16 or newer (macOS only) | Mac App Store |
+| **JDK** | 21 (use Android Studio's embedded JDK) | Bundled with Android Studio |
+
+Check Node before anything else. Angular 22 will not start below 22.14.0:
+
+```bash
+node -v   # must print v22.14.0 or higher
+npm -v    # any v10+
+```
+
+If `node -v` prints v20 or lower, install Node 22 and open a new terminal window before continuing.
+
+---
+
+## 1  VS Code — browser preview
+
+**Quick start** (after the first-time setup below):
 
 ```bash
 cd lulafind
-node -v
+npm start
+# open http://localhost:4200
+```
+
+### First-time setup
+
+1. **Open the `lulafind` folder** in VS Code — not the repo root, not a parent folder.  
+   File → Open Folder → select `…/LulaFind/lulafind`.
+
+2. Open the integrated terminal (`` Ctrl+` `` / `` Cmd+` ``).  
+   The prompt must end in `lulafind`. If it says `LulaFind`, type `cd lulafind`.
+
+3. Install dependencies:
+
+```bash
 npm install
+```
+
+   This takes 30–60 s on first run. It installs Angular, Ionic, Capacitor, and Supabase.
+
+4. Start the dev server:
+
+```bash
 npm start
 ```
 
-5. Open http://localhost:4200 and create an account with email. Firebase sends the verification link. Supabase does not.
+   Wait for the line:
 
-This is not an end-to-end pass. The production web build compiles. A signed-in write, an inbox, and a phone launch were not watched from here, so this was not merged as finished.
+   ```
+   Application bundle generation complete.
+   ```
 
-A phone build is later, in sections 3 and 4. Those steps were not run here.
+5. Open **http://localhost:4200** in Chrome or Safari.
 
-This environment did not launch Android Studio, an Android emulator, Xcode, or an iPhone simulator. The steps below are the exact project files and commands. A production web build did succeed here with Node 22.22.3. That is not a phone test.
+6. Create an account with an email address and a password. No phone number. Google sign-in also works if the Supabase Google provider is enabled (see `docs/SETUP.md`).
 
-## What you need
+### What works in the browser
 
-| Tool | Version this project expects | Where |
-| --- | --- | --- |
-| Node.js | 22.22.3 or newer. Node 20 will refuse `ng`. | https://nodejs.org |
-| npm | Comes with Node 22 | terminal |
-| VS Code | Current | the `lulafind` folder, not a parent folder |
-| Android Studio | Current, with JDK 21 and Android SDK 36 | Windows, Mac, or Linux |
-| Xcode | Current, Mac only | `ios/App/App.xcodeproj` |
+| ✅ Works | ❌ Does not work in-browser |
+|---------|--------------------------|
+| All screens and navigation | Camera (file picker used instead) |
+| Create / read / update posts and Spotlights | Push notifications |
+| Sign-up, sign-in, password reset | Native share sheet (clipboard fallback used) |
+| 24-hour stories | Haptic feedback |
+| Follow, unfollow, private chat | Status bar colour |
+| Report, save, hide posts | Capacitor plugins that need a native runtime |
+| Real-time feed updates via Supabase | |
 
-Check Node before anything else:
+### Recommended VS Code extensions
+
+- **Angular Language Service** (`angular.ng-template`) — template intellisense
+- **ESLint** (`dbaeumer.vscode-eslint`) — inline lint errors
+- **Prettier** (`esbenp.prettier-vscode`) — auto-format on save
+
+### Stop and restart
+
+Stop the dev server with **Ctrl+C** in the terminal. Restart with `npm start`. You do not need to re-run `npm install` unless `package.json` changed.
+
+---
+
+## 2  One-time backend switches (Supabase)
+
+The app runs on its own without touching these. Saving a new account, post, follow, or Spotlight to the live database requires them.
+
+1. Go to **https://supabase.com/dashboard** → your project → **Authentication → Providers → Email**.
+   - ✅ **Enable email provider**: ON
+   - ❌ **Confirm email**: OFF (Firebase sends the verification email instead)
+   - Leave everything else as-is. Click **Save** if the button is active.
+
+2. Go to **Authentication → URL Configuration → Redirect URLs**. Add each of these lines:
+
+   ```
+   http://localhost:4200/auth
+   http://localhost:4200/**
+   https://localhost/auth
+   https://localhost/**
+   capacitor://localhost/auth
+   https://lulafind.co.za/auth
+   https://lulafind.co.za/**
+   ```
+
+   Google sign-in redirects back to the URL the app was opened from. If that URL is not in this list, Google returns an error.
+
+3. The `records` table SQL has already been run. Do **not** run `editor.sql`, `wire-fix.sql`, or `fix-rls.sql` a second time.
+
+The publishable (anon) key is already in `src/environments/environment.ts`. Do not put the service-role secret, the database password, or any Firebase Admin key in the app source.
+
+---
+
+## 3  Android Studio
+
+### What you need
+
+- Android Studio **Ladybug (2024.2)** or newer
+- Android SDK **Platform 36** (API 36)
+- Android SDK Build-Tools (any version in the list)
+- Android SDK Platform-Tools
+- JDK 21 — use Android Studio's **embedded JDK** (File → Settings → Build, Execution, Deployment → Build Tools → Gradle → Gradle JDK → `JAVA_HOME` or `Embedded JDK`)
+
+### First-time setup
+
+From the `lulafind` folder in a terminal that has **Node 22**:
 
 ```bash
-node -v
-```
-
-If that prints v20 or lower, install Node 22 and open a new terminal. `package.json` requires `>=22.14.0`. Angular 22 refuses to start below `22.22.3`.
-
-## 1. VS Code, browser
-
-1. Open the `lulafind` folder in VS Code. File → Open Folder.
-2. Open a terminal in that folder. The prompt should end in `lulafind`.
-3. Install and start:
-
-```bash
+node -v              # must be v22+
 npm install
-npm start
+npm run build        # builds www/ — must finish with no errors
+npm run setup:native # sets API 36, adds permissions, writes privacy manifest
+npx cap sync android # copies www/ into the Android project
 ```
 
-4. Wait until the terminal says the server is listening.
-5. Open http://localhost:4200
+`npm run build` must succeed before `cap sync`. If the build fails, fix the errors first. `cap sync` with a broken `www/` puts broken JS onto the device.
 
-`npm start` is `ng serve --host 0.0.0.0 --port 4200 --disable-host-check`. Leave that terminal open. Stop it with Ctrl+C.
+### Open in Android Studio
 
-There is no demo account and no sample missing person. Sign-up is email and password, or Google. There is no phone field and no Apple button.
+1. Android Studio → **File → Open**
+2. Select the `android` folder **inside** `lulafind` (not the repo root).
+3. Wait for **Gradle sync** to complete. This downloads Android libraries on first run — you need an internet connection and it can take 5–10 minutes.
+4. If Gradle offers to install SDK 36, click **OK**.
+5. If it asks for a JDK, point it at Android Studio's embedded JDK 21.
 
-What the browser can prove:
+### Create an emulator
 
-- The screens open.
-- A production build of this source completed into `www/`.
-- It cannot prove an email arrived, a phone permission prompt, or a Play/App Store install.
+1. **Device Manager** (right-hand panel or Tools → Device Manager) → **Create Device**
+2. Choose a **Pixel 8** (or any Pixel with the Play Store icon)
+3. System image: select **API 36** (Vanilla Ice Cream). Click **Download** if it is greyed out.
+4. Finish and **Close**.
 
-If `npm start` says the Angular CLI wants Node 22, you are still on the old Node. Fix that before you open Android Studio. A failed web build will put an old `www/` folder into the phone app.
+### Run
 
-## 2. One-time backend switches
+1. Select the emulator in the device dropdown at the top of Android Studio.
+2. Press the green **Run** button (▶).
 
-The app will open without these. Saving a new account, a post, a follow, or a Spotlight will not fully work until they are done. Details and the live check are in `docs/SETUP.md`.
+The first launch compiles the Gradle project and takes 3–5 minutes. Subsequent runs are faster.
 
-1. Supabase → Authentication → Providers → Email. **Enable email provider** stays on. **Confirm email** is off. Leave it off. If Save is still showing, click it. Leave secure email change, secure password change, and require current password off. Phone stays off. Google stays on. **Allow new users to sign up** stays on.
-2. `supabase/editor.sql` already succeeded in the SQL editor. Do not run it again. Do not run `wire-fix.sql` or `fix-rls.sql`.
-3. Supabase → Authentication → URL configuration → Redirect URLs. Add every line below:
+### Run on a real Android phone
 
-```text
-http://localhost:4200/auth
-http://localhost:4200/**
-https://localhost/auth
-https://localhost/**
-capacitor://localhost/auth
-https://lulafind.co.za/auth
-```
+1. On the phone: **Settings → About phone** → tap **Build number** seven times to enable Developer options.
+2. **Settings → Developer options** → enable **USB debugging**.
+3. Connect the phone with a USB cable. Accept the **Allow USB debugging** prompt on the phone.
+4. The phone appears in the device dropdown. Select it and press Run.
 
-Google sign-in returns to the address the app was opened from. Without that address in the list, Google comes back as an error.
+### After you change the app
 
-## 3. Android Studio
-
-You need Android Studio with JDK 21 and Android SDK 36. The repo already targets SDK 36 in `android/variables.gradle`. The application id is `com.lulafind.app`. A debug run does not need a release keystore.
-
-From the `lulafind` folder, in a terminal that has Node 22:
+Any TypeScript or template change must be rebuilt and synced before it appears on the device:
 
 ```bash
-node -v
-npm install
 npm run build
-npm run setup:native
 npx cap sync android
 ```
 
-`npm run build` must finish with no errors before `cap sync`. Sync copies `www/` into the Android project. If you skip the build, the phone runs an old copy.
+Then press Run in Android Studio (you do not need to recreate the project).
 
-Then:
+### Install SDK components if Gradle fails
 
-1. Android Studio → File → Open.
-2. Choose the `android` folder inside `lulafind`. Do not open the repo root.
-3. Wait for Gradle sync. If it offers to install SDK 36, accept it.
-4. If it asks for a JDK, use Android Studio's embedded JDK 21. File → Settings → Build, Execution, Deployment → Build Tools → Gradle → Gradle JDK.
-5. Create a phone emulator: Device Manager → Create Device → a current Pixel → a system image that includes API 36. Download it if it is missing.
-6. Select that emulator in the device dropdown.
-7. Press Run.
+Android Studio → **SDK Manager** (Tools → SDK Manager) → **SDK Platforms** tab:
+- ✅ Android 16.0 (API 36)
 
-The first Gradle sync can take several minutes. It downloads Android libraries. You need an internet connection.
+**SDK Tools** tab:
+- ✅ Android SDK Build-Tools
+- ✅ Android SDK Platform-Tools
+- ✅ Android Emulator
 
-If Gradle says the SDK is missing, open SDK Manager and install:
+Click **Apply**.
 
-- Android SDK Platform 36
-- Android SDK Build-Tools
-- Android SDK Platform-Tools
+### Key file locations (Android)
 
-`google-services.json` is already in `android/app/`. The package name in that file is `com.lulafind.app`. Do not rename the application id.
+| File | Purpose |
+|------|---------|
+| `android/app/build.gradle` | `compileSdkVersion`, `targetSdkVersion`, `minSdkVersion` (set by `setup:native`) |
+| `android/app/google-services.json` | Firebase project for push notifications |
+| `android/app/src/main/AndroidManifest.xml` | Permissions: internet, camera, location, notifications |
+| `android/variables.gradle` | SDK version variables shared across modules |
 
-Permissions already declared: internet, location, camera, photos, and notifications. The first time you attach a place, take a photo, or turn alerts on, the phone will ask. Denying a permission does not crash the app. That feature stays off until you allow it in the phone's Settings → Apps → LulaFind.
+---
 
-To run on a real Android phone: enable Developer options and USB debugging, plug it in, accept the computer prompt, pick the phone in the device dropdown, and press Run.
+## 4  Xcode (macOS only)
 
-This guide was not executed in Android Studio here. There is no Android SDK in the environment that prepared this file.
+Xcode only runs on a Mac. There is no `.xcworkspace` and no `pod install` — Capacitor 8 uses Swift Package Manager exclusively.
 
-## 4. Xcode
+### What you need
 
-Xcode only runs on a Mac. The project is already in the repo. Capacitor 8 uses Swift Package Manager. Do not look for an `.xcworkspace` and do not run `pod install`.
+- **Xcode 16** or newer (Mac App Store)
+- An **Apple ID** (free tier is enough for the simulator; a paid Apple Developer account is required for a real iPhone)
+- Simulator runtime: download from **Xcode → Settings → Platforms** if missing
 
-On the Mac, from the `lulafind` folder, with Node 22:
+### First-time setup
+
+From the `lulafind` folder in a terminal with **Node 22** on the Mac:
 
 ```bash
 node -v
@@ -143,47 +235,132 @@ npm run setup:native
 npx cap sync ios
 ```
 
-Then:
+### Open in Xcode
 
-1. Open `ios/App/App.xcodeproj`. Double-click that file, or in Xcode choose File → Open and select it.
-2. Wait until the Swift packages finish resolving. The first open downloads Capacitor. If it stalls, File → Packages → Resolve Package Versions.
-3. In the project navigator, select the **App** target.
-4. Signing & Capabilities → Team. A simulator does not need a paid Apple Developer account. A real iPhone does need a free or paid team, and the phone must trust the developer certificate.
-5. Bundle identifier must stay `com.lulafind.app`.
-6. Pick an iPhone simulator from the scheme menu, for example iPhone 16.
-7. Press Run.
+1. Open `ios/App/App.xcodeproj`.  
+   Double-click the file in Finder, or Xcode → **File → Open** → select it.  
+   **Do not** open `App.xcworkspace` — it does not exist for a CocoaPods-free project.
 
-`ios/App/App/Info.plist` already explains why the app asks for location, camera, and photos. `PrivacyInfo.xcprivacy` is already in the app target. `npm run setup:native` copies it again if it is missing. It says the app does not track you.
+2. Wait for **Swift Package Manager** to resolve packages. On first open Xcode downloads Capacitor. If it stalls: **File → Packages → Resolve Package Versions**.
 
-If the simulator is not in the list, Xcode → Settings → Platforms, and download an iOS simulator runtime.
+3. In the project navigator select the **App** target.
 
-To run on a real iPhone: connect it, select it as the run destination, set a Team, and on the phone open Settings → General → VPN & Device Management and trust the certificate if iOS asks.
+4. **Signing & Capabilities** → **Team**:
+   - Simulator: your personal Apple ID is enough (free).
+   - Real iPhone: requires a free or paid Apple Developer account. Create one at https://developer.apple.com.
 
-This guide was not executed in Xcode here. There is no Mac and no `xcodebuild` in the environment that prepared this file.
+5. The **Bundle Identifier** must stay `com.lulafind.app`. Do not change it.
 
-## 5. After you change the app
+### Run on the simulator
 
-Any TypeScript change is invisible to Android and iOS until you build and sync again:
+1. Select an **iPhone 16** simulator in the scheme menu (top bar).
+2. Press **Run** (⌘R).
+
+If no simulator appears in the list: Xcode → **Settings → Platforms** → download an iOS 18 runtime.
+
+### Run on a real iPhone
+
+1. Connect the iPhone with a USB cable.
+2. Select it in the scheme menu.
+3. Press Run.
+4. On the iPhone: **Settings → General → VPN & Device Management** → tap your developer certificate → **Trust**.
+5. Press Run again if it stopped at the trust step.
+
+### After you change the app
 
 ```bash
 npm run build
-npx cap sync
+npx cap sync ios
 ```
 
-Then press Run again in Android Studio or Xcode. You do not need to recreate the `android/` or `ios/` folders.
+Then press Run in Xcode.
 
-`npm test` runs the unit tests. It needs Node 22. A passing test is not a phone test.
+### Key file locations (iOS)
 
-## 6. What you should see
+| File | Purpose |
+|------|---------|
+| `ios/App/App/Info.plist` | Privacy usage descriptions for camera, location, photos |
+| `ios/App/App/PrivacyInfo.xcprivacy` | Apple privacy manifest (no tracking declared) |
+| `ios/App/App/AppDelegate.swift` | App entry point — do not modify |
 
-- Sign-up asks for email, password, and full name. The second word becomes the username. The name cannot be edited later. You can add a profile photo.
-- The feed is empty until someone posts. There is no sample case.
-- A story disappears 24 hours after it is posted. The rail does not keep an expired story.
-- Me → the followers number and the following number open the lists. Unfollow is on the people you follow.
-- A green ring means Safe. An orange ring means Unfamiliar place. A red ring means Check on me. The words are on the screen as well. Colour is not the only clue.
-- Get help lists phone numbers you tap yourself. LulaFind does not call them.
-- Contact LulaFind opens a mail to `mkhungela.l@gmail.com`.
+---
 
-## 7. Not a store build
+## 5  Production build check
 
-Opening the projects is not a signed Play Store or App Store upload. A store build still needs your own signing keys, a real privacy-policy URL, and a pass on a real device. Share links still use `https://lulafind.co.za` until that domain is yours.
+Run this before committing a release:
+
+```bash
+npm run build
+```
+
+Output goes to `www/`. The build must finish with:
+
+```
+Application bundle generation complete.
+```
+
+and **zero errors**. Warnings about unused exports or bundle size are acceptable. Any `ERROR` line is a blocking issue.
+
+To preview the production bundle locally:
+
+```bash
+npm run preview
+# open http://localhost:4000
+```
+
+`npm run preview` uses `server.mjs` — a plain static file server for the `www/` folder. It does not have hot-reload.
+
+---
+
+## 6  Tests
+
+```bash
+npm test
+```
+
+75 unit tests run with Vitest. A passing test suite is not a guarantee that the app works on a phone — it proves the data layer, services, and component rendering are correct.
+
+---
+
+## 7  Troubleshooting
+
+### `ng` is not recognised / Angular CLI version mismatch
+
+```bash
+node -v   # fix this first if it is below v22.14.0
+npm install
+npx ng version
+```
+
+### `cap sync` copies nothing / www/ is empty
+
+Run `npm run build` first. `cap sync` copies whatever is in `www/` — if the build failed, sync is useless.
+
+### Gradle sync fails with "SDK not found"
+
+Open Android Studio's SDK Manager and install Android SDK Platform 36 and Build-Tools.
+
+### Swift Package resolution stalls in Xcode
+
+File → Packages → Resolve Package Versions. If it still stalls, close Xcode, delete `ios/App/App.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved`, and reopen.
+
+### App opens but the feed is empty
+
+The Supabase `records` table exists but has no rows yet. Create an account and post something — there is no pre-loaded sample data in the live database.
+
+### Google sign-in returns an error after redirect
+
+The redirect URL is missing from Supabase → Authentication → URL Configuration. Add `http://localhost:4200/**` for local testing, and `https://lulafind.co.za/**` for production.
+
+### Push notifications do not arrive
+
+FCM requires a real device (not an emulator) and the `google-services.json` in `android/app/` must match your Firebase project. APNs on iOS requires a paid Apple Developer account and a valid push certificate. Both are out of scope for local development.
+
+---
+
+## 8  What a local run does not prove
+
+- That an email arrived in an inbox (the Firebase template page exists; delivery was not watched)
+- That push notifications fire on a device (FCM/APNs setup required)
+- That the app passes Play Store or App Store review (store build requires signed keystores and a real privacy policy URL)
+- That all Supabase RLS policies are correct (test on the live project with a real account)

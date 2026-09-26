@@ -273,8 +273,8 @@ export class LocationService {
   async backgroundCheck(opts: { subjectRegistered: boolean; consentFromSubject: 'none' | 'requested' | 'granted' | 'declined' }): Promise<GeoPoint[] | null> {
     if (!opts.subjectRegistered) return null;
     if (opts.consentFromSubject !== 'granted') return null;
-    const point = await this.readDevicePosition();
-    return point ? [point] : null;
+    if (!this.current()) return null;
+    return [this.current()!];
   }
 
   async revokeAll(): Promise<void> {
