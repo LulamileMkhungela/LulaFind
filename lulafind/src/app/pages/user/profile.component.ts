@@ -89,8 +89,9 @@ import { cover } from '../../core/data/seed';
 
             <div class="acts">
               @if (!isMe()) {
-                <button class="lf-btn lf-btn--sm" [class.lf-btn--ghost]="following()" (click)="toggleFollow()">
-                  <lf-icon [name]="following() ? 'check' : 'plus'" [size]="15" /> {{ following() ? 'Following' : 'Follow' }}
+                <button class="lf-btn lf-btn--sm" [class.lf-btn--ghost]="following() || followRequested()" (click)="toggleFollow()">
+                  <lf-icon [name]="following() ? 'check' : followRequested() ? 'clock' : 'plus'" [size]="15" />
+                  {{ following() ? 'Following' : followRequested() ? 'Requested' : 'Follow' }}
                 </button>
                 <button class="lf-btn lf-btn--sm" (click)="share()"><lf-icon name="share" [size]="15" /> Share</button>
                 @if (canMessage()) {
@@ -265,6 +266,7 @@ export class ProfileComponent implements OnInit {
 
   u = signal<UserProfile | null>(null);
   following = signal(false);
+  followRequested = signal(false);
   checking = signal(false);
   picked = signal<CheckInStatus | null>(null);
   shareLocation = signal(false);
@@ -285,7 +287,7 @@ export class ProfileComponent implements OnInit {
   });
 
   /** Privacy: only show what this person allows. */
-  readonly showLocation = computed(() => this.isMe() || this.u()?.privacy?.showLocation !== false);
+  readonly showLocation = computed(() => this.isMe() || this.u()?.privacy?.showLocation === true);
   readonly showStats = computed(() => this.isMe() || this.u()?.privacy?.showStats !== false);
   readonly showSpotlights = computed(() => this.isMe() || this.u()?.privacy?.showSpotlights !== false);
   readonly canMessage = computed(() => !this.u()?.suspended && this.u()?.privacy?.allowMessages !== false);
@@ -305,7 +307,9 @@ export class ProfileComponent implements OnInit {
     const id = this.route.snapshot.paramMap.get('id');
     if (!id) return;
     this.u.set((await this.data.profile(id)) ?? null);
-    this.following.set(await this.data.isFollowing(id));
+    const followState = await this.data.followStatus(id);
+    this.following.set(followState === 'accepted');
+    this.followRequested.set(followState === 'pending');
     await this.loadBadge();
   }
 
@@ -390,7 +394,10 @@ export class ProfileComponent implements OnInit {
       return;
     }
     try {
-      this.following.set(await this.data.toggleFollow(u.id));
+      await this.data.toggleFollow(u.id);
+      const state = await this.data.followStatus(u.id);
+      this.following.set(state === 'accepted');
+      this.followRequested.set(state === 'pending');
     } catch (e: any) {
       await this.say(e?.message ?? 'Could not follow');
     }

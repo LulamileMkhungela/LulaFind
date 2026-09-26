@@ -3,8 +3,8 @@ import { Subscription } from 'rxjs';
 import { toObservable } from '@angular/core/rxjs-interop';
 import { LULA_API, LulaApi } from '../data/api';
 import {
-  Audience, Comment, DangerAlert, FeedFilter, FollowEdge, Notification, Post, PostType, Spotlight, Story, Tip, UserProfile,
-  VoteValue, dangerLabel, emptyFilter, provinceName
+  Audience, Comment, DangerAlert, FeedFilter, FollowEdge, Notification, Post, PostType, Spotlight, Story, StoryReply, StoryView, Tip, UserProfile,
+  VoteValue, VehicleDetails, dangerLabel, emptyFilter, provinceName
 } from '../models/types';
 import { avatar, cover, hueOf, scene } from '../data/seed';
 import { HOUR, DAY, compact, uid } from '../utils/format';
@@ -27,6 +27,7 @@ export interface UpdatePostInput {
   caseNumber?: string | null;
   reward?: string | null;
   subject?: Post['subject'];
+  vehicleDetails?: VehicleDetails | null;
   audience?: Post['audience'];
   spotlightId?: string | null;
   chatEnabled?: boolean;
@@ -53,6 +54,7 @@ export interface CreatePostInput {
   caseNumber: string | null;
   reward: string | null;
   subject: Post['subject'];
+  vehicleDetails?: VehicleDetails | null;
   audience: Post['audience'];
   spotlightId: string | null;
   chatEnabled: boolean;
@@ -125,6 +127,8 @@ export class DataService {
     // cache, so cards, detail pages and counters can never disagree.
     this.changeSub = this.api.changes().subscribe(() => {
       void this.loadFeed();
+      if (this.auth.viewerId) void this.loadUserScoped();
+      void this.loadStatic();
     });
     effect(() => {
       // reload whenever the viewer or any filter value changes
@@ -250,10 +254,34 @@ export class DataService {
   }
 
   async loadStatic(): Promise<void> {
-    const [spots, stories, tips] = await Promise.all([this.api.spotlights(), this.api.stories(), this.api.tips()]);
+    const [spots, rawStories, tips] = await Promise.all([this.api.spotlights(), this.api.stories(), this.api.tips()]);
     this.spotlights.set(spots);
+    const me = this.auth.viewerId;
+    const stories = await Promise.all(rawStories.map(async (story) => {
+      const [views, replies] = await Promise.all([
+        this.api.storyViewsFor(story.id),
+        story.authorId === me ? this.api.storyRepliesFor(story.id) : Promise.resolve([] as StoryReply[])
+      ]);
+      const isOwner = story.authorId === me;
+      // Older rows may have embedded projections; current Supabase records keep
+      // replies/views in private collections, so these fields can be absent.
+      const legacyViewers = story.viewers ?? [];
+      const legacyReplies = story.replies ?? [];
+      const viewerIds = isOwner
+        ? [...new Set([...legacyViewers, ...views.map((view) => view.viewerId)])]
+        : me && views.some((view) => view.viewerId === me) ? [me] : [];
+      const replyMap = new Map([...legacyReplies, ...replies].map((reply) => [reply.id, reply]));
+      return {
+        ...story,
+        viewers: viewerIds,
+        replies: isOwner ? [...replyMap.values()].sort((a, b) => a.at - b.at) : []
+      };
+    }));
     this.stories.set(stories);
     this.tips.set(tips);
+    void this.cacheAuthors(stories.flatMap((story) => [
+      ...(story.replies ?? []).map((reply) => reply.authorId), ...(story.viewers ?? [])
+    ]));
   }
 
   async loadUserScoped(): Promise<void> {
@@ -262,32 +290,20 @@ export class DataService {
       this.notifications.set([]);
       this.followingIds.set([]);
       this.followerIds.set([]);
+      this.followRequests.set([]);
       return;
     }
-    const [notes, follows] = await Promise.all([this.api.notifications(id), this.api.posts()]);
+    const [notes, following, followers, requests] = await Promise.all([
+      this.api.notifications(id),
+      this.api.followsFor(id, 'following'),
+      this.api.followsFor(id, 'followers'),
+      this.api.followRequests(id)
+    ]);
     this.notifications.set(notes);
-    // following list comes from the api through follow state checks below
-    this.followingIds.set(await this.computeFollowing(id, follows));
+    this.followingIds.set(following.map((edge) => edge.followingId));
+    this.followerIds.set(followers.map((edge) => edge.followerId));
+    this.followRequests.set(requests);
     void this.loadStatic();
-  }
-
-  private async computeFollowing(userId: string, posts: Post[]): Promise<string[]> {
-    const ids = new Set<string>();
-    for (const p of posts) {
-      if (p.authorId !== userId && await this.api.isFollowing(userId, p.authorId)) ids.add(p.authorId);
-    }
-    return [...ids];
-  }
-
-  /** Who follows this person. Only post authors are candidates in mock mode. */
-  private async computeFollowers(userId: string, posts: Post[]): Promise<string[]> {
-    const ids = new Set<string>();
-    for (const p of posts) {
-      const authorId = p.authorId;
-      if (authorId === userId || ids.has(authorId)) continue;
-      if (await this.api.isFollowing(authorId, userId)) ids.add(authorId);
-    }
-    return [...ids];
   }
 
   /* ------------------------- voting ---------------------------- */
@@ -409,11 +425,13 @@ export class DataService {
     if (input.type !== 'story' && !input.town.trim()) throw new Error('Choose the town or suburb where this happened');
     if (input.type === 'danger' && !input.lastSeenWhere.trim()) throw new Error('Say the place where you saw this');
     if (input.type === 'danger' && !input.danger?.kind) throw new Error('Choose what kind of danger you saw');
+    if (input.type === 'khumbulekhaya' && !input.khumbu) throw new Error('Add the basic details about when they left home');
     if (input.audience === 'surname' && !input.spotlightId) throw new Error('Choose which Spotlight community should see this');
     if (input.media.length > 1 && input.media.some((m) => m.kind === 'video')) {
       throw new Error('Choose photos or one video - not both');
     }
 
+    const media = await Promise.all(input.media.map((item) => this.api.uploadMedia(me.id, item)));
     const now = Date.now();
     const post: Post = {
       id: uid('p'),
@@ -424,7 +442,7 @@ export class DataService {
       askWanted: input.askWanted,
       title: input.title.trim(),
       body: input.body.trim(),
-      media: input.media,
+      media,
       province: input.province,
       town: input.town.trim(),
       lastSeenAt: input.lastSeenAt,
@@ -437,7 +455,8 @@ export class DataService {
       reward: input.reward?.trim() || null,
       createdAt: now,
       updatedAt: now,
-      subject: input.subject,
+      subject: input.type === 'vehicle' ? null : input.subject,
+      vehicleDetails: input.type === 'vehicle' ? input.vehicleDetails ?? null : null,
       audience: input.audience,
       spotlightId: input.spotlightId,
       chatEnabled: input.chatEnabled,
@@ -502,12 +521,15 @@ export class DataService {
       throw new Error('The description must be at least 30 characters');
     }
     if (patch.province !== undefined && !patch.province) throw new Error('Choose a province');
+    const media = patch.media
+      ? await Promise.all(patch.media.map((item) => this.api.uploadMedia(me.id, item)))
+      : p.media;
 
     const next: Post = {
       ...p,
       title: patch.title !== undefined ? patch.title.trim() : p.title,
       body: patch.body !== undefined ? patch.body.trim() : p.body,
-      media: patch.media ?? p.media,
+      media,
       province: patch.province ?? p.province,
       town: patch.town !== undefined ? patch.town.trim() : p.town,
       lastSeenAt: patch.lastSeenAt !== undefined ? patch.lastSeenAt : p.lastSeenAt,
@@ -519,6 +541,7 @@ export class DataService {
       caseNumber: patch.caseNumber !== undefined ? patch.caseNumber?.trim() || null : p.caseNumber,
       reward: patch.reward !== undefined ? patch.reward?.trim() || null : p.reward,
       subject: patch.subject !== undefined ? patch.subject : p.subject,
+      vehicleDetails: patch.vehicleDetails !== undefined ? patch.vehicleDetails : p.vehicleDetails ?? null,
       audience: patch.audience ?? p.audience,
       spotlightId: patch.spotlightId !== undefined ? patch.spotlightId : p.spotlightId,
       chatEnabled: patch.chatEnabled ?? p.chatEnabled,
@@ -623,6 +646,12 @@ export class DataService {
   }
 
   /* ------------------------ following -------------------------- */
+  async followStatus(targetId: string): Promise<'accepted' | 'pending' | null> {
+    const me = this.auth.viewerId;
+    if (!me || me === targetId) return null;
+    return this.api.followStatus(me, targetId);
+  }
+
   async isFollowing(targetId: string): Promise<boolean> {
     const me = this.auth.viewerId;
     if (!me || me === targetId) return false;
@@ -634,15 +663,19 @@ export class DataService {
     if (!me) throw new Error('Sign in to follow');
     if (me === targetId) throw new Error('You cannot follow yourself');
     if (this.auth.user()?.suspended) throw new Error('Your account is suspended');
-    const already = await this.api.isFollowing(me, targetId);
-    if (already) {
+    const existing = await this.api.followStatus(me, targetId);
+    if (existing === 'accepted') {
       await this.api.unfollow(me, targetId);
       this.followingIds.set(this.followingIds().filter((x) => x !== targetId));
       return false;
     }
+    if (existing === 'pending') {
+      await this.api.unfollow(me, targetId);
+      return false;
+    }
     const outcome = await this.api.follow(me, targetId);
     if (outcome === 'pending') {
-      // they approve requests first - nothing counts until they say yes
+      // They approve requests first. Nothing counts until they say yes.
       await this.api.pushNotification({
         id: uid('n'), userId: targetId, kind: 'follow',
         title: 'New follow request',
@@ -719,11 +752,8 @@ export class DataService {
     if (!me || !sp) throw new Error('That community is not here any more');
     if (me.suspended) throw new Error('Your account is suspended, so you cannot join communities');
     if (sp.memberIds.includes(me.id)) return false;
-    await this.api.saveSpotlight({
-      ...sp,
-      memberIds: [...sp.memberIds, me.id],
-      followers: sp.followers + 1
-    });
+    const joined = await this.api.setSpotlightMembership(id, me.id, true);
+    if (!joined) throw new Error('That community is not here any more');
     await this.loadStatic();
     return true;
   }
@@ -733,12 +763,8 @@ export class DataService {
     const sp = await this.api.spotlight(id);
     if (!me || !sp || !sp.memberIds.includes(me)) return;
     if (sp.ownerId === me) throw new Error('You created this community. Delete it instead of leaving.');
-    await this.api.saveSpotlight({
-      ...sp,
-      memberIds: sp.memberIds.filter((x) => x !== me),
-      adminIds: sp.adminIds.filter((x) => x !== me),
-      followers: Math.max(0, sp.followers - 1)
-    });
+    const left = await this.api.setSpotlightMembership(id, me, false);
+    if (!left) return;
     await this.loadStatic();
   }
 
@@ -822,14 +848,20 @@ export class DataService {
     if (me.suspended) throw new Error('Your account is suspended');
     if (!input.text.trim() && !input.media.length) throw new Error('Add a photo or some words');
     const audience = input.audience ?? 'public';
-    if (audience === 'surname' && !input.spotlightId) throw new Error('Choose which Spotlight community should see this story');
+    if (audience === 'surname' && (!input.spotlightId || !this.isMember(input.spotlightId))) {
+      throw new Error('Choose a Spotlight community you have joined.');
+    }
+    if (input.media.length > 3 || input.media.some((item) => item.kind !== 'image')) {
+      throw new Error('A story can contain up to three photos. Video stories are not available yet.');
+    }
+    const media = await Promise.all(input.media.map((item) => this.api.uploadMedia(me.id, item)));
     const now = Date.now();
     const s: Story = {
       id: uid('s'),
       authorId: me.id,
       createdAt: now,
       expiresAt: now + 24 * HOUR,
-      media: input.media,
+      media,
       text: input.text.trim(),
       bgHue: input.bgHue,
       viewers: [],
@@ -850,7 +882,7 @@ export class DataService {
       if (s.authorId === me) return true;
       if (s.audience === 'public') return true;
       if (!me) return false;
-      if (s.audience === 'followers') return this.followerIds().includes(me);
+      if (s.audience === 'followers') return this.followingIds().includes(s.authorId);
       if (s.audience === 'surname') {
         if (!s.spotlightId) return false;
         const sp = this.spotlights().find((x) => x.id === s.spotlightId);
@@ -862,26 +894,41 @@ export class DataService {
 
   async markStorySeen(storyId: string): Promise<void> {
     const me = this.auth.viewerId;
-    const s = this.stories().find((x) => x.id === storyId);
-    if (!s || !me || s.viewers.includes(me)) return;
-    await this.api.saveStory({ ...s, viewers: [...s.viewers, me] });
+    const s = this.visibleStories().find((x) => x.id === storyId);
+    if (!s || !me || s.authorId === me || s.viewers.includes(me)) return;
+    const views = await this.api.storyViewsFor(storyId);
+    if (views.some((view) => view.viewerId === me)) return;
+    const view: StoryView = { id: `sv_${storyId}_${me}`, storyId, viewerId: me, at: Date.now() };
+    await this.api.saveStoryView(view);
     await this.loadStatic();
   }
 
   async replyToStory(storyId: string, body: string): Promise<void> {
     const me = this.auth.viewerId;
-    const s = this.stories().find((x) => x.id === storyId);
-    if (!s || !me) return;
-    await this.api.saveStory({
-      ...s,
-      replies: [...s.replies, { id: uid('r'), authorId: me, body: body.trim(), at: Date.now() }]
-    });
+    const text = body.trim();
+    const s = this.visibleStories().find((x) => x.id === storyId);
+    if (!me) throw new Error('Sign in to reply to a story');
+    if (!s) throw new Error('This story is no longer available to you');
+    if (!text) throw new Error('Write a reply first');
+    const reply: StoryReply = { id: uid('r'), storyId, authorId: me, body: text, at: Date.now() };
+    await this.api.saveStoryReply(reply);
+    if (s.authorId !== me) {
+      await this.notify({
+        userId: s.authorId,
+        kind: 'story_reply',
+        title: 'A reply to your story',
+        body: `${this.auth.user()?.displayName ?? 'Someone'}: ${text.slice(0, 100)}`,
+        route: `/story/${s.id}`,
+        postId: null
+      });
+    }
     await this.loadStatic();
   }
 
   async deleteStory(storyId: string): Promise<void> {
     const s = this.stories().find((x) => x.id === storyId);
     if (!s) return;
+    if (s.authorId !== this.auth.viewerId) throw new Error('Only the person who shared this story can remove it');
     await this.api.saveStory({ ...s, expiresAt: 0 });
     await this.loadStatic();
   }
@@ -1250,6 +1297,7 @@ export class DataService {
       route: accept ? `/user/${me}` : null, postId: null
     });
     await this.loadFollowRequests();
+    await this.loadUserScoped();
   }
 
   /* ------------------------- search party ------------------------- */

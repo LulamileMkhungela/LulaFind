@@ -8,95 +8,47 @@ Last updated: 26 September 2026. This file is the source of truth for what is co
 
 | Backend | Used for | Not used for |
 |---------|----------|-------------|
-| **Supabase** | All data: posts, comments, follows, Spotlights, chat, stories, user profiles, notifications | Firebase email templates |
-| **Firebase** | The three account emails only: email verification, password reset, and email-change undo | Firestore, Realtime Database, Cloud Storage, Analytics — none of these are used |
+| **Supabase** | Email/password accounts, Google OAuth, email confirmation and password recovery; all app data and photos | — |
+| **Firebase** | Not used by the current app flow. The project and its legacy email templates remain configured but are not the auth provider. | Firestore, Realtime Database, Cloud Storage, Analytics, account emails |
 
-The app picks the backend at startup in `src/app/app.config.ts`:
-1. If `environment.supabaseUrl` and `environment.supabaseKey` are set → **SupabaseApi** (real database)
-2. Else if `environment.dataMode === 'firebase'` → **FirebaseApi** (Firestore)
-3. Otherwise → **MockApi** (localStorage, no backend needed)
+The app picks its data adapter at startup in `src/app/app.config.ts`:
+1. If `environment.supabaseUrl` and `environment.supabaseKey` are set → **SupabaseApi** and the Supabase Auth client.
+2. Else if `environment.dataMode === 'firebase'` → **FirebaseApi** for data only; this is not the configured authentication flow.
+3. Otherwise → **MockApi** and local demo credentials.
 
-Both `environment.ts` and `environment.prod.ts` set `dataMode: 'supabase'` and include the real credentials. **The app writes to Supabase by default.**
-
----
-
-## Live check (26 September 2026)
-
-| Piece | Status |
-|-------|--------|
-| Supabase project | ✅ Live at `https://srwdtguxdjsjlkaydhet.supabase.co` |
-| `records` table | ✅ Exists. Empty — no seed data in the live DB. |
-| Anonymous read | ✅ RLS allows public read of all collections. |
-| Anonymous write | ✅ Blocked. A signed-in session is required. |
-| Email provider (Supabase Auth) | ✅ Enabled. Confirm email is **OFF** (Firebase sends it). |
-| Google provider (Supabase Auth) | ✅ Enabled. |
-| Apple provider | ✅ OFF — the app does not offer Apple sign-in. |
-| Phone provider | ✅ OFF — no phone field anywhere in the app. |
-| Firebase project | ✅ `lulafinds-app` at `lulafinds-app.firebaseapp.com` |
-| Firebase email templates | ✅ All three templates are configured (verify, reset, change). |
-| Firebase Auth page | ✅ `https://lulafinds-app.firebaseapp.com/__/auth/action` returns 200. |
-| `liveSupabaseEnabled()` | ✅ Fixed — reads `environment.supabaseUrl` and `environment.supabaseKey` correctly. Previously broken (was reading `environment.supabase?.url` which did not exist). |
-| `SupabaseApi` | ✅ Real implementation using `@supabase/supabase-js`. Real-time via `postgres_changes`. |
-| Supabase redirect URLs | ⚠️ You must add your URLs manually — see section below. |
-| Firebase `storageBucket` | ⚠️ Empty string in `environment.ts`. Not needed unless Firebase Storage is used (it isn't). |
-| Firebase `appId` | ⚠️ Empty string. Not needed unless Firebase Analytics is used (it isn't). |
-| Email delivery | ❓ Not verified from an inbox. The template page exists; whether the message arrives depends on Firebase and the recipient's mail server. |
-| Android or iOS app | ❓ Not launched in this check — no Android SDK and no Xcode available here. |
+Both `environment.ts` and `environment.prod.ts` set `dataMode: 'supabase'` and include the publishable Supabase key. Live email/password, Google OAuth and recovery therefore require Supabase Auth; the source code does not use Firebase Auth for those journeys.
 
 ---
 
-## `records` table schema
+## Configuration status (26 September 2026)
 
-The Supabase project stores all domain objects in a single flat table:
-
-```sql
-CREATE TABLE records (
-  id          text PRIMARY KEY,
-  collection  text NOT NULL,
-  owner_id    text,
-  data        jsonb NOT NULL,
-  created_at  timestamptz DEFAULT now(),
-  updated_at  timestamptz DEFAULT now()
-);
-
--- Index for collection queries (the most common read path)
-CREATE INDEX idx_records_collection ON records (collection);
-
--- Index for owner-scoped queries
-CREATE INDEX idx_records_owner ON records (collection, owner_id);
-
--- Partial indexes for the most common feed filters
-CREATE INDEX idx_records_province ON records USING gin ((data->'province'))
-  WHERE collection = 'posts';
-```
-
-The `collection` column holds values: `users`, `posts`, `comments`, `spotlights`, `stories`, `threads`, `messages`, `follows`, `notifications`, `tips`.
-
-Row-level security must be enabled. Suggested policies:
-
-```sql
--- Anyone may read any row
-CREATE POLICY "public read"
-  ON records FOR SELECT USING (true);
-
--- A signed-in user may insert rows they own
-CREATE POLICY "authenticated insert"
-  ON records FOR INSERT
-  WITH CHECK (auth.uid()::text = owner_id OR owner_id IS NULL);
-
--- A signed-in user may update or delete only their own rows
-CREATE POLICY "owner update"
-  ON records FOR UPDATE
-  USING (auth.uid()::text = owner_id);
-
-CREATE POLICY "owner delete"
-  ON records FOR DELETE
-  USING (auth.uid()::text = owner_id);
-```
+| Piece | What the repository confirms |
+|-------|------------------------------|
+| Supabase source configuration | `environment.ts` contains the project URL and publishable key; this does not prove a live request succeeds. |
+| Records schema | `supabase/schema.sql` uses `(collection, id)` as the key, `owner_id uuid`, and `payload jsonb`. The hosted schema and policies have not been checked from this code session. |
+| Story privacy migration | `supabase/story-privacy.sql` is the idempotent migration for an existing project. It backfills legacy reply/viewer projections into private rows, strips them from story payloads, and replaces the known RLS policies. It has not been run against the hosted database. |
+| Auth source code | Supabase Auth is used when `SupabaseApi` is active: email/password, confirmation callback, password recovery, and Google OAuth callback/session restore. |
+| Supabase providers and SMTP | Must be verified in the dashboard; the source code cannot enable providers or guarantee mail delivery. |
+| Redirect URLs | Must be allowed in Supabase Auth and Google OAuth settings; see the list below. Preview domains may need the exact Arena origin. |
+| Firebase project/templates | Legacy configuration only; the current auth flow does not call Firebase Auth or its email action page. |
+| Live writes, OAuth consent, and email delivery | Not verified against the hosted project in this session. |
+| Android/iOS OAuth callback | Native deep-link round-trip has not been exercised on a device. |
 
 ---
 
-## Redirect URLs (required for Google sign-in)
+## `records` table schema and RLS
+
+The Supabase adapter stores domain records in one flat table. The authoritative, repeatable SQL is [`supabase/schema.sql`](../supabase/schema.sql): it defines `id text`, `collection text`, `owner_id uuid`, `payload jsonb`, and `updated_at bigint`, with a composite primary key on `(collection, id)`. The adapter reads and writes `payload` (not `data`).
+
+For a new project, run `supabase/schema.sql`. For the existing project, run `supabase/story-privacy.sql`; it replaces the known `lula read`/write policies, migrates old embedded story replies and viewers into separate RLS-protected records, removes those private projections from each story row, and installs the same audience checks used by the new-project schema. It also removes the old broad Spotlight-update and reports-read policies, replacing unrestricted membership writes with `lula_set_spotlight_membership()`.
+
+The photos bucket is private. New uploads are stored as object paths, and the adapter obtains a one-hour signed URL only after RLS confirms the viewer can access the referencing post or story. This prevents a permanent public storage URL from bypassing story audiences (a signed link can still be shared while it remains valid). Full `users` records are readable only by their owner (or a trusted moderator); the `lula_user_profiles_public` view strips email/admin fields and returns exact check-in coordinates only during an opted-in, active live share. Town/province sharing is off until the person opts in; stats and Spotlight membership follow their visibility switches. In Supabase, assign `app_metadata.role` (`admin` or `moderator`) only through a trusted server/Admin API; RLS ignores client-editable profile flags for privileges. The app also orders Supabase records by the schema's `updated_at` column (not the nonexistent `created_at` column), so cloud reads no longer silently fall back to local demo data for that query error.
+
+The migration has not been run against the hosted project from this session. After applying it, run `supabase/verify-rls.sql` in the SQL editor; it inserts rollback-only fixtures and asserts sanitized public profiles, owner-only full profiles, denied self-assigned privileges, public/follower/Spotlight visibility, story-photo signing, author-only insights, legacy post status, private follow approval, and denied cross-audience reply writes. Then smoke-test with two real accounts. `lula_post_visible()` treats legacy posts with a missing status as active, not SQL `NULL`/hidden.
+
+---
+
+## Redirect URLs (required for OAuth and recovery)
 
 In Supabase → **Authentication → URL Configuration → Redirect URLs**, add:
 
@@ -108,19 +60,16 @@ https://localhost/**
 capacitor://localhost/auth
 https://lulafind.co.za/auth
 https://lulafind.co.za/**
+https://**.e2b.app/**
 ```
 
-Without these, Google sign-in succeeds on Google's side but the callback fails when it returns to the app.
+Add the exact preview origin if the wildcard is rejected. Configure the Google provider in Supabase and use the callback URL shown in the dashboard in the Google OAuth client's authorized redirect URIs. Google consent happens on Google's site; the callback returns to LulaFind. Password-reset email redirects return to `/auth?mode=newpass`.
 
 ---
 
-## Firebase email templates
+## Legacy Firebase settings
 
-The three templates are already configured in the Firebase console for `lulafinds-app`. The links in each email open `https://lulafinds-app.firebaseapp.com/__/auth/action`. The person finishes the action on that page, then returns to the LulaFind app and signs in.
-
-Do not change the template links. Do not add a custom domain to the Firebase Auth action URL unless you have tested the full round-trip.
-
-Reply-to is set to `mkhungela.lulamile1@gmail.com`. Change this to a business address before public launch.
+Firebase email templates and action pages are not called by the current auth service. Keep them separate from the Supabase confirmation/recovery flow. The app does not currently implement Firebase Auth or a native Firebase OAuth callback.
 
 ---
 
@@ -128,15 +77,14 @@ Reply-to is set to `mkhungela.lulamile1@gmail.com`. Change this to a business ad
 
 | Step | Why |
 |------|-----|
-| Run the `records` table SQL (schema above) in the Supabase SQL editor | The table does not exist in the live project yet. `SupabaseApi` will throw on every write until it does. |
-| Enable RLS and add the policies above | Without RLS, any anonymous request can write or delete any row. |
-| Add the redirect URLs listed above | Required for Google sign-in to complete. |
-| Replace `SUPPORT_EMAIL` in `src/app/core/config.ts` | Currently a personal Gmail address. Use a business / support address. |
-| Set `SHOW_DEMO_OTP = false` in `src/app/core/config.ts` | Currently `true` — the OTP code is displayed on screen for demo testing. Turn it off before public launch. |
-| Set `firebase.storageBucket` and `firebase.appId` | Only needed if you add Firebase Storage or Analytics. Both are currently empty and do not block the app. |
-| Add a real privacy policy URL | Required by both the Play Store and App Store. The current Terms screen is a placeholder. |
-| Configure FCM for push notifications | Requires the FCM server key in `android/app/google-services.json` and an APNs certificate for iOS. |
-| Test the full email round-trip | Send a real verification email and open it on a phone. |
+| Verify the remote `records` columns match `supabase/schema.sql` (`payload`, composite key, UUID owner) | The source was inspected; the hosted database was not queried in this session. |
+| Run `supabase/story-privacy.sql` and then `supabase/verify-rls.sql` in the SQL editor | Migrates private story data and policies; the rollback-only check verifies audience, follow-request, reply/view, and legacy-status rules. |
+| Confirm Supabase Email and Google providers are enabled and configure email delivery | Needed for confirmation, reset links, and OAuth. Settings and inbox delivery are not verified by a local build. |
+| Add allowed redirect URLs for production and the exact preview origin | OAuth and recovery callbacks must return to `/auth`. |
+| Replace `SUPPORT_EMAIL` in `src/app/core/config.ts` | Use a monitored business/support address before public launch. |
+| Add a real privacy policy URL | Required by both the Play Store and App Store; the current Terms screen is a placeholder. |
+| Configure FCM for push notifications | Requires the FCM server key and APNs configuration for iOS. |
+| Test full auth recovery and OAuth round-trips with real accounts | Confirms provider settings, callbacks, and email delivery on actual domains/devices. |
 
 ---
 
@@ -145,11 +93,11 @@ Reply-to is set to `mkhungela.lulamile1@gmail.com`. Change this to a business ad
 | Feature | Wired in source | Live on a real account |
 |---------|----------------|----------------------|
 | Create, edit, delete a post | `DataService.createPost`, `updatePost`, `deletePost` → `SupabaseApi.savePost`, `deletePost` | Not watched on a live account in this check |
-| Create, join, edit, delete a Spotlight | `DataService.createSpotlight`, `updateSpotlight`, `deleteSpotlight` → `SupabaseApi` methods | Not watched |
+| Create, join, edit, delete a Spotlight | Owner edits use `SupabaseApi.saveSpotlight`; joins/leaves use `lula_set_spotlight_membership()` to avoid broad row-update rights | Not watched |
 | 24-hour stories — disappear after expiry | `expiresAt` set to `Date.now() + 86400000`; `SupabaseApi.stories()` filters at read time | Not watched for 24 hours |
 | Follow / unfollow | `DataService.toggleFollow` → `SupabaseApi.follow`, `unfollow` | Not watched with two accounts |
 | Private chat (three-gate: chatEnabled + upvote + mutual follow) | `ChatService.gate()` checks all three; `ChatService.ensureThread` creates the thread | Not watched with two accounts |
-| Report a post | `ModerationService.report()` — saves to `localStorage` in mock mode; writes a `notifications` row in Supabase mode | Not watched |
+| Report a post | `ModerationService.report()` currently saves to the local device store; cloud report persistence is not wired | Local demo only |
 | Contact us | `mailto:` link in Help and Settings → opens mail app | Link confirmed in source |
 | Sign out | Clears `localStorage` session, sets `user` signal to null, navigates to `/auth` | Not watched on a device |
 | Real-time updates | `SupabaseApi.init()` subscribes to `postgres_changes` on the `records` table | Not watched with a second device |

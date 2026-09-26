@@ -79,7 +79,7 @@ import { UserProfile, Post, PROVINCES } from '../../core/models/types';
                 <lf-avatar [src]="data.avatarFor(u)" [name]="u.displayName" [size]="44" />
                 <div class="lf-grow">
                   <strong>{{ u.displayName }}</strong>
-                  <span class="lf-meta">&#64;{{ u.handle }} · {{ u.town }}</span>
+                  <span class="lf-meta">&#64;{{ u.handle }}@if (u.privacy && u.privacy.showLocation === true && u.town) { · {{ u.town }} }</span>
                 </div>
               </a>
             }

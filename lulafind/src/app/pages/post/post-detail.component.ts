@@ -68,8 +68,8 @@ import { leadMarkView } from '../../core/utils/mark-check';
                 </div>
               </div>
               @if (!isMine()) {
-                <button class="lf-btn lf-btn--sm" [class.lf-btn--ghost]="following()" (click)="toggleFollow()">
-                  {{ following() ? 'Following' : 'Follow' }}
+                <button class="lf-btn lf-btn--sm" [class.lf-btn--ghost]="following() || followRequested()" (click)="toggleFollow()">
+                  {{ following() ? 'Following' : followRequested() ? 'Requested' : 'Follow' }}
                 </button>
               }
             </div>
@@ -611,7 +611,7 @@ import { leadMarkView } from '../../core/utils/mark-check';
                 <lf-avatar [src]="data.avatarFor(u)" [name]="u.displayName" [size]="36" />
                 <span>
                   <strong>{{ u.displayName }}</strong>
-                  <small>&#64;{{ u.handle }}@if (u.town) { · {{ u.town }} }</small>
+                  <small>&#64;{{ u.handle }}@if (u.privacy && u.privacy.showLocation === true && u.town) { · {{ u.town }} }</small>
                 </span>
               </button>
             }
@@ -851,6 +851,7 @@ export class PostDetailComponent implements OnInit {
   comments = signal<Comment[]>([]);
   gate = signal<ChatGate>({ allowed: true, reason: 'open' });
   following = signal(false);
+  followRequested = signal(false);
   saved = signal(false);
   draft = '';
   replyDraft = '';
@@ -881,7 +882,9 @@ export class PostDetailComponent implements OnInit {
     }
     this.comments.set(await this.data.comments(id));
     await this.refreshGate();
-    this.following.set(this.p() ? await this.data.isFollowing(this.p()!.authorId) : false);
+    const followState = this.p() ? await this.data.followStatus(this.p()!.authorId) : null;
+    this.following.set(followState === 'accepted');
+    this.followRequested.set(followState === 'pending');
     this.saved.set(this.data.savedIds().includes(id));
   }
 
@@ -938,7 +941,8 @@ export class PostDetailComponent implements OnInit {
   roleLine(): string {
     const rel = this.p()?.subject?.relationship;
     if (this.p()?.anonymous && !this.isMine()) return 'Posted anonymously';
-    return rel ? `Reports as: ${rel}` : this.author()?.town || '';
+    const author = this.author();
+    return rel ? `Reports as: ${rel}` : author?.privacy?.showLocation === true ? author.town : '';
   }
 
   showContact(): boolean {
@@ -973,7 +977,10 @@ export class PostDetailComponent implements OnInit {
     if (!this.auth.signedIn()) return this.needAuth();
     const p = this.p();
     if (!p) return;
-    this.following.set(await this.data.toggleFollow(p.authorId));
+    await this.data.toggleFollow(p.authorId);
+    const state = await this.data.followStatus(p.authorId);
+    this.following.set(state === 'accepted');
+    this.followRequested.set(state === 'pending');
     await this.refreshGate();
   }
 
@@ -1309,9 +1316,13 @@ export class PostDetailComponent implements OnInit {
     }
     if (g.step === 'follow') {
       await this.data.toggleFollow(p.authorId);
-      this.following.set(true);
+      const state = await this.data.followStatus(p.authorId);
+      this.following.set(state === 'accepted');
+      this.followRequested.set(state === 'pending');
       await this.refreshGate();
-      await this.say('Following. Chat opens when they follow you back.');
+      await this.say(state === 'pending'
+        ? 'Follow request sent. Chat opens after they accept and follow you back.'
+        : 'Following. Chat opens when they follow you back.');
       return;
     }
     await this.say((g as any).reason ?? 'Chat unavailable');

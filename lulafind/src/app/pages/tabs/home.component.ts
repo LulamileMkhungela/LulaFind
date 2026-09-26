@@ -2,7 +2,6 @@ import { Component, computed, effect, inject, signal } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import { IonContent } from '@ionic/angular/ion-content';
 import { IonHeader } from '@ionic/angular/ion-header';
-import { IonToolbar } from '@ionic/angular/ion-toolbar';
 import { IonRefresher } from '@ionic/angular/ion-refresher';
 import { IonRefresherContent } from '@ionic/angular/ion-refresher-content';
 import { IonInfiniteScroll } from '@ionic/angular/ion-infinite-scroll';
@@ -30,7 +29,7 @@ import { POST_TYPE_META, Post } from '../../core/models/types';
   selector: 'lf-home',
   standalone: true,
   imports: [
-    IonContent, IonHeader, IonToolbar, IonRefresher, IonRefresherContent,
+    IonContent, IonHeader, IonRefresher, IonRefresherContent,
     IonInfiniteScroll, IonInfiniteScrollContent, IonSkeletonText,
     RouterLink, IconComponent, AvatarComponent, EmptyComponent, PostCardComponent, StoryRailComponent, FilterBarComponent
   ],

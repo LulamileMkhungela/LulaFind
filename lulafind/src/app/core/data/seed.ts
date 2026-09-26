@@ -964,7 +964,7 @@ export const seedStories = (): Story[] => [
     id: 's1', authorId: 'u_demo', createdAt: now - 3 * HOUR, expiresAt: now + 21 * HOUR,
     media: [{ id: 'sm1', kind: 'image', src: scene('Prayer vigil - Orlando', 'vigil', 'night') }],
     text: 'Prayer vigil at Orlando community hall tonight, 19:00. Bring a candle. #FindThato',
-    bgHue: 28, viewers: ['u_lerato', 'u_kabelo'], replies: [{ id: 'r1', authorId: 'u_lerato', body: 'On my way', at: now - 2 * HOUR }], audience: 'public', spotlightId: null
+    bgHue: 28, viewers: ['u_lerato', 'u_kabelo'], replies: [{ id: 'r1', storyId: 's1', authorId: 'u_lerato', body: 'On my way', at: now - 2 * HOUR }], audience: 'public', spotlightId: null
   },
   {
     id: 's2', authorId: 'u_ayanda', createdAt: now - 8 * HOUR, expiresAt: now + 16 * HOUR,

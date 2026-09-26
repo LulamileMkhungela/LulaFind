@@ -1,6 +1,6 @@
 import { Observable, Subject } from 'rxjs';
 import {
-  ChatMessage, ChatThread, Comment, FeedFilter, FollowEdge, Notification, Post, Spotlight, Story, Tip, UserProfile
+  ChatMessage, ChatThread, Comment, FeedFilter, FollowEdge, MediaItem, Notification, Post, Spotlight, Story, StoryReply, StoryView, Tip, UserProfile
 } from '../models/types';
 import { LulaApi } from './api';
 
@@ -165,14 +165,37 @@ export class FirebaseApi implements LulaApi {
   async spotlights() { return this.getList<Spotlight>(this.col('spotlights')); }
   async spotlight(id: string) { return this.getOne<Spotlight>(`spotlights/${id}`); }
   async saveSpotlight(s: Spotlight) { await this.set(`spotlights/${s.id}`, s as unknown as Record<string, unknown>); }
+  async setSpotlightMembership(id: string, memberId: string, joining: boolean) {
+    const spotlight = await this.spotlight(id);
+    if (!spotlight) return undefined;
+    const memberIds = joining
+      ? [...new Set([...spotlight.memberIds, memberId])]
+      : spotlight.memberIds.filter((current) => current !== memberId);
+    const next = { ...spotlight, memberIds, followers: memberIds.length };
+    await this.saveSpotlight(next);
+    return next;
+  }
   async deleteSpotlight(id: string) { await this.remove(`spotlights/${id}`); }
 
   /* stories */
+  async uploadMedia(_ownerId: string, item: MediaItem) { return item; }
   async stories() {
     const all = await this.getList<Story>(this.q.query(this.col('stories'), this.q.orderBy('createdAt', 'desc'), this.q.limit(100)));
     return all.filter((s) => s.expiresAt > Date.now());
   }
   async saveStory(s: Story) { await this.set(`stories/${s.id}`, s as unknown as Record<string, unknown>); }
+  async storyRepliesFor(storyId: string) {
+    return this.getList<StoryReply>(this.col(`stories/${storyId}/replies`));
+  }
+  async saveStoryReply(reply: StoryReply) {
+    await this.set(`stories/${reply.storyId}/replies/${reply.id}`, reply as unknown as Record<string, unknown>);
+  }
+  async storyViewsFor(storyId: string) {
+    return this.getList<StoryView>(this.col(`stories/${storyId}/views`));
+  }
+  async saveStoryView(view: StoryView) {
+    await this.set(`stories/${view.storyId}/views/${view.id}`, view as unknown as Record<string, unknown>);
+  }
 
   /* chat */
   async threadsFor(userId: string) {
@@ -192,8 +215,17 @@ export class FirebaseApi implements LulaApi {
 
   /* follows */
   async isFollowing(a: string, b: string) {
+    return (await this.followStatus(a, b)) === 'accepted';
+  }
+  async followStatus(a: string, b: string): Promise<FollowEdge['status'] | null> {
     const snap = await this.q.getDoc(this.doc(`follows/${a}__${b}`));
-    return snap.exists() && (snap.data() as FollowEdge | undefined)?.status !== 'pending';
+    return snap.exists() ? (snap.data() as FollowEdge | undefined)?.status ?? null : null;
+  }
+  async followsFor(userId: string, direction: 'followers' | 'following'): Promise<FollowEdge[]> {
+    const all = await this.getList<FollowEdge>(this.col('follows'));
+    return all.filter((edge) =>
+      edge.status === 'accepted' && (direction === 'followers' ? edge.followingId === userId : edge.followerId === userId)
+    );
   }
   /**
    * Follow someone. Returns 'pending' when they approve requests first.

@@ -37,8 +37,9 @@ export type ChatState = 'off' | 'locked-vote' | 'locked-follow' | 'open';
             <span class="fb-author-name">{{ authorName() }}</span>
             @if (showFollow()) {
               <span class="fb-dot">·</span>
-              <button class="fb-follow-link" [class.on]="followingAuthor()" (click)="onFollow($event)">
-                {{ followingAuthor() ? 'Following' : 'Follow' }}
+              <button class="fb-follow-link" [class.on]="followingAuthor()" [class.requested]="followRequested()"
+                      [attr.aria-pressed]="followingAuthor() || followRequested()" (click)="onFollow($event)">
+                {{ followingAuthor() ? 'Following' : followRequested() ? 'Requested' : 'Follow' }}
               </button>
             }
           </div>
@@ -184,6 +185,7 @@ export type ChatState = 'off' | 'locked-vote' | 'locked-follow' | 'open';
       padding: 0;
     }
     .fb-follow-link.on { color: #65676b; }
+    .fb-follow-link.requested { color: #65676b; }
     .fb-sub-meta {
       display: flex;
       align-items: center;
@@ -292,6 +294,7 @@ export class PostCardComponent implements OnInit, OnChanges {
 
   saved = signal(false);
   followingAuthor = signal(false);
+  followRequested = signal(false);
   expanded = signal(false);
 
   protected readonly compact = compact;
@@ -337,17 +340,27 @@ export class PostCardComponent implements OnInit, OnChanges {
   private syncFollow(): void {
     const id = this.post?.authorId;
     if (!id) return;
-    void this.data.isFollowing(id).then((v) => this.followingAuthor.set(v));
+    void this.data.followStatus(id).then((status) => {
+      this.followingAuthor.set(status === 'accepted');
+      this.followRequested.set(status === 'pending');
+    });
   }
 
   async onFollow(e: Event): Promise<void> {
     e.preventDefault();
     e.stopPropagation();
-    if (!this.auth.signedIn() || !this.post) return;
+    if (!this.post) return;
+    if (!this.auth.signedIn()) {
+      await this.router.navigate(['/auth'], { queryParams: { mode: 'signin', next: this.router.url } });
+      return;
+    }
     try {
-      this.followingAuthor.set(await this.data.toggleFollow(this.post.authorId));
-    } catch { /* caller handles feedback */ }
-    this.follow.emit(this.post);
+      await this.data.toggleFollow(this.post.authorId);
+      const status = await this.data.followStatus(this.post.authorId);
+      this.followingAuthor.set(status === 'accepted');
+      this.followRequested.set(status === 'pending');
+      this.follow.emit(this.post);
+    } catch { /* the profile has a full follow control with feedback */ }
   }
 
   statusLabel(): string {

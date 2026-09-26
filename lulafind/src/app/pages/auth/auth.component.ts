@@ -19,12 +19,8 @@ type Mode = 'welcome' | 'signup' | 'signin' | 'forgot' | 'newpass';
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
 /**
- * Snapchat-style Auth Flow & UI.
- *
- * Welcome screen: Snapchat Yellow background, ghost/logo, "Continue with Google", "Sign Up", "Log in".
- * Login screen: "USERNAME OR EMAIL", "PASSWORD", "Log in" pill button, "Continue with Google".
- * Signup flow: 5-step Snapchat wizard (Name -> Username -> Password -> Email -> Province & Terms).
- * NO phone number login, NO passkeys, NO email verification code step!
+ * LulaFind account flow: email + password, Google OAuth, recovery, and a compact profile setup.
+ * The screens keep the social-app familiarity while making age, terms and privacy choices explicit.
  */
 @Component({
   selector: 'lf-auth',
@@ -77,12 +73,12 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
           <div class="snap-body">
             <div class="snap-field">
-              <label class="snap-label">USERNAME OR EMAIL</label>
-              <input class="snap-input" type="text" placeholder="Username or email"
+              <label class="snap-label">EMAIL ADDRESS</label>
+              <input class="snap-input" type="email" autocomplete="email" placeholder="you@example.co.za"
                      [value]="f.email" (input)="f.email = $any($event.target).value"
                      (blur)="touched.email = true" />
               @if (touched.email && !emailOk() && f.email.length > 0) {
-                <p class="field-err">Enter a valid email address or username</p>
+                <p class="field-err">Enter a valid email address</p>
               }
             </div>
 
@@ -127,6 +123,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
             </label>
 
             @if (error()) { <p class="err-msg"><lf-icon name="alert" [size]="15" /> {{ error() }}</p> }
+            @if (notice()) { <p class="ok-msg"><lf-icon name="check" [size]="15" /> {{ notice() }}</p> }
           </div>
         </section>
       }
@@ -263,6 +260,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
             }
 
             @if (error()) { <p class="err-msg"><lf-icon name="alert" [size]="15" /> {{ error() }}</p> }
+            @if (notice()) { <p class="ok-msg"><lf-icon name="check" [size]="15" /> {{ notice() }}</p> }
           </div>
         </section>
       }
@@ -289,6 +287,43 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
           </div>
         </section>
       }
+
+      @if (mode() === 'newpass') {
+        <section class="lf-fade-in snap-form">
+          <div class="snap-header">
+            <button class="snap-back" type="button" (click)="mode.set('signin')" aria-label="Back to sign in">
+              <lf-icon name="arrowLeft" [size]="22" />
+            </button>
+            <h1 class="snap-title">Choose a new password</h1>
+            <div style="width:32px"></div>
+          </div>
+          <div class="snap-body">
+            <p class="snap-subtext">Use at least 8 characters. You can sign in with it straight away.</p>
+            <div class="snap-field">
+              <label class="snap-label" for="new-password">NEW PASSWORD</label>
+              <div class="snap-pass-wrap">
+                <input id="new-password" class="snap-input" [type]="showPass() ? 'text' : 'password'"
+                       autocomplete="new-password" placeholder="At least 8 characters"
+                       [value]="f.newPassword" (input)="f.newPassword = $any($event.target).value" />
+                <button class="eye-btn" type="button" (click)="showPass.set(!showPass())" aria-label="Toggle password visibility">
+                  <lf-icon [name]="showPass() ? 'eyeOff' : 'eye'" [size]="18" />
+                </button>
+              </div>
+            </div>
+            <div class="snap-field">
+              <label class="snap-label" for="confirm-password">CONFIRM NEW PASSWORD</label>
+              <input id="confirm-password" class="snap-input" type="password" autocomplete="new-password"
+                     placeholder="Enter it again" [value]="f.confirmPassword"
+                     (input)="f.confirmPassword = $any($event.target).value" />
+            </div>
+            <button class="snap-btn snap-btn--blue snap-block" [disabled]="busy()" (click)="saveNewPassword()">
+              {{ busy() ? 'Saving…' : 'Save new password' }}
+            </button>
+            @if (error()) { <p class="err-msg" role="alert"><lf-icon name="alert" [size]="15" /> {{ error() }}</p> }
+            @if (notice()) { <p class="ok-msg"><lf-icon name="check" [size]="15" /> {{ notice() }}</p> }
+          </div>
+        </section>
+      }
     </ion-content>
 
     @if (legal()) {
@@ -310,14 +345,15 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
     }
   `,
   styles: [`
-    .welcome-bg { --background: #fffc00 !important; }
+    .welcome-bg { --background: #f0f2f5 !important; }
     .snap-welcome {
-      min-height: 100vh;
+      min-height: 100dvh;
+      box-sizing: border-box;
       display: flex;
       flex-direction: column;
       justify-content: space-between;
-      padding: 60px 24px 40px;
-      background: #fffc00;
+      padding: max(56px, env(safe-area-inset-top)) 24px max(28px, env(safe-area-inset-bottom));
+      background: #f0f2f5;
     }
     .snap-logo-wrap {
       flex: 1;
@@ -326,13 +362,15 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
       justify-content: center;
     }
     .ghost-logo {
-      font-size: 54px;
-      font-weight: 900;
-      letter-spacing: -2px;
-      color: #000;
+      font-size: clamp(46px, 14vw, 64px);
+      font-weight: 850;
+      letter-spacing: -2.6px;
+      color: #1877f2;
+      line-height: 1;
+      text-shadow: 0 4px 18px rgba(24,119,242,.12);
     }
-    .mark { color: #000; }
-    .mark--2 { color: #000; }
+    .mark { color: #1877f2; }
+    .mark--2 { color: #1c1e21; }
 
     .snap-bottom-cta {
       display: flex;
@@ -364,13 +402,14 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
       box-shadow: 0 4px 14px rgba(0,0,0,0.1);
     }
     .snap-btn--blue {
-      background: #0fb2ff;
+      background: #1877f2;
       color: #ffffff;
-      box-shadow: 0 4px 14px rgba(0, 178, 255, 0.3);
+      box-shadow: 0 4px 14px rgba(24, 119, 242, .2);
     }
     .snap-btn--black {
-      background: #000000;
-      color: #ffffff;
+      background: #ffffff;
+      color: #1c1e21;
+      border: 1px solid #ced0d4;
     }
     .snap-block { width: 100%; margin-top: 10px; }
 
@@ -384,7 +423,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
     .snap-link {
       background: none;
       border: 0;
-      color: #0088ff;
+      color: #1877f2;
       font-weight: 800;
       font-size: 14px;
       cursor: pointer;
@@ -401,13 +440,18 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
     /* Snapchat Form Screens */
     .snap-form {
-      padding: 16px 24px 40px;
+      box-sizing: border-box;
+      padding: max(16px, env(safe-area-inset-top)) 24px max(28px, env(safe-area-inset-bottom));
       max-width: 440px;
-      margin: 0 auto;
+      width: min(100% - 24px, 440px);
+      margin: 12px auto max(12px, env(safe-area-inset-bottom));
       display: flex;
       flex-direction: column;
-      min-height: 100vh;
+      min-height: calc(100dvh - 24px);
+      border: 1px solid #e4e6eb;
+      border-radius: 16px;
       background: #ffffff;
+      box-shadow: 0 10px 32px rgba(20, 42, 72, .07);
     }
     .snap-header {
       display: flex;
@@ -460,7 +504,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
     .snap-label {
       font-size: 11px;
       font-weight: 800;
-      color: #0088ff;
+      color: #1877f2;
       letter-spacing: 0.5px;
     }
     .snap-input, .snap-select {
@@ -475,8 +519,8 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
       width: 100%;
     }
     .snap-input:focus, .snap-select:focus {
-      border-color: #0fb2ff;
-      box-shadow: 0 0 0 2px rgba(15, 178, 255, 0.2);
+      border-color: #1877f2;
+      box-shadow: 0 0 0 2px rgba(24, 119, 242, .15);
     }
     .snap-pass-wrap {
       position: relative;
@@ -496,7 +540,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
     .snap-text-link {
       background: none;
       border: 0;
-      color: #0088ff;
+      color: #1877f2;
       font-size: 14px;
       font-weight: 700;
       margin-top: 12px;
@@ -529,7 +573,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
       margin-top: 18px;
       justify-content: center;
     }
-    .snap-checkbox-row input { accent-color: #0fb2ff; width: 18px; height: 18px; }
+    .snap-checkbox-row input { accent-color: #1877f2; width: 18px; height: 18px; }
 
     .snap-ident-card {
       display: flex;
@@ -569,13 +613,13 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
       color: #333333;
       line-height: 1.4;
     }
-    .snap-check input { accent-color: #0fb2ff; width: 20px; height: 20px; flex-shrink: 0; }
+    .snap-check input { accent-color: #1877f2; width: 20px; height: 20px; flex-shrink: 0; }
 
-    .field-err { color: #ff3b30; font-size: 12px; font-weight: 600; margin: 4px 0 0; }
-    .err-msg { color: #ff3b30; font-size: 13px; margin: 12px 0 0; text-align: center; display: flex; align-items: center; justify-content: center; gap: 6px; }
-    .ok-msg { color: #34c759; font-size: 13px; margin: 12px 0 0; text-align: center; display: flex; align-items: center; justify-content: center; gap: 6px; }
+    .field-err { color: #d93025; font-size: 12px; font-weight: 600; margin: 4px 0 0; }
+    .err-msg { color: #d93025; font-size: 13px; margin: 12px 0 0; text-align: center; display: flex; align-items: center; justify-content: center; gap: 6px; }
+    .ok-msg { color: #148a52; font-size: 13px; margin: 12px 0 0; text-align: center; display: flex; align-items: center; justify-content: center; gap: 6px; }
 
-    .linklike { background: none; border: 0; color: #0088ff; font-weight: 700; cursor: pointer; text-decoration: underline; padding: 0; font-size: inherit; }
+    .linklike { background: none; border: 0; color: #1877f2; font-weight: 700; cursor: pointer; text-decoration: underline; padding: 0; font-size: inherit; }
 
     .legal { position: fixed; inset: 0; z-index: 40; background: rgba(0, 0, 0, 0.6); display: flex; align-items: flex-end; justify-content: center; }
     .legal .sheet { width: 100%; max-width: 520px; max-height: 86vh; overflow-y: auto; background: #ffffff; border-radius: 18px 18px 0 0; padding: 20px 20px 32px; color: #000; }
@@ -608,7 +652,7 @@ export class AuthComponent implements OnInit {
   touched = { name: false, email: false, password: false, surname: false, province: false, over18: false, terms: false, otp: false };
 
   f = {
-    displayName: '', email: '', password: '', surname: '', otp: '',
+    displayName: '', email: '', password: '', newPassword: '', confirmPassword: '', surname: '', otp: '',
     province: null as ProvinceCode | null, town: ''
   };
 
@@ -632,7 +676,12 @@ export class AuthComponent implements OnInit {
   }
 
   ngOnInit(): void {
-    this.next = (this.route.snapshot.queryParamMap.get('next') as string) || '/home';
+    const requestedNext = this.route.snapshot.queryParamMap.get('next') ?? '/home';
+    this.next = requestedNext.startsWith('/') && !requestedNext.startsWith('//') ? requestedNext : '/home';
+    const requestedMode = this.route.snapshot.queryParamMap.get('mode');
+    if (requestedMode === 'signup' || requestedMode === 'signin' || requestedMode === 'forgot' || requestedMode === 'newpass') {
+      this.mode.set(requestedMode);
+    }
     void this.afterRestore();
   }
 
@@ -640,13 +689,16 @@ export class AuthComponent implements OnInit {
     for (let i = 0; i < 50 && !this.auth.ready(); i++) {
       await new Promise((resolve) => setTimeout(resolve, 40));
     }
+    if (this.mode() === 'newpass' || this.auth.passwordRecovery()) {
+      this.mode.set('newpass');
+      return;
+    }
     if (this.auth.signedIn()) {
       await this.afterAuth();
       return;
     }
-    if (this.auth.passwordRecovery()) {
-      this.mode.set('newpass');
-      return;
+    if (this.mode() === 'signup') {
+      await this.loadHandles();
     }
     const pending = this.auth.pendingProvider();
     if (pending) {
@@ -664,6 +716,7 @@ export class AuthComponent implements OnInit {
 
   startSignup(): void {
     this.error.set('');
+    this.notice.set('');
     this.signupStep.set(1);
     this.mode.set('signup');
     void this.loadHandles();
@@ -763,7 +816,13 @@ export class AuthComponent implements OnInit {
       else await this.auth.signUp(payload);
       await this.afterAuth();
     } catch (e: any) {
-      this.error.set(String(e?.message ?? 'Could not create the account'));
+      const message = String(e?.message ?? 'Could not create the account');
+      if (message === 'EMAIL_CONFIRMATION_REQUIRED') {
+        this.notice.set('Check your email and follow the confirmation link to finish creating your account.');
+        this.mode.set('signin');
+      } else {
+        this.error.set(message);
+      }
     } finally {
       this.busy.set(false);
     }
@@ -773,7 +832,7 @@ export class AuthComponent implements OnInit {
     this.error.set('');
     if (!this.f.email.trim()) {
       this.touched.email = true;
-      this.error.set('Enter your username or email.');
+      this.error.set('Enter your email address.');
       return;
     }
     if (!this.f.password) {
@@ -800,7 +859,7 @@ export class AuthComponent implements OnInit {
       await this.afterAuth();
     } catch (e: any) {
       const msg = String(e?.message ?? '');
-      if (msg === 'GOOGLE_REDIRECT') return;
+      if (msg === 'OAUTH_REDIRECT' || msg === 'GOOGLE_REDIRECT') return;
       if (msg === 'NEW_ACCOUNT') {
         const pending = this.auth.pendingProvider();
         if (pending) {
@@ -823,8 +882,15 @@ export class AuthComponent implements OnInit {
     if (!this.emailOk()) { this.error.set('Enter the email on the account.'); return; }
     this.busy.set(true);
     try {
-      await this.auth.sendPasswordReset(this.f.email);
-      this.notice.set('Password reset link sent to your email.');
+      const result = await this.auth.sendPasswordReset(this.f.email);
+      if (result === 'preview') {
+        this.notice.set('Offline preview: email delivery is not configured, so you can set a new password now.');
+        this.f.newPassword = '';
+        this.f.confirmPassword = '';
+        this.mode.set('newpass');
+      } else {
+        this.notice.set('If an account exists for that email, a password reset link has been sent. Check your inbox.');
+      }
     } catch (e: any) {
       this.error.set(e?.message ?? 'Could not send a reset link.');
     } finally {
@@ -832,11 +898,37 @@ export class AuthComponent implements OnInit {
     }
   }
 
+  async saveNewPassword(): Promise<void> {
+    this.error.set('');
+    if (this.f.newPassword.length < 8) { this.error.set('Use at least 8 characters for your new password.'); return; }
+    if (this.f.newPassword !== this.f.confirmPassword) { this.error.set('The passwords do not match.'); return; }
+    this.busy.set(true);
+    try {
+      const profile = await this.auth.completePasswordReset(this.f.newPassword);
+      this.f.newPassword = '';
+      this.f.confirmPassword = '';
+      this.auth.passwordRecovery.set(false);
+      if (!profile) {
+        this.mode.set('signin');
+        this.notice.set('Password changed. Sign in with your new password.');
+        return;
+      }
+      await this.afterAuth();
+    } catch (e: any) {
+      this.error.set(e?.message ?? 'Could not update your password. Request a new reset link.');
+    } finally {
+      this.busy.set(false);
+    }
+  }
+
   browse(): void {
+    this.auth.setGuestBrowsing(true);
     void this.router.navigate(['/home']);
   }
 
   private async afterAuth(): Promise<void> {
+    this.auth.setGuestBrowsing(false);
+    this.auth.passwordRecovery.set(false);
     await this.data.refresh();
     await this.router.navigateByUrl(this.next);
   }

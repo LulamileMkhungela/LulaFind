@@ -37,10 +37,8 @@ interface StoredAccount {
 /**
  * Auth + session.
  *
- * Mode 1 (default, environment.dataMode='mock'): local accounts kept in
- * localStorage so the whole product is testable without any backend.
- * Mode 2 (environment.dataMode='firebase'): Firebase Auth email/password plus
- * Google and Apple sign-in. The call sites are identical either way.
+ * Live Supabase mode uses Supabase Auth for email/password, recovery and Google OAuth.
+ * Mock mode keeps local hashed demo credentials so the journeys can be tested offline.
  *
  * Deliberately NO phone-number sign-up, per product decision.
  */
@@ -74,11 +72,43 @@ export class AuthService {
     return this.injectedApi;
   }
 
+  /** The production adapter exposes its Supabase auth client; mock mode does not. */
+  private get supabaseAuth(): any | null {
+    return (this.api as LulaApi & { client?: { auth?: any } }).client?.auth ?? null;
+  }
+
+  private redirectUrl(path = '/auth'): string {
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    return `${origin}${path}`;
+  }
+
+  private recoveryLinkPresent(): boolean {
+    if (typeof window === 'undefined') return false;
+    const query = new URLSearchParams(window.location.search);
+    const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+    return query.get('mode') === 'newpass' || query.get('type') === 'recovery' || hash.get('type') === 'recovery';
+  }
+
   private restored = false;
+  private authSubscription: { unsubscribe: () => void } | null = null;
 
   attachApi(_api?: LulaApi): void {
     if (this.restored) return;
     this.restored = true;
+    const supa = this.supabaseAuth;
+    if (supa) {
+      const { data } = supa.onAuthStateChange((event: string, session: any) => {
+        if (event === 'PASSWORD_RECOVERY' || this.recoveryLinkPresent()) this.passwordRecovery.set(true);
+        if (session?.user) {
+          // Keep Supabase calls out of its auth-state callback lock.
+          setTimeout(() => void this.resolveSupabaseUser(session.user).catch((e) => console.warn('Auth callback:', e)), 0);
+        } else if (event === 'SIGNED_OUT') {
+          this.user.set(null);
+          this.store.remove('session');
+        }
+      });
+      this.authSubscription = data?.subscription ?? null;
+    }
     void this.restore();
   }
 
@@ -94,13 +124,79 @@ export class AuthService {
   }
 
   private async restore(): Promise<void> {
-    const userId = this.store.get<string | null>('session', null);
-    if (userId) {
-      const u = await this.api.user(userId);
-      if (u) this.user.set(u);
-      else this.store.remove('session');
+    try {
+      const supa = this.supabaseAuth;
+      if (supa) {
+        if (this.recoveryLinkPresent()) this.passwordRecovery.set(true);
+        const { data, error } = await supa.getSession();
+        if (error) throw error;
+        if (data.session?.user) await this.resolveSupabaseUser(data.session.user);
+        else {
+          // A local demo session must never impersonate a Supabase account.
+          this.store.remove('session');
+          if (this.recoveryLinkPresent()) this.passwordRecovery.set(true);
+        }
+        return;
+      }
+      const userId = this.store.get<string | null>('session', null);
+      if (userId) {
+        const u = await this.api.user(userId);
+        if (u) this.user.set(u);
+        else this.store.remove('session');
+      }
+    } catch (e) {
+      console.warn('Could not restore authentication session:', e);
+    } finally {
+      this.ready.set(true);
     }
-    this.ready.set(true);
+  }
+
+  private isTrustedSupabaseAdmin(authUser: any): boolean {
+    const role = String(authUser?.app_metadata?.role ?? '').toLowerCase();
+    return role === 'admin' || role === 'moderator';
+  }
+
+  private withTrustedSupabaseRole(profile: UserProfile, authUser: any): UserProfile {
+    return { ...profile, isAdmin: this.isTrustedSupabaseAdmin(authUser) };
+  }
+
+  private async resolveSupabaseUser(authUser: any): Promise<void> {
+    if (!authUser?.id) return;
+    const existing = await this.api.user(authUser.id);
+    if (existing) {
+      const profile = this.withTrustedSupabaseRole(existing, authUser);
+      this.user.set(profile);
+      this.store.set('session', existing.id);
+      this.pendingProvider.set(null);
+      return;
+    }
+
+    const metadata = authUser.user_metadata ?? {};
+    if (metadata.lulafindSignupComplete === true && metadata.acceptedTerms === true && metadata.over18 === true) {
+      const displayName = String(metadata.displayName ?? metadata.full_name ?? metadata.name ?? '').trim();
+      const parsed = parseFullName(displayName);
+      const province = metadata.province as UserProfile['province'] | undefined;
+      if (parsed && province) {
+        const profile = this.withTrustedSupabaseRole(await this.makeProfile({
+          displayName: parsed.full,
+          email: String(authUser.email ?? metadata.email ?? ''),
+          password: '', surname: parsed.surname,
+          province, town: String(metadata.town ?? ''),
+          over18: true, acceptedTerms: true
+        }, authUser.id), authUser);
+        await this.api.saveUser(profile);
+        this.user.set(profile);
+        this.store.set('session', profile.id);
+        this.pendingProvider.set(null);
+        return;
+      }
+    }
+
+    const email = String(authUser.email ?? '');
+    const displayName = String(metadata.full_name ?? metadata.name ?? metadata.displayName ?? email.split('@')[0] ?? 'LulaFind member');
+    const provider = (authUser.app_metadata?.provider === 'apple' ? 'apple' : 'google') as AuthProvider;
+    this.pendingProvider.set({ provider, displayName, email, surname: parseFullName(displayName)?.surname ?? '' });
+    this.user.set(null);
   }
 
   /** Public browsing is allowed; this is the profile shown when signed out. */
@@ -191,18 +287,28 @@ export class AuthService {
    */
   async completePasswordReset(newPassword: string, _otp?: string): Promise<UserProfile | null> {
     if (newPassword.length < 8) throw new Error('Password must be at least 8 characters');
-    const userId = this.store.get<string | null>('session', null);
-    if (!userId) {
-      // No live session - account may not be fully created yet.
-      return null;
+    const supa = this.supabaseAuth;
+    if (supa) {
+      const { data, error } = await supa.updateUser({ password: newPassword });
+      if (error) throw error;
+      if (data.user) await this.resolveSupabaseUser(data.user);
+      this.passwordRecovery.set(false);
+      return this.user();
     }
+
+    const userId = this.store.get<string | null>('session', null)
+      ?? this.store.get<string | null>('password-reset-user', null);
+    if (!userId) throw new Error('This reset link is no longer valid. Request a new one.');
     const accs = this.accounts();
     const idx = accs.findIndex((a) => a.userId === userId);
-    if (idx === -1) throw new Error('Account not found - sign in first');
+    if (idx === -1) throw new Error('Account not found - request another reset link.');
     accs[idx] = { ...accs[idx], secret: this.hash(newPassword) };
     this.store.set('accounts', accs);
+    this.store.remove('password-reset-user');
+    this.store.set('session', userId);
     const u = await this.api.user(userId);
     if (u) this.user.set(u);
+    this.passwordRecovery.set(false);
     return u ?? null;
   }
 
@@ -252,33 +358,15 @@ export class AuthService {
     this.saveOtps(all);
   }
 
-  async signUp(p: SignUpPayload): Promise<UserProfile> {
-    const email = p.email.trim().toLowerCase();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) throw new Error('Enter a valid email address');
-
-    // Check the duplicate first - telling someone their email is already
-    // registered matters more than any other field-level nit.
-    const existing = await this.api.users();
-    if (existing.some((u) => u.email.toLowerCase() === email)) {
-      throw new Error('An account already exists with that email. Try signing in.');
-    }
-
-    // The second name is the surname, and that surname is the username.
-    // A surname typed in a separate field is ignored — the full name is the source.
+  private async makeProfile(p: SignUpPayload, id: string): Promise<UserProfile> {
     const parsed = parseFullName(p.displayName);
     if (!parsed) throw new Error('Enter your first name and surname');
-    if (!p.provider && p.password.length < 8) throw new Error('Password must be at least 8 characters');
-    if (!p.provider && p.otpVerified !== true) throw new Error('Enter the code we emailed you');
-    if (!p.over18) throw new Error('You must be 18 or older to use LulaFind');
-    if (!p.acceptedTerms) throw new Error('Accept the terms before you continue');
-
-    const handle = nextHandle(parsed.username, existing.map((u) => u.handle));
-    const id = uid('u');
-    const profile: UserProfile = {
+    const existing = await this.api.users();
+    return {
       id,
-      email,
+      email: p.email.trim().toLowerCase(),
       displayName: parsed.full,
-      handle,
+      handle: nextHandle(parsed.username, existing.map((u) => u.handle)),
       avatarHue: hueOf(parsed.full),
       bio: '',
       province: p.province,
@@ -302,26 +390,95 @@ export class AuthService {
       privacy: defaultPrivacy(),
       checkIn: null
     };
-    await this.api.saveUser(profile);
+  }
 
-    if (!p.provider) {
+  async signUp(p: SignUpPayload): Promise<UserProfile> {
+    const email = p.email.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) throw new Error('Enter a valid email address');
+    const existing = await this.api.users();
+    if (existing.some((u) => u.email.toLowerCase() === email)) {
+      throw new Error('An account already exists with that email. Try signing in.');
+    }
+    const parsed = parseFullName(p.displayName);
+    if (!parsed) throw new Error('Enter your first name and surname');
+    if (!p.provider && p.password.length < 8) throw new Error('Password must be at least 8 characters');
+    if (!p.provider && p.otpVerified !== true) throw new Error('Enter the code we emailed you');
+    if (!p.province) throw new Error('Choose your province');
+    if (!p.over18) throw new Error('You must be 18 or older to use LulaFind');
+    if (!p.acceptedTerms) throw new Error('Accept the terms before you continue');
+
+    const supa = this.supabaseAuth;
+    let id: string;
+    let supabaseSessionUser: any = null;
+    if (supa && p.provider) {
+      const { data, error } = await supa.getSession();
+      if (error) throw error;
+      if (!data.session?.user) throw new Error('Finish signing in with your provider first');
+      supabaseSessionUser = data.session.user;
+      id = data.session.user.id;
+    } else if (supa) {
+      const { data, error } = await supa.signUp({
+        email,
+        password: p.password,
+        options: {
+          emailRedirectTo: this.redirectUrl('/auth'),
+          data: {
+            lulafindSignupComplete: true,
+            displayName: parsed.full,
+            province: p.province,
+            town: p.town.trim(),
+            over18: true,
+            acceptedTerms: true
+          }
+        }
+      });
+      if (error) throw error;
+      if (!data.user) throw new Error('The account could not be created. Try again.');
+      if (!data.session) throw new Error('EMAIL_CONFIRMATION_REQUIRED');
+      supabaseSessionUser = data.user;
+      id = data.user.id;
+    } else {
+      id = uid('u');
+    }
+
+    const profile = await this.makeProfile({ ...p, email }, id);
+    await this.api.saveUser(profile);
+    if (!supa && !p.provider) {
       this.consumeOtp(email);
       const accs = this.accounts();
       accs.push({ email, secret: this.hash(p.password), userId: id });
       this.store.set('accounts', accs);
     }
+    const signedInProfile = supabaseSessionUser
+      ? this.withTrustedSupabaseRole(profile, supabaseSessionUser)
+      : profile;
     this.store.set('session', id);
-    this.user.set(profile);
-    return profile;
+    this.user.set(signedInProfile);
+    this.pendingProvider.set(null);
+    return signedInProfile;
   }
 
   async signIn(email: string, password: string): Promise<UserProfile> {
     const em = email.trim().toLowerCase();
-    if (!em) throw new Error('Enter your email');
+    if (!em) throw new Error('Enter your email address');
     if (!password) throw new Error('Enter your password');
+    const supa = this.supabaseAuth;
+    if (supa) {
+      if (!em.includes('@')) throw new Error('Use the email address on your LulaFind account to sign in.');
+      const { data, error } = await supa.signInWithPassword({ email: em, password });
+      if (error) throw error;
+      if (!data.user) throw new Error('Sign-in did not return an account. Try again.');
+      const storedProfile = await this.api.user(data.user.id);
+      if (!storedProfile) throw new Error('Your account needs profile setup. Contact support if you already completed it.');
+      const profile = this.withTrustedSupabaseRole(storedProfile, data.user);
+      this.store.set('session', profile.id);
+      this.user.set(profile);
+      this.passwordRecovery.set(false);
+      return profile;
+    }
+
     const acc = this.accounts().find((a) => a.email === em);
     if (!acc) {
-      // Email is known to the OTP system (confirmed) but no profile was finished.
       const allUsers = await this.api.users();
       if (allUsers.some((u) => u.email.toLowerCase() === em)) {
         this.confirmedEmail.set(em);
@@ -335,21 +492,21 @@ export class AuthService {
     if (!u) throw new Error('Account data is missing - contact support');
     this.store.set('session', acc.userId);
     this.user.set(u);
+    this.passwordRecovery.set(false);
     return u;
   }
 
-  /**
-   * Google and Apple sign-in. Both providers go through exactly the same path:
-   * existing email -> straight in; new email -> the sign-up form with the name,
-   * email and avatar already filled in, so the person still confirms they are
-   * 18+, accepts the terms and picks a province.
-   *
-   * Mock mode resolves the provider locally so the flow is testable without a
-   * Google or Apple developer account. In Firebase mode replace `resolveProvider`
-   * with signInWithPopup(auth, new GoogleAuthProvider()) / OAuthProvider('apple.com')
-   * and return the same shape - nothing else in the app changes.
-   */
+  /** Start the real OAuth redirect when Supabase is configured. */
   async signInWithProvider(provider: AuthProvider): Promise<UserProfile> {
+    const supa = this.supabaseAuth;
+    if (supa) {
+      const { error } = await supa.signInWithOAuth({
+        provider,
+        options: { redirectTo: this.redirectUrl('/auth') }
+      });
+      if (error) throw error;
+      throw new Error('OAUTH_REDIRECT');
+    }
     const info = await this.resolveProvider(provider);
     const existing = await this.api.users();
     const found = existing.find((u) => u.email.toLowerCase() === info.email.toLowerCase());
@@ -358,7 +515,6 @@ export class AuthService {
       this.user.set(found);
       return found;
     }
-    // Hand the details to the form instead of creating a half-empty account.
     this.pendingProvider.set({ provider, ...info });
     throw new Error('NEW_ACCOUNT');
   }
@@ -383,10 +539,22 @@ export class AuthService {
     return this.signUp(p);
   }
 
-  async sendPasswordReset(email: string): Promise<void> {
+  async sendPasswordReset(email: string): Promise<'sent' | 'preview'> {
     const em = email.trim().toLowerCase();
-    if (!this.accounts().some((a) => a.email === em)) throw new Error('No LulaFind account with that email');
-    // Mock mode: nothing to send. Firebase mode: sendPasswordResetEmail(auth, em).
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(em)) throw new Error('Enter a valid email address');
+    const supa = this.supabaseAuth;
+    if (supa) {
+      const { error } = await supa.resetPasswordForEmail(em, {
+        redirectTo: this.redirectUrl('/auth?mode=newpass')
+      });
+      if (error) throw error;
+      return 'sent';
+    }
+    const account = this.accounts().find((item) => item.email === em);
+    if (!account) throw new Error('If an account exists for that email, a reset link will be sent.');
+    this.store.set('password-reset-user', account.userId);
+    this.passwordRecovery.set(true);
+    return 'preview';
   }
 
   /** Demo account lets reviewers (and Play Store testers) in instantly. */
@@ -399,7 +567,13 @@ export class AuthService {
   }
 
   async signOut(): Promise<void> {
+    if (this.supabaseAuth) {
+      const { error } = await this.supabaseAuth.signOut();
+      if (error) throw error;
+    }
     this.store.remove('session');
+    this.pendingProvider.set(null);
+    this.passwordRecovery.set(false);
     this.user.set(null);
     await this.router.navigate(['/auth']);
   }
