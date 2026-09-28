@@ -1,6 +1,7 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import { IonContent } from '@ionic/angular/ion-content';
+import { IonHeader } from '@ionic/angular/ion-header';
 import { IonModal } from '@ionic/angular/ion-modal';
 import { IonInput } from '@ionic/angular/ion-input';
 import { IonTextarea } from '@ionic/angular/ion-textarea';
@@ -28,10 +29,20 @@ import { MediaService } from '../../core/services/media.service';
   selector: 'lf-me',
   standalone: true,
   imports: [
-    IonContent, IonModal, IonInput, IonTextarea, IonSelect, IonSelectOption, IonItem, IonLabel, IonToggle,
+    IonContent, IonHeader, IonModal, IonInput, IonTextarea, IonSelect, IonSelectOption, IonItem, IonLabel, IonToggle,
     RouterLink, IconComponent, AvatarComponent, EmptyComponent, PostCardComponent
   ],
   template: `
+    <ion-header class="fb-head">
+      <div class="fb-head__bar">
+        <h1 class="fb-head__title">Menu</h1>
+        <div class="fb-head__tools">
+          <button class="lf-round-btn" routerLink="/settings" aria-label="Settings"><lf-icon name="settings" [size]="20" /></button>
+          <button class="lf-round-btn" routerLink="/search" aria-label="Search"><lf-icon name="search" [size]="20" [weight]="2.4" /></button>
+        </div>
+      </div>
+    </ion-header>
+
     <ion-content class="lf-page">
       @if (!me()) {
         <lf-empty icon="user" title="You are browsing as a guest"
@@ -39,23 +50,21 @@ import { MediaService } from '../../core/services/media.service';
                   actionLabel="Sign in / Sign up" (action)="goAuth()" />
       } @else {
         <div class="hero">
-          <button class="face" type="button" (click)="addPhoto()" aria-label="Add a profile photo">
-            <lf-avatar [src]="avatar()" [name]="me()!.displayName" [size]="84" [ring]="true"
+          <div class="cover" aria-hidden="true"></div>
+          <button class="face" type="button" (click)="addPhoto()" [attr.aria-label]="me()!.avatarUrl ? 'Change profile photo' : 'Add a profile photo'">
+            <lf-avatar [src]="avatar()" [name]="me()!.displayName" [size]="128"
                        [status]="me()!.checkIn?.status ?? null" />
-            <span>{{ me()!.avatarUrl ? 'Change photo' : 'Add photo' }}</span>
+            <span class="cam"><lf-icon name="camera" [size]="18" /></span>
           </button>
-          <div class="lf-row-between">
-            <div>
-              <h1 class="lf-h2">
-                {{ me()!.displayName }}
-                @if (me()!.verified) { <lf-icon name="award" [size]="16" /> }
-              </h1>
-              <div class="lf-meta">&#64;{{ me()!.handle }} · {{ location() }}</div>
-              @if (contributorLabel(me()!.contributorCredits)) {
-                <span class="lf-contrib" [class.top]="mostNamed()">{{ contributorLabel(me()!.contributorCredits) }}</span>
-              }
-            </div>
-            <button class="lf-icon-btn" routerLink="/settings"><lf-icon name="settings" [size]="20" /></button>
+          <div>
+            <h1 class="name">
+              {{ me()!.displayName }}
+              @if (me()!.verified) { <lf-icon name="award" [size]="18" /> }
+            </h1>
+            <div class="lf-meta">&#64;{{ me()!.handle }} · {{ location() }}</div>
+            @if (contributorLabel(me()!.contributorCredits)) {
+              <span class="lf-contrib" [class.top]="mostNamed()" style="margin-top:6px">{{ contributorLabel(me()!.contributorCredits) }}</span>
+            }
           </div>
           @if (me()!.bio) { <p class="bio">{{ me()!.bio }}</p> }
           <div class="stats">
@@ -96,39 +105,45 @@ import { MediaService } from '../../core/services/media.service';
             </div>
           }
           <p class="ring-key">{{ ringKey }}</p>
-          <div class="lf-row" style="gap:8px;flex-wrap:wrap">
-            <button class="lf-btn lf-btn--primary lf-btn--sm" routerLink="/user/{{ me()!.id }}">
-              <lf-icon name="shield" [size]="15" /> Check in
+          <div class="actions">
+            <button class="lf-btn lf-btn--primary" routerLink="/user/{{ me()!.id }}">
+              <lf-icon name="shield" [size]="16" /> Check in
             </button>
-            <button class="lf-btn lf-btn--ghost lf-btn--sm" (click)="editing.set(true); prepareEdit()">
-              <lf-icon name="edit" [size]="15" /> Edit profile
+            <button class="lf-btn" (click)="editing.set(true); prepareEdit()">
+              <lf-icon name="edit" [size]="16" /> Edit profile
             </button>
-            <button class="lf-btn lf-btn--ghost lf-btn--sm" (click)="shareProfile()">
-              <lf-icon name="share" [size]="15" /> Share
+            <button class="lf-btn icon-only" (click)="shareProfile()" aria-label="Share profile">
+              <lf-icon name="share" [size]="16" />
             </button>
           </div>
-          <div class="lf-meta" style="margin-top:10px">Joined {{ dayMonth(me()!.createdAt) }}</div>
+          <div class="lf-meta"><lf-icon name="clock" [size]="14" /> Joined {{ dayMonth(me()!.createdAt) }}</div>
         </div>
 
+        <h2 class="fb-section-title">All shortcuts</h2>
         <div class="quick">
-          <a class="q" routerLink="/notifications"><lf-icon name="bell" [size]="20" /><span>Alerts</span>
+          <a class="q" routerLink="/saved"><span class="qi qi-purple"><lf-icon name="bookmark" [size]="20" /></span><span>Saved</span>
+            @if (data.savedIds().length) { <em class="lf-count">{{ data.savedIds().length }}</em> }</a>
+          <a class="q" routerLink="/connections"><span class="qi qi-blue"><lf-icon name="users" [size]="20" /></span><span>Friends</span>
+            @if (data.followRequests().length) { <em class="lf-badge">{{ data.followRequests().length }}</em> }</a>
+          <a class="q" routerLink="/notifications"><span class="qi qi-blue"><lf-icon name="bell" [size]="20" /></span><span>Alerts</span>
             @if (data.unreadNotifications() > 0) { <em class="lf-badge">{{ data.unreadNotifications() }}</em> }</a>
-          <a class="q" routerLink="/safety"><lf-icon name="shield" [size]="20" /><span>Safety</span></a>
-          <a class="q" routerLink="/tips"><lf-icon name="info" [size]="20" /><span>Tips</span></a>
-          <a class="q" routerLink="/spotlight"><lf-icon name="users" [size]="20" /><span>Spotlight</span></a>
-          <a class="q" routerLink="/settings"><lf-icon name="lock" [size]="20" /><span>Privacy</span></a>
+          <a class="q" routerLink="/safety"><span class="qi qi-green"><lf-icon name="shield" [size]="20" /></span><span>Safety</span></a>
+          <a class="q" routerLink="/tips"><span class="qi qi-yellow"><lf-icon name="info" [size]="20" /></span><span>Tips</span></a>
+          <a class="q" routerLink="/spotlight"><span class="qi qi-teal"><lf-icon name="users" [size]="20" /></span><span>Spotlight</span></a>
+          <a class="q" routerLink="/settings"><span class="qi qi-grey"><lf-icon name="lock" [size]="20" /></span><span>Privacy</span></a>
           @if (isAdmin()) {
-            <a class="q" routerLink="/admin"><lf-icon name="shield" [size]="20" /><span>Admin</span>
+            <a class="q" routerLink="/admin"><span class="qi qi-red"><lf-icon name="shield" [size]="20" /></span><span>Admin</span>
               @if (mod.openCount() > 0) { <em class="lf-badge">{{ mod.openCount() }}</em> }</a>
           }
-          <a class="q" (click)="signOut()"><lf-icon name="logout" [size]="20" /><span>Sign out</span></a>
+          <a class="q" routerLink="/help"><span class="qi qi-red"><lf-icon name="phone" [size]="20" /></span><span>Get help</span></a>
+          <a class="q" (click)="signOut()"><span class="qi qi-grey"><lf-icon name="logout" [size]="20" /></span><span>Sign out</span></a>
         </div>
 
         @if (data.followRequests().length) {
           <div class="requests">
             <div class="lf-row-between">
               <h3 class="lf-h2"><lf-icon name="users" [size]="16" /> Follow requests</h3>
-              <span class="lf-badge">{{ data.followRequests().length }}</span>
+              <a class="see-all" routerLink="/connections" [queryParams]="{ tab: 'requests' }">See all</a>
             </div>
             @for (r of requestPeople(); track r.id) {
               <div class="req">
@@ -144,6 +159,7 @@ import { MediaService } from '../../core/services/media.service';
           </div>
         }
 
+        <h2 class="fb-section-title">Posts</h2>
         <div class="tabs">
           @for (t of tabs; track t.key) {
             <button class="tab" [class.on]="tab() === t.key" (click)="tab.set(t.key)">{{ t.label }}</button>
@@ -160,10 +176,8 @@ import { MediaService } from '../../core/services/media.service';
                     actionLabel="Create a post" (action)="create()" />
         }
 
-        <div class="lf-pad lf-safe-bottom" style="padding-top:18px">
-          <button class="lf-btn lf-btn--ghost lf-btn--block" (click)="signOut()">
-            <lf-icon name="logout" [size]="16" /> Sign out
-          </button>
+        <div class="lf-pad lf-safe-bottom" style="padding-top:12px">
+          <button class="lf-btn lf-btn--block" (click)="signOut()">Log out</button>
         </div>
       }
     </ion-content>
@@ -259,45 +273,66 @@ import { MediaService } from '../../core/services/media.service';
     </ion-modal>
   `,
   styles: [`
-    .hero { padding: 26px var(--lf-gap) 14px; display: flex; flex-direction: column; gap: 12px;
-      background: linear-gradient(180deg, color-mix(in srgb, var(--lf-beacon) 9%, transparent), transparent 70%); }
-    .hero h1 { display: flex; align-items: center; gap: 6px; }
-    .hero h1 lf-icon { color: var(--lf-beacon); }
-    .bio { margin: 0; font-size: 14px; line-height: 1.5; }
-    .status { display: inline-flex; align-items: center; gap: 7px; align-self: flex-start; padding: 7px 12px; flex-wrap: wrap;
-      border-radius: 999px; font-size: 12.5px; font-weight: 700;
+    .hero { position: relative; padding: 0 16px 16px; display: flex; flex-direction: column; gap: 10px;
+      background: var(--lf-card); box-shadow: var(--lf-shadow); }
+    .cover { height: 150px; margin: 0 -16px -76px;
+      background: linear-gradient(135deg, color-mix(in srgb, var(--lf-primary) 55%, var(--lf-card)), color-mix(in srgb, var(--lf-primary) 18%, var(--lf-card-2))); }
+    .face { position: relative; align-self: flex-start; border: 0; background: transparent; color: inherit; padding: 0; cursor: pointer;
+      border-radius: 50%; box-shadow: 0 0 0 4px var(--lf-card); }
+    .cam { position: absolute; right: 2px; bottom: 6px; width: 34px; height: 34px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center; background: var(--lf-card-2); color: var(--ion-text-color);
+      box-shadow: 0 0 0 2px var(--lf-card); }
+    .name { display: flex; align-items: center; gap: 6px; margin: 4px 0 2px; font-size: 24px; font-weight: 700; letter-spacing: -.3px; }
+    .name lf-icon { color: var(--lf-primary); }
+    .bio { margin: 0; font-size: 15px; line-height: 1.34; }
+    .actions { display: flex; gap: 8px; }
+    .actions .lf-btn { flex: 1; }
+    .actions .icon-only { flex: 0 0 44px; padding: 0; }
+    .status { display: inline-flex; align-items: center; gap: 7px; align-self: flex-start; padding: 6px 10px; flex-wrap: wrap;
+      border-radius: 6px; font-size: 13px; font-weight: 600;
       background: color-mix(in srgb, var(--lf-marigold) 18%, transparent); }
-    .clear { border: 0; background: transparent; color: inherit; font-weight: 800; font-size: 12px; cursor: pointer; text-decoration: underline; }
-    .status.safe { background: color-mix(in srgb, var(--lf-ubuntu) 18%, transparent); }
-    .stats { display: flex; gap: 18px; }
-    .stats div, .stats button { display: flex; flex-direction: column; align-items: flex-start;
-      border: 0; background: transparent; color: inherit; padding: 0; cursor: pointer; }
-    .stats strong { font-size: 17px; }
-    .stats span { font-size: 11.5px; color: var(--lf-muted); }
-    .quick { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 6px var(--lf-gap) 14px; }
-    .q { position: relative; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 13px 6px;
-      border-radius: var(--lf-radius); border: 1px solid var(--lf-line); background: var(--lf-card);
-      color: inherit; text-decoration: none; font-size: 12px; font-weight: 600; cursor: pointer; }
-    .q:active { background: var(--lf-card-2); }
-    .q .lf-badge { position: absolute; top: 8px; right: 10px; }
-    .tabs { display: flex; gap: 8px; padding: 4px var(--lf-gap) 10px; border-bottom: 1px solid var(--lf-line); }
-    .tab { padding: 8px 14px; border-radius: 999px; border: 1px solid var(--lf-line); background: transparent;
-      color: var(--lf-muted); font-weight: 700; font-size: 13px; cursor: pointer; }
-    .tab.on { background: var(--lf-beacon); color: #1a1200; border-color: var(--lf-beacon); }
-    .requests { margin: 12px var(--lf-gap) 0; padding: 12px 13px; border-radius: 14px;
-      background: var(--lf-card); border: 1px solid color-mix(in srgb, var(--lf-beacon) 40%, var(--lf-line)); }
+    .clear { border: 0; background: transparent; color: var(--lf-link); font-weight: 600; font-size: 13px; cursor: pointer; }
+    .status.safe, .status[data-status="safe"] { background: color-mix(in srgb, var(--lf-ubuntu) 16%, transparent); }
+    .stats { display: flex; gap: 16px; flex-wrap: wrap; }
+    .stats div, .stats button { display: flex; align-items: baseline; gap: 4px;
+      border: 0; background: transparent; color: inherit; padding: 0; cursor: pointer; font-family: inherit; }
+    .stats strong { font-size: 15px; font-weight: 700; }
+    .stats span { font-size: 15px; color: var(--lf-muted); }
+    .quick { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; padding: 0 var(--lf-gap) 8px; }
+    .q { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 12px;
+      border-radius: var(--lf-radius); border: 0; background: var(--lf-card); box-shadow: var(--lf-shadow);
+      color: inherit; text-decoration: none; font-size: 15px; font-weight: 600; cursor: pointer; }
+    .q:active { background: var(--lf-hover); }
+    .q .lf-badge { position: absolute; top: 12px; right: 12px; }
+    .qi { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+    .qi-blue { background: var(--lf-primary-soft); color: var(--lf-primary-soft-text); }
+    .qi-green { background: color-mix(in srgb, var(--lf-ubuntu) 16%, transparent); color: var(--lf-ubuntu); }
+    .qi-yellow { background: color-mix(in srgb, var(--lf-marigold) 20%, transparent); color: #c98f00; }
+    .qi-red { background: color-mix(in srgb, var(--lf-signal) 14%, transparent); color: var(--lf-signal); }
+    .qi-grey { background: var(--lf-card-2); color: var(--ion-text-color); }
+    .qi-purple { background: color-mix(in srgb, #a33bc2 16%, transparent); color: #a33bc2; }
+    .qi-teal { background: color-mix(in srgb, #1bb5a3 16%, transparent); color: #12998a; }
+    .q .lf-count { position: absolute; top: 14px; right: 14px; font-style: normal; font-size: 13px; color: var(--lf-muted); font-weight: 600; }
+    .see-all { color: var(--lf-link); font-size: 15px; font-weight: 600; text-decoration: none; }
+    .tabs { display: flex; gap: 8px; padding: 0 var(--lf-gap) 10px; overflow-x: auto; scrollbar-width: none; }
+    .tab { height: 36px; padding: 0 14px; border-radius: 999px; border: 0; background: var(--lf-card-2);
+      color: var(--ion-text-color); font-family: inherit; font-weight: 600; font-size: 15px; cursor: pointer; white-space: nowrap; }
+    .tab.on { background: var(--lf-primary-soft); color: var(--lf-primary-soft-text); border-color: transparent; }
+    @media (min-width: 700px) {
+      .hero { max-width: var(--lf-maxw); margin: 0 auto; border-radius: 0 0 var(--lf-radius) var(--lf-radius); overflow: hidden; }
+      .quick, .tabs { max-width: var(--lf-maxw); margin: 0 auto; box-sizing: border-box; }
+    }
+    .requests { margin: 8px var(--lf-gap) 0; padding: 12px; border-radius: var(--lf-radius);
+      background: var(--lf-card); box-shadow: var(--lf-shadow); }
     .requests h3 { display: flex; align-items: center; gap: 7px; margin: 0; }
     .req { display: flex; align-items: center; gap: 9px; padding: 9px 0; border-top: 1px solid var(--lf-line); }
     .req strong { display: block; font-size: 14px; }
     .req span { display: block; }
     .field-err { color: var(--lf-signal); font-size: 12px; font-weight: 600; margin: -2px 0 6px 4px; }
     .ident-lock { display: flex; align-items: center; gap: 10px; padding: 10px 12px; margin: 4px 0 8px;
-      border-radius: 12px; border: 1px dashed var(--lf-line); background: var(--lf-card-2); }
+      border-radius: 8px; border: 1px dashed var(--lf-line); background: var(--lf-card-2); }
     .ident-lock .k { display: block; font-size: 11px; color: var(--lf-muted); font-weight: 700; }
     .ident-lock lf-icon { margin-left: auto; color: var(--lf-muted); }
-    .face { align-self: flex-start; display: flex; flex-direction: column; align-items: flex-start; gap: 6px;
-      border: 0; background: transparent; color: inherit; padding: 0; cursor: pointer; }
-    .face span { font-size: 12px; font-weight: 700; color: var(--lf-beacon); }
     .err { display: flex; align-items: center; gap: 8px; color: var(--lf-signal); font-size: 13px; margin: 6px 0 0; }
     ion-item.bad { --border-color: var(--lf-signal); box-shadow: inset 0 0 0 1.5px var(--lf-signal); }
     .sheet { padding: 20px var(--lf-gap) 34px; }
@@ -345,7 +380,7 @@ export class MeComponent {
   tab = signal<'posts' | 'saved' | 'khumbu'>('posts');
   tabs = [
     { key: 'posts' as const, label: 'My posts' },
-    { key: 'saved' as const, label: 'Watchlist' },
+    { key: 'saved' as const, label: 'Saved' },
     { key: 'khumbu' as const, label: 'KhumbulEkhaya' }
   ];
 
@@ -365,7 +400,7 @@ export class MeComponent {
   });
   readonly visible = computed(() => {
     switch (this.tab()) {
-      case 'saved': return this.data.feed().filter((p) => this.data.savedIds().includes(p.id));
+      case 'saved': return this.data.savedPosts();
       case 'khumbu': return this.myPosts().filter((p) => p.type === 'khumbulekhaya');
       default: return this.myPosts();
     }
@@ -375,6 +410,7 @@ export class MeComponent {
     this.syncForm();
     void this.loadRequests();
     void this.loadBadge();
+    void this.data.loadSaved();
   }
 
   /**
@@ -405,7 +441,7 @@ export class MeComponent {
   }
 
   emptyTitle(): string {
-    return this.tab() === 'saved' ? 'Your watchlist is empty' : 'You have not posted yet';
+    return this.tab() === 'saved' ? 'Nothing saved yet' : 'You have not posted yet';
   }
 
   touched = { name: false };

@@ -23,7 +23,7 @@ browser before you open Android Studio or Xcode.
 | UI | **Ionic 9 + Angular 22** (standalone components, signals, zoneless change detection) | Native-feel mobile components, fastest render path Angular has, one codebase for both stores |
 | Native shell | **Capacitor 8** | Real Android + iOS builds, first-class plugin access, targets Android 16 (API 36) as Play now requires |
 | Data | **Supabase** `records` table for posts, chat, follows, stories, and profiles | Firebase is only the three account emails. No Firestore. |
-| Auth | Email through Firebase templates. Google through Supabase. | No phone. No Apple. |
+| Auth | Firebase Auth: email + password (verified) and Google. Data in Supabase. | No phone. No Apple. |
 | Tests | **Vitest** | Run `npm test` on Node 22. A passing test is not a phone test. |
 | Icons | Inline SVG registry | No icon font, no network request, identical on web/Android/iOS |
 
@@ -46,7 +46,40 @@ There is no demo account and no sample missing person. Create an account with em
 
 ---
 
-## Features
+## Look and feel: Facebook, light and dark
+
+The whole app follows the Facebook mobile app. **Light is the default.** Dark is
+in Settings -> Appearance (or "Match my phone").
+
+- **Tokens only.** Every colour comes from `src/app/core/theme/variables.scss`
+  (`--lf-bg`, `--lf-card`, `--lf-card-2`, `--lf-line`, `--lf-muted`,
+  `--lf-primary`, ...). Components do not hard-code hex, so light and dark stay
+  in step. Facebook light: `#F0F2F5` page, white cards, `#1877F2` blue. Facebook
+  dark: `#18191A` page, `#242526` cards, `#3A3B3C` buttons, `#2D88FF` blue.
+- **Bottom bar:** Home · Spotlight · Chats · Notifications · Menu (your photo).
+  The blue bar sits over the active tab and badges are Facebook red.
+- **Home header:** `lulafind` wordmark with round grey **+**, search and
+  Messenger buttons, then the "What's on your mind?" composer
+  (Missing / Sighting / Danger).
+- **Feed cards** run edge to edge on phones (rounded, centred on tablets and
+  desktop), with real counts only and the **Idea / No idea / Comment / Share**
+  bar. Save lives in the `...` menu.
+- **Tab screens** (Spotlight, Chats, Notifications, Menu) use Facebook's big
+  left title with round buttons. Chats use Messenger bubbles. The Menu tab shows
+  your profile with a cover and Facebook-style shortcut tiles.
+- **Home** opens straight onto stories, filters and the feed. New posts start
+  from the round **+** in the header.
+- **Spotlight** has two buttons, **View** and **Create**. View shows your own
+  surname's page first, then the spotlights you joined, then A-Z. A Spotlight
+  page lists posts filed into it **plus every post about someone with that
+  surname**, with All / Still missing / Found filters.
+- **Saved** (Menu → Saved) keeps every post you save, on your profile so it
+  follows you to any phone. You get an alert when a saved post, or a post in a
+  Spotlight you joined, gets a new Idea or is marked found.
+- **Friends** (Menu → Friends) lists follow requests (Confirm / Delete),
+  people you follow (Unfollow) and your followers (Follow back / Remove).
+- **Log in** is Facebook-style: round logo, pill **Log in**, **Continue with
+  Google**, and an outlined **Create new account**.
 
 ### Feed (Quora-style)
 - Cards with author, status chips, title, body preview, media grid, counters and
@@ -160,6 +193,9 @@ they do not want to come home · free support lines · what makes a poster work 
 share widely but never a home address.
 
 ### Auth — email first, no phone number
+Accounts are **Firebase Auth**; everything else is **Supabase**, which trusts the
+Firebase ID token (Third-Party Auth). Setup steps: [`docs/SETUP.md`](docs/SETUP.md).
+
 A modern sign-in / sign-up screen. **Email is the default.** Google, Apple and the
 demo account follow the same flow. There is no phone-number sign-up and no LinkedIn.
 

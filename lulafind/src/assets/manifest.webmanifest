@@ -2,8 +2,8 @@
   "name": "LulaFind",
   "short_name": "LulaFind",
   "display": "browser",
-  "background_color": "#0A1024",
-  "theme_color": "#0A1024",
+  "background_color": "#FFFFFF",
+  "theme_color": "#1877F2",
   "description": "LulaFind is a native app. This file only gives the browser tab an icon and colour.",
   "icons": [
     {

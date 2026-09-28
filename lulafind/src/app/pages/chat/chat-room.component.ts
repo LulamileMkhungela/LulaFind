@@ -36,7 +36,7 @@ import { MediaService } from '../../core/services/media.service';
       </ion-toolbar>
     </ion-header>
 
-    <ion-content class="lf-page room">
+    <ion-content class="lf-page lf-plain room">
       @if (post()) {
         <a class="casebar" [routerLink]="'/post/' + post()!.id">
           <lf-icon name="pin" [size]="16" />
@@ -89,14 +89,14 @@ import { MediaService } from '../../core/services/media.service';
       }
       <div class="bar">
         <button type="button" class="ico em-btn" [class.on]="emojiOpen()" (click)="emojiOpen.set(!emojiOpen())"
-                aria-label="Emoji" aria-expanded="emojiOpen()">&#128578;</button>
-        <button type="button" class="ico" (click)="attach()" aria-label="Attach a photo"><lf-icon name="image" [size]="19" /></button>
-        <button type="button" class="ico" (click)="attach(true)" aria-label="Take a photo"><lf-icon name="camera" [size]="19" /></button>
+                aria-label="Emoji" [attr.aria-expanded]="emojiOpen()"><lf-icon name="smile" [size]="22" /></button>
+        <button type="button" class="ico" (click)="attach()" aria-label="Attach a photo"><lf-icon name="image" [size]="22" /></button>
+        <button type="button" class="ico" (click)="attach(true)" aria-label="Take a photo"><lf-icon name="camera" [size]="22" /></button>
         <ion-textarea rows="1" autoGrow placeholder="Message…" [value]="draft"
                       (ionInput)="draft = $any($event.target).value"
                       (keydown.enter)="$event.preventDefault(); send()"></ion-textarea>
         <button class="lf-icon-btn send" (click)="send()" [disabled]="chat.sending() || (!draft.trim() && !pending())">
-          <lf-icon name="send" [size]="18" />
+          <lf-icon name="send" [size]="22" [filled]="true" />
         </button>
       </div>
     </div>
@@ -106,25 +106,28 @@ import { MediaService } from '../../core/services/media.service';
     .peer div { display: flex; flex-direction: column; line-height: 1.2; }
     .room { --padding-bottom: 80px; }
     .casebar { display: flex; align-items: center; gap: 8px; margin: 10px var(--lf-gap); padding: 10px 12px;
-      border-radius: 11px; border: 1px solid var(--lf-line); background: var(--lf-card);
+      border-radius: var(--lf-radius); border: 0; background: var(--lf-bg);
       color: inherit; text-decoration: none; font-size: 13px; font-weight: 600; }
-    .notice { display: flex; gap: 8px; margin: 0 var(--lf-gap) 8px; font-size: 11.5px; color: var(--lf-muted);
-      padding: 8px 10px; border-radius: 10px; background: var(--lf-card-2); line-height: 1.4; }
+    .notice { display: flex; gap: 8px; margin: 0 var(--lf-gap) 8px; font-size: 12px; color: var(--lf-muted);
+      padding: 8px 10px; border-radius: 8px; background: var(--lf-bg); line-height: 1.4; }
     .msgs { display: flex; flex-direction: column; gap: 8px; padding: 6px var(--lf-gap) 20px; }
-    .sys { align-self: center; max-width: 82%; text-align: center; font-size: 11.5px; color: var(--lf-muted);
-      padding: 8px 12px; border-radius: 999px; background: var(--lf-card-2); }
+    .sys { align-self: center; max-width: 82%; text-align: center; font-size: 12px; color: var(--lf-muted);
+      padding: 6px 12px; }
     .msg { display: flex; gap: 8px; align-items: flex-end; max-width: 82%; }
     .msg.mine { align-self: flex-end; flex-direction: row-reverse; }
-    .bubble { padding: 10px 13px; border-radius: 16px; background: var(--lf-card); border: 1px solid var(--lf-line); }
-    .bubble p { margin: 0 0 3px; font-size: 14.5px; line-height: 1.45; white-space: pre-wrap; word-break: break-word; }
-    .msg.mine .bubble { background: color-mix(in srgb, var(--lf-beacon) 20%, var(--lf-card));
-      border-color: color-mix(in srgb, var(--lf-beacon) 40%, transparent); }
-    .bubble .lf-tiny { color: var(--lf-muted); }
+    /* Messenger bubbles: grey for them, blue for me. */
+    .bubble { padding: 8px 12px; border-radius: 18px; background: var(--lf-card-2); border: 0; }
+    .bubble p { margin: 0 0 2px; font-size: 15px; line-height: 1.34; white-space: pre-wrap; word-break: break-word; }
+    .msg.mine .bubble { background: var(--lf-primary); color: #fff; }
+    :host-context(.lf-dark) .msg.mine .bubble { background: #0a7cff; }
+    .bubble .lf-tiny { color: var(--lf-muted); font-size: 11px; }
+    .msg.mine .bubble .lf-tiny { color: rgba(255,255,255,.75); }
     .bubble img { display: block; max-width: 210px; width: 100%; border-radius: 12px; margin-bottom: 4px; }
     .bar { display: flex; align-items: flex-end; gap: 8px; width: 100%; }
-    .ico { flex: none; width: 44px; height: 44px; border: none; border-radius: 50%; cursor: pointer;
-      background: var(--lf-card-2); color: var(--lf-muted); display: grid; place-items: center; }
-    .ico.on { background: color-mix(in srgb, var(--lf-beacon) 25%, var(--lf-card-2)); color: var(--lf-ink); }
+    .ico { flex: none; width: 36px; height: 36px; border: none; border-radius: 50%; cursor: pointer;
+      background: transparent; color: var(--lf-primary); display: grid; place-items: center; }
+    .ico:hover { background: var(--lf-hover); }
+    .ico.on { background: var(--lf-primary-soft); }
     .em-btn { font-size: 19px; line-height: 1; }
     .picker { display: grid; grid-template-columns: repeat(8, 1fr); gap: 2px; width: 100%;
       padding: 6px 2px 8px; border-bottom: 1px solid var(--lf-line); }
@@ -139,11 +142,13 @@ import { MediaService } from '../../core/services/media.service';
     .composer { position: fixed; left: 0; right: 0; bottom: var(--keyboard-offset, 0px); display: flex; flex-direction: column;
       padding: 10px 14px; padding-bottom: max(10px, var(--lf-safe-bottom, 0px));
       padding-left: max(14px, var(--lf-safe-left, 0px)); padding-right: max(14px, var(--lf-safe-right, 0px));
-      background: color-mix(in srgb, var(--lf-toolbar) 78%, transparent);
-      backdrop-filter: blur(18px) saturate(1.3); -webkit-backdrop-filter: blur(18px) saturate(1.3);
-      border-top: 1px solid var(--lf-line); }
-    .bar ion-textarea { flex: 1; --background: var(--lf-card-2); border-radius: 18px; --padding-start: 14px; }
-    .send { background: var(--lf-beacon); color: #1a1200; width: 44px; height: 44px; }
+      padding-top: 8px;
+      background: var(--lf-card);
+      border-top: 1px solid var(--lf-line-soft); }
+    .bar { align-items: center; gap: 4px; }
+    .bar ion-textarea { flex: 1; --background: var(--lf-input); border-radius: 20px; --padding-start: 14px; --padding-end: 14px;
+      --padding-top: 9px; --padding-bottom: 9px; min-height: 38px; font-size: 15px; margin: 0 4px; }
+    .send { background: transparent; color: var(--lf-primary); width: 38px; height: 38px; }
     .send[disabled] { opacity: .4; }
   `]
 })

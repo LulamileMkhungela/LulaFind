@@ -1,47 +1,61 @@
-import { Component, computed, inject } from '@angular/core';
-import { Router } from '@angular/router';
+import { Component, computed, inject, signal } from '@angular/core';
 import { IonTabs } from '@ionic/angular/ion-tabs';
 import { IonLabel } from '@ionic/angular/ion-label';
 import { IonTabBar, IonTabButton } from '@ionic/angular';
 import { IconComponent } from '../../shared/components/icon.component';
+import { AvatarComponent } from '../../shared/components/avatar.component';
 import { ChatService } from '../../core/services/chat.service';
 import { DataService } from '../../core/services/data.service';
 import { AuthService } from '../../core/services/auth.service';
 
+/**
+ * Facebook-style bottom navigation: Home, Spotlight, Chats, Notifications, Menu.
+ * Creating a post lives where Facebook puts it: the "+" in the Home header and
+ * the "What's on your mind?" composer.
+ */
 @Component({
   selector: 'lf-tabs',
   standalone: true,
-  imports: [IonTabs, IonTabBar, IonTabButton, IonLabel, IconComponent],
+  imports: [IonTabs, IonTabBar, IonTabButton, IonLabel, IconComponent, AvatarComponent],
   template: `
-    <ion-tabs>
+    <ion-tabs (ionTabsDidChange)="active.set($event.tab)">
       <ion-tab-bar slot="bottom">
         <ion-tab-button tab="home">
-          <lf-icon name="home" [size]="22" />
+          <lf-icon name="home" [size]="24" [filled]="active() === 'home'" />
           <ion-label>Home</ion-label>
         </ion-tab-button>
 
         <ion-tab-button tab="spotlight">
-          <lf-icon name="users" [size]="22" />
+          <lf-icon name="users" [size]="24" [weight]="active() === 'spotlight' ? 2.6 : 2" />
           <ion-label>Spotlight</ion-label>
-        </ion-tab-button>
-
-        <ion-tab-button tab="create" (click)="openCreate($event)">
-          <div class="fb-fab"><lf-icon name="plus" [size]="22" [weight]="2.5" /></div>
-          <ion-label>Report</ion-label>
         </ion-tab-button>
 
         <ion-tab-button tab="chats">
           <div class="wrap">
-            <lf-icon name="chat" [size]="22" />
-            @if (unread() > 0) { <span class="lf-badge">{{ unread() }}</span> }
+            <lf-icon name="messenger" [size]="24" [weight]="active() === 'chats' ? 2.4 : 1.8" />
+            @if (unread() > 0) { <span class="count">{{ unread() > 99 ? '99+' : unread() }}</span> }
           </div>
           <ion-label>Chats</ion-label>
         </ion-tab-button>
 
+        <ion-tab-button tab="notifications">
+          <div class="wrap">
+            <lf-icon name="bell" [size]="24" [filled]="active() === 'notifications'" />
+            @if (alerts() > 0) { <span class="count">{{ alerts() > 99 ? '99+' : alerts() }}</span> }
+          </div>
+          <ion-label>Notifications</ion-label>
+        </ion-tab-button>
+
         <ion-tab-button tab="me">
           <div class="wrap">
-            <lf-icon name="user" [size]="22" />
-            @if (alerts() > 0) { <span class="lf-badge dot"></span> }
+            @if (auth.signedIn()) {
+              <span class="me" [class.on]="active() === 'me'">
+                <lf-avatar [src]="auth.userAvatar()" [name]="auth.user()?.displayName ?? ''" [size]="24" />
+              </span>
+              <span class="menu-pip"><lf-icon name="menu" [size]="9" [weight]="3" /></span>
+            } @else {
+              <lf-icon name="menu" [size]="24" [weight]="active() === 'me' ? 2.6 : 2" />
+            }
           </div>
           <ion-label>Menu</ion-label>
         </ion-tab-button>
@@ -50,73 +64,76 @@ import { AuthService } from '../../core/services/auth.service';
   `,
   styles: [`
     ion-tab-bar {
-      background: #ffffff;
-      border-top: 1px solid #ced0d4;
-      height: 56px;
+      height: calc(var(--lf-tabbar-h) + var(--lf-safe-bottom));
       padding: 0;
-      box-shadow: 0 -1px 3px rgba(0,0,0,0.06);
     }
     ion-tab-button {
-      --color: #65676b;
-      --color-selected: #1877f2;
+      --color: var(--lf-muted);
+      --color-selected: var(--lf-primary);
+      --ripple-color: var(--lf-hover);
       background: transparent;
-      padding: 4px 0;
+      padding: 4px 0 2px;
+      position: relative;
     }
-    ion-tab-button.tab-selected lf-icon {
-      color: #1877f2;
+    /* Facebook's blue bar over the active tab */
+    ion-tab-button.tab-selected::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 22%; right: 22%;
+      height: 3px;
+      border-radius: 0 0 3px 3px;
+      background: var(--lf-primary);
     }
     ion-label {
       font-size: 11px;
-      font-weight: 600;
-      margin-top: 2px;
+      font-weight: 500;
+      margin-top: 3px;
+      white-space: nowrap;
     }
-    .fb-fab {
-      width: 28px;
-      height: 28px;
-      border-radius: 50%;
-      background: #1877f2;
-      color: #ffffff;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-    .wrap { position: relative; }
-    .lf-badge {
+    ion-tab-button.tab-selected ion-label { font-weight: 600; }
+    .wrap { position: relative; display: inline-flex; }
+    .count {
       position: absolute;
-      top: -4px;
-      right: -8px;
-      background: #e41e3f;
-      color: #ffffff;
-      font-size: 10px;
-      font-weight: 800;
+      top: -5px;
+      left: 14px;
+      background: var(--lf-badge);
+      color: #fff;
+      font-size: 11px;
+      font-weight: 700;
       border-radius: 999px;
-      min-width: 16px;
-      height: 16px;
+      min-width: 18px;
+      height: 18px;
+      padding: 0 5px;
+      box-sizing: border-box;
       display: inline-flex;
       align-items: center;
       justify-content: center;
+      box-shadow: 0 0 0 2px var(--lf-tabbar);
     }
-    .lf-badge.dot {
-      min-width: 8px; width: 8px; height: 8px; padding: 0; top: 0; right: -2px; background: #e41e3f;
+    .me { display: inline-flex; border-radius: 50%; }
+    .me.on { box-shadow: 0 0 0 2px var(--lf-tabbar), 0 0 0 4px var(--lf-primary); }
+    .menu-pip {
+      position: absolute;
+      right: -4px;
+      bottom: -3px;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: var(--lf-card-2);
+      color: var(--ion-text-color);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 0 2px var(--lf-tabbar);
     }
   `]
 })
 export class TabsComponent {
   private chat = inject(ChatService);
   private data = inject(DataService);
-  private auth = inject(AuthService);
-  private router = inject(Router);
+  protected auth = inject(AuthService);
 
+  readonly active = signal('home');
   readonly unread = computed(() => this.chat.unreadTotal());
   readonly alerts = computed(() => this.data.unreadNotifications());
-
-  openCreate(ev: Event): void {
-    ev.preventDefault();
-    ev.stopPropagation();
-    if (!this.auth.signedIn()) {
-      void this.router.navigate(['/auth'], { queryParams: { next: '/new' } });
-      return;
-    }
-    void this.router.navigate(['/new']);
-  }
 }

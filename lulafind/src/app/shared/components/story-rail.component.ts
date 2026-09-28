@@ -51,80 +51,89 @@ import { AuthService } from '../../core/services/auth.service';
       display: flex;
       gap: 8px;
       overflow-x: auto;
-      padding: 10px 12px;
-      background: #ffffff;
-      border-top: 1px solid #ced0d4;
-      border-bottom: 1px solid #ced0d4;
+      padding: 12px 16px;
+      background: var(--lf-card);
+      box-shadow: var(--lf-shadow);
       margin-bottom: 8px;
       scrollbar-width: none;
       -webkit-overflow-scrolling: touch;
     }
     .fb-story-rail::-webkit-scrollbar { display: none; }
+    @media (min-width: 700px) {
+      .fb-story-rail { max-width: var(--lf-maxw); margin: 0 auto 12px; border-radius: var(--lf-radius); box-sizing: border-box; }
+    }
 
     .fb-story-card {
-      width: 100px;
-      height: 160px;
-      border-radius: 12px;
+      width: 108px;
+      height: 192px;
+      border-radius: 10px;
       flex-shrink: 0;
       position: relative;
       overflow: hidden;
       display: flex;
       flex-direction: column;
       justify-content: space-between;
-      border: 1px solid #ced0d4;
-      background: #e4e6eb;
+      border: 0;
+      background: var(--lf-card-2);
       text-decoration: none;
-      color: #ffffff;
+      color: #fff;
       cursor: pointer;
-      box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+      font-family: inherit;
     }
     .fb-story-card:active { transform: scale(0.98); }
+    /* legibility scrim for the name, like Facebook */
+    .fb-story-card:not(.fb-story-card--create)::after {
+      content: '';
+      position: absolute; inset: 0;
+      background: linear-gradient(180deg, rgba(0,0,0,.28) 0%, transparent 30%, transparent 62%, rgba(0,0,0,.55) 100%);
+      z-index: 1;
+    }
 
-    /* Create Story Card */
+    /* Create story card */
     .fb-story-card--create {
-      background: #ffffff;
-      border-color: #ced0d4;
+      background: var(--lf-card);
+      box-shadow: inset 0 0 0 1px var(--lf-line);
       padding: 0;
     }
     .fb-story-top-img {
-      height: 105px;
+      height: 136px;
       width: 100%;
       overflow: hidden;
-      background: #e4e6eb;
+      background: var(--lf-card-2);
     }
-    .fb-story-top-img lf-avatar {
-      width: 100%;
-      height: 100%;
-      border-radius: 0;
-      object-fit: cover;
+    .fb-story-top-img lf-avatar { width: 100%; height: 100%; }
+    .fb-story-top-img ::ng-deep img,
+    .fb-story-top-img ::ng-deep .fallback {
+      width: 100% !important;
+      height: 100% !important;
+      border-radius: 0 !important;
     }
     .fb-story-plus-wrap {
-      height: 55px;
-      background: #ffffff;
+      flex: 1;
       position: relative;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: flex-end;
-      padding-bottom: 8px;
+      padding-bottom: 10px;
     }
     .fb-story-plus-btn {
       position: absolute;
-      top: -16px;
-      width: 32px;
-      height: 32px;
+      top: -18px;
+      width: 36px;
+      height: 36px;
       border-radius: 50%;
-      background: #1877f2;
-      color: #ffffff;
-      border: 3px solid #ffffff;
+      background: var(--lf-primary);
+      color: #fff;
+      box-shadow: 0 0 0 4px var(--lf-card);
       display: flex;
       align-items: center;
       justify-content: center;
     }
     .fb-story-create-label {
-      font-size: 11.5px;
-      font-weight: 700;
-      color: #050505;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--ion-text-color);
     }
 
     .fb-story-cover {
@@ -137,26 +146,26 @@ import { AuthService } from '../../core/services/auth.service';
 
     .fb-story-avatar-badge {
       position: absolute;
-      top: 8px;
-      left: 8px;
+      top: 10px;
+      left: 10px;
       border-radius: 50%;
       padding: 2px;
-      background: #1877f2;
+      background: var(--lf-primary);
+      box-shadow: inset 0 0 0 2px var(--lf-primary);
       z-index: 2;
+      display: flex;
     }
-    .fb-story-avatar-badge.seen {
-      background: #ced0d4;
-    }
+    .fb-story-avatar-badge lf-avatar { border-radius: 50%; box-shadow: 0 0 0 2px var(--lf-card); }
+    .fb-story-avatar-badge.seen { background: var(--lf-card-2); box-shadow: none; }
 
     .fb-story-name {
       position: absolute;
       bottom: 8px;
       left: 8px;
       right: 8px;
-      font-size: 12px;
-      font-weight: 700;
-      color: #ffffff;
-      text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+      font-size: 13px;
+      font-weight: 600;
+      color: #fff;
       z-index: 2;
       white-space: nowrap;
       overflow: hidden;

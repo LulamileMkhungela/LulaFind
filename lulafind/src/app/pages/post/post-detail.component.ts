@@ -625,6 +625,7 @@ import { leadMarkView } from '../../core/utils/mark-check';
     }
   `,
   styles: [`
+    .title.lf-h1 { font-size: 22px; line-height: 1.25; letter-spacing: -.2px; }
     .detail { padding-bottom: 30px; }
     .author { padding: 14px; }
     .author .lf-icon { color: var(--lf-beacon); }
@@ -647,13 +648,13 @@ import { leadMarkView } from '../../core/utils/mark-check';
     .verified lf-icon { color: var(--lf-ubuntu); margin-top: 2px; }
     .verified span { display: block; color: var(--lf-muted); }
     .focus { display: flex; align-items: center; gap: 10px; margin: 0 16px 12px; padding: 12px;
-      border-radius: 14px; background: var(--lf-card); border: 1px solid var(--lf-line); }
+      border-radius: var(--lf-radius); background: var(--lf-card); border: 0; box-shadow: var(--lf-shadow); }
     .focus strong, .focus span { display: block; }
     .focus[data-ring="green"] { border-color: color-mix(in srgb, var(--lf-ubuntu) 45%, transparent); }
     .focus[data-ring="amber"] { border-color: color-mix(in srgb, var(--lf-marigold) 50%, transparent); }
     .focus[data-ring="red"] { border-color: color-mix(in srgb, var(--lf-signal) 45%, transparent); }
-    .party { margin: 0 16px 12px; padding: 13px; border-radius: 14px; background: var(--lf-card);
-      border: 1px solid var(--lf-line); display: flex; flex-direction: column; gap: 9px; }
+    .party { margin: 0 16px 12px; padding: 13px; border-radius: var(--lf-radius); background: var(--lf-card);
+      border: 0; box-shadow: var(--lf-shadow); display: flex; flex-direction: column; gap: 9px; }
     .party h3 { display: flex; align-items: center; gap: 7px; margin: 0; }
     .zone { display: flex; align-items: center; gap: 8px; padding: 9px 10px; border-radius: 10px;
       background: var(--lf-card-2); border: 1px solid transparent; }
@@ -684,20 +685,20 @@ import { leadMarkView } from '../../core/utils/mark-check';
       font-size: 13px; color: var(--lf-muted); }
     .steps li { display: flex; align-items: center; gap: 9px; }
     .steps span { width: 20px; height: 20px; border-radius: 50%; background: var(--lf-card-2); display: flex;
-      align-items: center; justify-content: center; font-size: 11px; font-weight: 800; }
+      align-items: center; justify-content: center; font-size: 11px; font-weight: 700; }
     .steps.done1 li:nth-child(1), .steps.done2 li:nth-child(2), .steps.done3 li:nth-child(3) { color: var(--lf-ubuntu); }
     .steps.done1 li:nth-child(1) span, .steps.done2 li:nth-child(2) span, .steps.done3 li:nth-child(3) span {
       background: var(--lf-ubuntu); color: #fff; }
     .composer { display: flex; align-items: flex-end; gap: 8px; margin-top: 12px; }
     .composer ion-textarea { flex: 1; --background: var(--lf-card-2); border-radius: 12px; --padding-start: 12px; }
-    .send { background: var(--lf-beacon); color: #1a1200; width: 40px; height: 40px; }
+    .send { background: transparent; color: var(--lf-primary); width: 40px; height: 40px; }
     .send[disabled] { opacity: .4; }
     .leadcheck { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--lf-muted); margin-top: 8px; }
     .leadcheck input { accent-color: var(--lf-ubuntu); width: 17px; height: 17px; }
     .comment { display: flex; gap: 10px; padding: 14px 0; border-top: 1px solid var(--lf-line); margin-top: 12px; }
     .comment .lf-prose { margin: 4px 0 0; font-size: 14px; }
-    .mark { width: 100%; margin: 6px 0 0 42px; box-sizing: border-box; padding: 8px 10px; border-radius: 10px;
-      border: 1px solid var(--lf-line); background: var(--lf-card); color: inherit; font: inherit; }
+    .mark { width: 100%; margin: 6px 0 0 42px; box-sizing: border-box; padding: 8px 10px; border-radius: var(--lf-radius);
+      border: 0; box-shadow: var(--lf-shadow); background: var(--lf-card); color: inherit; font: inherit; }
     .sighting { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 6px; font-size: 12px;
       padding: 6px 9px; border-radius: 9px; background: color-mix(in srgb, var(--lf-ubuntu) 14%, transparent); }
     .mini { background: none; border: 0; color: var(--lf-muted); font-size: 12px; font-weight: 700;
@@ -706,12 +707,12 @@ import { leadMarkView } from '../../core/utils/mark-check';
     .reply { display: flex; gap: 8px; margin-top: 10px; padding-left: 8px; border-left: 2px solid var(--lf-line); }
     .reply .lf-prose { font-size: 13.5px; }
     .replybox { margin-top: 8px; }
-    .sheetwrap { position: fixed; inset: 0; z-index: 40; background: rgba(4, 8, 20, .72);
+    .sheetwrap { position: fixed; inset: 0; z-index: 40; background: var(--lf-scrim);
       display: flex; align-items: flex-end; justify-content: center; }
     .sheet { width: 100%; max-width: 520px; max-height: 88vh; overflow-y: auto; background: var(--lf-card);
       border-radius: 18px 18px 0 0; padding: 18px 18px 28px; display: flex; flex-direction: column; gap: 8px; }
     .sheet p { margin: 0; line-height: 1.45; }
-    .k { font-size: 12px; font-weight: 800; color: var(--lf-muted); }
+    .k { font-size: 12px; font-weight: 700; color: var(--lf-muted); }
     .fld { width: 100%; box-sizing: border-box; border-radius: 12px; border: 1px solid var(--lf-line);
       background: var(--lf-card-2); color: inherit; font: inherit; padding: 12px; }
     .hits { display: flex; flex-direction: column; gap: 6px; max-height: 240px; overflow-y: auto; }
@@ -987,8 +988,9 @@ export class PostDetailComponent implements OnInit {
   async save(): Promise<void> {
     const p = this.p();
     if (!p) return;
+    if (!this.auth.signedIn()) { void this.router.navigate(['/auth'], { queryParams: { next: `/post/${p.id}` } }); return; }
     this.saved.set(await this.data.toggleSaved(p.id));
-    await this.say(this.saved() ? 'Added to your watchlist' : 'Removed from watchlist');
+    await this.say(this.saved() ? 'Saved. Find it in Menu → Saved.' : 'Removed from Saved');
   }
 
   async share(): Promise<void> {

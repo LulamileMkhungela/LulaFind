@@ -161,6 +161,8 @@ export interface UserProfile {
   blockedUserIds: string[];
   /** spotlight (surname) communities this user administers */
   spotlightIds: string[];
+  /** Posts this person saved. Kept on the profile so it follows them to any phone. */
+  savedPostIds?: string[];
   /** LulaFind staff / moderator - can remove posts and people */
   isAdmin: boolean;
   /** blocked by an admin: cannot post, vote, comment or chat */

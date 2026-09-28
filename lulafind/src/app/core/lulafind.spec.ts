@@ -1229,3 +1229,59 @@ describe('Competitor-parity features', () => {
     await expect(data.openSearchParty(theirs.id, 'Somewhere', null, ['Zone A'])).rejects.toThrow(/poster/i);
   });
 });
+
+describe('Saved posts, watch alerts and followers', () => {
+  beforeEach(bed);
+
+  it('keeps saved posts on the profile and tells the saver about new Ideas and a found case', async () => {
+    signInAs('u_kabelo');
+    const data = svc<DataService>(DataService);
+    await data.refresh();
+    const target = data.feed().find((p) => p.authorId !== 'u_kabelo' && p.authorId !== 'u_bongani' && p.status === 'active')!;
+    expect(target).toBeTruthy();
+
+    expect(await data.toggleSaved(target.id)).toBe(true);
+    expect(db.user('u_kabelo')!.savedPostIds).toContain(target.id);
+    expect((await data.loadSaved()).map((p) => p.id)).toContain(target.id);
+
+    // someone else has an idea
+    signInAs('u_bongani');
+    await data.vote(target.id, 'up');
+    signInAs('u_kabelo');
+    await data.loadUserScoped();
+    await data.checkWatched(true);
+    expect(data.notifications().some((n) => n.postId === target.id && n.kind === 'vote')).toBe(true);
+
+    // the family marks them found
+    signInAs(target.authorId);
+    await data.markFound(target.id, { whereabouts: 'At home' });
+    signInAs('u_kabelo');
+    await data.checkWatched(true);
+    expect(data.notifications().some((n) => n.postId === target.id && n.kind === 'outcome')).toBe(true);
+
+    // unsave
+    expect(await data.toggleSaved(target.id)).toBe(false);
+    expect(db.user('u_kabelo')!.savedPostIds).not.toContain(target.id);
+  });
+
+  it('tells the poster when someone has an idea', async () => {
+    signInAs('u_kabelo');
+    const data = svc<DataService>(DataService);
+    await data.refresh();
+    const target = data.feed().find((p) => p.authorId !== 'u_kabelo' && p.voterIds['u_kabelo'] !== 'up')!;
+    await data.vote(target.id, 'up');
+    signInAs(target.authorId);
+    await data.loadUserScoped();
+    expect(data.notifications().some((n) => n.postId === target.id && n.kind === 'vote' && /idea/i.test(n.title))).toBe(true);
+  });
+
+  it('lets you remove a follower', async () => {
+    signInAs('u_kabelo');
+    const data = svc<DataService>(DataService);
+    await data.loadUserScoped();
+    const follower = data.followerIds()[0];
+    expect(follower).toBeTruthy();
+    await data.removeFollower(follower);
+    expect(data.followerIds()).not.toContain(follower);
+  });
+});

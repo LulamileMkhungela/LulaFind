@@ -126,7 +126,7 @@ import { uid } from '../../core/utils/format';
   `,
   styles: [`
     .card { margin: 12px var(--lf-gap); padding: 15px; border-radius: var(--lf-radius);
-      border: 1px solid var(--lf-line); background: var(--lf-card); display: flex; flex-direction: column; gap: 10px; }
+      border: 0; box-shadow: var(--lf-shadow); background: var(--lf-card); display: flex; flex-direction: column; gap: 10px; }
     .result { display: flex; gap: 10px; align-items: center; padding: 12px; border-radius: 12px; background: var(--lf-card-2); }
     .result.yes { background: color-mix(in srgb, var(--lf-ubuntu) 16%, transparent); }
     .result div { display: flex; flex-direction: column; gap: 2px; }

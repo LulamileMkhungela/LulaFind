@@ -1,4 +1,4 @@
-import { Injectable, computed, effect, inject, signal } from '@angular/core';
+import { Injectable, computed, effect, inject, signal, untracked } from '@angular/core';
 import { Subscription } from 'rxjs';
 import { toObservable } from '@angular/core/rxjs-interop';
 import { LULA_API, LulaApi } from '../data/api';
@@ -86,6 +86,8 @@ export class DataService {
   readonly tips = signal<Tip[]>([]);
   readonly notifications = signal<Notification[]>([]);
   readonly savedIds = signal<string[]>([]);
+  /** Full posts for the Saved page, newest save first. Deleted posts drop out. */
+  readonly savedPosts = signal<Post[]>([]);
   /** Posts the user tapped "Don't want to see this" on. Per device, per account. */
   readonly hiddenIds = signal<string[]>([]);
   readonly followingIds = signal<string[]>([]);
@@ -303,7 +305,7 @@ export class DataService {
     this.followingIds.set(following.map((edge) => edge.followingId));
     this.followerIds.set(followers.map((edge) => edge.followerId));
     this.followRequests.set(requests);
-    void this.loadStatic();
+    void this.loadStatic().then(() => this.checkWatched());
   }
 
   /* ------------------------- voting ---------------------------- */
@@ -324,6 +326,15 @@ export class DataService {
     };
     await this.api.savePost(nextPost);
     this.mergeCache([nextPost]);
+    if (next === 'up' && current !== 'up' && p.authorId !== me) {
+      const who = this.auth.user()?.displayName ?? 'Someone';
+      await this.notify({
+        userId: p.authorId, kind: 'vote',
+        title: `${who} has an idea about your post`,
+        body: `${p.subject?.name?.trim() || p.title} · open it to chat or read their comment.`,
+        route: `/post/${p.id}`, postId: p.id
+      }).catch(() => undefined);
+    }
     await this.loadFeed();
     return nextPost;
   }
@@ -496,8 +507,8 @@ export class DataService {
     await this.api.savePost(post);
     if (post.type === 'danger') await this.alertProvince(post);
     if (post.spotlightId) {
-      const sp = await this.api.spotlight(post.spotlightId);
-      if (sp) await this.api.saveSpotlight({ ...sp, postIds: [...new Set([post.id, ...sp.postIds])] });
+      // the post is already live; a failed Spotlight index must not look like a failed post
+      await this.api.linkSpotlightPost(post.spotlightId, post.id, true).catch((e) => console.warn(e?.message));
     }
     this.mergeCache([post]);
     await this.loadFeed();
@@ -559,12 +570,10 @@ export class DataService {
     const before = p.spotlightId;
     const after = next.spotlightId;
     if (before && before !== after) {
-      const sp = await this.api.spotlight(before);
-      if (sp) await this.api.saveSpotlight({ ...sp, postIds: sp.postIds.filter((x) => x !== next.id) });
+      await this.api.linkSpotlightPost(before, next.id, false).catch((e) => console.warn(e?.message));
     }
     if (after) {
-      const sp = await this.api.spotlight(after);
-      if (sp) await this.api.saveSpotlight({ ...sp, postIds: [...new Set([next.id, ...sp.postIds])] });
+      await this.api.linkSpotlightPost(after, next.id, true).catch((e) => console.warn(e?.message));
     }
 
     this.mergeCache([next]);
@@ -597,9 +606,149 @@ export class DataService {
 
   /* ------------------------- saved ----------------------------- */
   async toggleSaved(postId: string): Promise<boolean> {
+    if (!this.auth.viewerId) throw new Error('Sign in to save posts');
     const has = this.savedIds().includes(postId);
-    this.savedIds.set(has ? this.savedIds().filter((x) => x !== postId) : [...this.savedIds(), postId]);
+    // newest first, so the Saved page reads like Facebook's
+    const next = has ? this.savedIds().filter((x) => x !== postId) : [postId, ...this.savedIds()];
+    this.savedIds.set(next);
+    this.savedPosts.set(has
+      ? this.savedPosts().filter((p) => p.id !== postId)
+      : [this.post(postId), ...this.savedPosts()].filter((p): p is Post => !!p));
+    if (!has) {
+      // Start watching from now, so only news after the save is announced.
+      const p = this.post(postId);
+      if (p) this.rememberWatch([p]);
+    }
+    this.persistViewerPrefs();
+    try {
+      await this.auth.updateProfile({ savedPostIds: next });
+    } catch {
+      /* offline - the device copy is kept and re-sent with the next profile save */
+    }
     return !has;
+  }
+
+  /** Load every saved post for the Saved page. */
+  async loadSaved(): Promise<Post[]> {
+    const ids = this.savedIds();
+    const posts = (await Promise.all(ids.map((id) => this.loadPost(id).catch(() => undefined))))
+      .filter((p): p is Post => !!p);
+    this.savedPosts.set(posts);
+    // forget posts that were deleted
+    if (posts.length !== ids.length && this.auth.viewerId) {
+      const alive = posts.map((p) => p.id);
+      this.savedIds.set(alive);
+      this.persistViewerPrefs();
+      void this.auth.updateProfile({ savedPostIds: alive }).catch(() => undefined);
+    }
+    return posts;
+  }
+
+  /* ------------------ watched-post updates ---------------------- */
+  /**
+   * Tell the viewer when a post they saved, or a post in a Spotlight they
+   * joined, gets new Ideas or is marked found.
+   *
+   * Runs on this phone against a small snapshot (ideas count + found) kept per
+   * account. The first time a post is seen it is only remembered, so joining a
+   * busy Spotlight does not flood the bell. The poster already gets their own
+   * Idea alerts, so their own posts are skipped here.
+   */
+  private watchBusy = false;
+  private watchAt = 0;
+
+  private get watchKey(): string {
+    return `lulafind.watch.${this.auth.viewerId ?? 'anon'}`;
+  }
+
+  private readWatch(): Record<string, { up: number; found: boolean }> {
+    try {
+      const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(this.watchKey) : null;
+      const v = raw ? JSON.parse(raw) : {};
+      return v && typeof v === 'object' ? v : {};
+    } catch { return {}; }
+  }
+
+  private writeWatch(v: Record<string, { up: number; found: boolean }>): void {
+    try { if (typeof localStorage !== 'undefined') localStorage.setItem(this.watchKey, JSON.stringify(v)); } catch { /* quota */ }
+  }
+
+  private rememberWatch(posts: Post[]): void {
+    const snap = this.readWatch();
+    for (const p of posts) snap[p.id] = { up: p.upvotes, found: p.status === 'found' };
+    this.writeWatch(snap);
+  }
+
+  async checkWatched(force = false): Promise<number> {
+    const me = this.auth.viewerId;
+    if (!me || this.watchBusy) return 0;
+    if (!force && Date.now() - this.watchAt < 60_000) return 0;
+    this.watchBusy = true;
+    this.watchAt = Date.now();
+    try {
+      const why = new Map<string, string>();
+      for (const id of this.savedIds()) why.set(id, 'a post you saved');
+      for (const sp of this.spotlights().filter((s) => s.memberIds.includes(me))) {
+        const posts = await this.api.queryFeed({ ...emptyFilter(), status: 'all', spotlightId: sp.id }, me).catch(() => [] as Post[]);
+        this.mergeCache(posts);
+        for (const p of posts.slice(0, 40)) if (!why.has(p.id)) why.set(p.id, `the ${sp.surname} spotlight`);
+      }
+      let sent = 0;
+      // "Did you get help?" - ask the poster once a case has real traction.
+      const mine = Object.values(this.cache()).filter((p) => p.authorId === me && p.status === 'active'
+        && (p.type === 'missing' || p.type === 'khumbulekhaya')
+        && (p.upvotes >= 15 || p.commentCount >= 2)
+        && (!p.outcomeNudgeAt || Date.now() - p.outcomeNudgeAt > 3 * DAY));
+      for (const p of mine) {
+        const who = p.subject?.name?.trim() || 'them';
+        await this.api.pushNotification({
+          id: uid('n'), userId: me, kind: 'outcome',
+          title: `Did you get help finding ${who}?`,
+          body: `${p.upvotes} people have an idea and ${p.commentCount} commented. If ${who} is home, tap to mark them found.`,
+          at: Date.now(), read: false, route: `/post/${p.id}`, postId: p.id
+        });
+        await this.setOutcomeNudged(p.id).catch(() => undefined);
+        sent++;
+      }
+      if (!why.size) {
+        if (sent) this.notifications.set(await this.api.notifications(me));
+        return sent;
+      }
+
+      const snap = this.readWatch();
+      for (const [id, where] of why) {
+        const p = this.post(id) ?? (await this.api.post(id).catch(() => undefined));
+        if (!p) continue;
+        const was = snap[id];
+        const found = p.status === 'found';
+        snap[id] = { up: p.upvotes, found };
+        if (!was || p.authorId === me) continue;
+        const who = p.subject?.name?.trim() || p.title;
+        if (found && !was.found) {
+          await this.api.pushNotification({
+            id: uid('n'), userId: me, kind: 'outcome',
+            title: p.outcome?.whereaboutsFound && p.type === 'khumbulekhaya' ? `Whereabouts found: ${who}` : `${who} has been found`,
+            body: `Update on ${where}.${p.outcome?.whereaboutsFound ? ' ' + p.outcome.whereaboutsFound : ''}`,
+            at: Date.now(), read: false, route: `/post/${p.id}`, postId: p.id
+          });
+          sent++;
+        } else if (!found && p.upvotes > was.up) {
+          const n = p.upvotes - was.up;
+          await this.api.pushNotification({
+            id: uid('n'), userId: me, kind: 'vote',
+            title: n === 1 ? `Someone has an idea about ${who}` : `${n} people have an idea about ${who}`,
+            body: `New Idea on ${where}. Open it to read the leads.`,
+            at: Date.now(), read: false, route: `/post/${p.id}`, postId: p.id
+          });
+          sent++;
+        }
+      }
+      this.writeWatch(snap);
+      if (sent) this.notifications.set(await this.api.notifications(me));
+      return sent;
+    } finally {
+      this.watchBusy = false;
+    }
   }
 
   /** localStorage key for "don't want to see this", scoped per account. */
@@ -607,22 +756,33 @@ export class DataService {
     return `lulafind.hidden.${this.auth.viewerId ?? 'anon'}`;
   }
 
+  private get savedKey(): string {
+    return `lulafind.saved.${this.auth.viewerId ?? 'anon'}`;
+  }
+
   private persistViewerPrefs(): void {
     try {
       if (typeof localStorage === 'undefined') return;
       localStorage.setItem(this.hiddenKey, JSON.stringify(this.hiddenIds()));
+      localStorage.setItem(this.savedKey, JSON.stringify(this.savedIds()));
     } catch { /* private mode / full quota - the choice lasts for this session only */ }
   }
 
   /** Restore this account's hidden posts. Called when the viewer changes. */
   private loadViewerPrefs(): void {
+    // Saved posts: the profile copy wins, the device copy covers offline saves.
+    const fromProfile = untracked(() => this.auth.user()?.savedPostIds) ?? null;
     try {
-      if (typeof localStorage === 'undefined') { this.hiddenIds.set([]); return; }
+      if (typeof localStorage === 'undefined') { this.hiddenIds.set([]); this.savedIds.set(fromProfile ?? []); return; }
       const raw = localStorage.getItem(this.hiddenKey);
       const list = raw ? (JSON.parse(raw) as string[]) : [];
       this.hiddenIds.set(Array.isArray(list) ? list : []);
+      const rawSaved = localStorage.getItem(this.savedKey);
+      const local = rawSaved ? (JSON.parse(rawSaved) as string[]) : [];
+      this.savedIds.set(fromProfile ?? (Array.isArray(local) ? local : []));
     } catch {
       this.hiddenIds.set([]);
+      this.savedIds.set(fromProfile ?? []);
     }
   }
 
@@ -680,7 +840,7 @@ export class DataService {
         id: uid('n'), userId: targetId, kind: 'follow',
         title: 'New follow request',
         body: `${this.auth.user()?.displayName ?? 'Someone'} asked to follow you.`,
-        at: Date.now(), read: false, route: '/me', postId: null
+        at: Date.now(), read: false, route: '/connections', postId: null
       });
       return false;
     }
@@ -825,6 +985,27 @@ export class DataService {
     const me = this.auth.viewerId;
     if (!me || !spotlightId) return false;
     return !!this.spotlights().find((s) => s.id === spotlightId && s.memberIds.includes(me));
+  }
+
+  /**
+   * Everything for a Spotlight page: posts filed into it, plus any post about
+   * a person with that surname (so nobody has to scroll the whole feed).
+   * Independent of the home feed filters; found cases included.
+   */
+  async postsForSpotlight(sp: Spotlight): Promise<Post[]> {
+    const me = this.auth.viewerId;
+    const needle = sp.surname.trim().toLowerCase();
+    const all = await this.api.queryFeed({ ...emptyFilter(), status: 'all', sort: 'recent' }, me);
+    const hidden = this.hiddenIds();
+    const list = all.filter((p) => !hidden.includes(p.id) && (
+      p.spotlightId === sp.id ||
+      (p.type !== 'danger' && !!needle && (
+        (p.subject?.surname ?? '').trim().toLowerCase() === needle ||
+        (p.subject?.name ?? '').trim().toLowerCase().split(/\s+/).includes(needle)
+      ))
+    ));
+    this.mergeCache(list);
+    return list.sort((a, b) => b.createdAt - a.createdAt);
   }
 
   spotlightPosts(id: string): Post[] {
@@ -1282,6 +1463,15 @@ export class DataService {
   }
 
   /** Accept or decline one request. */
+  /** Stop someone following you. They are not told. */
+  async removeFollower(followerId: string): Promise<void> {
+    const me = this.auth.viewerId;
+    if (!me) throw new Error('Sign in to manage followers');
+    await this.api.unfollow(followerId, me);
+    this.followerIds.set(this.followerIds().filter((x) => x !== followerId));
+    await this.loadUserScoped();
+  }
+
   async respondToFollowRequest(followerId: string, accept: boolean): Promise<void> {
     const me = this.auth.viewerId;
     if (!me) throw new Error('Sign in to manage follow requests');

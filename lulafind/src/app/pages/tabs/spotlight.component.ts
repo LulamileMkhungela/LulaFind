@@ -2,9 +2,6 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import { IonContent } from '@ionic/angular/ion-content';
 import { IonHeader } from '@ionic/angular/ion-header';
-import { IonToolbar } from '@ionic/angular/ion-toolbar';
-import { IonTitle } from '@ionic/angular/ion-title';
-import { IonModal } from '@ionic/angular/ion-modal';
 import { IonInput } from '@ionic/angular/ion-input';
 import { IonTextarea } from '@ionic/angular/ion-textarea';
 import { IonSelect } from '@ionic/angular/ion-select';
@@ -32,89 +29,105 @@ const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
   selector: 'lf-spotlight',
   standalone: true,
   imports: [
-    IonContent, IonHeader, IonToolbar, IonTitle, IonModal, IonInput, IonTextarea, IonSelect,
+    IonContent, IonHeader, IonInput, IonTextarea, IonSelect,
     IonSelectOption, IonItem, IonLabel, IonSearchbar, RouterLink, IconComponent, EmptyComponent
   ],
   template: `
-    <ion-header translucent="true">
-      <ion-toolbar>
-        <ion-title>Spotlight communities</ion-title>
-      </ion-toolbar>
-      <ion-toolbar>
-        <div class="filters">
-          <ion-searchbar class="grow" placeholder="Search a surname" [debounce]="200"
-                       (ionInput)="query.set($any($event.detail).value ?? '')" animated="true"></ion-searchbar>
-          <ion-select class="letter" [value]="letter()" placeholder="A–Z"
-                      (ionChange)="letter.set($any($event.detail).value)">
-            <ion-select-option value="all">All letters</ion-select-option>
-            @for (l of alphabet; track l) { <ion-select-option [value]="l">{{ l }}</ion-select-option> }
-          </ion-select>
-        </div>
-      </ion-toolbar>
+    <ion-header class="fb-head">
+      <div class="fb-head__bar">
+        <h1 class="fb-head__title">Spotlight</h1>
+      </div>
+      <!-- Two jobs only: find a surname, or start one. -->
+      <div class="seg" role="tablist" aria-label="Spotlight">
+        <button role="tab" class="seg__btn" [class.on]="mode() === 'view'" [attr.aria-selected]="mode() === 'view'"
+                (click)="mode.set('view')">
+          <lf-icon name="search" [size]="18" [weight]="2.2" /> View
+        </button>
+        <button role="tab" class="seg__btn" [class.on]="mode() === 'create'" [attr.aria-selected]="mode() === 'create'"
+                (click)="openCreate()">
+          <lf-icon name="plus" [size]="18" [weight]="2.4" /> Create
+        </button>
+      </div>
     </ion-header>
 
     <ion-content class="lf-page">
-      <div class="lf-banner">
-        <lf-icon name="users" [size]="18" />
-        <div>
-          A Spotlight is a page for a surname. Anyone can join - no approval needed - and once you are in you can
-          post cases, stories and updates to that family.
+      @if (mode() === 'view') {
+        <div class="find">
+          <ion-searchbar placeholder="Search a surname, e.g. Ndlela" [debounce]="150" [value]="query()"
+                         (ionInput)="query.set($any($event.detail).value ?? '')" animated="true"></ion-searchbar>
+          <div class="letters" role="group" aria-label="Filter by first letter">
+            <button class="pill" [class.on]="letter() === 'all'" (click)="letter.set('all')">All</button>
+            @for (l of alphabet; track l) {
+              <button class="pill" [class.on]="letter() === l" (click)="letter.set(letter() === l ? 'all' : l)">{{ l }}</button>
+            }
+          </div>
         </div>
-      </div>
 
-      @if (mine().length) {
-        <h3 class="section">Your communities</h3>
-        <div class="grid">
-          @for (s of mine(); track s.id) {
-            <a class="tile" [routerLink]="'/spotlight/' + s.id" [style.--hue]="s.coverHue">
+        @if (!query() && letter() === 'all' && mySurname()) {
+          @if (surnameSpot(); as sp) {
+            <a class="mine-card" [routerLink]="'/spotlight/' + sp.id">
+              <img [src]="coverOf(sp.surname, sp.coverHue)" alt="" />
+              <div>
+                <span class="lf-tiny lf-muted">Your surname</span>
+                <strong>{{ sp.surname }}</strong>
+                <span class="lf-tiny lf-muted">{{ sp.postIds.length }} posts · {{ sp.followers }} members</span>
+              </div>
+              <lf-icon name="chevronRight" [size]="20" />
+            </a>
+          } @else {
+            <button class="mine-card mine-card--new" (click)="openCreate()">
+              <span class="disc"><lf-icon name="plus" [size]="22" [weight]="2.4" /></span>
+              <div>
+                <span class="lf-tiny lf-muted">No spotlight for your surname yet</span>
+                <strong>Start the {{ mySurname() }} spotlight</strong>
+              </div>
+            </button>
+          }
+        }
+
+        @if (mine().length && !query() && letter() === 'all') {
+          <h3 class="section">Spotlights you joined</h3>
+          <div class="grid">
+            @for (s of mine(); track s.id) {
+              <a class="tile" [routerLink]="'/spotlight/' + s.id">
+                <img [src]="coverOf(s.surname, s.coverHue)" [alt]="s.surname" loading="lazy" />
+                <div class="meta">
+                  <strong>{{ s.surname }}</strong>
+                  <span>{{ s.postIds.length }} posts · {{ s.followers }} members</span>
+                </div>
+              </a>
+            }
+          </div>
+        }
+
+        <h3 class="section">
+          {{ query() ? 'Results' : letter() === 'all' ? 'All spotlights' : 'Surnames starting with ' + letter() }}
+          <span class="lf-muted lf-tiny">{{ list().length }}</span>
+        </h3>
+        @if (!list().length) {
+          <lf-empty icon="users" [title]="query() ? 'No ' + query().trim() + ' spotlight yet' : 'No spotlight for that letter yet'"
+                    message="Create it and it becomes the home for every post with that surname."
+                    actionLabel="Create a spotlight" (action)="openCreate(query())" />
+        }
+        <div class="grid lf-safe-bottom">
+          @for (s of list(); track s.id) {
+            <a class="tile" [routerLink]="'/spotlight/' + s.id">
               <img [src]="coverOf(s.surname, s.coverHue)" [alt]="s.surname" loading="lazy" />
               <div class="meta">
                 <strong>{{ s.surname }}</strong>
                 <span>{{ s.postIds.length }} posts · {{ s.followers }} members</span>
+                @if (s.province) { <span>{{ provinceName(s.province) }}</span> }
               </div>
-              @if (s.verified) { <span class="lf-chip lf-chip--success lf-tiny">verified</span> }
+              @if (joined(s)) { <span class="lf-chip lf-tiny">Joined</span> }
+              @else if (s.verified) { <span class="lf-chip lf-tiny">Verified</span> }
             </a>
           }
         </div>
-      }
-
-      <h3 class="section">
-        {{ letter() === 'all' ? 'All spotlights' : 'Surnames starting with ' + letter() }}
-        <span class="lf-muted lf-tiny">{{ list().length }}</span>
-      </h3>
-      @if (!list().length) {
-        <lf-empty icon="users" title="No spotlight for that letter yet"
-                  message="Create one and it becomes the home for every post with that surname."
-                  actionLabel="Create a spotlight" (action)="openCreate()" />
-      }
-      <div class="grid">
-        @for (s of list(); track s.id) {
-          <a class="tile" [routerLink]="'/spotlight/' + s.id">
-            <img [src]="coverOf(s.surname, s.coverHue)" [alt]="s.surname" loading="lazy" />
-            <div class="meta">
-              <strong>{{ s.surname }}</strong>
-              <span>{{ s.postIds.length }} posts · {{ s.followers }} members</span>
-              @if (s.province) { <span>{{ provinceName(s.province) }}</span> }
-            </div>
-            @if (joined(s)) { <span class="lf-chip lf-chip--success lf-tiny">joined</span> }
-            @else if (s.verified) { <span class="lf-chip lf-chip--success lf-tiny">verified</span> }
-          </a>
-        }
-      </div>
-
-      <div class="lf-pad lf-safe-bottom">
-        <button class="lf-btn lf-btn--primary lf-btn--block" (click)="openCreate()">
-          <lf-icon name="plus" [size]="18" /> Create a spotlight for your surname
-        </button>
-      </div>
-    </ion-content>
-
-    <ion-modal [isOpen]="creating()" (didDismiss)="creating.set(false)" [initialBreakpoint]="0.9" [breakpoints]="[0.5, 0.9, 1]">
-      <ng-template>
-        <div class="sheet">
-          <h3 class="lf-h2">Create a spotlight</h3>
-          <p class="lf-muted lf-small">
-            One community per surname, per province. You become the first admin, and anyone can join straight away.
+      } @else {
+        <section class="form lf-safe-bottom">
+          <p class="lf-muted lf-small intro">
+            A spotlight is a page for one surname in one province. Everyone who opens it sees every post about
+            people with that surname. You become the first admin and anyone can join straight away.
           </p>
 
           <ion-item [class.bad]="touched.surname && !!surnameError()">
@@ -123,18 +136,16 @@ const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
                        (ionInput)="form.surname = $any($event.target).value" (ionBlur)="touched.surname = true"></ion-input>
           </ion-item>
           @if (touched.surname && surnameError()) { <p class="field-err">{{ surnameError() }}</p> }
-          @if (duplicate()) {
-            <p class="field-err">
-              <lf-icon name="alert" [size]="13" /> A "{{ form.surname.trim() }}" spotlight already exists in
-              {{ form.province ? provinceName(form.province) : 'that province' }}. Join that one instead.
-            </p>
+          @if (duplicate(); as d) {
+            <a class="field-err dup" [routerLink]="'/spotlight/' + d.id">
+              <lf-icon name="alert" [size]="13" /> "{{ d.surname }}" already exists in {{ provinceName(d.province!) }}. Tap to open it and join.
+            </a>
           }
 
           <ion-item [class.bad]="touched.province && !form.province">
             <ion-label position="stacked">Province</ion-label>
             <ion-select placeholder="Choose a province" [value]="form.province"
                         (ionChange)="form.province = $any($event.detail).value">
-              <ion-select-option [value]="null">Choose a province</ion-select-option>
               @for (p of provinces; track p.code) { <ion-select-option [value]="p.code">{{ p.name }}</ion-select-option> }
             </ion-select>
           </ion-item>
@@ -153,41 +164,54 @@ const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
 
           @if (error()) { <p class="err"><lf-icon name="alert" [size]="15" /> {{ error() }}</p> }
 
-          <div class="row">
-            <button class="lf-btn lf-btn--ghost" (click)="creating.set(false)">Cancel</button>
-            <button class="lf-btn lf-btn--primary" [disabled]="!!duplicate() || busy()" (click)="submit()">
-              {{ busy() ? 'Creating…' : 'Create spotlight' }}
-            </button>
-          </div>
-        </div>
-      </ng-template>
-    </ion-modal>
+          <button class="lf-btn lf-btn--primary lf-btn--block create" [disabled]="!!duplicate() || busy()" (click)="submit()">
+            {{ busy() ? 'Creating…' : 'Create spotlight' }}
+          </button>
+        </section>
+      }
+    </ion-content>
   `,
   styles: [`
-    .filters { display: flex; align-items: center; gap: 8px; padding: 0 8px 0 0; }
-    .filters .grow { flex: 1; }
-    .letter { max-width: 132px; --background: var(--lf-card); border-radius: 12px; font-size: 14px;
-      padding-left: 12px; min-height: 40px; }
-    .section { padding: 18px var(--lf-gap) 8px; font-size: 15px; font-weight: 800; display: flex; gap: 8px;
+    .seg { display: flex; gap: 8px; padding: 4px var(--lf-gap) 10px; }
+    .seg__btn { flex: 1; height: 38px; border: 0; border-radius: 999px; cursor: pointer; font: inherit; font-size: 15px;
+      font-weight: 600; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+      background: var(--lf-card-2); color: var(--ion-text-color); transition: background .15s, color .15s; }
+    .seg__btn.on { background: var(--lf-primary-soft); color: var(--lf-link); }
+    .find { background: var(--lf-card); padding: 8px 0 10px; margin-bottom: 8px; box-shadow: var(--lf-shadow); }
+    .find ion-searchbar { padding: 0 var(--lf-gap) !important; --border-radius: 999px; height: 40px; }
+    .letters { display: flex; gap: 6px; overflow-x: auto; padding: 8px var(--lf-gap) 0; scrollbar-width: none; }
+    .letters::-webkit-scrollbar { display: none; }
+    .pill { flex: none; min-width: 36px; height: 32px; padding: 0 12px; border: 0; border-radius: 999px; cursor: pointer;
+      background: var(--lf-card-2); color: var(--ion-text-color); font: inherit; font-size: 14px; font-weight: 600; }
+    .pill.on { background: var(--lf-primary-soft); color: var(--lf-link); }
+    .mine-card { display: flex; align-items: center; gap: 12px; width: calc(100% - 2 * var(--lf-gap)); box-sizing: border-box;
+      margin: 0 var(--lf-gap) 4px; padding: 10px 12px; border: 0; border-radius: var(--lf-radius); background: var(--lf-card);
+      box-shadow: var(--lf-shadow); color: inherit; text-decoration: none; font: inherit; text-align: left; cursor: pointer; }
+    .mine-card img { width: 56px; height: 56px; border-radius: 10px; object-fit: cover; flex: none; }
+    .mine-card > div { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+    .mine-card strong { font-size: 16px; font-weight: 700; }
+    .mine-card .disc { width: 56px; height: 56px; border-radius: 10px; display: grid; place-items: center; flex: none;
+      background: var(--lf-primary-soft); color: var(--lf-link); }
+    .section { margin: 0; padding: 16px var(--lf-gap) 8px; font-size: 17px; font-weight: 700; display: flex; gap: 8px;
       align-items: baseline; }
-    .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; padding: 0 var(--lf-gap); }
+    .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; padding: 0 var(--lf-gap) 16px; }
     @media (min-width: 620px) { .grid { grid-template-columns: repeat(3, 1fr); } }
-    .tile { position: relative; border-radius: var(--lf-radius); overflow: hidden; border: 1px solid var(--lf-line);
+    @media (min-width: 768px) { .grid, .section, .mine-card, .form { max-width: var(--lf-maxw); margin-left: auto; margin-right: auto; box-sizing: border-box; } }
+    .tile { position: relative; border-radius: var(--lf-radius); overflow: hidden; border: 0; box-shadow: var(--lf-shadow);
       background: var(--lf-card); text-decoration: none; color: inherit; display: block; }
-    .tile img { width: 100%; height: 84px; object-fit: cover; display: block; }
-    .tile .meta { padding: 9px 11px 12px; display: flex; flex-direction: column; gap: 2px; }
-    .tile .meta strong { font-size: 15px; }
-    .tile .meta span { font-size: 11.5px; color: var(--lf-muted); }
-    .tile .lf-chip { position: absolute; top: 8px; right: 8px; }
-    .sheet { padding: 20px var(--lf-gap) 34px; }
-    .sheet p { margin: 6px 0 14px; line-height: 1.45; }
-    ion-item { --background: var(--lf-card); border-radius: 12px; margin-bottom: 8px; --border-radius: 12px; }
+    .tile img { width: 100%; height: 96px; object-fit: cover; display: block; }
+    .tile .meta { padding: 8px 12px 12px; display: flex; flex-direction: column; gap: 2px; }
+    .tile .meta strong { font-size: 15px; font-weight: 600; }
+    .tile .meta span { font-size: 13px; color: var(--lf-muted); }
+    .tile .lf-chip { position: absolute; top: 8px; right: 8px; background: rgba(0,0,0,.55); color: #fff; border: 0; }
+    .form { background: var(--lf-card); padding: 16px var(--lf-gap) 24px; box-shadow: var(--lf-shadow); }
+    .intro { margin: 0 0 14px; line-height: 1.45; }
+    ion-item { margin-bottom: 8px; }
     ion-item.bad { --border-color: var(--lf-signal); box-shadow: inset 0 0 0 1.5px var(--lf-signal); }
     .field-err { color: var(--lf-signal); font-size: 12px; font-weight: 600; margin: -4px 0 8px 4px;
-      display: flex; align-items: center; gap: 5px; }
+      display: flex; align-items: center; gap: 5px; text-decoration: none; }
     .err { display: flex; align-items: center; gap: 8px; color: var(--lf-signal); font-size: 13px; margin: 4px 0 0; }
-    .row { display: flex; gap: 10px; margin-top: 18px; }
-    .row .lf-btn { flex: 1; }
+    .create { margin-top: 16px; }
   `]
 })
 export class SpotlightComponent {
@@ -197,7 +221,7 @@ export class SpotlightComponent {
   private toast = inject(ToastController);
 
   query = signal('');
-  creating = signal(false);
+  mode = signal<'view' | 'create'>('view');
   busy = signal(false);
   error = signal('');
   letter = signal<'all' | string>('all');
@@ -228,13 +252,22 @@ export class SpotlightComponent {
    * Read on every change-detection pass - the form is a plain object, so a
    * memoised computed would go stale as the person types.
    */
-  duplicate(): boolean {
+  duplicate(): Spotlight | null {
     const surname = this.form.surname.trim().toLowerCase();
-    if (surname.length < 2 || !this.form.province) return false;
+    if (surname.length < 2 || !this.form.province) return null;
     return this.data
       .spotlights()
-      .some((s) => s.surname.toLowerCase() === surname && s.province === this.form.province);
+      .find((s) => s.surname.toLowerCase() === surname && s.province === this.form.province) ?? null;
   }
+
+  /** The viewer's own surname, if we know it. */
+  readonly mySurname = computed(() => (this.auth.user()?.surname ?? '').trim());
+
+  /** The spotlight for the viewer's surname - their province first, then any. */
+  readonly surnameSpot = computed(() => {
+    const surname = this.mySurname();
+    return surname ? this.data.spotlightForSurname(surname, this.auth.user()?.province ?? null) ?? null : null;
+  });
 
   joined(s: Spotlight): boolean {
     const me = this.auth.viewerId;
@@ -253,17 +286,16 @@ export class SpotlightComponent {
     return cover(`${surname} family`, hue || undefined);
   }
 
-  openCreate(): void {
+  openCreate(prefill = ''): void {
     if (!this.auth.signedIn()) {
       void this.router.navigate(['/auth'], { queryParams: { next: '/spotlight' } });
       return;
     }
     this.error.set('');
     this.touched = { surname: false, province: false };
-    this.form.surname = this.auth.user()?.surname ?? '';
+    this.form = { surname: prefill.trim() || this.auth.user()?.surname || '', tagline: '', about: '', province: null };
     // never pre-select the province - the person must choose it
-    this.form.province = null;
-    this.creating.set(true);
+    this.mode.set('create');
   }
 
   async submit(): Promise<void> {
@@ -281,7 +313,7 @@ export class SpotlightComponent {
     this.busy.set(true);
     try {
       const sp = await this.data.createSpotlight(this.form as any);
-      this.creating.set(false);
+      this.mode.set('view');
       const t = await this.toast.create({ message: `${sp.surname} spotlight created. You are the first member.`, duration: 2400, position: 'bottom' });
       await t.present();
       await this.router.navigate(['/spotlight', sp.id]);

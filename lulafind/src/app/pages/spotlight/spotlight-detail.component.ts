@@ -46,7 +46,7 @@ import { cover } from '../../core/data/seed';
             <p class="tag">{{ sp()!.tagline }}</p>
             <div class="stats">
               <div><strong>{{ compact(sp()!.followers) }}</strong><span>members</span></div>
-              <div><strong>{{ posts().length }}</strong><span>posts</span></div>
+              <div><strong>{{ all().length }}</strong><span>posts</span></div>
               <div><strong>{{ sp()!.adminIds.length }}</strong><span>admins</span></div>
             </div>
             @if (sp()!.about) { <p class="about">{{ sp()!.about }}</p> }
@@ -78,6 +78,12 @@ import { cover } from '../../core/data/seed';
 
         <ion-searchbar placeholder="Search inside the {{ sp()!.surname }} spotlight" [debounce]="200"
                        (ionInput)="q.set($any($event.detail).value ?? '')"></ion-searchbar>
+        <div class="pills">
+          <button class="pill" [class.on]="show() === 'all'" (click)="show.set('all')">All · {{ all().length }}</button>
+          <button class="pill" [class.on]="show() === 'active'" (click)="show.set('active')">Still missing</button>
+          <button class="pill" [class.on]="show() === 'found'" (click)="show.set('found')">Found</button>
+        </div>
+        <p class="lf-tiny lf-muted scope">Posts filed here and every post about someone with the surname {{ sp()!.surname }}.</p>
 
         @if (!posts().length) {
           <lf-empty icon="users" title="Nothing posted to this spotlight yet"
@@ -102,6 +108,11 @@ import { cover } from '../../core/data/seed';
     .stats strong { font-size: 17px; }
     .stats span { font-size: 11.5px; color: var(--lf-muted); }
     .acts { display: flex; gap: 8px; flex-wrap: wrap; }
+    .pills { display: flex; gap: 8px; padding: 4px var(--lf-gap) 0; overflow-x: auto; }
+    .pill { flex: none; height: 32px; padding: 0 12px; border: 0; border-radius: 999px; cursor: pointer; font: inherit;
+      font-size: 14px; font-weight: 600; background: var(--lf-card-2); color: var(--ion-text-color); }
+    .pill.on { background: var(--lf-primary-soft); color: var(--lf-link); }
+    .scope { margin: 6px var(--lf-gap) 8px; }
   `]
 })
 export class SpotlightDetailComponent implements OnInit {
@@ -118,6 +129,9 @@ export class SpotlightDetailComponent implements OnInit {
 
   sp = signal<Spotlight | null>(null);
   q = signal('');
+  /** posts filed here + posts about anyone with this surname */
+  readonly all = signal<Post[]>([]);
+  readonly show = signal<'all' | 'active' | 'found'>('all');
 
   readonly member = computed(() => {
     const me = this.auth.viewerId;
@@ -132,7 +146,9 @@ export class SpotlightDetailComponent implements OnInit {
   readonly posts = computed(() => {
     const id = this.sp()?.id;
     const needle = this.q().trim().toLowerCase();
-    let list = this.data.feed().filter((p) => p.spotlightId === id);
+    let list = this.all();
+    if (this.show() === 'active') list = list.filter((p) => p.status !== 'found');
+    if (this.show() === 'found') list = list.filter((p) => p.status === 'found');
     if (needle) {
       list = list.filter(
         (p) => p.title.toLowerCase().includes(needle) || p.body.toLowerCase().includes(needle) ||
@@ -151,6 +167,12 @@ export class SpotlightDetailComponent implements OnInit {
       await this.data.loadStatic();
       this.sp.set(this.data.spotlights().find((s) => s.id === id) ?? null);
     }
+    await this.reloadPosts();
+  }
+
+  async reloadPosts(): Promise<void> {
+    const sp = this.sp();
+    if (sp) this.all.set(await this.data.postsForSpotlight(sp));
   }
 
   coverOf(): string {
@@ -269,7 +291,9 @@ export class SpotlightDetailComponent implements OnInit {
   }
 
   vote(p: Post, v: 'up' | 'down'): void {
-    void this.data.vote(p.id, v);
+    void this.data.vote(p.id, v).then(() => this.reloadPosts()).catch(async (e) => {
+      await this.toast.create({ message: e?.message ?? 'Could not vote', duration: 2200, position: 'bottom' }).then((t) => t.present());
+    });
   }
 
   open(p: Post): void {

@@ -137,7 +137,7 @@ import { fullDate } from '../../core/utils/format';
   `,
   styles: [`
     .card { margin: 12px var(--lf-gap); padding: 15px; border-radius: var(--lf-radius);
-      border: 1px solid var(--lf-line); background: var(--lf-card); display: flex; flex-direction: column; gap: 10px; }
+      border: 0; box-shadow: var(--lf-shadow); background: var(--lf-card); display: flex; flex-direction: column; gap: 10px; }
     .stat { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
     .stat div { padding: 10px 12px; border-radius: 11px; background: var(--lf-card-2); display: flex; flex-direction: column; gap: 2px; }
     .stat span { font-size: 11px; color: var(--lf-muted); text-transform: uppercase; letter-spacing: .5px; }

@@ -46,8 +46,8 @@ import { SUPPORT_EMAIL, SUPPORT_NAME } from '../../core/config';
         <ion-item>
           <ion-label position="stacked">Theme</ion-label>
           <ion-select [value]="s().theme" (ionChange)="set({ theme: $any($event.detail).value })">
-            <ion-select-option value="dark">Dark (default)</ion-select-option>
-            <ion-select-option value="light">Light</ion-select-option>
+            <ion-select-option value="light">Light (default)</ion-select-option>
+            <ion-select-option value="dark">Dark</ion-select-option>
             <ion-select-option value="system">Match my phone</ion-select-option>
           </ion-select>
         </ion-item>
@@ -182,17 +182,18 @@ import { SUPPORT_EMAIL, SUPPORT_NAME } from '../../core/config';
     </ion-content>
   `,
   styles: [`
-    .card { margin: 12px var(--lf-gap); padding: 15px; border-radius: var(--lf-radius);
-      border: 1px solid var(--lf-line); background: var(--lf-card); }
-    .card h3 { margin: 0 0 10px; font-size: 16px; }
+    .card { margin: 8px var(--lf-gap); padding: 12px 16px; border-radius: var(--lf-radius);
+      border: 0; box-shadow: var(--lf-shadow); background: var(--lf-card); }
+    .card h3 { margin: 0 0 8px; font-size: 17px; font-weight: 700; }
+    @media (min-width: 768px) { .card { max-width: var(--lf-maxw); margin-left: auto; margin-right: auto; } }
     .card p { line-height: 1.55; margin: 6px 0 10px; }
     code { background: var(--lf-card-2); padding: 1px 5px; border-radius: 5px; font-size: 12px; }
     .row { display: flex; align-items: center; gap: 10px; padding: 12px 4px; color: inherit; text-decoration: none;
-      border-top: 1px solid var(--lf-line); font-size: 14.5px; font-weight: 600; }
+      border-top: 1px solid var(--lf-line-soft); font-size: 15px; font-weight: 500; }
     .row span { flex: 1; }
     .danger-zone { display: flex; flex-direction: column; gap: 10px; padding-bottom: 34px; }
     .perm { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
-      padding: 12px 0; border-top: 1px solid var(--lf-line); }
+      padding: 12px 0; border-top: 1px solid var(--lf-line-soft); }
     .perm p { margin: 4px 0 0; }
     .perm button { flex-shrink: 0; margin-top: 2px; }
   `]

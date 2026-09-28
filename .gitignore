@@ -1,0 +1,5 @@
+
+# Service-account keys are secrets - never commit them
+uploads/*adminsdk*.json
+*firebase-adminsdk*.json
+service-account*.json

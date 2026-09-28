@@ -198,17 +198,17 @@ import { cover } from '../../core/data/seed';
     .stats strong { font-size: 17px; }
     .stats span { font-size: 11.5px; color: var(--lf-muted); }
     .quick { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; padding: 12px 13px;
-      border-radius: 14px; background: var(--lf-card); border: 1px solid var(--lf-line); }
-    .quick-label { font-size: 12.5px; font-weight: 800; color: var(--lf-muted); }
+      border-radius: var(--lf-radius); background: var(--lf-card); border: 0; box-shadow: var(--lf-shadow); }
+    .quick-label { font-size: 12.5px; font-weight: 700; color: var(--lf-muted); }
     .quick-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
     .quickbtn { display: inline-flex; align-items: center; justify-content: center; gap: 7px;
       min-height: 46px; border-radius: 12px; border: 1.5px solid var(--lf-line);
-      background: transparent; color: inherit; font-size: 14px; font-weight: 800; cursor: pointer; }
+      background: transparent; color: inherit; font-size: 14px; font-weight: 700; cursor: pointer; }
     .quickbtn:active { transform: scale(.98); }
     .quickbtn.safe { border-color: var(--lf-ubuntu); color: var(--lf-ubuntu); }
-    .quickbtn.safe.on { background: var(--lf-ubuntu); color: #04150c; border-color: var(--lf-ubuntu); }
+    .quickbtn.safe.on { background: var(--lf-ubuntu); color: #fff; border-color: var(--lf-ubuntu); }
     .quickbtn.help { border-color: var(--lf-signal); color: var(--lf-signal); }
-    .quickbtn.help.on { background: var(--lf-signal); color: #1b0603; border-color: var(--lf-signal); }
+    .quickbtn.help.on { background: var(--lf-signal); color: #fff; border-color: var(--lf-signal); }
     .quickbtn:disabled { opacity: .55; cursor: wait; }
     .checkin { display: flex; align-items: center; gap: 10px; padding: 11px 13px; border-radius: 12px;
       background: color-mix(in srgb, var(--lf-ubuntu) 16%, transparent); }
@@ -217,11 +217,11 @@ import { cover } from '../../core/data/seed';
     .checkin.bad { background: color-mix(in srgb, var(--lf-signal) 18%, transparent); }
     .checkin .live { display: inline-flex; align-items: center; gap: 5px; color: var(--lf-ubuntu); font-weight: 700; }
     .acts { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
-    .section { padding: 16px var(--lf-gap) 6px; font-size: 15px; font-weight: 800; }
-    .sp { display: flex; flex-direction: column; gap: 2px; padding: 12px 16px; border-radius: 12px;
-      border: 1px solid var(--lf-line); background: var(--lf-card); color: inherit; text-decoration: none; min-width: 140px; }
+    .section { padding: 16px var(--lf-gap) 6px; font-size: 15px; font-weight: 700; }
+    .sp { display: flex; flex-direction: column; gap: 2px; padding: 12px 16px; border-radius: var(--lf-radius);
+      border: 0; box-shadow: var(--lf-shadow); background: var(--lf-card); color: inherit; text-decoration: none; min-width: 140px; }
     .sp span { font-size: 11.5px; color: var(--lf-muted); }
-    .sheetwrap { position: fixed; inset: 0; z-index: 40; background: rgba(4, 8, 20, .72);
+    .sheetwrap { position: fixed; inset: 0; z-index: 40; background: var(--lf-scrim);
       display: flex; align-items: flex-end; justify-content: center; }
     .sheet { width: 100%; max-width: 520px; max-height: 88vh; overflow-y: auto; background: var(--lf-card);
       border-radius: 18px 18px 0 0; padding: 18px 18px 30px; display: flex; flex-direction: column; gap: 10px; }

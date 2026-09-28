@@ -73,12 +73,12 @@ const CATS = [
     .cats { padding: 8px var(--lf-gap); gap: 6px; }
     .chip { padding: 6px 13px; border-radius: 999px; border: 1px solid var(--lf-line); background: transparent;
       color: var(--lf-muted); font-size: 12.5px; font-weight: 700; cursor: pointer; white-space: nowrap; }
-    .chip.on { background: var(--lf-beacon); color: #1a1200; border-color: var(--lf-beacon); }
+    .chip.on { background: var(--lf-primary-soft); color: var(--lf-primary-soft-text); border-color: transparent; }
     .list { padding: 4px var(--lf-gap) 30px; display: flex; flex-direction: column; gap: 10px; }
-    .tip { padding: 15px; border-radius: var(--lf-radius); border: 1px solid var(--lf-line); background: var(--lf-card); }
+    .tip { padding: 15px; border-radius: var(--lf-radius); border: 0; box-shadow: var(--lf-shadow); background: var(--lf-card); }
     .tip.urgent { border-color: color-mix(in srgb, var(--lf-signal) 50%, var(--lf-line)); }
     .hd { display: flex; align-items: center; gap: 8px; color: var(--lf-beacon); margin-bottom: 6px; }
-    .cat { font-size: 11px; font-weight: 800; letter-spacing: .6px; text-transform: uppercase; color: var(--lf-muted); }
+    .cat { font-size: 11px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase; color: var(--lf-muted); }
     .tip h3 { margin: 0 0 6px; font-size: 16px; line-height: 1.3; }
     .tip p { margin: 0 0 10px; font-size: 13.5px; line-height: 1.55; color: var(--ion-text-color); opacity: .92; }
     .share { display: inline-flex; align-items: center; gap: 6px; margin-left: 8px; background: none; border: 0;

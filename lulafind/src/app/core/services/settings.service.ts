@@ -47,7 +47,7 @@ export class SettingsService {
     root.classList.toggle('lf-dark', !!dark);
     root.classList.toggle('lf-light', !dark);
     const meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute('content', dark ? '#0a1024' : '#ffffff');
+    if (meta) meta.setAttribute('content', dark ? '#242526' : '#ffffff');
   }
 
   init(): void {

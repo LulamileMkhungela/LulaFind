@@ -96,7 +96,7 @@ import { escalationNote } from '../../core/data/sa-help';
   `,
   styles: [`
     .card { margin: 12px var(--lf-gap); padding: 15px; border-radius: var(--lf-radius);
-      border: 1px solid var(--lf-line); background: var(--lf-card); }
+      border: 0; box-shadow: var(--lf-shadow); background: var(--lf-card); }
     .partner { display: flex; gap: 12px; align-items: center; padding: 11px 0 4px; border-top: 1px solid var(--lf-line); }
     .partner:first-of-type { border-top: 0; }
     .partner div { display: flex; flex-direction: column; gap: 2px; }
