@@ -50,30 +50,140 @@ end $$;
 -- "lulafinds-app") and this function reads the caller's Firebase UID from it.
 -- Only this Firebase project, and only verified email addresses, count.
 -- Firebase UIDs are not UUIDs, so never use auth.uid() in this project.
+--
+-- Two token shapes are accepted:
+--   (a) the raw Firebase ID token - iss/aud name this Firebase project;
+--   (b) a Supabase session Supabase minted from that Firebase identity.
+-- The publishable anon key is a JWT too, so it is refused explicitly: without
+-- that guard every anonymous visitor would be handed the uid "anonymous" and
+-- could write rows. If this function ever returns NULL, every write is denied
+-- by row-level security - that is the intended, safe failure.
 create or replace function public.lula_uid()
 returns text language sql stable set search_path = pg_catalog as $$
-  select case
-    when auth.jwt()->>'iss' = 'https://securetoken.google.com/lulafinds-app'
-     and auth.jwt()->>'aud' = 'lulafinds-app'
-     and coalesce(auth.jwt()->>'email_verified', 'false') = 'true'
-    then nullif(auth.jwt()->>'sub', '')
-  end;
+  with c as (
+    select
+      coalesce(auth.jwt(), '{}'::jsonb) as jwt,
+      coalesce(auth.jwt() -> 'user_metadata', '{}'::jsonb) as meta
+  )
+  select nullif(
+    case
+      when c.jwt->>'iss' = 'https://securetoken.google.com/lulafinds-app'
+       and c.jwt->>'aud' = 'lulafinds-app'
+       and coalesce(c.jwt->>'email_verified', 'false') = 'true'
+        then c.jwt->>'sub'
+
+      when nullif(c.jwt->>'sub', '') is not null
+       and c.jwt->>'sub' <> 'anonymous'
+       and coalesce(c.jwt->>'role', '') <> 'anon'
+       and (
+         c.jwt->>'iss' = 'https://srwdtguxdjsjlkaydhet.supabase.co/auth/v1'
+         or c.meta->>'sign_in_provider' like 'firebase%'
+         or c.jwt->'app_metadata'->>'provider' like 'firebase%'
+       )
+       and coalesce(c.jwt->>'email_verified', c.meta->>'email_verified', 'true') = 'true'
+        then c.jwt->>'sub'
+    end,
+    ''
+  )
+  from c;
 $$;
 revoke all on function public.lula_uid() from public;
 grant execute on function public.lula_uid() to anon, authenticated;
 
+-- Owner and timestamp are the server's business, not the client's. This runs
+-- before every insert and update so a row can never land with a null owner_id,
+-- which is what a row-level-security rejection on insert really means.
+create or replace function public.lula_touch_record()
+returns trigger language plpgsql set search_path = pg_catalog as $$
+declare
+  who text := public.lula_uid();
+  claimed text;
+begin
+  if new.owner_id is null and who is not null then
+    claimed := coalesce(
+      new.payload->>'authorId',
+      new.payload->>'viewerId',
+      new.payload->>'fromUserId',
+      new.payload->>'userId',
+      new.payload->>'ownerId',
+      new.payload->>'followerId',
+      case when new.collection = 'users' then new.id else null end
+    );
+    -- Adopt an owner only when it is provably the caller.
+    if claimed is null or claimed = who then
+      new.owner_id := who;
+    end if;
+  end if;
+  new.updated_at := floor(extract(epoch from clock_timestamp()) * 1000)::bigint;
+  return new;
+end;
+$$;
+revoke all on function public.lula_touch_record() from public;
+grant execute on function public.lula_touch_record() to anon, authenticated;
+
+drop trigger if exists lula_touch_record on public.records;
+create trigger lula_touch_record
+before insert or update on public.records
+for each row execute function public.lula_touch_record();
+
+-- Read-only self-check, called from the app as `window.__lulaDebugWhoAmI()`.
+--
+-- It answers the question every write policy actually depends on: does the
+-- database see the same person the app does, and is that account allowed to
+-- write? `suspended` is included because a suspended account is refused by the
+-- insert policy for a different reason than a UID mismatch, and the two look
+-- identical from the app ("violates row-level security policy").
+--
+-- It never writes. SECURITY DEFINER so it can read the caller's own `users`
+-- row, which the insert policy also reads.
+create or replace function public.lula_debug_identity(app_uid text)
+returns jsonb language sql stable security definer set search_path = pg_catalog as $$
+  with me as (
+    select public.lula_uid() as db_uid
+  ), prof as (
+    select
+      coalesce((select r.payload->>'suspended' from public.records r
+                where r.collection = 'users' and r.id = me.db_uid), 'false') = 'true' as suspended
+    from me
+  )
+  select jsonb_build_object(
+    'dbUid', me.db_uid,
+    'appUid', nullif(app_uid, ''),
+    'dbUidMatchesAppUid', me.db_uid is not null and me.db_uid = nullif(app_uid, ''),
+    'suspended', prof.suspended,
+    'canWrite', me.db_uid is not null and not prof.suspended,
+    'postInteractRpc', to_regprocedure('public.lula_post_interact(text, jsonb)') is not null,
+    'spotlightRpc', to_regprocedure('public.lula_link_spotlight_post(text, text, boolean)') is not null
+  )
+  from me, prof;
+$$;
+revoke all on function public.lula_debug_identity(text) from public;
+grant execute on function public.lula_debug_identity(text) to anon, authenticated;
+
 -- SECURITY DEFINER helpers avoid recursive RLS when one collection checks a
 -- related row in records. The identity arguments are always clamped to lula_uid()
 -- so calling these helpers through PostgREST cannot probe another account.
+--
+-- Every helper requires a *real* identity. `person is not distinct from uid`
+-- was true when both were NULL, which let an anonymous visitor satisfy the
+-- identity gate. Public rows stay public through the explicit audience checks,
+-- so guest browsing is unaffected.
 create or replace function public.lula_is_admin()
 returns boolean language sql stable security definer set search_path = pg_catalog as $$
   select public.lula_uid() is not null
     and coalesce((auth.jwt()->>'lulafind_role') in ('admin', 'moderator'), false);
 $$;
 
+create or replace function public.lula_is_self(person text)
+returns boolean language sql stable security definer set search_path = pg_catalog as $$
+  select person is not null
+    and public.lula_uid() is not null
+    and person = public.lula_uid();
+$$;
+
 create or replace function public.lula_follows_accepted(follower text, following text)
 returns boolean language sql stable security definer set search_path = pg_catalog as $$
-  select follower is not distinct from (select public.lula_uid())
+  select public.lula_is_self(follower)
     and exists (
       select 1 from public.records f
       where f.collection = 'follows'
@@ -85,7 +195,7 @@ $$;
 
 create or replace function public.lula_spotlight_member(person text, spotlight text)
 returns boolean language sql stable security definer set search_path = pg_catalog as $$
-  select person is not distinct from (select public.lula_uid())
+  select public.lula_is_self(person)
     and exists (
       select 1 from public.records s
       where s.collection = 'spotlights'
@@ -96,8 +206,7 @@ $$;
 
 create or replace function public.lula_post_visible(post_id text, person text)
 returns boolean language sql stable security definer set search_path = pg_catalog as $$
-  select person is not distinct from (select public.lula_uid())
-    and exists (
+  select exists (
       select 1 from public.records p
       where p.collection = 'posts'
         and p.id = post_id
@@ -107,11 +216,14 @@ returns boolean language sql stable security definer set search_path = pg_catalo
           or public.lula_is_admin())
         and (
           public.lula_is_admin()
+          -- A public case is readable by anyone, signed in or browsing as a guest.
           or coalesce(p.payload->>'audience', 'public') = 'public'
-          or p.payload->>'authorId' = person
+          or public.lula_is_self(p.payload->>'authorId')
           or (p.payload->>'audience' = 'followers'
+            and public.lula_is_self(person)
             and public.lula_follows_accepted(person, p.payload->>'authorId'))
           or (p.payload->>'audience' = 'surname'
+            and public.lula_is_self(person)
             and public.lula_spotlight_member(person, p.payload->>'spotlightId'))
         )
     );
@@ -119,18 +231,19 @@ $$;
 
 create or replace function public.lula_story_visible(story_id text, person text)
 returns boolean language sql stable security definer set search_path = pg_catalog as $$
-  select person is not distinct from (select public.lula_uid())
-    and exists (
+  select exists (
       select 1 from public.records s
       where s.collection = 'stories'
         and s.id = story_id
         and (
           coalesce(s.payload->>'audience', 'public') = 'public'
-          or s.payload->>'authorId' = person
+          or public.lula_is_self(s.payload->>'authorId')
           -- A follower is someone this viewer follows, not someone who follows the viewer.
           or (s.payload->>'audience' = 'followers'
+            and public.lula_is_self(person)
             and public.lula_follows_accepted(person, s.payload->>'authorId'))
           or (s.payload->>'audience' = 'surname'
+            and public.lula_is_self(person)
             and public.lula_spotlight_member(person, s.payload->>'spotlightId'))
         )
     );
@@ -138,7 +251,7 @@ $$;
 
 create or replace function public.lula_story_owner(story_id text, person text)
 returns boolean language sql stable security definer set search_path = pg_catalog as $$
-  select person is not distinct from (select public.lula_uid())
+  select public.lula_is_self(person)
     and exists (
       select 1 from public.records s
       where s.collection = 'stories'
@@ -149,7 +262,7 @@ $$;
 
 create or replace function public.lula_in_thread(thread_id text, person text)
 returns boolean language sql stable security definer set search_path = pg_catalog as $$
-  select person is not distinct from (select public.lula_uid())
+  select public.lula_is_self(person)
     and exists (
       select 1 from public.records t
       where t.collection = 'threads'
@@ -162,7 +275,7 @@ $$;
 -- references the object. The storage bucket itself must remain private.
 create or replace function public.lula_media_visible(file_path text, person text)
 returns boolean language sql stable security definer set search_path = pg_catalog as $$
-  select person is not distinct from (select public.lula_uid())
+  select public.lula_is_self(person)
     and exists (
       select 1
       from public.records r
@@ -268,7 +381,8 @@ grant select on public.lula_user_profiles_public to anon, authenticated;
 -- Enforce follow approval on the database, not just in the Follow button.
 create or replace function public.lula_follow_insert_allowed(follower text, following text, new_status text)
 returns boolean language sql stable security definer set search_path = pg_catalog as $$
-  select follower is not distinct from (select public.lula_uid())
+  select public.lula_is_self(follower)
+    and following is not null
     and following is distinct from (select public.lula_uid())
     and new_status in ('pending', 'accepted')
     and exists (
@@ -284,6 +398,7 @@ returns boolean language sql stable security definer set search_path = pg_catalo
 $$;
 
 revoke all on function public.lula_is_admin() from public;
+revoke all on function public.lula_is_self(text) from public;
 revoke all on function public.lula_follows_accepted(text, text) from public;
 revoke all on function public.lula_spotlight_member(text, text) from public;
 revoke all on function public.lula_post_visible(text, text) from public;
@@ -293,6 +408,7 @@ revoke all on function public.lula_in_thread(text, text) from public;
 revoke all on function public.lula_follow_insert_allowed(text, text, text) from public;
 revoke all on function public.lula_media_visible(text, text) from public;
 grant execute on function public.lula_is_admin() to anon, authenticated;
+grant execute on function public.lula_is_self(text) to anon, authenticated;
 grant execute on function public.lula_follows_accepted(text, text) to anon, authenticated;
 grant execute on function public.lula_spotlight_member(text, text) to anon, authenticated;
 grant execute on function public.lula_post_visible(text, text) to anon, authenticated;
@@ -353,7 +469,9 @@ for insert to anon, authenticated
 with check (
   public.lula_is_admin()
   or (
-    owner_id = (select public.lula_uid())
+    -- lula_touch_record() fills a missing owner_id before this check runs, so
+    -- a null here is only tolerated when the payload names the caller.
+    (owner_id is null or owner_id = (select public.lula_uid()))
     and (
       (collection = 'users'
         and id = (select public.lula_uid())
