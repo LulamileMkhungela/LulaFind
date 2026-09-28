@@ -19,9 +19,10 @@ import { UserProfile, Post, PROVINCES } from '../../core/models/types';
   standalone: true,
   imports: [IonContent, IonSearchbar, RouterLink, IconComponent, AvatarComponent, EmptyComponent, PostCardComponent, TopNavComponent],
   template: `
-    <lf-top-nav title="Search" backTo="/home" />
+    <lf-top-nav />
 
     <ion-content class="lf-page">
+      <div class="page-title"><h1>Search</h1></div>
       <!-- The search field and its quick chips scroll with the results instead
            of being pinned under a translucent bar, where they were clipped by
            the status bar on notched phones. -->

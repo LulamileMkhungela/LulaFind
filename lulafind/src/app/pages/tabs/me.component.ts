@@ -33,7 +33,7 @@ import { MediaService } from '../../core/services/media.service';
     RouterLink, IconComponent, AvatarComponent, EmptyComponent, PostCardComponent
   ],
   template: `
-    <lf-top-nav title="Menu" backTo="/home" />
+    <lf-top-nav />
 
     <ion-content class="lf-page">
       <div class="page-title">
@@ -114,66 +114,70 @@ import { MediaService } from '../../core/services/media.service';
           <div class="lf-meta"><lf-icon name="clock" [size]="14" /> Joined {{ dayMonth(me()!.createdAt) }}</div>
         </div>
 
-        <h2 class="fb-section-title">All shortcuts</h2>
-        <div class="quick">
-          <a class="q" routerLink="/saved"><span class="qi qi-purple"><lf-icon name="bookmark" [size]="20" /></span><span>Saved</span>
-            @if (data.savedIds().length) { <em class="lf-count">{{ data.savedIds().length }}</em> }</a>
-          <a class="q" routerLink="/connections"><span class="qi qi-blue"><lf-icon name="users" [size]="20" /></span><span>Friends</span>
-            @if (data.followRequests().length) { <em class="lf-badge">{{ data.followRequests().length }}</em> }</a>
-          <a class="q" routerLink="/notifications"><span class="qi qi-blue"><lf-icon name="bell" [size]="20" /></span><span>Alerts</span>
-            @if (data.unreadNotifications() > 0) { <em class="lf-badge">{{ data.unreadNotifications() }}</em> }</a>
-          <a class="q" routerLink="/safety"><span class="qi qi-green"><lf-icon name="shield" [size]="20" /></span><span>Safety</span></a>
-          <a class="q" routerLink="/tips"><span class="qi qi-yellow"><lf-icon name="info" [size]="20" /></span><span>Tips</span></a>
-          <a class="q" routerLink="/spotlight"><span class="qi qi-teal"><lf-icon name="users" [size]="20" /></span><span>Spotlight</span></a>
-          <a class="q" routerLink="/settings"><span class="qi qi-grey"><lf-icon name="lock" [size]="20" /></span><span>Privacy</span></a>
-          @if (isAdmin()) {
-            <a class="q" routerLink="/admin"><span class="qi qi-red"><lf-icon name="shield" [size]="20" /></span><span>Admin</span>
-              @if (mod.openCount() > 0) { <em class="lf-badge">{{ mod.openCount() }}</em> }</a>
+        <div class="tabs menu-tabs" role="tablist" aria-label="Menu sections">
+          @for (t of menuTabs; track t.key) {
+            <button class="tab" [class.on]="menuTab() === t.key" [id]="'menu-tab-' + t.key"
+                    role="tab" [attr.aria-selected]="menuTab() === t.key" [attr.aria-controls]="'menu-panel-' + t.key"
+                    (click)="menuTab.set(t.key)">
+              {{ t.label }}
+            </button>
           }
-          <a class="q" routerLink="/help"><span class="qi qi-red"><lf-icon name="phone" [size]="20" /></span><span>Get help</span></a>
-          <a class="q" (click)="signOut()"><span class="qi qi-grey"><lf-icon name="logout" [size]="20" /></span><span>Sign out</span></a>
         </div>
 
-        @if (data.followRequests().length) {
-          <div class="requests">
-            <div class="lf-row-between">
-              <h3 class="lf-h2"><lf-icon name="users" [size]="16" /> Follow requests</h3>
-              <a class="see-all" routerLink="/connections" [queryParams]="{ tab: 'requests' }">See all</a>
+        @if (menuTab() === 'shortcuts') {
+          <section class="menu-panel" id="menu-panel-shortcuts" role="tabpanel" aria-labelledby="menu-tab-shortcuts">
+            <div class="quick">
+              <a class="q" routerLink="/connections"><span class="qi qi-blue"><lf-icon name="users" [size]="20" /></span><span>Friends</span>
+                @if (data.followRequests().length) { <em class="lf-badge">{{ data.followRequests().length }}</em> }</a>
+              <a class="q" routerLink="/notifications"><span class="qi qi-blue"><lf-icon name="bell" [size]="20" /></span><span>Alerts</span>
+                @if (data.unreadNotifications() > 0) { <em class="lf-badge">{{ data.unreadNotifications() }}</em> }</a>
+              <a class="q" routerLink="/safety"><span class="qi qi-green"><lf-icon name="shield" [size]="20" /></span><span>Safety</span></a>
+              <a class="q" routerLink="/tips"><span class="qi qi-yellow"><lf-icon name="info" [size]="20" /></span><span>Tips</span></a>
+              <a class="q" routerLink="/spotlight"><span class="qi qi-teal"><lf-icon name="users" [size]="20" /></span><span>Spotlight</span></a>
+              <a class="q" routerLink="/settings"><span class="qi qi-grey"><lf-icon name="lock" [size]="20" /></span><span>Privacy</span></a>
+              @if (isAdmin()) {
+                <a class="q" routerLink="/admin"><span class="qi qi-red"><lf-icon name="shield" [size]="20" /></span><span>Admin</span>
+                  @if (mod.openCount() > 0) { <em class="lf-badge">{{ mod.openCount() }}</em> }</a>
+              }
+              <a class="q" routerLink="/help"><span class="qi qi-red"><lf-icon name="phone" [size]="20" /></span><span>Get help</span></a>
+              <button class="q" type="button" (click)="signOut()"><span class="qi qi-grey"><lf-icon name="logout" [size]="20" /></span><span>Sign out</span></button>
             </div>
-            @for (r of requestPeople(); track r.id) {
-              <div class="req">
-                <lf-avatar [src]="data.avatarFor(r.u)" [name]="r.u?.displayName ?? '?'" [size]="40" />
-                <div class="lf-grow">
-                  <strong>{{ r.u?.displayName ?? 'A member' }}</strong>
-                  <span class="lf-small lf-muted">wants to follow you</span>
+
+            @if (data.followRequests().length) {
+              <div class="requests">
+                <div class="lf-row-between">
+                  <h3 class="lf-h2"><lf-icon name="users" [size]="16" /> Follow requests</h3>
+                  <a class="see-all" routerLink="/connections" [queryParams]="{ tab: 'requests' }">See all</a>
                 </div>
-                <button class="lf-btn lf-btn--sm" (click)="respond(r.id, true)">Accept</button>
-                <button class="lf-btn lf-btn--sm lf-btn--ghost" (click)="respond(r.id, false)">Decline</button>
+                @for (r of requestPeople(); track r.id) {
+                  <div class="req">
+                    <lf-avatar [src]="data.avatarFor(r.u)" [name]="r.u?.displayName ?? '?'" [size]="40" />
+                    <div class="lf-grow">
+                      <strong>{{ r.u?.displayName ?? 'A member' }}</strong>
+                      <span class="lf-small lf-muted">wants to follow you</span>
+                    </div>
+                    <button class="lf-btn lf-btn--sm" (click)="respond(r.id, true)">Accept</button>
+                    <button class="lf-btn lf-btn--sm lf-btn--ghost" (click)="respond(r.id, false)">Decline</button>
+                  </div>
+                }
               </div>
             }
-          </div>
-        }
-
-        <h2 class="fb-section-title">Posts</h2>
-        <div class="tabs">
-          @for (t of tabs; track t.key) {
-            <button class="tab" [class.on]="tab() === t.key" (click)="tab.set(t.key)">{{ t.label }}</button>
-          }
-        </div>
-
-        @if (visible().length) {
-          @for (p of visible(); track p.id) {
-            <lf-post-card [post]="p" [author]="data.authorOf(p.authorId) ?? null" chatState="off"
-                          (vote)="vote(p, $event)" (comment)="open(p)" (share)="share(p)" (more)="more(p)" />
-          }
+          </section>
         } @else {
-          <lf-empty icon="book" [title]="emptyTitle()" message="Anything you post shows up here instantly."
-                    actionLabel="Create a post" (action)="create()" />
+          <section class="menu-panel menu-posts" [id]="'menu-panel-' + menuTab()" role="tabpanel"
+                   [attr.aria-labelledby]="'menu-tab-' + menuTab()">
+            <h2 class="fb-section-title">{{ menuTab() === 'posts' ? 'Posts' : 'Saved posts' }}</h2>
+            @if (visible().length) {
+              @for (p of visible(); track p.id) {
+                <lf-post-card [post]="p" [author]="data.authorOf(p.authorId) ?? null" chatState="off"
+                              (vote)="vote(p, $event)" (comment)="open(p)" (share)="share(p)" (more)="more(p)" />
+              }
+            } @else {
+              <lf-empty [icon]="menuTab() === 'saved' ? 'bookmark' : 'book'" [title]="emptyTitle()"
+                        [message]="emptyMessage()" [actionLabel]="emptyActionLabel()" (action)="emptyAction()" />
+            }
+          </section>
         }
-
-        <div class="lf-pad lf-safe-bottom" style="padding-top:12px">
-          <button class="lf-btn lf-btn--block" (click)="signOut()">Log out</button>
-        </div>
       }
     </ion-content>
 
@@ -293,10 +297,13 @@ import { MediaService } from '../../core/services/media.service';
       border: 0; background: transparent; color: inherit; padding: 0; cursor: pointer; font-family: inherit; }
     .stats strong { font-size: 15px; font-weight: 700; }
     .stats span { font-size: 15px; color: var(--lf-muted); }
+    .menu-tabs { margin-top: 8px; }
+    .menu-tabs .tab { flex: 1; }
+    .menu-panel { padding-bottom: 8px; }
     .quick { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; padding: 0 var(--lf-gap) 8px; }
     .q { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 12px;
       border-radius: var(--lf-radius); border: 0; background: var(--lf-card); box-shadow: var(--lf-shadow);
-      color: inherit; text-decoration: none; font-size: 15px; font-weight: 600; cursor: pointer; }
+      color: inherit; text-decoration: none; text-align: left; font-family: inherit; font-size: 15px; font-weight: 600; cursor: pointer; }
     .q:active { background: var(--lf-hover); }
     .q .lf-badge { position: absolute; top: 12px; right: 12px; }
     .qi { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
@@ -372,11 +379,11 @@ export class MeComponent {
     }
   }
 
-  tab = signal<'posts' | 'saved' | 'khumbu'>('posts');
-  tabs = [
-    { key: 'posts' as const, label: 'My posts' },
-    { key: 'saved' as const, label: 'Saved' },
-    { key: 'khumbu' as const, label: 'KhumbulEkhaya' }
+  readonly menuTab = signal<'shortcuts' | 'posts' | 'saved'>('shortcuts');
+  readonly menuTabs = [
+    { key: 'shortcuts' as const, label: 'All shortcuts' },
+    { key: 'posts' as const, label: 'Posts' },
+    { key: 'saved' as const, label: 'Saved' }
   ];
 
   form = {
@@ -393,13 +400,7 @@ export class MeComponent {
     const id = this.auth.viewerId;
     return this.data.feed().filter((p) => p.authorId === id);
   });
-  readonly visible = computed(() => {
-    switch (this.tab()) {
-      case 'saved': return this.data.savedPosts();
-      case 'khumbu': return this.myPosts().filter((p) => p.type === 'khumbulekhaya');
-      default: return this.myPosts();
-    }
-  });
+  readonly visible = computed(() => this.menuTab() === 'saved' ? this.data.savedPosts() : this.myPosts());
 
   constructor() {
     this.syncForm();
@@ -436,7 +437,22 @@ export class MeComponent {
   }
 
   emptyTitle(): string {
-    return this.tab() === 'saved' ? 'Nothing saved yet' : 'You have not posted yet';
+    return this.menuTab() === 'saved' ? 'Nothing saved yet' : 'You have not posted yet';
+  }
+
+  emptyMessage(): string {
+    return this.menuTab() === 'saved'
+      ? 'Posts you save from the feed will show up here.'
+      : 'Anything you post shows up here instantly.';
+  }
+
+  emptyActionLabel(): string {
+    return this.menuTab() === 'saved' ? 'Browse the feed' : 'Create a post';
+  }
+
+  emptyAction(): void {
+    if (this.menuTab() === 'saved') void this.router.navigateByUrl('/home');
+    else this.create();
   }
 
   touched = { name: false };
