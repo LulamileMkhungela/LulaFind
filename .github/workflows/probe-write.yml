@@ -27,15 +27,8 @@ jobs:
         run: |
           set +e
           echo "secrets db=$HAS_DB sr=$HAS_SR pat=$HAS_PAT sb=$HAS_SB" > /tmp/probe.txt
-          gh api "repos/${{ github.repository }}/contents/uploads/lulafinds-app-firebase-adminsdk-fbsvc-cb7ffa9ade.json?ref=fc481d00" --jq .content | base64 -d > /tmp/fb-admin.json
-          echo "key bytes $(wc -c < /tmp/fb-admin.json 2>/dev/null || echo 0)" >> /tmp/probe.txt
-          if [ -s /tmp/fb-admin.json ]; then
-            node lulafind/scripts/probe-write.mjs /tmp/fb-admin.json >> /tmp/probe.txt 2>&1
-          else
-            echo "key fetch failed" >> /tmp/probe.txt
-          fi
+          node lulafind/scripts/probe-write.mjs >> /tmp/probe.txt 2>&1
           code=$?
-          rm -f /tmp/fb-admin.json
           jq -n --rawfile text /tmp/probe.txt --arg code "$code" '{body: ("probe exit " + $code + "\n```\n" + $text + "\n```")}' \
             | gh api --method POST "repos/${{ github.repository }}/commits/${{ github.sha }}/comments" --input - >> /tmp/probe.txt
           exit "$code"
