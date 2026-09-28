@@ -32,11 +32,21 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
         <section class="lf-fade-in snap-welcome">
           <div class="snap-logo-wrap">
             <div class="ghost-logo">
-              <span class="mark">Lula</span><span class="mark mark--2">Find</span>
+              <span class="logo-disc" aria-hidden="true">
+                <svg width="40" height="40" viewBox="0 0 64 64" fill="none">
+                  <circle cx="29" cy="28" r="13" stroke="#fff" stroke-width="5"/>
+                  <line x1="39" y1="38" x2="50" y2="49" stroke="#fff" stroke-width="5" stroke-linecap="round"/>
+                  <path d="M29 23.5c0-2.2 3.3-3.2 3.3 0 0-3.2 3.3-2.2 3.3 0 0 3.3-3.3 5.4-3.3 5.4s-3.3-2.1-3.3-5.4z" fill="#fff" transform="translate(-3.3 1)"/>
+                </svg>
+              </span>
+              <span class="wordmark">lulafind</span>
+              <span class="tagline">Bring them home.</span>
             </div>
           </div>
 
           <div class="snap-bottom-cta">
+            <button class="snap-btn snap-btn--blue" (click)="mode.set('signin')">Log in</button>
+
             <button class="snap-btn snap-btn--google" (click)="provider('google')">
               <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                 <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -47,13 +57,12 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
               <span>Continue with Google</span>
             </button>
 
-            <button class="snap-btn snap-btn--blue" (click)="startSignup()">
-              Sign Up
+            <div class="snap-divider"><span>or</span></div>
+
+            <button class="snap-btn snap-btn--outline" (click)="startSignup()">
+              Create new account
             </button>
 
-            <p class="snap-switch">
-              Already have an account? <button class="snap-link" (click)="mode.set('signin')">Log in</button>
-            </p>
             <p class="snap-switch guest-link">
               <button class="snap-link-muted" (click)="browse()">Browse as guest</button>
             </p>
@@ -73,7 +82,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
           <div class="snap-body">
             <div class="snap-field">
-              <label class="snap-label">EMAIL ADDRESS</label>
+              <label class="snap-label">Email address</label>
               <input class="snap-input" type="email" autocomplete="email" placeholder="you@example.co.za"
                      [value]="f.email" (input)="f.email = $any($event.target).value"
                      (blur)="touched.email = true" />
@@ -83,7 +92,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
             </div>
 
             <div class="snap-field">
-              <label class="snap-label">PASSWORD</label>
+              <label class="snap-label">Password</label>
               <div class="snap-pass-wrap">
                 <input class="snap-input" [type]="showPass() ? 'text' : 'password'" placeholder=""
                        [value]="f.password" (input)="f.password = $any($event.target).value"
@@ -105,7 +114,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
               Forgot your password?
             </button>
 
-            <div class="snap-divider"><span>OR</span></div>
+            <div class="snap-divider"><span>or</span></div>
 
             <button class="snap-btn snap-btn--black snap-block" (click)="provider('google')">
               <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -145,7 +154,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
             @if (signupStep() === 1) {
               <h2 class="snap-question">What's your name?</h2>
               <div class="snap-field">
-                <label class="snap-label">FIRST NAME AND SURNAME</label>
+                <label class="snap-label">First name and surname</label>
                 <input class="snap-input" type="text" placeholder="e.g. John Doe"
                        [value]="f.displayName" (input)="onFullName($any($event.target).value)"
                        (blur)="touched.name = true" />
@@ -190,7 +199,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
               <h2 class="snap-question">Set a password</h2>
               <p class="snap-subtext">Your password must be at least 8 characters long.</p>
               <div class="snap-field">
-                <label class="snap-label">PASSWORD</label>
+                <label class="snap-label">Password</label>
                 <div class="snap-pass-wrap">
                   <input class="snap-input" [type]="showPass() ? 'text' : 'password'" placeholder="At least 8 characters"
                          [value]="f.password" (input)="f.password = $any($event.target).value"
@@ -213,7 +222,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
             @if (signupStep() === 4) {
               <h2 class="snap-question">What's your email?</h2>
               <div class="snap-field">
-                <label class="snap-label">EMAIL</label>
+                <label class="snap-label">Email</label>
                 <input class="snap-input" type="email" placeholder="you@example.co.za"
                        [value]="f.email" [disabled]="!!pendingName()"
                        (input)="f.email = $any($event.target).value" (blur)="touched.email = true" />
@@ -232,7 +241,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
               <h2 class="snap-question">Select your province</h2>
               <p class="snap-subtext">Choose your province to customize local emergency and search party alerts.</p>
               <div class="snap-field">
-                <label class="snap-label">PROVINCE</label>
+                <label class="snap-label">Province</label>
                 <select class="snap-select" [value]="f.province ?? ''" (change)="f.province = $any($event.target).value">
                   <option value="" disabled>Select province...</option>
                   @for (p of provinces; track p.code) {
@@ -277,7 +286,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
           <div class="snap-body">
             <p class="snap-subtext">Enter your email address and we'll send you a password reset link.</p>
             <div class="snap-field">
-              <label class="snap-label">EMAIL</label>
+              <label class="snap-label">Email</label>
               <input class="snap-input" type="email" placeholder="you@example.co.za"
                      [value]="f.email" (input)="f.email = $any($event.target).value" />
             </div>
@@ -345,284 +354,170 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
     }
   `,
   styles: [`
-    .welcome-bg { --background: #f0f2f5 !important; }
+    /* Facebook-style login: centred logo, pill buttons, token colours so
+       light and dark stay in step. */
+    .welcome-bg { --background: var(--lf-card) !important; }
+    .auth { --background: var(--lf-bg); }
     .snap-welcome {
       min-height: 100dvh;
       box-sizing: border-box;
       display: flex;
       flex-direction: column;
       justify-content: space-between;
-      padding: max(56px, env(safe-area-inset-top)) 24px max(28px, env(safe-area-inset-bottom));
-      background: #f0f2f5;
+      padding: max(56px, var(--lf-safe-top)) 20px max(28px, var(--lf-safe-bottom));
+      background: var(--lf-card);
     }
-    .snap-logo-wrap {
-      flex: 1;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+    .snap-logo-wrap { flex: 1; display: flex; align-items: center; justify-content: center; }
+    .ghost-logo { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+    .logo-disc {
+      width: 72px; height: 72px; border-radius: 50%;
+      background: var(--lf-primary);
+      display: flex; align-items: center; justify-content: center;
     }
-    .ghost-logo {
-      font-size: clamp(46px, 14vw, 64px);
-      font-weight: 850;
-      letter-spacing: -2.6px;
-      color: #1877f2;
-      line-height: 1;
-      text-shadow: 0 4px 18px rgba(24,119,242,.12);
+    .wordmark {
+      font-size: 40px; font-weight: 800; letter-spacing: -1.6px; line-height: 1;
+      color: var(--lf-primary);
+      font-family: Helvetica, Arial, var(--ion-font-family);
     }
-    .mark { color: #1877f2; }
-    .mark--2 { color: #1c1e21; }
+    .tagline { font-size: 15px; color: var(--lf-muted); }
 
-    .snap-bottom-cta {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-      width: 100%;
-      max-width: 360px;
-      margin: 0 auto;
-    }
+    .snap-bottom-cta { display: flex; flex-direction: column; gap: 10px; width: 100%; max-width: 400px; margin: 0 auto; }
 
     .snap-btn {
-      height: 50px;
-      border-radius: 999px;
+      height: 44px;
+      border-radius: 22px;
       border: 0;
+      font-family: inherit;
       font-size: 16px;
-      font-weight: 700;
+      font-weight: 600;
       display: inline-flex;
       align-items: center;
       justify-content: center;
       gap: 8px;
       cursor: pointer;
       width: 100%;
-      transition: transform 0.1s ease, filter 0.12s ease;
+      transition: transform .1s ease, filter .12s ease;
     }
-    .snap-btn:active { transform: scale(0.98); }
-    .snap-btn--google {
-      background: #ffffff;
-      color: #000000;
-      box-shadow: 0 4px 14px rgba(0,0,0,0.1);
+    .snap-btn:active { transform: scale(.98); }
+    .snap-btn:hover { filter: brightness(.97); }
+    .snap-btn[disabled] { opacity: .5; pointer-events: none; }
+    .snap-btn--blue { background: var(--lf-primary); color: #fff; }
+    :host-context(.lf-dark) .snap-btn--blue { background: #2374e1; }
+    .snap-btn--google, .snap-btn--black {
+      background: transparent;
+      color: var(--ion-text-color);
+      border: 1px solid var(--lf-line);
     }
-    .snap-btn--blue {
-      background: #1877f2;
-      color: #ffffff;
-      box-shadow: 0 4px 14px rgba(24, 119, 242, .2);
-    }
-    .snap-btn--black {
-      background: #ffffff;
-      color: #1c1e21;
-      border: 1px solid #ced0d4;
-    }
+    .snap-btn--outline { background: transparent; color: var(--lf-primary); border: 1px solid var(--lf-primary); }
     .snap-block { width: 100%; margin-top: 10px; }
 
-    .snap-switch {
-      text-align: center;
-      font-size: 14px;
-      color: #000000;
-      margin: 6px 0 0;
-      font-weight: 600;
-    }
-    .snap-link {
-      background: none;
-      border: 0;
-      color: #1877f2;
-      font-weight: 800;
-      font-size: 14px;
-      cursor: pointer;
-      text-decoration: underline;
-    }
-    .snap-link-muted {
-      background: none;
-      border: 0;
-      color: rgba(0,0,0,0.6);
-      font-size: 13px;
-      font-weight: 600;
-      cursor: pointer;
-    }
+    .snap-switch { text-align: center; font-size: 15px; color: var(--ion-text-color); margin: 6px 0 0; }
+    .snap-link { background: none; border: 0; color: var(--lf-link); font-family: inherit; font-weight: 600; font-size: 15px; cursor: pointer; }
+    .snap-link-muted { background: none; border: 0; color: var(--lf-muted); font-family: inherit; font-size: 15px; font-weight: 500; cursor: pointer; }
 
-    /* Snapchat Form Screens */
     .snap-form {
       box-sizing: border-box;
-      padding: max(16px, env(safe-area-inset-top)) 24px max(28px, env(safe-area-inset-bottom));
+      padding: max(12px, var(--lf-safe-top)) 20px max(28px, var(--lf-safe-bottom));
       max-width: 440px;
-      width: min(100% - 24px, 440px);
-      margin: 12px auto max(12px, env(safe-area-inset-bottom));
+      width: 100%;
+      margin: 0 auto;
       display: flex;
       flex-direction: column;
-      min-height: calc(100dvh - 24px);
-      border: 1px solid #e4e6eb;
-      border-radius: 16px;
-      background: #ffffff;
-      box-shadow: 0 10px 32px rgba(20, 42, 72, .07);
+      min-height: 100dvh;
+      background: var(--lf-card);
+      color: var(--ion-text-color);
     }
-    .snap-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      height: 48px;
+    @media (min-width: 520px) {
+      .snap-form { min-height: auto; margin: 32px auto; border-radius: var(--lf-radius); box-shadow: var(--lf-shadow-lg); }
     }
+    .snap-header { display: flex; align-items: center; justify-content: space-between; height: 48px; }
     .snap-back {
-      background: none;
-      border: 0;
-      color: #000;
-      cursor: pointer;
-      padding: 4px;
+      width: 40px; height: 40px; border-radius: 50%;
+      display: inline-flex; align-items: center; justify-content: center;
+      background: none; border: 0; color: var(--ion-text-color); cursor: pointer;
     }
-    .snap-title {
-      font-size: 24px;
-      font-weight: 800;
-      color: #000000;
-      margin: 0;
-    }
+    .snap-back:hover { background: var(--lf-hover); }
+    .snap-title { font-size: 20px; font-weight: 700; color: var(--ion-text-color); margin: 0; }
     .snap-title-group { text-align: center; }
-    .snap-title-sm { font-size: 18px; font-weight: 800; margin: 0; color: #000; }
-    .snap-step-sub { font-size: 12px; color: #65676b; margin: 2px 0 0; font-weight: 600; }
+    .snap-title-sm { font-size: 17px; font-weight: 700; margin: 0; color: var(--ion-text-color); }
+    .snap-step-sub { font-size: 13px; color: var(--lf-muted); margin: 2px 0 0; }
 
-    .snap-body {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      margin-top: 24px;
-    }
-    .snap-question {
-      font-size: 22px;
-      font-weight: 800;
-      color: #000000;
-      margin: 0 0 16px;
-    }
-    .snap-subtext {
-      font-size: 14px;
-      color: #65676b;
-      margin: -8px 0 16px;
-      line-height: 1.4;
-    }
+    .snap-body { flex: 1; display: flex; flex-direction: column; margin-top: 20px; }
+    .snap-question { font-size: 24px; font-weight: 700; color: var(--ion-text-color); margin: 0 0 12px; }
+    .snap-subtext { font-size: 15px; color: var(--lf-muted); margin: -4px 0 16px; line-height: 1.35; }
 
-    .snap-field {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-      margin-bottom: 18px;
-    }
-    .snap-label {
-      font-size: 11px;
-      font-weight: 800;
-      color: #1877f2;
-      letter-spacing: 0.5px;
-    }
+    .snap-field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+    .snap-label { font-size: 13px; font-weight: 600; color: var(--lf-muted); }
     .snap-input, .snap-select {
-      height: 50px;
-      border-radius: 10px;
-      border: 1px solid #d1d5db;
+      height: 52px;
+      border-radius: 12px;
+      border: 1px solid var(--lf-line);
       padding: 0 16px;
+      font-family: inherit;
       font-size: 16px;
-      color: #000000;
-      background: #ffffff;
+      color: var(--ion-text-color);
+      background: var(--lf-card);
       outline: none;
       width: 100%;
+      box-sizing: border-box;
     }
-    .snap-input:focus, .snap-select:focus {
-      border-color: #1877f2;
-      box-shadow: 0 0 0 2px rgba(24, 119, 242, .15);
-    }
-    .snap-pass-wrap {
-      position: relative;
-      width: 100%;
-    }
+    .snap-input::placeholder { color: var(--lf-muted); }
+    .snap-input:focus, .snap-select:focus { border-color: var(--lf-primary); box-shadow: 0 0 0 1px var(--lf-primary); }
+    .snap-pass-wrap { position: relative; width: 100%; }
+    .snap-pass-wrap .snap-input { padding-right: 48px; }
     .eye-btn {
-      position: absolute;
-      right: 12px;
-      top: 50%;
-      transform: translateY(-50%);
-      background: none;
-      border: 0;
-      color: #65676b;
-      cursor: pointer;
+      position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+      width: 36px; height: 36px; border-radius: 50%;
+      display: inline-flex; align-items: center; justify-content: center;
+      background: none; border: 0; color: var(--lf-muted); cursor: pointer;
     }
 
     .snap-text-link {
-      background: none;
-      border: 0;
-      color: #1877f2;
-      font-size: 14px;
-      font-weight: 700;
-      margin-top: 12px;
-      cursor: pointer;
-      align-self: center;
+      background: none; border: 0; color: var(--ion-text-color);
+      font-family: inherit; font-size: 15px; font-weight: 600;
+      margin-top: 14px; cursor: pointer; align-self: center;
     }
 
     .snap-divider {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      color: #8e8e93;
-      font-size: 12px;
-      font-weight: 700;
-      margin: 24px 0 16px;
+      display: flex; align-items: center; gap: 12px;
+      color: var(--lf-muted); font-size: 13px;
+      margin: 18px 0 12px;
     }
-    .snap-divider::before, .snap-divider::after {
-      content: '';
-      flex: 1;
-      height: 1px;
-      background: #e5e5ea;
-    }
+    .snap-divider::before, .snap-divider::after { content: ''; flex: 1; height: 1px; background: var(--lf-line-soft); }
+    .snap-bottom-cta .snap-divider { margin: 4px 0; }
 
     .snap-checkbox-row {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      font-size: 13px;
-      color: #65676b;
-      margin-top: 18px;
-      justify-content: center;
+      display: flex; align-items: center; gap: 10px;
+      font-size: 14px; color: var(--lf-muted);
+      margin-top: 18px; justify-content: center;
     }
-    .snap-checkbox-row input { accent-color: #1877f2; width: 18px; height: 18px; }
+    .snap-checkbox-row input { accent-color: var(--lf-primary); width: 18px; height: 18px; }
 
     .snap-ident-card {
-      display: flex;
-      align-items: center;
-      gap: 14px;
-      padding: 14px 16px;
-      border-radius: 14px;
-      border: 1px solid #e5e5ea;
-      background: #f9f9fb;
+      display: flex; align-items: center; gap: 14px;
+      padding: 12px 14px; border-radius: 12px;
+      border: 1px solid var(--lf-line-soft);
+      background: var(--lf-bg);
       margin-bottom: 20px;
     }
-    .snap-ident-card .k { font-size: 10px; color: #8e8e93; font-weight: 800; display: block; }
-    .snap-ident-card strong { font-size: 17px; color: #000000; }
+    .snap-ident-card .k { font-size: 12px; color: var(--lf-muted); font-weight: 600; display: block; }
+    .snap-ident-card strong { font-size: 17px; color: var(--ion-text-color); }
 
-    .snap-footer-notes {
-      margin-top: auto;
-      padding-top: 20px;
-    }
-    .fine-terms {
-      font-size: 12px;
-      color: #65676b;
-      line-height: 1.45;
-      text-align: center;
-      margin-bottom: 12px;
-    }
+    .snap-footer-notes { margin-top: auto; padding-top: 20px; }
+    .fine-terms { font-size: 13px; color: var(--lf-muted); line-height: 1.4; text-align: center; margin-bottom: 12px; }
 
-    .snap-agree-box {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-      margin-top: 10px;
-    }
-    .snap-check {
-      display: flex;
-      gap: 10px;
-      font-size: 13px;
-      color: #333333;
-      line-height: 1.4;
-    }
-    .snap-check input { accent-color: #1877f2; width: 20px; height: 20px; flex-shrink: 0; }
+    .snap-agree-box { display: flex; flex-direction: column; gap: 12px; margin-top: 10px; }
+    .snap-check { display: flex; gap: 10px; font-size: 14px; color: var(--ion-text-color); line-height: 1.4; }
+    .snap-check input { accent-color: var(--lf-primary); width: 20px; height: 20px; flex-shrink: 0; }
 
-    .field-err { color: #d93025; font-size: 12px; font-weight: 600; margin: 4px 0 0; }
-    .err-msg { color: #d93025; font-size: 13px; margin: 12px 0 0; text-align: center; display: flex; align-items: center; justify-content: center; gap: 6px; }
-    .ok-msg { color: #148a52; font-size: 13px; margin: 12px 0 0; text-align: center; display: flex; align-items: center; justify-content: center; gap: 6px; }
+    .field-err { color: var(--lf-signal); font-size: 13px; font-weight: 500; margin: 2px 0 0; }
+    .err-msg { color: var(--lf-signal); font-size: 14px; margin: 12px 0 0; text-align: center; display: flex; align-items: center; justify-content: center; gap: 6px; }
+    .ok-msg { color: var(--lf-ubuntu); font-size: 14px; margin: 12px 0 0; text-align: center; display: flex; align-items: center; justify-content: center; gap: 6px; }
 
-    .linklike { background: none; border: 0; color: #1877f2; font-weight: 700; cursor: pointer; text-decoration: underline; padding: 0; font-size: inherit; }
+    .linklike { background: none; border: 0; color: var(--lf-link); font-weight: 600; cursor: pointer; padding: 0; font-size: inherit; font-family: inherit; }
 
-    .legal { position: fixed; inset: 0; z-index: 40; background: rgba(0, 0, 0, 0.6); display: flex; align-items: flex-end; justify-content: center; }
-    .legal .sheet { width: 100%; max-width: 520px; max-height: 86vh; overflow-y: auto; background: #ffffff; border-radius: 18px 18px 0 0; padding: 20px 20px 32px; color: #000; }
+    .legal { position: fixed; inset: 0; z-index: 40; background: var(--lf-scrim); display: flex; align-items: flex-end; justify-content: center; }
+    .legal .sheet { width: 100%; max-width: 520px; max-height: 86vh; overflow-y: auto; background: var(--lf-card); border-radius: 12px 12px 0 0; padding: 20px 20px 32px; color: var(--ion-text-color); }
   `]
 })
 export class AuthComponent implements OnInit {

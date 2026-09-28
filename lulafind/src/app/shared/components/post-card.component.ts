@@ -25,10 +25,6 @@ export type ChatState = 'off' | 'locked-vote' | 'locked-follow' | 'open';
     <article class="fb-card lf-fade-in"
              [class.fb-card--critical]="isCritical()"
              [class.fb-card--found]="post.status === 'found'">
-      @if (post.status === 'found') {
-        <span class="home-stamp" aria-hidden="true">HOME</span>
-      }
-
       <header class="fb-card-header" [routerLink]="authorRoute()">
         <lf-avatar [src]="authorAvatar()" [name]="authorName()" [size]="40"
                    [status]="authorStatus()" />
@@ -71,11 +67,13 @@ export type ChatState = 'off' | 'locked-vote' | 'locked-follow' | 'open';
         <h3 class="fb-post-title">{{ post.title }}</h3>
         @if (post.type === 'vehicle') {
           <div class="fb-fact-row">
-            <span>🚗 <strong>Stolen Vehicle:</strong> {{ post.subject?.vehicle || post.title }}</span>
+            <lf-icon name="car" [size]="14" />
+            <span><strong>Stolen vehicle:</strong> {{ post.subject?.vehicle || post.title }}</span>
           </div>
         } @else if (post.type === 'pet') {
           <div class="fb-fact-row">
-            <span>🐾 <strong>Lost Pet:</strong> {{ post.subject?.name || 'Pet' }}</span>
+            <lf-icon name="paw" [size]="14" />
+            <span><strong>Lost pet:</strong> {{ post.subject?.name || 'Pet' }}</span>
           </div>
         } @else if (post.subject?.name && post.type !== 'story' && post.type !== 'danger') {
           <div class="fb-fact-row">
@@ -95,7 +93,7 @@ export type ChatState = 'off' | 'locked-vote' | 'locked-follow' | 'open';
         <p class="fb-post-text" [class.lf-clamp-4]="!expanded()">{{ post.body }}</p>
         @if (longBody()) {
           <button class="fb-readmore" (click)="toggleExpand($event)">
-            {{ expanded() ? 'Show less' : 'Read more' }}
+            {{ expanded() ? 'See less' : 'See more' }}
           </button>
         }
       </div>
@@ -105,47 +103,61 @@ export type ChatState = 'off' | 'locked-vote' | 'locked-follow' | 'open';
           @if (post.media.length === 1) {
             <img class="fb-media-img" [src]="post.media[0].src" [alt]="post.title" loading="lazy" />
           } @else {
-            <div class="lf-grid-2">
+            <div class="fb-grid" [attr.data-count]="visibleMedia().length">
               @for (m of visibleMedia(); track m.id; let i = $index) {
-                <img class="fb-media-img" [src]="m.src" [alt]="m.caption ?? ''" loading="lazy" />
+                <div class="fb-grid__tile">
+                  <img [src]="m.src" [alt]="m.caption ?? ''" loading="lazy" />
+                  @if (i === visibleMedia().length - 1 && extraMedia() > 0) {
+                    <span class="fb-grid__more">+{{ extraMedia() }}</span>
+                  }
+                </div>
               }
             </div>
           }
         </div>
       }
 
-      <!-- Facebook Reaction Summary Bar -->
-      <div class="fb-stats-bar" [routerLink]="'/post/' + post.id">
-        <div class="fb-stats-likes">
-          <span class="fb-like-icon">👍</span>
-          <span>{{ compact(post.upvotes || 1) }}</span>
+      <!-- Facebook reaction summary: real counts only, hidden when there are none -->
+      @if (post.upvotes > 0 || post.commentCount > 0 || post.shares > 0) {
+        <div class="fb-stats-bar" [routerLink]="'/post/' + post.id">
+          <div class="fb-stats-likes">
+            @if (post.upvotes > 0) {
+              <span class="fb-like-icon"><lf-icon name="bulb" [size]="11" [weight]="2.6" /></span>
+              <span>{{ compact(post.upvotes) }} {{ post.upvotes === 1 ? 'idea' : 'ideas' }}</span>
+            }
+          </div>
+          <div class="fb-stats-right">
+            @if (post.commentCount > 0) { <span>{{ compact(post.commentCount) }} {{ post.commentCount === 1 ? 'comment' : 'comments' }}</span> }
+            @if (post.shares > 0) { <span>{{ compact(post.shares) }} {{ post.shares === 1 ? 'share' : 'shares' }}</span> }
+          </div>
         </div>
-        <div class="fb-stats-right">
-          @if (post.commentCount > 0) { <span>{{ compact(post.commentCount) }} comments</span> }
-          @if (post.shares > 0) { <span class="fb-dot">·</span> <span>{{ compact(post.shares) }} shares</span> }
-        </div>
-      </div>
+      }
 
-      <!-- Facebook Action Buttons Row -->
+      <!-- Facebook action bar: Idea / No idea / Comment / Share -->
       <div class="fb-actions-row">
-        <button class="fb-action-btn" [class.active]="myVote() === 'up'" (click)="onVote('up')">
-          <lf-icon name="bulb" [size]="18" />
+        <button class="fb-action-btn" [class.active]="myVote() === 'up'" [attr.aria-pressed]="myVote() === 'up'" (click)="onVote('up')">
+          <lf-icon name="bulb" [size]="20" [filled]="myVote() === 'up'" />
           <span>Idea</span>
         </button>
 
+        <button class="fb-action-btn" [class.active-down]="myVote() === 'down'" [attr.aria-pressed]="myVote() === 'down'" (click)="onVote('down')">
+          <lf-icon name="bulbOff" [size]="20" />
+          <span>No idea</span>
+        </button>
+
         <button class="fb-action-btn" (click)="comment.emit()">
-          <lf-icon name="comment" [size]="18" />
+          <lf-icon name="comment" [size]="19" />
           <span>Comment</span>
         </button>
 
         <button class="fb-action-btn" (click)="share.emit()">
-          <lf-icon name="share" [size]="18" />
+          <lf-icon name="share" [size]="19" />
           <span>Share</span>
         </button>
       </div>
 
       @if (post.chatEnabled && !isMine()) {
-        <button class="fb-chat-cta" (click)="chat.emit()">
+        <button class="fb-chat-cta" [class.open]="chatState === 'open'" (click)="chat.emit()">
           <lf-icon [name]="chatState === 'open' ? 'unlock' : 'lock'" [size]="15" />
           {{ chatLabel() }}
         </button>
@@ -153,125 +165,158 @@ export type ChatState = 'off' | 'locked-vote' | 'locked-follow' | 'open';
     </article>
   `,
   styles: [`
+    /* Mobile Facebook: edge-to-edge cards separated by the grey page. */
     .fb-card {
-      background: #ffffff;
-      border: 1px solid #ced0d4;
-      border-radius: 8px;
-      margin: 10px 0;
+      background: var(--lf-card);
+      margin: 0 0 8px;
       overflow: hidden;
-      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+      box-shadow: var(--lf-shadow);
       position: relative;
     }
-    .fb-card--critical { border-left: 4px solid #e41e3f; }
-    .fb-card--found { border-left: 4px solid #34c759; }
+    .fb-card--critical { box-shadow: var(--lf-shadow), inset 0 3px 0 var(--lf-signal); }
+    .fb-card--found { box-shadow: var(--lf-shadow), inset 0 3px 0 var(--lf-ubuntu); }
+    @media (min-width: 700px) {
+      .fb-card { border-radius: var(--lf-radius); max-width: var(--lf-maxw); margin: 0 auto 12px; }
+    }
 
     .fb-card-header {
       display: flex;
       align-items: center;
-      gap: 10px;
-      padding: 12px 14px 4px;
+      gap: 8px;
+      padding: 12px 8px 0 16px;
+      cursor: pointer;
     }
     .fb-author-meta { flex: 1; min-width: 0; }
-    .fb-author-row { display: flex; align-items: center; gap: 6px; }
-    .fb-author-name { font-weight: 700; font-size: 15px; color: #050505; }
-    .fb-dot { color: #65676b; font-size: 12px; }
+    .fb-author-row { display: flex; align-items: center; gap: 4px; min-width: 0; }
+    .fb-author-name { font-weight: 600; font-size: 15px; color: var(--ion-text-color);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .fb-dot { color: var(--lf-muted); font-size: 13px; }
     .fb-follow-link {
       background: none;
       border: 0;
-      color: #1877f2;
-      font-weight: 700;
-      font-size: 13.5px;
+      color: var(--lf-link);
+      font-family: inherit;
+      font-weight: 600;
+      font-size: 15px;
       cursor: pointer;
       padding: 0;
+      flex-shrink: 0;
     }
-    .fb-follow-link.on { color: #65676b; }
-    .fb-follow-link.requested { color: #65676b; }
+    .fb-follow-link.on,
+    .fb-follow-link.requested { color: var(--lf-muted); }
     .fb-sub-meta {
       display: flex;
       align-items: center;
-      gap: 4px;
-      font-size: 12px;
-      color: #65676b;
-      margin-top: 2px;
+      gap: 3px;
+      font-size: 13px;
+      color: var(--lf-muted);
+      margin-top: 1px;
     }
     .fb-more-btn {
+      width: 36px; height: 36px;
+      display: inline-flex; align-items: center; justify-content: center;
       background: none;
       border: 0;
-      color: #65676b;
+      color: var(--lf-muted);
       cursor: pointer;
-      padding: 6px;
       border-radius: 50%;
+      align-self: flex-start;
     }
+    .fb-more-btn:hover { background: var(--lf-hover); }
 
-    .fb-chips { display: flex; gap: 6px; flex-wrap: wrap; padding: 4px 14px 6px; }
+    .fb-chips { display: flex; gap: 6px; flex-wrap: wrap; padding: 8px 16px 0; }
     .fb-chip {
       display: inline-flex; align-items: center; gap: 4px;
-      padding: 3px 8px; border-radius: 4px; font-size: 11.5px; font-weight: 700;
-      background: #e4e6eb; color: #050505;
+      padding: 3px 8px; border-radius: 6px; font-size: 12px; font-weight: 600;
+      background: var(--lf-card-2); color: var(--ion-text-color);
     }
-    .fb-chip--danger { background: #ffebe9; color: #e41e3f; }
-    .fb-chip--success { background: #e6f4ea; color: #137333; }
-    .fb-chip--beacon { background: #e7f3ff; color: #1877f2; }
+    .fb-chip--danger { background: color-mix(in srgb, var(--lf-signal) 12%, transparent); color: var(--lf-signal); }
+    .fb-chip--success { background: color-mix(in srgb, var(--lf-ubuntu) 14%, transparent); color: var(--lf-ubuntu); }
+    .fb-chip--beacon { background: var(--lf-primary-soft); color: var(--lf-primary-soft-text); }
 
-    .fb-card-body { padding: 4px 14px 10px; }
-    .fb-post-title { font-size: 16px; font-weight: 700; color: #050505; margin: 0 0 4px; line-height: 1.3; }
-    .fb-fact-row { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #65676b; margin-bottom: 4px; }
-    .fb-post-text { font-size: 14.5px; color: #050505; line-height: 1.45; margin: 4px 0 0; }
-    .fb-readmore { background: none; border: 0; color: #1877f2; font-weight: 700; font-size: 13.5px; cursor: pointer; padding: 0; margin-top: 4px; }
+    .fb-card-body { padding: 8px 16px 12px; cursor: pointer; }
+    .fb-post-title { font-size: 17px; font-weight: 700; color: var(--ion-text-color); margin: 0 0 4px; line-height: 1.3; }
+    .fb-fact-row { display: flex; align-items: center; gap: 6px; font-size: 14px; color: var(--lf-muted); margin-bottom: 3px; }
+    .fb-fact-row strong { color: var(--ion-text-color); font-weight: 600; }
+    .fb-muted { color: var(--lf-muted); }
+    .fb-post-text { font-size: 15px; color: var(--ion-text-color); line-height: 1.34; margin: 6px 0 0; white-space: pre-line; }
+    .fb-readmore { background: none; border: 0; color: var(--lf-muted); font-family: inherit; font-weight: 600; font-size: 15px; cursor: pointer; padding: 0; margin-top: 2px; }
+    .fb-readmore:hover { text-decoration: underline; }
 
-    .fb-media { width: 100%; max-height: 440px; overflow: hidden; background: #000; }
-    .fb-media-img { width: 100%; object-fit: cover; max-height: 440px; display: block; }
+    .fb-media { width: 100%; overflow: hidden; background: var(--lf-card-2); cursor: pointer; }
+    .fb-media-img { width: 100%; object-fit: cover; max-height: 520px; display: block; }
+    .fb-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2px; }
+    .fb-grid[data-count="3"] .fb-grid__tile:first-child { grid-column: 1 / -1; aspect-ratio: 2 / 1; }
+    .fb-grid__tile { position: relative; aspect-ratio: 1 / 1; overflow: hidden; }
+    .fb-grid__tile img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .fb-grid__more {
+      position: absolute; inset: 0;
+      display: flex; align-items: center; justify-content: center;
+      background: rgba(0, 0, 0, .45); color: #fff;
+      font-size: 30px; font-weight: 700;
+    }
 
     .fb-stats-bar {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 10px 14px;
-      font-size: 13px;
-      color: #65676b;
+      gap: 10px;
+      margin: 0 16px;
+      padding: 10px 0;
+      font-size: 15px;
+      color: var(--lf-muted);
+      cursor: pointer;
     }
     .fb-stats-likes { display: flex; align-items: center; gap: 6px; }
     .fb-like-icon {
-      width: 18px; height: 18px; border-radius: 50%; background: #1877f2; color: #fff;
-      display: inline-flex; align-items: center; justify-content: center; font-size: 10px;
+      width: 18px; height: 18px; border-radius: 50%;
+      background: linear-gradient(180deg, #18afff, #0062df); color: #fff;
+      display: inline-flex; align-items: center; justify-content: center;
+      box-shadow: 0 0 0 2px var(--lf-card);
     }
-    .fb-stats-right { display: flex; align-items: center; gap: 6px; }
+    .fb-stats-right { display: flex; align-items: center; gap: 12px; }
 
     .fb-actions-row {
       display: flex;
       align-items: center;
-      border-top: 1px solid #ced0d4;
-      padding: 2px 6px;
+      margin: 0 12px;
+      padding: 4px 0;
+      border-top: 1px solid var(--lf-line-soft);
     }
     .fb-action-btn {
       flex: 1;
-      height: 40px;
+      min-width: 0;
+      height: 36px;
       border: 0;
       background: transparent;
-      color: #65676b;
-      font-size: 13.5px;
-      font-weight: 700;
+      color: var(--lf-muted);
+      font-family: inherit;
+      font-size: 14px;
+      font-weight: 600;
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      gap: 6px;
+      gap: 5px;
       cursor: pointer;
       border-radius: 4px;
+      white-space: nowrap;
     }
-    .fb-action-btn:active { background: #e4e6eb; }
-    .fb-action-btn.active { color: #1877f2; }
+    .fb-action-btn:hover, .fb-action-btn:active { background: var(--lf-hover); }
+    .fb-action-btn.active { color: var(--lf-primary); }
+    .fb-action-btn.active-down { color: var(--lf-signal); }
+    @media (max-width: 370px) {
+      .fb-action-btn span { font-size: 13px; }
+    }
 
     .fb-chat-cta {
-      display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%;
-      height: 40px; border: 0; border-top: 1px solid #ced0d4; background: #f0f2f5;
-      color: #1877f2; font-weight: 700; font-size: 13px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      width: calc(100% - 24px); margin: 0 12px 10px;
+      height: 36px; border: 0; border-radius: 6px;
+      background: var(--lf-card-2);
+      color: var(--ion-text-color); font-family: inherit; font-weight: 600; font-size: 14px; cursor: pointer;
     }
+    .fb-chat-cta.open { background: var(--lf-primary-soft); color: var(--lf-primary-soft-text); }
 
-    .home-stamp {
-      position: absolute; top: 12px; right: 14px; z-index: 2;
-      border: 2px solid #34c759; color: #34c759; font-size: 11px; font-weight: 900;
-      padding: 2px 6px; border-radius: 4px; background: #ffffff;
-    }
   `]
 })
 export class PostCardComponent implements OnInit, OnChanges {
@@ -321,6 +366,7 @@ export class PostCardComponent implements OnInit, OnChanges {
   readonly longBody = computed(() => (this.post?.body?.trim().length ?? 0) > 190);
 
   readonly visibleMedia = computed(() => this.post?.media.slice(0, 4) ?? []);
+  readonly extraMedia = computed(() => Math.max(0, (this.post?.media.length ?? 0) - 4));
 
   readonly showFollow = computed(() => {
     if (this.isMine()) return false;
@@ -365,7 +411,7 @@ export class PostCardComponent implements OnInit, OnChanges {
 
   statusLabel(): string {
     if (!this.post) return '';
-    if (this.post.status === 'found') return 'FOUND';
+    if (this.post.status === 'found') return 'Found - home safe';
     return POST_TYPE_META[this.post.type].label;
   }
 

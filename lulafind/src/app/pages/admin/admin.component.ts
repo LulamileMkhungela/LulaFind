@@ -148,7 +148,7 @@ import { timeAgo } from '../../core/utils/format';
     .tabs { display: flex; gap: 8px; padding: 12px var(--lf-gap); }
     .tab { position: relative; padding: 8px 16px; border-radius: 999px; border: 1px solid var(--lf-line);
       background: transparent; color: var(--lf-muted); font-weight: 700; font-size: 13px; cursor: pointer; }
-    .tab.on { background: var(--lf-beacon); color: #1a1200; border-color: var(--lf-beacon); }
+    .tab.on { background: var(--lf-primary-soft); color: var(--lf-primary-soft-text); border-color: transparent; }
     .tab .lf-badge { margin-left: 6px; }
     .acts { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
   `]

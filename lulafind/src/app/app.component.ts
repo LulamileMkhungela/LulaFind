@@ -15,7 +15,7 @@ import { supabaseNotice } from './core/data/supabase-client';
   template: `
     <ion-app>
       @if (notice()) {
-        <p style="margin:0;padding:10px 14px;background:#7a2e24;color:#fff;font:600 13px/1.35 system-ui">{{ notice() }}</p>
+        <p class="lf-notice" role="alert">{{ notice() }}</p>
       }
 
       <!-- ── Animated splash overlay ── shown until auth is ready, then fades out -->
@@ -23,15 +23,12 @@ import { supabaseNotice } from './core/data/supabase-client';
         <div class="lf-splash" [class.lf-splash--out]="splashFading()" aria-hidden="true">
           <div class="lf-splash__logo">
             <svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-              <circle cx="32" cy="32" r="32" fill="#f2b233"/>
+              <circle cx="32" cy="32" r="32" fill="var(--lf-primary)"/>
               <!-- Stylised magnifier with a heart inside -->
-              <circle cx="29" cy="28" r="12" stroke="#04150c" stroke-width="4" fill="none"/>
-              <line x1="38" y1="37" x2="50" y2="49" stroke="#04150c" stroke-width="4" stroke-linecap="round"/>
-              <path d="M29 24 c0-2 3-3 3 0 c0-3 3-2 3 0 c0 3-3 5-3 5 s-3-2-3-5z" fill="#04150c"/>
+              <circle cx="29" cy="28" r="12" stroke="#fff" stroke-width="4" fill="none"/>
+              <line x1="38" y1="37" x2="50" y2="49" stroke="#fff" stroke-width="4" stroke-linecap="round"/>
+              <path d="M29 24 c0-2 3-3 3 0 c0-3 3-2 3 0 c0 3-3 5-3 5 s-3-2-3-5z" fill="#fff"/>
             </svg>
-          </div>
-          <div class="lf-splash__wordmark">
-            <span class="lf-splash__lula">Lula</span><span class="lf-splash__find">Find</span>
           </div>
           <p class="lf-splash__tagline">Bring them home.</p>
           <div class="lf-splash__dots" role="status" aria-label="Loading">
@@ -48,7 +45,7 @@ import { supabaseNotice } from './core/data/supabase-client';
       position: fixed; inset: 0; z-index: 9999;
       display: flex; flex-direction: column; align-items: center; justify-content: center;
       gap: 12px;
-      background: #0a1024;
+      background: var(--lf-card);
       transition: opacity .55s cubic-bezier(.4,0,.2,1), transform .55s cubic-bezier(.4,0,.2,1);
     }
     .lf-splash--out {
@@ -59,23 +56,12 @@ import { supabaseNotice } from './core/data/supabase-client';
     .lf-splash__logo {
       animation: splash-pop .7s cubic-bezier(.2,.8,.2,1) both;
     }
-    .lf-splash__logo svg {
-      display: block;
-      filter: drop-shadow(0 8px 24px rgba(242,178,51,.45));
-    }
-    .lf-splash__wordmark {
-      font-size: 38px;
-      font-weight: 900;
-      letter-spacing: -1.5px;
-      animation: splash-up .6s .1s cubic-bezier(.2,.8,.2,1) both;
-    }
-    .lf-splash__lula { color: #f2b233; }
-    .lf-splash__find { color: #eaf0ff; }
+    .lf-splash__logo svg { display: block; width: 76px; height: 76px; }
     .lf-splash__tagline {
       margin: 0;
-      font-size: 14px;
-      font-weight: 700;
-      color: rgba(234,240,255,.55);
+      font-size: 15px;
+      font-weight: 500;
+      color: var(--lf-muted);
       letter-spacing: .4px;
       animation: splash-up .6s .2s cubic-bezier(.2,.8,.2,1) both;
     }
@@ -85,7 +71,7 @@ import { supabaseNotice } from './core/data/supabase-client';
     }
     .lf-splash__dots span {
       width: 7px; height: 7px; border-radius: 50%;
-      background: rgba(242,178,51,.7);
+      background: var(--lf-primary);
       animation: splash-dot 1.2s ease-in-out infinite;
     }
     .lf-splash__dots span:nth-child(2) { animation-delay: .2s; }
@@ -102,8 +88,10 @@ import { supabaseNotice } from './core/data/supabase-client';
       0%, 80%, 100% { transform: scale(.6); opacity: .4; }
       40%           { transform: scale(1); opacity: 1; }
     }
+    .lf-notice { margin: 0; padding: 10px 14px; padding-top: max(10px, var(--lf-safe-top));
+      background: var(--lf-signal); color: #fff; font: 600 13px/1.35 var(--ion-font-family); }
     @media (prefers-reduced-motion: reduce) {
-      .lf-splash, .lf-splash__logo, .lf-splash__wordmark,
+      .lf-splash, .lf-splash__logo,
       .lf-splash__tagline, .lf-splash__dots,
       .lf-splash__dots span { animation: none; transition: none; }
     }

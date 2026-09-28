@@ -103,6 +103,7 @@ describe('Components render', () => {
     const html: string = (f.nativeElement as HTMLElement).innerHTML;
     expect(html).toContain('Follow');
     expect(html).toContain('Idea');
+    expect(html).toContain('No idea');
     expect(html).toContain('Comment');
   });
 
@@ -114,7 +115,7 @@ describe('Components render', () => {
     const html: string = el.innerHTML;
 
     expect(html).toContain('Continue with Google');
-    expect(html).toContain('Sign Up');
+    expect(html).toContain('Create new account');
     expect(html).toContain('Log in');
 
     // switch to signin mode
@@ -123,8 +124,8 @@ describe('Components render', () => {
     await f.whenStable();
     const loginHtml: string = (f.nativeElement as HTMLElement).innerHTML;
 
-    expect(loginHtml).toContain('EMAIL ADDRESS');
-    expect(loginHtml).toContain('PASSWORD');
+    expect(loginHtml).toContain('Email address');
+    expect(loginHtml).toContain('Password');
     expect(loginHtml).toContain('Log in');
     expect(loginHtml).toContain('Forgot your password?');
   });

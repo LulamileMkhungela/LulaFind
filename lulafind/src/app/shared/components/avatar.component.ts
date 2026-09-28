@@ -33,10 +33,9 @@ import { CheckInStatus } from '../../core/models/types';
     :host { display: inline-flex; flex-shrink: 0; }
     img, .fallback { border-radius: 50%; }
     img { object-fit: cover; display: block; background: var(--lf-card-2); }
-    img.ring { padding: 2px; border-radius: 50%;
-      background: linear-gradient(135deg, var(--lf-beacon), var(--lf-marigold), var(--lf-signal)); }
+    img.ring, .fallback.ring { box-shadow: 0 0 0 2px var(--lf-card), 0 0 0 4px var(--lf-primary); }
     .fallback { display: flex; align-items: center; justify-content: center;
-      font-weight: 800; color: #fff; letter-spacing: -0.4px; box-shadow: inset 0 0 0 1px rgba(255,255,255,.12); }
+      font-weight: 700; color: #fff; letter-spacing: -0.4px; }
 
     /* status rings - the same three colours used on the check-in banner */
     img.has-status, .fallback.has-status { padding: 3px; box-sizing: content-box; }

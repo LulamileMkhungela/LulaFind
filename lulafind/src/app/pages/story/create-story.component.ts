@@ -137,7 +137,7 @@ const AUDIENCES: { key: Audience; icon: string; label: string }[] = [
     .radio.checked { border-color: var(--fb-blue); }
     .radio i { width: 9px; height: 9px; border-radius: 50%; background: transparent; }
     .radio.checked i { background: var(--fb-blue); }
-    .spotlight-picker { display: flex; flex-direction: column; gap: 5px; color: var(--fb-muted); font-size: 11px; font-weight: 650; }
+    .spotlight-picker { display: flex; flex-direction: column; gap: 5px; color: var(--fb-muted); font-size: 11px; font-weight: 600; }
     .spotlight-picker select { min-height: 38px; padding: 0 10px; border: 1px solid var(--fb-line); border-radius: 7px; background: #fff; color: var(--fb-text); font-size: 12px; }
     .privacy-note { display: flex; gap: 8px; align-items: flex-start; padding: 9px; border-radius: 8px; background: #fff4e5; color: #784900; font-size: 11px; line-height: 1.4; }
     .privacy-note lf-icon { margin-top: 1px; }

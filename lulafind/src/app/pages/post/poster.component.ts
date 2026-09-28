@@ -51,7 +51,7 @@ import { SAPS_MISSING_LIST } from '../../core/data/sa-help';
   styles: [`
     .flyer { margin: 16px var(--lf-gap); padding: 18px; background: #fff4b8; color: #1a1200;
       border: 3px solid #1a1200; border-radius: 8px; }
-    .kicker { margin: 0 0 6px; font-weight: 900; letter-spacing: 1px; color: #9a1b1b; }
+    .kicker { margin: 0 0 6px; font-weight: 800; letter-spacing: 1px; color: #9a1b1b; }
     h1 { margin: 0 0 10px; font-size: 26px; line-height: 1.15; }
     img { width: 100%; max-height: 280px; object-fit: cover; border-radius: 4px; margin-bottom: 10px; }
     p { margin: 0 0 8px; font-size: 16px; font-weight: 700; line-height: 1.35; }

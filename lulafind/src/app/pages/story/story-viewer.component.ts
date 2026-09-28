@@ -144,7 +144,7 @@ import { storyBg } from '../../core/data/seed';
     .send { width: 36px; height: 36px; display: grid; place-items: center; border: 0; border-radius: 50%; background: #1877f2; color: #fff; }
     .send:disabled { opacity: .45; }
     .private-hint { grid-column: 1 / -1; justify-self: center; display: flex; align-items: center; gap: 4px; color: rgba(255,255,255,.82); font-size: 9.5px; padding: 0 0 4px; }
-    .sign-in-reply { grid-column: 1 / -1; min-height: 38px; border: 1px solid rgba(255,255,255,.55); border-radius: 999px; background: rgba(0,0,0,.22); color: #fff; font-size: 12px; font-weight: 650; }
+    .sign-in-reply { grid-column: 1 / -1; min-height: 38px; border: 1px solid rgba(255,255,255,.55); border-radius: 999px; background: rgba(0,0,0,.22); color: #fff; font-size: 12px; font-weight: 600; }
     .inline-error { position: relative; z-index: 3; margin: 0 12px 6px; padding: 8px 10px; border-radius: 7px; background: #ffebe9; color: #b42318; font-size: 11px; }
     .ended { position: relative; z-index: 1; margin: auto; padding: 28px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 8px; }
     .ended-icon { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 50%; background: rgba(255,255,255,.18); }

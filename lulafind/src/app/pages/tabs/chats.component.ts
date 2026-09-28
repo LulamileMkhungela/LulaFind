@@ -2,8 +2,6 @@ import { Component, computed, inject } from '@angular/core';
 import { Router } from '@angular/router';
 import { IonContent } from '@ionic/angular/ion-content';
 import { IonHeader } from '@ionic/angular/ion-header';
-import { IonToolbar } from '@ionic/angular/ion-toolbar';
-import { IonTitle } from '@ionic/angular/ion-title';
 import { IconComponent } from '../../shared/components/icon.component';
 import { AvatarComponent } from '../../shared/components/avatar.component';
 import { EmptyComponent } from '../../shared/components/empty.component';
@@ -15,17 +13,20 @@ import { clockTime, timeAgo } from '../../core/utils/format';
 @Component({
   selector: 'lf-chats',
   standalone: true,
-  imports: [IonContent, IonHeader, IonToolbar, IonTitle, IconComponent, AvatarComponent, EmptyComponent],
+  imports: [IonContent, IonHeader, IconComponent, AvatarComponent, EmptyComponent],
   template: `
-    <ion-header translucent="true">
-      <ion-toolbar>
-        <ion-title>Messages</ion-title>
-      </ion-toolbar>
+    <ion-header class="fb-head">
+      <div class="fb-head__bar">
+        <h1 class="fb-head__title">Chats</h1>
+        <div class="fb-head__tools">
+          <button class="lf-round-btn" (click)="goHome()" aria-label="Find a case to help with"><lf-icon name="edit" [size]="19" /></button>
+        </div>
+      </div>
     </ion-header>
 
-    <ion-content class="lf-page">
-      <div class="lf-banner">
-        <lf-icon name="lock" [size]="18" />
+    <ion-content class="lf-page lf-plain">
+      <div class="gate-note">
+        <span class="fb-row__icon"><lf-icon name="lock" [size]="18" /></span>
         <div>
           Private chat only opens after you <strong>upvote a post</strong> and <strong>follow each other</strong>.
           That is deliberate: it keeps chats between people who genuinely want to help.
@@ -64,10 +65,15 @@ import { clockTime, timeAgo } from '../../core/utils/format';
     </ion-content>
   `,
   styles: [`
-    .list { padding: 4px var(--lf-gap) 24px; display: flex; flex-direction: column; gap: 8px; }
-    .thread { display: flex; gap: 12px; align-items: center; padding: 12px; border-radius: var(--lf-radius);
-      border: 1px solid var(--lf-line); background: var(--lf-card); color: inherit; text-align: left; cursor: pointer; }
-    .thread:active { background: var(--lf-card-2); }
+    .gate-note { display: flex; gap: 12px; align-items: center; padding: 12px 16px; font-size: 13px; line-height: 1.35;
+      color: var(--lf-muted); background: var(--lf-card); border-bottom: 1px solid var(--lf-line-soft); }
+    .gate-note strong { color: var(--ion-text-color); font-weight: 600; }
+    .list { display: flex; flex-direction: column; background: var(--lf-card); padding: 4px 0 24px; }
+    .thread { display: flex; gap: 12px; align-items: center; padding: 8px 16px; border: 0;
+      background: transparent; color: inherit; text-align: left; cursor: pointer; font-family: inherit; }
+    .thread:hover, .thread:active { background: var(--lf-hover); }
+    .thread strong { font-size: 15px; font-weight: 600; }
+    @media (min-width: 768px) { .list, .gate-note { max-width: var(--lf-maxw); margin: 0 auto; } }
     .grow { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
     .lf-chip { align-self: flex-start; margin-top: 2px; }
   `]

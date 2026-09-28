@@ -55,36 +55,38 @@ import { LocationService } from '../../core/services/location.service';
     </div>
   `,
   styles: [`
-    .bar { border-bottom: 0; background: color-mix(in srgb, var(--ion-background-color) 72%, transparent);
-      backdrop-filter: blur(16px); position: sticky; top: 0; z-index: 5; }
-    .chips { padding: 8px var(--lf-gap) 4px; gap: 8px; }
-    .chip { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 8px 14px; border-radius: 999px;
-      border: 0; background: var(--lf-card-2); color: var(--lf-muted);
-      font-size: 13px; font-weight: 700; cursor: pointer; white-space: nowrap;
-      transition: transform .12s ease, background .12s ease; }
-    .chip:active { transform: scale(.96); }
-    .chip.on { background: var(--lf-beacon); color: #1a1200; box-shadow: 0 6px 16px color-mix(in srgb, var(--lf-beacon) 28%, transparent); }
-    .pip { background: var(--lf-signal); color: #fff; border-radius: 999px; font-size: 10px;
-      padding: 1px 6px; font-weight: 800; }
-    .chip.on .pip { background: #1a1200; }
-    .row2 { display: flex; gap: 8px; padding: 4px var(--lf-gap) 10px; overflow-x: auto; scrollbar-width: none; }
+    .bar { background: var(--lf-card); box-shadow: var(--lf-shadow); margin-bottom: 8px; }
+    @media (min-width: 700px) {
+      .bar { max-width: var(--lf-maxw); margin: 0 auto 12px; border-radius: var(--lf-radius); overflow: hidden; }
+    }
+    .chips { padding: 10px 16px 4px; gap: 8px; scroll-snap-type: none; scroll-padding-inline: 16px; }
+    .chip { display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 14px; border-radius: 999px;
+      border: 0; background: var(--lf-card-2); color: var(--ion-text-color);
+      font-family: inherit; font-size: 15px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+    .chip:active { filter: brightness(.94); }
+    .chip.on { background: var(--lf-primary-soft); color: var(--lf-primary-soft-text); }
+    .pip { background: var(--lf-badge); color: #fff; border-radius: 999px; font-size: 11px;
+      min-width: 18px; height: 18px; padding: 0 5px; box-sizing: border-box; font-weight: 700;
+      display: inline-flex; align-items: center; justify-content: center; }
+    .row2 { display: flex; gap: 8px; padding: 6px 16px 12px; overflow-x: auto; scrollbar-width: none; }
     .row2::-webkit-scrollbar { display: none; }
-    .pick { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 8px 12px; border-radius: 999px;
-      border: 0; background: var(--lf-card-2); color: var(--lf-muted);
-      font-size: 12.5px; font-weight: 700; cursor: pointer; white-space: nowrap; }
-    .pick.on { color: var(--lf-beacon); border-color: color-mix(in srgb, var(--lf-beacon) 50%, transparent); }
-    .pick.clear { color: var(--lf-signal); }
-    /* the select is wrapped so its text hugs the pin icon and the arrow,
-       instead of floating in the middle of a fixed-width box */
-    .selectwrap { display: inline-flex; align-items: center; gap: 5px; padding-left: 11px; }
-    .select { --placeholder-color: var(--lf-muted); --placeholder-opacity: 1;
-      --padding-start: 0; --padding-end: 2px;
-      min-width: 0; width: auto; max-width: 150px;
-      font-size: 12.5px; font-weight: 600; }
+    .pick { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: 999px;
+      border: 1px solid var(--lf-line); background: transparent; color: var(--ion-text-color);
+      font-family: inherit; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap; flex-shrink: 0; }
+    .pick lf-icon { color: var(--lf-muted); }
+    .pick.on { color: var(--lf-primary-soft-text); background: var(--lf-primary-soft); border-color: transparent; }
+    .pick.on lf-icon { color: inherit; }
+    /* the select is wrapped so its text hugs the pin icon and the arrow */
+    .selectwrap { padding-left: 11px; padding-right: 6px; }
+    .select { --placeholder-color: var(--ion-text-color); --placeholder-opacity: 1;
+      --padding-start: 0; --padding-end: 2px; --padding-top: 0; --padding-bottom: 0;
+      min-height: 30px; min-width: 0; width: auto; max-width: 150px;
+      font-size: 14px; font-weight: 600; }
     .select::part(icon) { margin-inline-start: 2px; }
     .select::part(text) { margin: 0; }
-    .pick.clear { color: var(--lf-muted); opacity: .6; }
-    .pick.clear.live { color: var(--lf-signal); opacity: 1; border-color: color-mix(in srgb, var(--lf-signal) 45%, transparent); }
+    .pick.clear { color: var(--lf-muted); border-style: dashed; }
+    .pick.clear.live { color: var(--lf-signal); border-color: color-mix(in srgb, var(--lf-signal) 45%, transparent); border-style: solid; }
+    .pick.clear.live lf-icon { color: inherit; }
   `]
 })
 export class FilterBarComponent {

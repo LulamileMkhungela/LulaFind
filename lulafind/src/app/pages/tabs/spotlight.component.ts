@@ -2,8 +2,6 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import { IonContent } from '@ionic/angular/ion-content';
 import { IonHeader } from '@ionic/angular/ion-header';
-import { IonToolbar } from '@ionic/angular/ion-toolbar';
-import { IonTitle } from '@ionic/angular/ion-title';
 import { IonModal } from '@ionic/angular/ion-modal';
 import { IonInput } from '@ionic/angular/ion-input';
 import { IonTextarea } from '@ionic/angular/ion-textarea';
@@ -32,15 +30,19 @@ const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
   selector: 'lf-spotlight',
   standalone: true,
   imports: [
-    IonContent, IonHeader, IonToolbar, IonTitle, IonModal, IonInput, IonTextarea, IonSelect,
+    IonContent, IonHeader, IonModal, IonInput, IonTextarea, IonSelect,
     IonSelectOption, IonItem, IonLabel, IonSearchbar, RouterLink, IconComponent, EmptyComponent
   ],
   template: `
-    <ion-header translucent="true">
-      <ion-toolbar>
-        <ion-title>Spotlight communities</ion-title>
-      </ion-toolbar>
-      <ion-toolbar>
+    <ion-header class="fb-head">
+      <div class="fb-head__bar">
+        <h1 class="fb-head__title">Spotlight</h1>
+        <div class="fb-head__tools">
+          <button class="lf-round-btn" (click)="openCreate()" aria-label="Create a spotlight"><lf-icon name="plus" [size]="20" [weight]="2.4" /></button>
+          <button class="lf-round-btn" routerLink="/search" aria-label="Search"><lf-icon name="search" [size]="20" [weight]="2.4" /></button>
+        </div>
+      </div>
+      <div class="fb-head__search">
         <div class="filters">
           <ion-searchbar class="grow" placeholder="Search a surname" [debounce]="200"
                        (ionInput)="query.set($any($event.detail).value ?? '')" animated="true"></ion-searchbar>
@@ -50,7 +52,7 @@ const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
             @for (l of alphabet; track l) { <ion-select-option [value]="l">{{ l }}</ion-select-option> }
           </ion-select>
         </div>
-      </ion-toolbar>
+      </div>
     </ion-header>
 
     <ion-content class="lf-page">
@@ -164,24 +166,25 @@ const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
     </ion-modal>
   `,
   styles: [`
-    .filters { display: flex; align-items: center; gap: 8px; padding: 0 8px 0 0; }
-    .filters .grow { flex: 1; }
-    .letter { max-width: 132px; --background: var(--lf-card); border-radius: 12px; font-size: 14px;
-      padding-left: 12px; min-height: 40px; }
-    .section { padding: 18px var(--lf-gap) 8px; font-size: 15px; font-weight: 800; display: flex; gap: 8px;
+    .filters { display: flex; align-items: center; gap: 8px; }
+    .filters .grow { flex: 1; padding: 0 !important; min-height: 36px; --border-radius: 999px; height: 36px; }
+    .letter { flex-shrink: 0; max-width: 132px; height: 36px; min-height: 36px; border-radius: 999px; font-size: 15px; font-weight: 600;
+      padding: 0 12px; background: var(--lf-card-2); --padding-top: 0; --padding-bottom: 0; }
+    .section { margin: 0; padding: 16px var(--lf-gap) 8px; font-size: 17px; font-weight: 700; display: flex; gap: 8px;
       align-items: baseline; }
-    .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; padding: 0 var(--lf-gap); }
+    .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; padding: 0 var(--lf-gap); }
     @media (min-width: 620px) { .grid { grid-template-columns: repeat(3, 1fr); } }
-    .tile { position: relative; border-radius: var(--lf-radius); overflow: hidden; border: 1px solid var(--lf-line);
+    @media (min-width: 768px) { .grid, .section { max-width: var(--lf-maxw); margin-left: auto; margin-right: auto; box-sizing: border-box; } }
+    .tile { position: relative; border-radius: var(--lf-radius); overflow: hidden; border: 0; box-shadow: var(--lf-shadow);
       background: var(--lf-card); text-decoration: none; color: inherit; display: block; }
-    .tile img { width: 100%; height: 84px; object-fit: cover; display: block; }
-    .tile .meta { padding: 9px 11px 12px; display: flex; flex-direction: column; gap: 2px; }
-    .tile .meta strong { font-size: 15px; }
-    .tile .meta span { font-size: 11.5px; color: var(--lf-muted); }
-    .tile .lf-chip { position: absolute; top: 8px; right: 8px; }
+    .tile img { width: 100%; height: 96px; object-fit: cover; display: block; }
+    .tile .meta { padding: 8px 12px 12px; display: flex; flex-direction: column; gap: 2px; }
+    .tile .meta strong { font-size: 15px; font-weight: 600; }
+    .tile .meta span { font-size: 13px; color: var(--lf-muted); }
+    .tile .lf-chip { position: absolute; top: 8px; right: 8px; background: rgba(0,0,0,.55); color: #fff; }
     .sheet { padding: 20px var(--lf-gap) 34px; }
     .sheet p { margin: 6px 0 14px; line-height: 1.45; }
-    ion-item { --background: var(--lf-card); border-radius: 12px; margin-bottom: 8px; --border-radius: 12px; }
+    ion-item { margin-bottom: 8px; }
     ion-item.bad { --border-color: var(--lf-signal); box-shadow: inset 0 0 0 1.5px var(--lf-signal); }
     .field-err { color: var(--lf-signal); font-size: 12px; font-weight: 600; margin: -4px 0 8px 4px;
       display: flex; align-items: center; gap: 5px; }

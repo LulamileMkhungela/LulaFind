@@ -94,18 +94,18 @@ import { UserProfile, Post, PROVINCES } from '../../core/models/types';
   `,
   styles: [`
     .quick { padding: 6px var(--lf-gap); gap: 6px; }
-    .chip { padding: 6px 12px; border-radius: 999px; border: 1px solid var(--lf-line); background: transparent;
-      color: var(--lf-muted); font-size: 12.5px; font-weight: 700; cursor: pointer; white-space: nowrap; }
-    .sp { display: flex; align-items: center; gap: 10px; min-width: 168px; padding: 12px 14px; border-radius: 12px;
-      border: 1px solid var(--lf-line); background: var(--lf-card); color: inherit; text-decoration: none; }
+    .chip { height: 32px; padding: 0 12px; border-radius: 999px; border: 0; background: var(--lf-card-2);
+      color: var(--ion-text-color); font-family: inherit; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+    .sp { display: flex; align-items: center; gap: 10px; min-width: 168px; padding: 12px 14px; border-radius: var(--lf-radius);
+      border: 0; box-shadow: var(--lf-shadow); background: var(--lf-card); color: inherit; text-decoration: none; }
     .sp div { display: flex; flex-direction: column; }
     .sp span { font-size: 11.5px; color: var(--lf-muted); }
     .provs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-    .prov { padding: 12px 8px; border-radius: 11px; border: 1px solid var(--lf-line); background: var(--lf-card);
+    .prov { padding: 12px 8px; border-radius: var(--lf-radius); border: 0; box-shadow: var(--lf-shadow); background: var(--lf-card);
       color: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer; }
     .people { display: flex; flex-direction: column; gap: 8px; }
-    .person { display: flex; align-items: center; gap: 11px; padding: 10px 12px; border-radius: 12px;
-      border: 1px solid var(--lf-line); background: var(--lf-card); color: inherit; text-decoration: none; }
+    .person { display: flex; align-items: center; gap: 11px; padding: 10px 12px; border-radius: var(--lf-radius);
+      border: 0; box-shadow: var(--lf-shadow); background: var(--lf-card); color: inherit; text-decoration: none; }
     .person div { display: flex; flex-direction: column; gap: 2px; }
   `]
 })

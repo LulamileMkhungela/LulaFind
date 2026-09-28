@@ -1,11 +1,5 @@
 /* ------------------------------------------------------------------ *
- * LulaFind design tokens
- * Palette rationale - colours that speak to what this app addresses:
- *   deep night navy  -> trust, seriousness, night-time searches
- *   beacon amber     -> hope, visibility, "look here"
- *   ubuntu emerald   -> safety, found, community, ubuntu
- *   signal crimson   -> urgency, missing, danger
- *   marigold         -> KhumbulEkhaya warmth, "come home"
+ * LulaFind design tokens - Facebook look, light and dark.
  * ------------------------------------------------------------------ */
 
 :root {
@@ -20,124 +14,155 @@
   --ion-safe-area-right: var(--lf-safe-right);
   --keyboard-offset: 0px;
 
-  --lf-night: #0a1024;
-  --lf-night-2: #111a36;
-  --lf-beacon: #f2b233;
-  --lf-ubuntu: #2fa36b;
-  --lf-signal: #e4573d;
-  --lf-marigold: #e8913a;
-  --lf-ink: #eaf0ff;
-
-  --lf-radius: 22px;
-  --lf-radius-sm: 14px;
-  --lf-gap: 16px;
-  --lf-shadow: 0 1px 0 rgba(255,255,255,.05) inset, 0 18px 40px rgba(0,0,0,.28);
   --lf-maxw: 680px;
-  --lf-tabbar-h: 60px;
+  --lf-tabbar-h: 56px;
 
-  --ion-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-
-  --ion-color-primary: #f2b233;
-  --ion-color-primary-rgb: 242, 178, 51;
-  --ion-color-primary-contrast: #1a1200;
-  --ion-color-primary-contrast-rgb: 26, 18, 0;
-  --ion-color-primary-shade: #d59d2d;
-  --ion-color-primary-tint: #f3ba47;
-
-  --ion-color-secondary: #2fa36b;
-  --ion-color-secondary-rgb: 47, 163, 107;
-  --ion-color-secondary-contrast: #ffffff;
-  --ion-color-secondary-contrast-rgb: 255, 255, 255;
-  --ion-color-secondary-shade: #298f5e;
-  --ion-color-secondary-tint: #44ac7a;
-
-  --ion-color-danger: #e4573d;
-  --ion-color-danger-rgb: 228, 87, 61;
-  --ion-color-danger-contrast: #ffffff;
-  --ion-color-danger-contrast-rgb: 255, 255, 255;
-  --ion-color-danger-shade: #c94c35;
-  --ion-color-danger-tint: #e76850;
-
-  --ion-color-success: #2fa36b;
-  --ion-color-success-rgb: 47, 163, 107;
-  --ion-color-success-contrast: #ffffff;
-  --ion-color-success-contrast-rgb: 255, 255, 255;
-  --ion-color-success-shade: #298f5e;
-  --ion-color-success-tint: #44ac7a;
-
-  --ion-color-warning: #e8913a;
-  --ion-color-warning-rgb: 232, 145, 58;
-  --ion-color-warning-contrast: #1a1200;
-  --ion-color-warning-contrast-rgb: 26, 18, 0;
-  --ion-color-warning-shade: #cc8033;
-  --ion-color-warning-tint: #ea9c4e;
-
-  --ion-color-medium: #8f9ab8;
-  --ion-color-medium-rgb: 143, 154, 184;
-  --ion-color-medium-contrast: #0a1024;
-  --ion-color-medium-contrast-rgb: 10, 16, 36;
-  --ion-color-medium-shade: #7e88a2;
-  --ion-color-medium-tint: #9aa4c0;
-
-  --ion-color-light: #eaf0ff;
-  --ion-color-light-rgb: 234, 240, 255;
-  --ion-color-light-contrast: #0a1024;
-  --ion-color-light-contrast-rgb: 10, 16, 36;
-  --ion-color-light-shade: #ced3e0;
-  --ion-color-light-tint: #ecf2ff;
+  /* Facebook's own system stack */
+  --ion-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI Historic", "Segoe UI", Helvetica, Arial, sans-serif;
 }
 
-/* Facebook Light Theme by Default */
+/* ------------------------------------------------------------------ *
+ * Facebook light (default) and Facebook dark.
+ * Components use only these tokens. No hard-coded hex in components, so
+ * both themes stay in step.
+ *   --lf-bg        page background        #F0F2F5 / #18191A
+ *   --lf-card      surface (cards, bars)  #FFFFFF / #242526
+ *   --lf-card-2    secondary button, input, hover  #E4E6EB / #3A3B3C
+ *   --lf-line      dividers               #CED0D4 / #3E4042
+ *   --lf-muted     secondary text         #65676B / #B0B3B8
+ *   --lf-primary   Facebook blue          #1877F2 / #2D88FF
+ * ------------------------------------------------------------------ */
 :root {
+  --lf-radius: 8px;
+  --lf-radius-sm: 6px;
+  --lf-gap: 12px;
+
+  color-scheme: light;
+  --lf-primary: #1877f2;
+  --lf-primary-rgb: 24, 119, 242;
+  --lf-primary-text: #ffffff;
+  --lf-primary-soft: #e7f3ff;
+  --lf-primary-soft-text: #1877f2;
+  --lf-link: #216fdb;
+  --lf-bg: #f0f2f5;
+  --lf-card: #ffffff;
+  --lf-card-2: #e4e6eb;
+  --lf-hover: #f2f2f2;
+  --lf-input: #f0f2f5;
+  --lf-line: #ced0d4;
+  --lf-line-soft: #e4e6eb;
+  --lf-muted: #65676b;
+  --lf-ink: #050505;
+  --lf-toolbar: #ffffff;
+  --lf-tabbar: #ffffff;
+  --lf-shadow: 0 1px 2px rgba(0, 0, 0, .2);
+  --lf-shadow-lg: 0 12px 28px 0 rgba(0, 0, 0, .2), 0 2px 4px 0 rgba(0, 0, 0, .1);
+  --lf-badge: #e41e3f;
+  --lf-on-media: #ffffff;
+  --lf-scrim: rgba(0, 0, 0, .45);
+
+  /* legacy names, mapped onto the Facebook palette */
+  --lf-beacon: var(--lf-primary);
+  --lf-night: var(--lf-bg);
+  --lf-night-2: var(--lf-card);
+  --lf-ubuntu: #31a24c;
+  --lf-signal: #e41e3f;
+  --lf-marigold: #f7b928;
+  --lf-fb-blue: var(--lf-primary);
+
   --ion-background-color: #f0f2f5;
   --ion-background-color-rgb: 240, 242, 245;
   --ion-text-color: #050505;
   --ion-text-color-rgb: 5, 5, 5;
+  --ion-item-background: var(--lf-card);
+  --ion-card-background: var(--lf-card);
+  --ion-toolbar-background: var(--lf-toolbar);
+  --ion-tab-bar-background: var(--lf-tabbar);
+  --ion-border-color: var(--lf-line);
   --ion-color-step-50: #f7f8fa;
   --ion-color-step-100: #e4e6eb;
   --ion-color-step-150: #dadde1;
   --ion-color-step-200: #ced0d4;
   --ion-color-step-250: #bcc0c4;
-  --ion-color-step-300: #65676b;
-  --ion-color-step-350: #4b4c4f;
-  --ion-color-step-400: #333334;
-  --lf-card: #ffffff;
-  --lf-card-2: #f0f2f5;
-  --lf-line: #ced0d4;
-  --lf-muted: #65676b;
-  --lf-toolbar: #ffffff;
-  --lf-tabbar: #ffffff;
-  --lf-ink: #050505;
-  --lf-beacon: #1877f2;
-  --lf-night: #f0f2f5;
-  --lf-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  --ion-color-step-300: #8a8d91;
+  --ion-color-step-350: #65676b;
+  --ion-color-step-400: #4b4c4f;
+  --ion-color-step-600: #65676b;
+  --ion-color-step-850: #1c1e21;
 
-  --lf-fb-blue: #1877f2;
-  --lf-snap-yellow: #fffc00;
-  --lf-snap-blue: #0fb2ff;
+  --ion-color-primary: #1877f2;
+  --ion-color-primary-rgb: 24, 119, 242;
+  --ion-color-primary-contrast: #ffffff;
+  --ion-color-primary-contrast-rgb: 255, 255, 255;
+  --ion-color-primary-shade: #166fe5;
+  --ion-color-primary-tint: #2d88ff;
+
+  --ion-color-secondary: #31a24c;
+  --ion-color-secondary-rgb: 49, 162, 76;
+  --ion-color-success: #31a24c;
+  --ion-color-success-rgb: 49, 162, 76;
+  --ion-color-success-shade: #2b8f43;
+  --ion-color-success-tint: #46ab5e;
+  --ion-color-danger: #e41e3f;
+  --ion-color-danger-rgb: 228, 30, 63;
+  --ion-color-danger-shade: #c91a37;
+  --ion-color-danger-tint: #e73552;
+  --ion-color-warning: #f7b928;
+  --ion-color-warning-rgb: 247, 185, 40;
+  --ion-color-warning-contrast: #050505;
+  --ion-color-medium: #65676b;
+  --ion-color-medium-rgb: 101, 103, 107;
+  --ion-color-light: #f0f2f5;
+  --ion-color-light-rgb: 240, 242, 245;
+  --ion-color-light-contrast: #050505;
 }
 
-/* Optional Dark mode (Settings -> Appearance). */
+/* Facebook dark (Settings -> Appearance). */
 :root.lf-dark {
-  --ion-background-color: #0a1024;
-  --ion-background-color-rgb: 10, 16, 36;
-  --ion-text-color: #eaf0ff;
-  --ion-text-color-rgb: 234, 240, 255;
-  --ion-color-step-50: #151b30;
-  --ion-color-step-100: #1e2438;
-  --ion-color-step-150: #272d40;
-  --ion-color-step-200: #303648;
-  --ion-color-step-250: #393f50;
-  --ion-color-step-300: #424858;
-  --ion-color-step-350: #4b5160;
-  --ion-color-step-400: #545a68;
-  --lf-card: #141c38;
-  --lf-card-2: #1a2444;
-  --lf-line: rgba(234, 240, 255, .08);
-  --lf-muted: #9aa6c4;
-  --lf-toolbar: rgba(13, 20, 40, .92);
-  --lf-tabbar: rgba(12, 18, 38, .92);
-  --lf-ink: #eaf0ff;
-  --lf-night: #0a1024;
-  --lf-shadow: 0 1px 0 rgba(255,255,255,.05) inset, 0 18px 40px rgba(0,0,0,.28);
+  color-scheme: dark;
+  --lf-primary: #2d88ff;
+  --lf-primary-rgb: 45, 136, 255;
+  --lf-primary-text: #ffffff;
+  --lf-primary-soft: #263951;
+  --lf-primary-soft-text: #4599ff;
+  --lf-link: #4599ff;
+  --lf-bg: #18191a;
+  --lf-card: #242526;
+  --lf-card-2: #3a3b3c;
+  --lf-hover: #3a3b3c;
+  --lf-input: #3a3b3c;
+  --lf-line: #3e4042;
+  --lf-line-soft: #3e4042;
+  --lf-muted: #b0b3b8;
+  --lf-ink: #e4e6eb;
+  --lf-toolbar: #242526;
+  --lf-tabbar: #242526;
+  --lf-shadow: 0 1px 2px rgba(0, 0, 0, .5);
+  --lf-shadow-lg: 0 12px 28px 0 rgba(0, 0, 0, .5), 0 2px 4px 0 rgba(0, 0, 0, .3);
+  --lf-scrim: rgba(0, 0, 0, .65);
+
+  --ion-background-color: #18191a;
+  --ion-background-color-rgb: 24, 25, 26;
+  --ion-text-color: #e4e6eb;
+  --ion-text-color-rgb: 228, 230, 235;
+  --ion-color-step-50: #1c1d1e;
+  --ion-color-step-100: #242526;
+  --ion-color-step-150: #2f3031;
+  --ion-color-step-200: #3a3b3c;
+  --ion-color-step-250: #3e4042;
+  --ion-color-step-300: #4e4f50;
+  --ion-color-step-350: #6a6b6c;
+  --ion-color-step-400: #8a8d91;
+  --ion-color-step-600: #b0b3b8;
+  --ion-color-step-850: #e4e6eb;
+
+  --ion-color-primary: #2d88ff;
+  --ion-color-primary-rgb: 45, 136, 255;
+  --ion-color-primary-shade: #2374e1;
+  --ion-color-primary-tint: #4599ff;
+  --ion-color-medium: #b0b3b8;
+  --ion-color-medium-rgb: 176, 179, 184;
+  --ion-color-light: #3a3b3c;
+  --ion-color-light-rgb: 58, 59, 60;
+  --ion-color-light-contrast: #e4e6eb;
 }

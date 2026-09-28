@@ -11,7 +11,8 @@ export const routes: Routes = [
       { path: 'spotlight', loadComponent: () => import('./pages/tabs/spotlight.component').then((m) => m.SpotlightComponent) },
       { path: 'create', redirectTo: '/new', pathMatch: 'full' },
       { path: 'chats', loadComponent: () => import('./pages/tabs/chats.component').then((m) => m.ChatsComponent) },
-      { path: 'me', loadComponent: () => import('./pages/tabs/me.component').then((m) => m.MeComponent) }
+      { path: 'notifications', canActivate: [authGuard], loadComponent: () => import('./pages/notifications/notifications.component').then((m) => m.NotificationsComponent) },
+          { path: 'me', loadComponent: () => import('./pages/tabs/me.component').then((m) => m.MeComponent) }
     ]
   },
   { path: 'auth', loadComponent: () => import('./pages/auth/auth.component').then((m) => m.AuthComponent) },
@@ -37,7 +38,6 @@ export const routes: Routes = [
   { path: 'spotlight/:id', loadComponent: () => import('./pages/spotlight/spotlight-detail.component').then((m) => m.SpotlightDetailComponent) },
   { path: 'story/:id', loadComponent: () => import('./pages/story/story-viewer.component').then((m) => m.StoryViewerComponent) },
   { path: 'search', loadComponent: () => import('./pages/search/search.component').then((m) => m.SearchComponent) },
-  { path: 'notifications', canActivate: [authGuard], loadComponent: () => import('./pages/notifications/notifications.component').then((m) => m.NotificationsComponent) },
   { path: 'tips', loadComponent: () => import('./pages/tips/tips.component').then((m) => m.TipsComponent) },
   { path: 'help', loadComponent: () => import('./pages/help/help.component').then((m) => m.HelpComponent) },
   {

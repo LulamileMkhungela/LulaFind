@@ -158,12 +158,12 @@ const STEPS = [
     header { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
     .step { font-size: 12px; color: var(--lf-muted); font-weight: 700; letter-spacing: .5px; }
     .hero p { font-size: 15px; line-height: 1.55; margin: 14px 0; }
-    .bigmark { width: 64px; height: 64px; border-radius: 20px; display: flex; align-items: center; justify-content: center;
-      font-size: 34px; font-weight: 900; color: #1a1200;
-      background: linear-gradient(135deg, var(--lf-beacon), var(--lf-marigold)); }
+    .bigmark { width: 64px; height: 64px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+      font-size: 34px; font-weight: 700; color: #fff;
+      background: var(--lf-primary); }
     .rows { display: flex; flex-direction: column; gap: 10px; }
-    .r { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 12px;
-      border: 1px solid var(--lf-line); background: var(--lf-card); font-size: 13.5px; line-height: 1.4; }
+    .r { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 8px;
+      border: 0; box-shadow: var(--lf-shadow); background: var(--lf-card); font-size: 14px; line-height: 1.4; }
     .r lf-icon { color: var(--lf-beacon); flex-shrink: 0; }
     .center { display: flex; flex-direction: column; gap: 12px; align-items: stretch; }
     .center > lf-avatar { margin: 6px auto 0; }
@@ -174,7 +174,7 @@ const STEPS = [
       background: transparent; color: inherit; font-size: 14.5px; font-weight: 600; text-align: left; cursor: pointer; }
     .prow.on { border-color: var(--lf-beacon); background: color-mix(in srgb, var(--lf-beacon) 12%, transparent); }
     .rules { display: flex; flex-direction: column; gap: 10px; }
-    .rule { display: flex; gap: 12px; padding: 13px; border-radius: 12px; border: 1px solid var(--lf-line); background: var(--lf-card); }
+    .rule { display: flex; gap: 12px; padding: 13px; border-radius: var(--lf-radius); border: 0; box-shadow: var(--lf-shadow); background: var(--lf-card); }
     .rule lf-icon { color: var(--lf-ubuntu); flex-shrink: 0; margin-top: 2px; }
     .rule div { display: flex; flex-direction: column; gap: 4px; }
     .rule span { font-size: 12.5px; color: var(--lf-muted); line-height: 1.45; }

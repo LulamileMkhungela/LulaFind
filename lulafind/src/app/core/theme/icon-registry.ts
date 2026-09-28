@@ -63,7 +63,12 @@ const PATHS: Record<string, string> = {
   megaphone: 'M3 11v2l14 5V6L3 11zM3 11h14M17 8a4 4 0 0 1 0 8M7 12v6a2 2 0 0 0 4 0v-4',
   link: 'M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7',
   more: 'M12 13a1 1 0 1 0 0-2 1 1 0 0 0 0 2zM19 13a1 1 0 1 0 0-2 1 1 0 0 0 0 2zM5 13a1 1 0 1 0 0-2 1 1 0 0 0 0 2z',
-  download: 'M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3'
+  download: 'M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3',
+  menu: 'M3 6h18M3 12h18M3 18h18',
+  smile: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM8 14s1.5 2 4 2 4-2 4-2M9 9h.01M15 9h.01',
+  /** Messenger-style bubble with the zig-zag. */
+  messenger: 'M12 2.5C6.5 2.5 2.5 6.4 2.5 11.3c0 2.6 1.1 4.8 3 6.4V21l3.1-1.7c1.1.3 2.2.5 3.4.5 5.5 0 9.5-3.9 9.5-8.8S17.5 2.5 12 2.5zM6.8 13.6l3-4.6 2.6 2.2 3.8-2.2-3 4.6-2.6-2.2z',
+  back: 'M19 12H5M12 19l-7-7 7-7'
 };
 
 export const registerCoreIcons = (): void => {

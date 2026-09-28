@@ -6,7 +6,7 @@ import { iconPath } from '../../core/theme/icon-registry';
   standalone: true,
   template: `
     <svg [attr.viewBox]="'0 0 24 24'" [attr.width]="size" [attr.height]="size"
-         fill="none" stroke="currentColor" [attr.stroke-width]="weight"
+         [attr.fill]="filled ? 'currentColor' : 'none'" stroke="currentColor" [attr.stroke-width]="weight"
          stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
       <path [attr.d]="path" />
     </svg>
@@ -20,6 +20,8 @@ export class IconComponent {
   @Input() name = 'info';
   @Input() size: number | string = 20;
   @Input() weight: number | string = 2;
+  /** Facebook fills the icon of the selected tab. */
+  @Input() filled = false;
 
   get path(): string {
     return iconPath(this.name) ?? iconPath('info') ?? '';

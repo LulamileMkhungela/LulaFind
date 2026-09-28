@@ -2,10 +2,6 @@ import { Component, computed, inject } from '@angular/core';
 import { Router } from "@angular/router";
 import { IonContent } from '@ionic/angular/ion-content';
 import { IonHeader } from '@ionic/angular/ion-header';
-import { IonToolbar } from '@ionic/angular/ion-toolbar';
-import { IonButtons } from '@ionic/angular/ion-buttons';
-import { IonBackButton } from '@ionic/angular/ion-back-button';
-import { IonTitle } from '@ionic/angular/ion-title';
 import { IconComponent } from '../../shared/components/icon.component';
 import { EmptyComponent } from '../../shared/components/empty.component';
 import { DataService } from '../../core/services/data.service';
@@ -15,27 +11,27 @@ import { timeAgo } from '../../core/utils/format';
 @Component({
   selector: 'lf-notifications',
   standalone: true,
-  imports: [IonContent, IonHeader, IonToolbar, IonButtons, IonBackButton, IonTitle, IconComponent, EmptyComponent],
+  imports: [IonContent, IonHeader, IconComponent, EmptyComponent],
   template: `
-    <ion-header translucent="true">
-      <ion-toolbar>
-        <ion-buttons slot="start"><ion-back-button defaultHref="/home" text=""></ion-back-button></ion-buttons>
-        <ion-title>Alerts</ion-title>
-        <ion-buttons slot="end">
-          <button class="lf-icon-btn" (click)="readAll()"><lf-icon name="check" [size]="20" /></button>
-        </ion-buttons>
-      </ion-toolbar>
+    <ion-header class="fb-head">
+      <div class="fb-head__bar">
+        <h1 class="fb-head__title">Notifications</h1>
+        <div class="fb-head__tools">
+          <button class="lf-round-btn" (click)="readAll()" aria-label="Mark all as read"><lf-icon name="check" [size]="20" [weight]="2.4" /></button>
+        </div>
+      </div>
     </ion-header>
 
-    <ion-content class="lf-page">
+    <ion-content class="lf-page lf-plain">
       @if (!items().length) {
         <lf-empty icon="bell" title="No alerts yet"
                   message="You will get pinged when someone votes, comments, follows, or when a case you posted is escalated." />
       }
+      @if (items().length) {
       <div class="list">
         @for (n of items(); track n.id) {
           <button class="row" [class.unread]="!n.read" (click)="go(n)">
-            <span class="ic" [attr.data-kind]="n.kind"><lf-icon [name]="iconFor(n.kind)" [size]="17" /></span>
+            <span class="ic" [attr.data-kind]="n.kind"><lf-icon [name]="iconFor(n.kind)" [size]="24" /></span>
             <div class="lf-grow">
               <strong>{{ n.title }}</strong>
               <p>{{ n.body }}</p>
@@ -45,22 +41,27 @@ import { timeAgo } from '../../core/utils/format';
           </button>
         }
       </div>
+      }
     </ion-content>
   `,
   styles: [`
-    .list { padding: 8px var(--lf-gap) 26px; display: flex; flex-direction: column; gap: 8px; }
-    .row { display: flex; gap: 12px; align-items: flex-start; padding: 13px; border-radius: var(--lf-radius);
-      border: 1px solid var(--lf-line); background: var(--lf-card); color: inherit; text-align: left; cursor: pointer; }
-    .row.unread { border-color: color-mix(in srgb, var(--lf-beacon) 40%, var(--lf-line)); }
-    .row p { margin: 3px 0; font-size: 13px; color: var(--lf-muted); line-height: 1.45; }
-    .ic { width: 34px; height: 34px; border-radius: 10px; display: flex; align-items: center; justify-content: center;
-      background: var(--lf-card-2); color: var(--lf-beacon); flex-shrink: 0; }
-    .ic[data-kind="danger"] { color: var(--lf-signal); }
-    .ic[data-kind="escalation"] { color: var(--lf-ubuntu); }
-    .ic[data-kind="vote"] { color: var(--lf-ubuntu); }
-    .ic[data-kind="outcome"] { color: var(--lf-marigold); }
-    .ic[data-kind="claim"] { color: var(--lf-marigold); }
-    .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--lf-beacon); flex-shrink: 0; margin-top: 6px; }
+    /* Facebook notifications: full-width rows, unread rows tinted blue. */
+    .list { display: flex; flex-direction: column; background: var(--lf-card); padding: 4px 0 26px; }
+    @media (min-width: 768px) { .list { max-width: var(--lf-maxw); margin: 0 auto; } }
+    .row { display: flex; gap: 12px; align-items: center; padding: 10px 16px; border: 0;
+      background: transparent; color: inherit; text-align: left; cursor: pointer; font-family: inherit; }
+    .row:hover, .row:active { filter: brightness(.97); }
+    .row.unread { background: var(--lf-primary-soft); }
+    .row strong { font-size: 15px; font-weight: 600; }
+    .row p { margin: 2px 0; font-size: 15px; color: var(--ion-text-color); line-height: 1.3; }
+    .row .lf-tiny { font-size: 13px; }
+    .row.unread .lf-tiny { color: var(--lf-primary-soft-text); font-weight: 600; }
+    .ic { width: 56px; height: 56px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+      background: var(--lf-primary); color: #fff; flex-shrink: 0; }
+    .ic[data-kind="danger"] { background: var(--lf-signal); }
+    .ic[data-kind="escalation"], .ic[data-kind="vote"] { background: var(--lf-ubuntu); }
+    .ic[data-kind="outcome"], .ic[data-kind="claim"] { background: var(--lf-marigold); }
+    .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--lf-primary); flex-shrink: 0; }
   `]
 })
 export class NotificationsComponent {

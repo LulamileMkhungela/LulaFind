@@ -34,52 +34,23 @@ import { POST_TYPE_META, Post } from '../../core/models/types';
     RouterLink, IconComponent, AvatarComponent, EmptyComponent, PostCardComponent, StoryRailComponent, FilterBarComponent
   ],
   template: `
-    <ion-header class="fb-header" [translucent]="false">
-      <!-- Level 1 Top Bar -->
-      <div class="fb-topbar">
-        <div class="fb-brand">
-          <span class="fb-brand-text">LulaFind</span>
-        </div>
-        <div class="fb-tools">
-          <button class="fb-tool-btn" (click)="onPromptClick()" aria-label="Create Case">
-            <lf-icon name="plus" [size]="18" [weight]="2.5" />
+    <ion-header class="fb-head home-head">
+      <div class="fb-head__bar">
+        <span class="brand" aria-label="LulaFind">lulafind</span>
+        <div class="fb-head__tools">
+          <button class="lf-round-btn" (click)="onPromptClick()" aria-label="Create post">
+            <lf-icon name="plus" [size]="20" [weight]="2.4" />
           </button>
-          <button class="fb-tool-btn" routerLink="/search" aria-label="Search">
-            <lf-icon name="search" [size]="18" />
+          <button class="lf-round-btn" routerLink="/search" aria-label="Search">
+            <lf-icon name="search" [size]="20" [weight]="2.4" />
           </button>
-          <button class="fb-tool-btn" routerLink="/me" aria-label="Menu">
-            <lf-icon name="menu" [size]="18" />
-          </button>
-        </div>
-      </div>
-
-      <!-- Level 2 Navigation Tabs -->
-      <div class="fb-nav-tabs">
-        <button class="fb-tab active">
-          <lf-icon name="home" [size]="22" />
-        </button>
-        <button class="fb-tab" routerLink="/spotlight">
-          <lf-icon name="users" [size]="22" />
-        </button>
-        <button class="fb-tab" routerLink="/chats">
-          <div class="fb-badge-wrap">
-            <lf-icon name="chat" [size]="22" />
+          <button class="lf-round-btn" routerLink="/chats" aria-label="Chats">
+            <lf-icon name="messenger" [size]="20" [weight]="2" />
             @if (chat.unreadTotal() > 0) {
-              <span class="fb-count-badge">{{ chat.unreadTotal() }}</span>
+              <span class="count">{{ chat.unreadTotal() }}</span>
             }
-          </div>
-        </button>
-        <button class="fb-tab" routerLink="/notifications">
-          <div class="fb-badge-wrap">
-            <lf-icon name="bell" [size]="22" />
-            @if (data.unreadNotifications() > 0) {
-              <span class="fb-count-badge">{{ data.unreadNotifications() }}</span>
-            }
-          </div>
-        </button>
-        <button class="fb-tab" routerLink="/tips">
-          <lf-icon name="info" [size]="22" />
-        </button>
+          </button>
+        </div>
       </div>
     </ion-header>
 
@@ -88,31 +59,32 @@ import { POST_TYPE_META, Post } from '../../core/models/types';
         <ion-refresher-content pullingText="Pull to refresh"></ion-refresher-content>
       </ion-refresher>
 
-      <!-- Facebook "What's on your mind?" Create Post Box -->
-      <div class="fb-create-card">
-        <div class="fb-create-top" (click)="onPromptClick()">
-          <lf-avatar [src]="auth.userAvatar()" [name]="auth.user()?.displayName ?? 'Guest'" [size]="40" />
-          <div class="fb-create-input">
-            <span>What's on your mind? Report a case...</span>
-          </div>
-        </div>
-        <div class="fb-create-actions">
-          <button class="fb-sub-btn" (click)="goReportMissing()">
-            <lf-icon name="plus" [size]="16" />
-            <span>Report Case</span>
+      <!-- Facebook composer: "What's on your mind?" -->
+      <section class="composer">
+        <div class="composer__top">
+          <a class="composer__me" [routerLink]="auth.signedIn() ? '/me' : '/auth'" aria-label="Your profile">
+            <lf-avatar [src]="auth.userAvatar()" [name]="auth.user()?.displayName ?? 'Guest'" [size]="40" />
+          </a>
+          <button class="composer__input" (click)="onPromptClick()">What's on your mind? Report a case...</button>
+          <button class="composer__photo" (click)="goReportMissing()" aria-label="Add photo">
+            <lf-icon name="image" [size]="24" />
           </button>
-          <span class="fb-sub-divider"></span>
-          <button class="fb-sub-btn" (click)="goSighting()">
-            <lf-icon name="pin" [size]="16" />
+        </div>
+        <div class="composer__actions">
+          <button class="composer__act" (click)="goReportMissing()">
+            <lf-icon name="search" [size]="20" class="ic-red" />
+            <span>Missing</span>
+          </button>
+          <button class="composer__act" (click)="goSighting()">
+            <lf-icon name="pin" [size]="20" class="ic-green" />
             <span>Sighting</span>
           </button>
-          <span class="fb-sub-divider"></span>
-          <button class="fb-sub-btn" (click)="onPromptClick()">
-            <lf-icon name="alert" [size]="16" />
-            <span>Emergency</span>
+          <button class="composer__act" (click)="goDanger()">
+            <lf-icon name="alert" [size]="20" class="ic-yellow" />
+            <span>Danger</span>
           </button>
         </div>
-      </div>
+      </section>
 
       <!-- Facebook Stories Rail -->
       <lf-story-rail (addStory)="onAddStory()" />
@@ -126,7 +98,12 @@ import { POST_TYPE_META, Post } from '../../core/models/types';
 
       @if (data.loading() && !data.feed().length) {
         @for (i of [1, 2, 3]; track i) {
-          <div class="fb-card-skel"><ion-skeleton-text style="height:160px"></ion-skeleton-text></div>
+          <div class="skel">
+            <div class="skel__head"><ion-skeleton-text class="skel__av"></ion-skeleton-text><div class="lf-grow"><ion-skeleton-text style="width:40%;height:12px"></ion-skeleton-text><ion-skeleton-text style="width:24%;height:10px"></ion-skeleton-text></div></div>
+            <ion-skeleton-text style="height:14px;width:90%"></ion-skeleton-text>
+            <ion-skeleton-text style="height:14px;width:70%"></ion-skeleton-text>
+            <ion-skeleton-text style="height:180px;margin-top:10px"></ion-skeleton-text>
+          </div>
         }
       }
 
@@ -160,11 +137,11 @@ import { POST_TYPE_META, Post } from '../../core/models/types';
               You have viewed 4 posts in guest preview mode. Join LulaFind to view full case details and help bring missing people home across South Africa.
             </p>
             <div class="guest-scroll-lock__btns">
-              <button class="snap-btn snap-btn--blue snap-block" (click)="goSignUp()">
-                Create free account
+              <button class="lf-btn lf-btn--success lf-btn--block" (click)="goSignUp()">
+                Create new account
               </button>
-              <button class="snap-btn snap-btn--black snap-block" (click)="goSignIn()">
-                Sign in
+              <button class="lf-btn lf-btn--primary lf-btn--block" (click)="goSignIn()">
+                Log in
               </button>
             </div>
           </div>
@@ -179,154 +156,130 @@ import { POST_TYPE_META, Post } from '../../core/models/types';
     </ion-content>
   `,
   styles: [`
-    .fb-header {
-      background: #ffffff;
-      box-shadow: 0 1px 2px rgba(0,0,0,0.1);
-    }
-    .fb-topbar {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 0 16px;
-      height: 48px;
-      background: #ffffff;
-    }
-    .fb-brand-text {
-      font-size: 28px;
-      font-weight: 900;
-      color: #1877f2;
+    .brand {
+      font-size: 29px;
+      font-weight: 700;
+      color: var(--lf-primary);
       letter-spacing: -1.2px;
+      line-height: 1;
+      font-family: Helvetica, Arial, var(--ion-font-family);
     }
-    .fb-tools { display: flex; align-items: center; gap: 8px; }
-    .fb-tool-btn {
-      width: 36px;
-      height: 36px;
-      border-radius: 50%;
-      background: #e4e6eb;
-      border: 0;
-      color: #050505;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-    }
-
-    /* Level 2 Navigation Tabs */
-    .fb-nav-tabs {
-      display: flex;
-      align-items: center;
-      justify-content: space-around;
-      height: 44px;
-      background: #ffffff;
-      border-top: 1px solid #f0f2f5;
-      border-bottom: 1px solid #ced0d4;
-    }
-    .fb-tab {
-      flex: 1;
-      height: 100%;
-      border: 0;
-      background: transparent;
-      color: #65676b;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      position: relative;
-      cursor: pointer;
-    }
-    .fb-tab.active {
-      color: #1877f2;
-    }
-    .fb-tab.active::after {
-      content: '';
-      position: absolute;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      height: 3px;
-      background: #1877f2;
-    }
-    .fb-badge-wrap { position: relative; }
-    .fb-count-badge {
+    :host-context(.lf-dark) .brand { color: #e4e6eb; }
+    .lf-round-btn .count {
       position: absolute;
       top: -4px;
-      right: -8px;
-      background: #e41e3f;
-      color: #ffffff;
-      font-size: 10px;
-      font-weight: 800;
+      right: -4px;
+      background: var(--lf-badge);
+      color: #fff;
+      font-size: 11px;
+      font-weight: 700;
       border-radius: 999px;
-      padding: 1px 5px;
-      min-width: 16px;
-    }
-
-    /* Facebook "What's on your mind?" Card */
-    .fb-create-card {
-      background: #ffffff;
-      margin: 0 0 8px;
-      border-bottom: 1px solid #ced0d4;
-    }
-    .fb-create-top {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 10px 16px;
-      cursor: pointer;
-    }
-    .fb-create-input {
-      flex: 1;
-      height: 38px;
-      border-radius: 999px;
-      background: #f0f2f5;
-      padding: 0 16px;
-      display: flex;
-      align-items: center;
-      color: #65676b;
-      font-size: 14px;
-      font-weight: 500;
-    }
-    .fb-create-actions {
-      display: flex;
-      align-items: center;
-      border-top: 1px solid #f0f2f5;
-      height: 40px;
-    }
-    .fb-sub-btn {
-      flex: 1;
-      height: 100%;
+      min-width: 18px;
+      height: 18px;
+      padding: 0 4px;
+      box-sizing: border-box;
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      gap: 6px;
-      border: 0;
+    }
+
+    /* Composer */
+    .composer {
+      background: var(--lf-card);
+      margin: 0 0 8px;
+      box-shadow: var(--lf-shadow);
+    }
+    .composer__top {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 12px 10px 16px;
+    }
+    .composer__me { display: inline-flex; border-radius: 50%; }
+    .composer__input {
+      flex: 1;
+      min-width: 0;
+      height: 40px;
+      border-radius: 999px;
+      border: 1px solid var(--lf-line);
       background: transparent;
-      color: #65676b;
-      font-size: 13px;
+      padding: 0 14px;
+      text-align: left;
+      color: var(--ion-text-color);
+      font-family: inherit;
+      font-size: 15px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      cursor: pointer;
+    }
+    .composer__input:hover { background: var(--lf-hover); }
+    .composer__photo {
+      width: 40px; height: 40px;
+      border: 0; border-radius: 50%;
+      background: transparent;
+      color: #45bd62;
+      display: inline-flex; align-items: center; justify-content: center;
+      cursor: pointer;
+    }
+    .composer__photo:hover { background: var(--lf-hover); }
+    .composer__actions {
+      display: flex;
+      border-top: 1px solid var(--lf-line-soft);
+      padding: 4px;
+    }
+    .composer__act {
+      flex: 1;
+      height: 40px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      border: 0;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--lf-muted);
+      font-family: inherit;
+      font-size: 14px;
       font-weight: 600;
       cursor: pointer;
     }
-    .fb-sub-btn:active { background: #e4e6eb; }
-    .fb-sub-divider { width: 1px; height: 20px; background: #ced0d4; flex-shrink: 0; }
+    .composer__act:hover, .composer__act:active { background: var(--lf-hover); }
+    .ic-red { color: #f3425f; }
+    .ic-green { color: #45bd62; }
+    .ic-yellow { color: #f7b928; }
 
-    .fb-card-skel { background: #ffffff; margin: 8px 0; padding: 16px; border: 1px solid #ced0d4; }
+    .skel {
+      background: var(--lf-card);
+      margin: 0 0 8px;
+      padding: 12px 16px 16px;
+      box-shadow: var(--lf-shadow);
+      display: flex; flex-direction: column; gap: 6px;
+    }
+    .skel__head { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; }
+    .skel__av { width: 40px; height: 40px; border-radius: 50%; flex-shrink: 0; }
 
     .guest-scroll-lock {
-      margin: 16px 12px 28px;
+      margin: 8px 0 28px;
       padding: 24px 20px;
-      border-radius: 12px;
-      background: #ffffff;
-      border: 1px solid #ced0d4;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      background: var(--lf-card);
+      box-shadow: var(--lf-shadow);
       text-align: center;
       display: flex; flex-direction: column; align-items: center; gap: 12px;
     }
     .guest-scroll-lock__badge {
       display: flex; align-items: center; justify-content: center;
-      width: 52px; height: 52px; border-radius: 50%;
-      background: #e7f3ff; color: #1877f2;
+      width: 56px; height: 56px; border-radius: 50%;
+      background: var(--lf-primary-soft); color: var(--lf-primary-soft-text);
     }
-    .guest-scroll-lock__title { margin: 0; font-size: 18px; font-weight: 800; color: #050505; }
-    .guest-scroll-lock__body { margin: 0; font-size: 13.5px; line-height: 1.45; color: #65676b; }
-    .guest-scroll-lock__btns { display: flex; flex-direction: column; gap: 10px; width: 100%; margin-top: 4px; }
+    .guest-scroll-lock__title { margin: 0; font-size: 20px; font-weight: 700; color: var(--ion-text-color); }
+    .guest-scroll-lock__body { margin: 0; font-size: 15px; line-height: 1.4; color: var(--lf-muted); }
+    .guest-scroll-lock__btns { display: flex; flex-direction: column; gap: 10px; width: 100%; max-width: 360px; margin-top: 4px; }
+
+    @media (min-width: 700px) {
+      .composer, .skel, .guest-scroll-lock { max-width: var(--lf-maxw); margin-left: auto; margin-right: auto; border-radius: var(--lf-radius); }
+      .composer { margin-top: 12px; }
+    }
   `]
 })
 export class HomeComponent {
@@ -387,6 +340,14 @@ export class HomeComponent {
       return;
     }
     void this.router.navigate(['/create/sighting']);
+  }
+
+  async goDanger(): Promise<void> {
+    if (!this.auth.signedIn()) {
+      void this.router.navigate(['/auth'], { queryParams: { next: '/create/danger' } });
+      return;
+    }
+    void this.router.navigate(['/create/danger']);
   }
 
   async goReportMissing(): Promise<void> {
@@ -471,9 +432,11 @@ export class HomeComponent {
 
   async onMore(p: Post): Promise<void> {
     const mine = this.data.canEdit(p);
+    const saved = this.data.savedIds().includes(p.id);
     const sheet = await this.sheetCtl.create({
       header: p.title.slice(0, 40),
       buttons: [
+        { text: saved ? 'Unsave post' : 'Save post', icon: 'bookmark' as const, handler: () => void this.onSave(p) },
         ...(mine
           ? [
             { text: 'Edit post', icon: 'pencil' as const, handler: () => void this.router.navigate(['/post', p.id, 'edit']) },
