@@ -1,6 +1,10 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { IonContent } from '@ionic/angular/ion-content';
+import { IonHeader } from '@ionic/angular/ion-header';
+import { IonToolbar } from '@ionic/angular/ion-toolbar';
+import { IonTitle } from '@ionic/angular/ion-title';
+import { IonButtons } from '@ionic/angular/ion-buttons';
 import { IconComponent } from '../../shared/components/icon.component';
 import { DataService } from '../../core/services/data.service';
 import { MediaService } from '../../core/services/media.service';
@@ -17,15 +21,21 @@ const AUDIENCES: { key: Audience; icon: string; label: string }[] = [
 @Component({
   selector: 'lf-create-story',
   standalone: true,
-  imports: [IonContent, IconComponent],
+  imports: [IonContent, IonHeader, IonToolbar, IonTitle, IonButtons, IconComponent],
   template: `
-    <ion-content class="lf-page story-create">
-      <header class="topbar">
-        <button class="close" type="button" (click)="cancel()" aria-label="Close story composer"><lf-icon name="x" [size]="21" /></button>
-        <strong>Create story</strong>
-        <button class="publish-top" type="button" (click)="publish()" [disabled]="busy() || !canPublish()">{{ busy() ? 'Posting…' : 'Share' }}</button>
-      </header>
+    <ion-header class="story-head" [translucent]="false">
+      <ion-toolbar>
+        <ion-buttons slot="start">
+          <button class="close" type="button" (click)="cancel()" aria-label="Close story composer"><lf-icon name="x" [size]="21" /></button>
+        </ion-buttons>
+        <ion-title>Create story</ion-title>
+        <ion-buttons slot="end">
+          <button class="publish-top" type="button" (click)="publish()" [disabled]="busy()">{{ busy() ? 'Posting…' : 'Share' }}</button>
+        </ion-buttons>
+      </ion-toolbar>
+    </ion-header>
 
+    <ion-content class="lf-page story-create">
       <div class="layout">
         <section class="preview-column">
           <div class="preview" [style.background]="bg()">
@@ -80,7 +90,16 @@ const AUDIENCES: { key: Audience; icon: string; label: string }[] = [
 
           <div class="background-setting">
             <div><strong>Background</strong><small>Change the colour behind your text</small></div>
-            <button type="button" class="color-swatch" [style.background]="bg()" (click)="cycleBg()" aria-label="Change story background"><lf-icon name="sparkle" [size]="16" /></button>
+            <button type="button" class="color-swatch" [style.background]="bg()" (click)="cycleBg()"
+                    [attr.aria-label]="'Change story background, currently ' + bg()"><lf-icon name="sparkle" [size]="16" /></button>
+          </div>
+          <div class="bg-grid" role="radiogroup" aria-label="Story background colour">
+            @for (swatch of swatches; track swatch) {
+              <button type="button" class="bg-chip" role="radio" [attr.aria-checked]="hue() === swatch"
+                      [attr.aria-label]="'Background colour ' + swatch"
+                      [class.on]="hue() === swatch" [style.background]="storyBg(swatch)"
+                      (click)="pickBg(swatch)"></button>
+            }
           </div>
 
           <div class="photo-setting">
@@ -100,11 +119,14 @@ const AUDIENCES: { key: Audience; icon: string; label: string }[] = [
   styles: [`
     :host { --fb-blue: #1877f2; --fb-text: #1c1e21; --fb-muted: #65676b; --fb-line: #ced0d4; --fb-bg: #f0f2f5; display: block; }
     .story-create { --background: var(--fb-bg); }
-    .topbar { position: sticky; z-index: 2; top: 0; height: 52px; display: grid; grid-template-columns: 42px 1fr 60px; align-items: center; gap: 8px; padding: 0 12px; background: #fff; border-bottom: 1px solid var(--fb-line); }
-    .topbar strong { text-align: center; font-size: 15px; color: var(--fb-text); }
-    .close { width: 36px; height: 36px; display: grid; place-items: center; border: 0; border-radius: 50%; background: var(--fb-bg); color: var(--fb-text); }
-    .publish-top { justify-self: end; min-width: 54px; padding: 7px 10px; border: 0; border-radius: 6px; color: #fff; background: var(--fb-blue); font-size: 12px; font-weight: 700; }
-    .publish-top:disabled, .share-bottom:disabled { opacity: .45; }
+    .story-head { background: var(--lf-card); }
+    .close { width: 36px; height: 36px; display: grid; place-items: center; border: 0; border-radius: 50%; background: var(--lf-card-2); color: var(--ion-text-color); }
+    .publish-top { min-width: 54px; height: 32px; padding: 0 12px; border: 0; border-radius: 6px; color: #fff; background: var(--lf-primary); font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+    .publish-top:disabled, .share-bottom:disabled { opacity: .45; cursor: default; }
+    .bg-grid { display: flex; flex-wrap: wrap; gap: 7px; }
+    .bg-chip { width: 34px; height: 34px; border: 2px solid transparent; border-radius: 8px; cursor: pointer; padding: 0; }
+    .bg-chip.on { border-color: var(--lf-primary); box-shadow: 0 0 0 2px color-mix(in srgb, var(--lf-primary) 25%, transparent); }
+    .color-swatch:active { transform: scale(.94); }
     .layout { width: min(100%, 930px); box-sizing: border-box; display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(290px, .9fr); gap: 16px; margin: 0 auto; padding: 16px; }
     .preview-column { min-width: 0; }
     .preview { position: relative; height: min(67vh, 660px); min-height: 390px; display: flex; flex-direction: column; justify-content: flex-end; box-sizing: border-box; padding: 18px; overflow: hidden; border-radius: 12px; background-size: cover; background-position: center; box-shadow: 0 2px 12px rgba(0,0,0,.12); }
@@ -168,7 +190,9 @@ export class CreateStoryComponent {
   private router = inject(Router);
 
   text = '';
-  hue = 221;
+  /** A signal, not a plain field: the app is zoneless, so a bare `hue = 47`
+   *  never re-rendered and the background looked frozen. */
+  readonly hue = signal(221);
   busy = signal(false);
   error = signal('');
   readonly media = signal<MediaItem[]>([]);
@@ -177,10 +201,14 @@ export class CreateStoryComponent {
   readonly spotlightId = signal<string | null>(null);
 
   protected readonly audiences = AUDIENCES;
+  /** Background colours offered under the swatch. */
+  protected readonly swatches = [221, 28, 340, 48, 120, 168, 265, 0];
+  /** Template helper for the swatch grid. */
+  protected readonly storyBg = storyBg;
   readonly mySpotlights = computed(() => this.data.mySpotlights());
   readonly currentMedia = computed(() => this.media()[this.previewIndex()] ?? null);
 
-  bg(): string { return storyBg(this.hue); }
+  bg(): string { return storyBg(this.hue()); }
 
   audienceHelp(value: Audience): string {
     if (value === 'public') return 'Anyone on LulaFind can view';
@@ -200,7 +228,9 @@ export class CreateStoryComponent {
     if (audience !== 'surname') this.spotlightId.set(null);
   }
 
-  cycleBg(): void { this.hue = (this.hue + 47) % 360; }
+  cycleBg(): void { this.hue.set((this.hue() + 47) % 360); }
+
+  pickBg(hue: number): void { this.hue.set(hue); }
 
   async addPhoto(): Promise<void> {
     if (this.media().length >= 3) return;
@@ -234,7 +264,7 @@ export class CreateStoryComponent {
       const story = await this.data.createStory({
         text: this.text,
         media: this.media(),
-        bgHue: this.hue,
+        bgHue: this.hue(),
         audience: this.audience(),
         spotlightId: this.audience() === 'surname' ? this.spotlightId() : null
       });
