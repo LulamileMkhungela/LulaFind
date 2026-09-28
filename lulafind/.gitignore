@@ -1,4 +1,6 @@
 node_modules/
+# Downloaded Firebase Android app config (contains project-specific OAuth client data).
+/android/app/google-services.json
 www/
 dist/
 out-tsc/

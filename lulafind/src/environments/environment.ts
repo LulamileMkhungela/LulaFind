@@ -5,8 +5,8 @@ export const environment = {
   appName: 'LulaFind',
   appVersion: '1.0.0',
   /**
-   * supabase = this project's database, accounts, chat and photos.
-   * Firebase is not the database. It only sends the normal-email account emails. Cloud Messaging stays separate. No paid plan.
+   * Supabase = app data, email/password accounts, recovery and RLS sessions.
+   * Firebase Authentication obtains Google identity only; its Google ID token is exchanged for a Supabase session.
    */
   dataMode: 'supabase' as 'mock' | 'firebase' | 'supabase',
   supabaseUrl: 'https://srwdtguxdjsjlkaydhet.supabase.co',
@@ -17,6 +17,7 @@ export const environment = {
     projectId: 'lulafinds-app',
     storageBucket: '',
     messagingSenderId: '359295927708',
+    // Copy the real Firebase Web App ID from Project settings → General → Your apps.
     appId: '',
     measurementId: ''
   },

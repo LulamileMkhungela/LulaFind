@@ -1,6 +1,6 @@
 # Backend setup and live check
 
-Last updated: 26 September 2026. This file is the source of truth for what is connected and what is not. Where it disagrees with `README.md`, follow this file.
+Last updated: 28 September 2026. This file is the source of truth for what is connected and what is not. Where it disagrees with `README.md`, follow this file.
 
 ---
 
@@ -8,15 +8,17 @@ Last updated: 26 September 2026. This file is the source of truth for what is co
 
 | Backend | Used for | Not used for |
 |---------|----------|-------------|
-| **Supabase** | Email/password accounts, Google OAuth, email confirmation and password recovery; all app data and photos | — |
-| **Firebase** | Not used by the current app flow. The project and its legacy email templates remain configured but are not the auth provider. | Firestore, Realtime Database, Cloud Storage, Analytics, account emails |
+| **Supabase** | Email/password, email confirmation and password recovery; the app's signed-in session, profiles, RLS and all app data/photos. Google uses `signInWithIdToken` only to establish this Supabase session. | Google OAuth redirects for the Google button |
+| **Firebase** | Google identity on Android, iOS and web. Firebase Authentication obtains Google's ID token, which the app exchanges with Supabase. | App data, Firestore in the active flow, email/password and recovery |
+
+The Google button follows this path: **Firebase Google sign-in → Google-issued ID token → Supabase `signInWithIdToken` → existing profile/data/RLS flow**. It does not use Supabase's Google OAuth redirect. Email/password, recovery, and the existing Apple path are kept separate.
 
 The app picks its data adapter at startup in `src/app/app.config.ts`:
 1. If `environment.supabaseUrl` and `environment.supabaseKey` are set → **SupabaseApi** and the Supabase Auth client.
-2. Else if `environment.dataMode === 'firebase'` → **FirebaseApi** for data only; this is not the configured authentication flow.
+2. Else if `environment.dataMode === 'firebase'` → **FirebaseApi** for Firestore data.
 3. Otherwise → **MockApi** and local demo credentials.
 
-Both `environment.ts` and `environment.prod.ts` set `dataMode: 'supabase'` and include the publishable Supabase key. Live email/password, Google OAuth and recovery therefore require Supabase Auth; the source code does not use Firebase Auth for those journeys.
+Both `environment.ts` and `environment.prod.ts` set `dataMode: 'supabase'` and include the publishable Supabase key. Email/password and recovery use Supabase Auth. Firebase Google sign-in is bridged into the same Supabase session for the app's existing RLS-protected data.
 
 ---
 
@@ -27,12 +29,13 @@ Both `environment.ts` and `environment.prod.ts` set `dataMode: 'supabase'` and i
 | Supabase source configuration | `environment.ts` contains the project URL and publishable key; this does not prove a live request succeeds. |
 | Records schema | `supabase/schema.sql` uses `(collection, id)` as the key, `owner_id uuid`, and `payload jsonb`. The hosted schema and policies have not been checked from this code session. |
 | Story privacy migration | `supabase/story-privacy.sql` is the idempotent migration for an existing project. It backfills legacy reply/viewer projections into private rows, strips them from story payloads, and replaces the known RLS policies. It has not been run against the hosted database. |
-| Auth source code | Supabase Auth is used when `SupabaseApi` is active: email/password, confirmation callback, password recovery, and Google OAuth callback/session restore. |
-| Supabase providers and SMTP | Must be verified in the dashboard; the source code cannot enable providers or guarantee mail delivery. |
-| Redirect URLs | Must be allowed in Supabase Auth and Google OAuth settings; see the list below. Preview domains may need the exact Arena origin. |
-| Firebase project/templates | Legacy configuration only; the current auth flow does not call Firebase Auth or its email action page. |
-| Live writes, OAuth consent, and email delivery | Not verified against the hosted project in this session. |
-| Android/iOS OAuth callback | Native deep-link round-trip has not been exercised on a device. |
+| Auth source code | Email/password and recovery stay on Supabase. Google uses Firebase Auth and exchanges the Google ID token through Supabase `signInWithIdToken`; the Google button does not call `signInWithOAuth`. |
+| Supabase providers and SMTP | Google and Email provider settings and SMTP must be verified in the dashboard; code cannot enable providers or guarantee mail delivery. |
+| Firebase Web App ID | Blank in both environment files intentionally. Copy the real `appId` from Firebase Console → Project settings → General → Your apps → Web app. |
+| Android OAuth client | The local Android config currently has the Web OAuth client but no Android OAuth client. Register signing SHA-1 fingerprints, then download an updated `google-services.json`. |
+| iOS Google configuration | `GoogleService-Info.plist`, bundle ID `com.lulafind.app`, and reversed-client URL scheme are present. Xcode/device sign-in still needs testing. |
+| Live writes, Google token exchange, and email delivery | Not verified against hosted services in this session. |
+| Android/iOS sign-in | Native Android/iOS builds and Google sign-in round-trips have not been verified on a device. |
 
 ---
 
@@ -63,13 +66,20 @@ https://lulafind.co.za/**
 https://**.e2b.app/**
 ```
 
-Add the exact preview origin if the wildcard is rejected. Configure the Google provider in Supabase and use the callback URL shown in the dashboard in the Google OAuth client's authorized redirect URIs. Google consent happens on Google's site; the callback returns to LulaFind. Password-reset email redirects return to `/auth?mode=newpass`.
+Add the exact preview origin if the wildcard is rejected. These allowed redirects are for password recovery and the existing Apple redirect path. Google sign-in uses Firebase's native/web Google sign-in and Supabase's ID-token exchange, so it does not return through a Supabase OAuth redirect. Enable Google in Supabase Auth and configure the matching Google Web OAuth client; keep any client secret in the Supabase dashboard, never in app source. Password-reset email redirects return to `/auth?mode=newpass`.
 
 ---
 
-## Legacy Firebase settings
+## Firebase Google sign-in setup
 
-Firebase email templates and action pages are not called by the current auth service. Keep them separate from the Supabase confirmation/recovery flow. The app does not currently implement Firebase Auth or a native Firebase OAuth callback.
+1. In [Firebase Console](https://console.firebase.google.com/) → **Authentication → Sign-in method**, enable **Google** for project `lulafinds-app`.
+2. Under **Project settings → General → Your apps**, open the Firebase **Web App** and copy its exact Firebase `appId` (the value beginning with `1:`) into the `appId` field in both `src/environments/environment.ts` and `src/environments/environment.prod.ts`. Do not use the iOS `GOOGLE_APP_ID` or an OAuth client ID in this field.
+3. For Android, add SHA-1 fingerprints for each signing certificate at **Project settings → Your apps → Android app → SHA certificate fingerprints**. Get local fingerprints from Android Studio's **Gradle → signingReport** task. For Play Store releases, also add the **App signing key certificate SHA-1** shown under Play Console → **App integrity → App signing**. Download the updated `google-services.json` and put it at `android/app/google-services.json`; it is intentionally ignored by Git.
+4. For iOS, verify the `GoogleService-Info.plist` belongs to bundle ID `com.lulafind.app` and that its `REVERSED_CLIENT_ID` is the `CFBundleURLSchemes` entry in `ios/App/App/Info.plist`. Both are present in this workspace. Run `npx cap sync ios`, build in Xcode, and test on an iOS device.
+5. In Supabase → **Authentication → Providers → Google**, enable the provider and configure the same Google Web OAuth client used by Firebase. This is the verifier for `signInWithIdToken`; Google does not use the Supabase redirect URI in the app's Google flow.
+6. Run `npx cap sync` after changing plugin or native config, then test Android on a device/emulator with Google Play Services and iOS on a device. Native builds were not available in the code session because Java/JAVA_HOME and Xcode were not available.
+
+The Web App ID could not be fetched from Firebase during this code session (the Firebase Management API request was unreachable), so both source values remain blank instead of using a guessed ID. The local Firebase Admin service-account JSON under `uploads/` is excluded from the current source tree and ignored. It was present in an earlier repository commit, so revoke/rotate that service-account key in Google Cloud IAM; a private GitHub repository does not make a committed private key safe.
 
 ---
 
@@ -79,8 +89,10 @@ Firebase email templates and action pages are not called by the current auth ser
 |------|-----|
 | Verify the remote `records` columns match `supabase/schema.sql` (`payload`, composite key, UUID owner) | The source was inspected; the hosted database was not queried in this session. |
 | Run `supabase/story-privacy.sql` and then `supabase/verify-rls.sql` in the SQL editor | Migrates private story data and policies; the rollback-only check verifies audience, follow-request, reply/view, and legacy-status rules. |
-| Confirm Supabase Email and Google providers are enabled and configure email delivery | Needed for confirmation, reset links, and OAuth. Settings and inbox delivery are not verified by a local build. |
-| Add allowed redirect URLs for production and the exact preview origin | OAuth and recovery callbacks must return to `/auth`. |
+| Confirm Supabase Email and Google providers are enabled and configure email delivery | Email confirmation/recovery and Google ID-token verification depend on dashboard settings not verified by a local build. |
+| Add the exact Firebase Web App ID to both environment files | Browser Google sign-in requires the actual Web App configuration from Firebase Console. |
+| Register Android signing SHA-1 fingerprints and download a fresh `google-services.json` | Required so Firebase/Google can validate Android builds; the downloaded JSON is ignored by Git. |
+| Test native Google sign-in on Android and iOS | Xcode/device and Android signing-provider setup were unavailable in this session. |
 | Replace `SUPPORT_EMAIL` in `src/app/core/config.ts` | Use a monitored business/support address before public launch. |
 | Add a real privacy policy URL | Required by both the Play Store and App Store; the current Terms screen is a placeholder. |
 | Configure FCM for push notifications | Requires the FCM server key and APNs configuration for iOS. |

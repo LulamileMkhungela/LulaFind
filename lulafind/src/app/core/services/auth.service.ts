@@ -6,6 +6,7 @@ import { KvStore } from '../data/local-db';
 import { avatar, hueOf } from '../data/seed';
 import { nextHandle, parseFullName, slugSurname, uid } from '../utils/format';
 import { PlatformService } from './platform.service';
+import { FirebaseGoogleAuthService } from './firebase-google-auth.service';
 
 export type AuthProvider = 'google' | 'apple';
 
@@ -29,7 +30,7 @@ export interface SignUpPayload {
 
 interface StoredAccount {
   email: string;
-  /** mock-mode credential hash. In firebase mode this is unused. */
+  /** Mock-mode credential hash; unused by real Supabase/Firebase authentication. */
   secret: string;
   userId: string;
 }
@@ -37,7 +38,9 @@ interface StoredAccount {
 /**
  * Auth + session.
  *
- * Live Supabase mode uses Supabase Auth for email/password, recovery and Google OAuth.
+ * Supabase owns email/password, recovery, and the app data session. Google sign-in
+ * is performed by Firebase, then its Google-issued ID token is exchanged with
+ * Supabase so the existing profile and RLS paths continue to work.
  * Mock mode keeps local hashed demo credentials so the journeys can be tested offline.
  *
  * Deliberately NO phone-number sign-up, per product decision.
@@ -45,6 +48,7 @@ interface StoredAccount {
 @Injectable({ providedIn: 'root' })
 export class AuthService {
   private platform = inject(PlatformService);
+  private firebaseGoogleAuth = inject(FirebaseGoogleAuthService);
   private router = inject(Router);
   private injectedApi = inject(LULA_API);
   private store = new KvStore('lulafind.auth');
@@ -117,7 +121,7 @@ export class AuthService {
   }
 
   private hash(s: string): string {
-    // NOT a security boundary - mock mode only. Firebase Auth handles real credentials.
+    // NOT a security boundary - mock mode only. Supabase Auth handles real email/password credentials.
     let h = 5381;
     for (let i = 0; i < s.length; i++) h = (h * 33) ^ s.charCodeAt(i);
     return (h >>> 0).toString(16);
@@ -224,8 +228,8 @@ export class AuthService {
   readonly passwordRecovery = signal(false);
 
   /**
-   * Set to true when the app is opened via an email-confirmation link (Supabase
-   * or Firebase) so the sign-up form can skip re-sending the OTP.
+   * Set to true when the app is opened via a Supabase email-confirmation link
+   * so the sign-up form can skip re-sending the OTP.
    */
   readonly emailAlreadyConfirmed = signal(false);
 
@@ -496,9 +500,37 @@ export class AuthService {
     return u;
   }
 
-  /** Start the real OAuth redirect when Supabase is configured. */
+  /** Firebase handles Google; Supabase receives only Google's ID token to establish its app session. */
   async signInWithProvider(provider: AuthProvider): Promise<UserProfile> {
     const supa = this.supabaseAuth;
+    if (supa && provider === 'google') {
+      const identity = await this.firebaseGoogleAuth.signInWithGoogle();
+      const { data, error } = await supa.signInWithIdToken({
+        provider: 'google',
+        token: identity.idToken
+      });
+      if (error) throw error;
+
+      const supabaseUser = data.user ?? data.session?.user;
+      if (!supabaseUser) throw new Error('Sign-in did not return an account. Try again.');
+      const metadata = supabaseUser.user_metadata ?? {};
+      const authUser = {
+        ...supabaseUser,
+        email: supabaseUser.email ?? identity.email ?? null,
+        user_metadata: {
+          ...(identity.displayName ? { full_name: identity.displayName, name: identity.displayName } : {}),
+          ...(identity.photoUrl ? { picture: identity.photoUrl } : {}),
+          ...metadata
+        }
+      };
+      await this.resolveSupabaseUser(authUser);
+      const profile = this.user();
+      if (profile) return profile;
+      if (this.pendingProvider()) throw new Error('NEW_ACCOUNT');
+      throw new Error('Could not load the account profile. Please try again.');
+    }
+
+    // Preserve the existing Apple OAuth redirect and the offline mock-provider flow.
     if (supa) {
       const { error } = await supa.signInWithOAuth({
         provider,
@@ -570,6 +602,13 @@ export class AuthService {
     if (this.supabaseAuth) {
       const { error } = await this.supabaseAuth.signOut();
       if (error) throw error;
+    }
+    try {
+      await this.firebaseGoogleAuth.signOut();
+    } catch (error) {
+      // Supabase is the session that protects LulaFind data; do not block logout
+      // if an old Firebase provider session cannot be cleared on this device.
+      console.warn('Could not clear Firebase Google session:', error);
     }
     this.store.remove('session');
     this.pendingProvider.set(null);

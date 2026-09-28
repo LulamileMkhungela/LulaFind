@@ -22,8 +22,8 @@ browser before you open Android Studio or Xcode.
 | --- | --- | --- |
 | UI | **Ionic 9 + Angular 22** (standalone components, signals, zoneless change detection) | Native-feel mobile components, fastest render path Angular has, one codebase for both stores |
 | Native shell | **Capacitor 8** | Real Android + iOS builds, first-class plugin access, targets Android 16 (API 36) as Play now requires |
-| Data | **Supabase** `records` table for posts, chat, follows, stories, and profiles | Firebase is only the three account emails. No Firestore. |
-| Auth | Email through Firebase templates. Google through Supabase. | No phone. No Apple. |
+| Data | **Supabase** `records` table for posts, chat, follows, stories, and profiles | Firebase is not used for app data in the active flow. |
+| Auth | Email/password and recovery through Supabase; Google through Firebase Auth → Google ID token → Supabase session. | No phone. The existing Apple path remains separate. |
 | Tests | **Vitest** | Run `npm test` on Node 22. A passing test is not a phone test. |
 | Icons | Inline SVG registry | No icon font, no network request, identical on web/Android/iOS |
 
@@ -200,8 +200,9 @@ so and offered the existing one instead.
 - **`MockApi`** (default) — seeded South African dataset + localStorage persistence.
   14 users, 13 cases, 14 comments, 4 Spotlights, 6 stories, 10 tips, an existing
   chat thread and notifications, so every screen has real content on first launch.
-- **`FirebaseApi`** — Cloud Firestore + Firebase Auth, imported lazily so the
-  bundle stays small until you configure it.
+- **`FirebaseApi`** — optional Cloud Firestore adapter, imported lazily; it is
+  not part of the active Supabase data/auth path. Firebase Authentication is
+  used specifically for Google identity sign-in.
 
 Switch with one line:
 

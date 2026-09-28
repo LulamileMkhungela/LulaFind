@@ -1,5 +1,6 @@
 App/build
 App/Pods
+App/CapApp-SPM/symlinks/
 App/output
 App/App/public
 DerivedData

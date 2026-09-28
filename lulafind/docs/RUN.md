@@ -119,7 +119,7 @@ The app runs on its own without touching these. Saving a new account, post, foll
    https://**.e2b.app/**
    ```
 
-   Add the exact Arena preview origin as well if your Supabase project rejects wildcard preview URLs. In **Authentication → Providers → Google**, enable Google and add the Supabase callback URL shown on that page to the Google OAuth client's authorised redirect URIs. Google opens its own account-consent screen, then returns to LulaFind at `/auth`; it does not send the user to Gmail.
+   Add the exact Arena preview origin as well if your Supabase project rejects wildcard preview URLs. These redirects are for password recovery and the existing Apple redirect path. Google sign-in uses Firebase and exchanges Google's ID token with Supabase; it does not use the Supabase Google OAuth redirect. Enable the Google provider in Supabase and configure the matching Google Web OAuth client for ID-token verification. See [SETUP.md](SETUP.md#firebase-google-sign-in-setup) for the Android/iOS/Web configuration steps.
 
 3. The base `records` table SQL has already been run. Do not rerun the old `editor.sql` or the historical `wire-fix.sql`; their broad update/read policies have been removed from the current scripts. Run `supabase/story-privacy.sql` on the existing project to migrate embedded story replies/viewers, scrub those projections from story rows, and replace the known RLS policies. It is safe to re-run if the SQL editor reports an interrupted migration.
 
@@ -208,7 +208,7 @@ Click **Apply**.
 | File | Purpose |
 |------|---------|
 | `android/app/build.gradle` | `compileSdkVersion`, `targetSdkVersion`, `minSdkVersion` (set by `setup:native`) |
-| `android/app/google-services.json` | Firebase project for push notifications |
+| `android/app/google-services.json` | Local-only Firebase app config for Android Google sign-in and push notifications; ignored by Git |
 | `android/app/src/main/AndroidManifest.xml` | Permissions: internet, camera, location, notifications |
 | `android/variables.gradle` | SDK version variables shared across modules |
 
@@ -349,9 +349,9 @@ File → Packages → Resolve Package Versions. If it still stalls, close Xcode,
 
 The Supabase `records` table exists but has no rows yet. Create an account and post something — there is no pre-loaded sample data in the live database.
 
-### Google sign-in returns an error after redirect
+### Google sign-in fails on a native build
 
-The redirect URL is missing from Supabase → Authentication → URL Configuration. Add `http://localhost:4200/**` for local testing, and `https://lulafind.co.za/**` for production.
+Check that Google is enabled in Firebase Authentication and Supabase Auth, the real Firebase Web App ID is set in both environment files for browser sign-in, Android SHA-1 signing fingerprints are registered and a fresh `google-services.json` is installed, and the iOS URL scheme matches `REVERSED_CLIENT_ID`. See [SETUP.md](SETUP.md#firebase-google-sign-in-setup). Google sign-in uses a token exchange, not the Supabase OAuth redirect.
 
 ### Push notifications do not arrive
 

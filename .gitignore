@@ -1,0 +1,4 @@
+# Never commit downloaded Firebase configs or service-account credentials.
+/uploads/google-services*.json
+/uploads/*firebase-adminsdk*.json
+/uploads/*service-account*.json

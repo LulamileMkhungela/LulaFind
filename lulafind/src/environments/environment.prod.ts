@@ -13,6 +13,7 @@ export const environment = {
     projectId: 'lulafinds-app',
     storageBucket: '',
     messagingSenderId: '359295927708',
+    // Copy the real Firebase Web App ID from Project settings → General → Your apps.
     appId: '',
     measurementId: ''
   },

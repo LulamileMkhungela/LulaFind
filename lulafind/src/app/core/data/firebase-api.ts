@@ -3,9 +3,10 @@ import {
   ChatMessage, ChatThread, Comment, FeedFilter, FollowEdge, MediaItem, Notification, Post, Spotlight, Story, StoryReply, StoryView, Tip, UserProfile
 } from '../models/types';
 import { LulaApi } from './api';
+import { getFirebaseApp } from './firebase-app';
 
 /*
- * Cloud Firestore + Firebase Auth implementation.
+ * Cloud Firestore data adapter (separate from the Firebase Google Auth flow).
  *
  * The firebase SDK is imported lazily (dynamic import) so the JS bundle stays
  * small and the app keeps working with zero config in mock mode.
@@ -42,11 +43,11 @@ export class FirebaseApi implements LulaApi {
   }
 
   async init(): Promise<void> {
-    const [{ initializeApp }, firestore] = await Promise.all([
-      import('firebase/app'),
+    const [app, firestore] = await Promise.all([
+      getFirebaseApp(this.config as any),
       import('firebase/firestore')
     ]);
-    this.app = initializeApp(this.config as any);
+    this.app = app;
     this.fs = firestore;
     this.q = firestore;
     this.listen();

@@ -1,12 +1,13 @@
 import { Component } from '@angular/core';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
-import { describe, expect, it, beforeEach } from 'vitest';
+import { describe, expect, it, beforeEach, vi } from 'vitest';
 import { provideRouter } from '@angular/router';
 import { provideIonicAngular } from '@ionic/angular';
 
 import { LocalDb } from './data/local-db';
 import { LULA_API, MockApi } from './data/api';
 import { AuthService } from './services/auth.service';
+import { FirebaseGoogleAuthService } from './services/firebase-google-auth.service';
 import { DataService } from './services/data.service';
 import { emptyFilter } from './models/types';
 import { FilterBarComponent } from '../shared/components/filter-bar.component';
@@ -567,47 +568,39 @@ describe('Email and Google sign-in', () => {
     expect(signedIn.email).toBe('nomvula@example.co.za');
   });
 
-  it('uses the Supabase Google redirect and restores the account from its OAuth callback', async () => {
-    let callback: ((event: string, session: any) => void) | undefined;
-    let oauthOptions: any;
+  it('passes the Firebase Google ID token to Supabase without starting Supabase Google OAuth', async () => {
+    let passedToken = '';
+    let oauthRedirectStarted = false;
+    const demo = (await TestBed.inject(LULA_API).user('u_demo'))!;
     const authClient = {
-      onAuthStateChange: (fn: (event: string, session: any) => void) => {
-        callback = fn;
-        return { data: { subscription: { unsubscribe: () => undefined } } };
-      },
+      onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => undefined } } }),
       getSession: async () => ({ data: { session: null }, error: null }),
-      signInWithOAuth: async (options: any) => {
-        oauthOptions = options;
-        return { data: { provider: 'google', url: 'https://accounts.google.com/' }, error: null };
+      signInWithIdToken: async (options: { provider: string; token: string }) => {
+        passedToken = options.token;
+        return {
+          data: { user: { id: demo.id, email: demo.email, user_metadata: {} }, session: {} },
+          error: null
+        };
+      },
+      signInWithOAuth: async () => {
+        oauthRedirectStarted = true;
+        return { data: {}, error: null };
       }
     };
     const api = TestBed.inject(LULA_API) as MockApi & { client?: { auth: typeof authClient } };
     api.client = { auth: authClient };
+    vi.spyOn(TestBed.inject(FirebaseGoogleAuthService), 'signInWithGoogle').mockResolvedValue({
+      idToken: 'google-issued-id-token', email: demo.email, displayName: demo.displayName
+    });
+
     const auth = TestBed.inject(AuthService);
     auth.attachApi(api);
+    const profile = await auth.signInWithProvider('google');
 
-    await expect(auth.signInWithProvider('google')).rejects.toThrow('OAUTH_REDIRECT');
-    expect(oauthOptions.provider).toBe('google');
-    expect(oauthOptions.options.redirectTo).toBe(`${window.location.origin}/auth`);
-
-    const demo = (await api.user('u_demo'))!;
-    callback?.('SIGNED_IN', { user: { id: demo.id, email: demo.email, user_metadata: {} } });
-    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(passedToken).toBe('google-issued-id-token');
+    expect(oauthRedirectStarted).toBe(false);
+    expect(profile.id).toBe('u_demo');
     expect(auth.user()?.id).toBe('u_demo');
-
-    callback?.('SIGNED_IN', {
-      user: {
-        id: '00000000-0000-4000-8000-000000000199',
-        email: 'oauth.new@example.com',
-        user_metadata: { full_name: 'New OAuth Member' },
-        app_metadata: { provider: 'google' }
-      }
-    });
-    await new Promise((resolve) => setTimeout(resolve, 10));
-    expect(auth.user()).toBe(null);
-    expect(auth.pendingProvider()).toMatchObject({
-      provider: 'google', email: 'oauth.new@example.com', displayName: 'New OAuth Member'
-    });
   });
 
   it('Google: a brand new email is handed to the sign-up form, not auto-created', async () => {

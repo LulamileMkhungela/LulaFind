@@ -8,7 +8,7 @@ import { LocalDb } from './local-db';
 /**
  * Data-source contract. Two implementations ship with the app:
  *  - MockApi  : bundled seed data + localStorage (default, works fully offline)
- *  - FirebaseApi : Cloud Firestore + Firebase Auth (set environment.dataMode = 'firebase')
+ *  - FirebaseApi : Cloud Firestore data adapter (set environment.dataMode = 'firebase')
  *
  * Everything above this line is UI code and never knows which one is active.
  */

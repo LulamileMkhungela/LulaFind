@@ -1,3 +1,4 @@
+/// <reference types="@capacitor-firebase/authentication" />
 import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
@@ -14,7 +15,24 @@ const config: CapacitorConfig = {
     contentInset: 'never',
     scrollEnabled: true
   },
+  experimental: {
+    ios: {
+      spm: {
+        swiftToolsVersion: '6.1',
+        packageOptions: {
+          '@capacitor-firebase/authentication': { symlink: true }
+        },
+        packageTraits: {
+          '@capacitor-firebase/authentication': ['Google']
+        }
+      }
+    }
+  },
   plugins: {
+    FirebaseAuthentication: {
+      providers: ['google.com'],
+      skipNativeAuth: false
+    },
     SplashScreen: {
       launchShowDuration: 1200,
       launchAutoHide: true,
