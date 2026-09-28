@@ -1,12 +1,9 @@
-// Create a throwaway Firebase user with the public web key, then see how the
-// live database treats that token versus no token. Deletes the user after.
+// Compare the exact upsert the app sends with a plain insert, using a real
+// Firebase token. Deletes the throwaway user and any rows it managed to write.
 const apiKey = 'AIzaSyAn_rXPhvO0MZvpFhkycbIqM-qkv4rHPi8';
 const supabase = 'https://srwdtguxdjsjlkaydhet.supabase.co';
 const publishable = 'sb_publishable_bs3aTBGzkc3N6kpAH0oZGg_-i4v5AT3';
-
 const stamp = Date.now();
-const email = `lulaprobe${stamp}@example.com`;
-const password = `Probe-${stamp}-Aa1`;
 
 async function identity(path, body) {
   const res = await fetch(`https://identitytoolkit.googleapis.com/v1/${path}?key=${apiKey}`, {
@@ -14,73 +11,91 @@ async function identity(path, body) {
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(body)
   });
-  const json = await res.json().catch(() => ({}));
-  return { status: res.status, json };
+  return res.json();
 }
 
-function claimsOf(token) {
-  try {
-    const json = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString());
-    return {
-      iss: json.iss, aud: json.aud, sub: json.sub,
-      email_verified: json.email_verified, role: json.role ?? null,
-      provider: json.firebase?.sign_in_provider ?? null
-    };
-  } catch (e) {
-    return { parse: String(e) };
-  }
-}
-
-async function supa(label, token, path, init = {}) {
-  const headers = {
-    apikey: publishable,
-    'content-type': 'application/json',
-    ...(init.headers || {})
-  };
-  if (token) headers.Authorization = `Bearer ${token}`;
-  const res = await fetch(`${supabase}${path}`, { ...init, headers });
-  const text = await res.text();
-  console.log(label, res.status, text.slice(0, 280));
-}
-
-const signed = await identity('accounts:signUp', { email, password, returnSecureToken: true });
-console.log('signup', signed.status, signed.json.error?.message || 'ok', 'localId', signed.json.localId || null);
-const token = signed.json.idToken;
+const signed = await identity('accounts:signUp', {
+  email: `lulaprobe${stamp}@example.com`,
+  password: `Probe-${stamp}-Aa1`,
+  returnSecureToken: true
+});
+const token = signed.idToken;
+const uid = signed.localId;
+console.log('signup', signed.error?.message || uid);
 if (!token) process.exit(0);
-console.log('claims', claimsOf(token));
 
-await supa('uid-firebase', token, '/rest/v1/rpc/lula_uid', { method: 'POST', body: '{}' });
-await supa('uid-none', '', '/rest/v1/rpc/lula_uid', { method: 'POST', body: '{}' });
-await supa('uid-garbage', 'not.a.jwt', '/rest/v1/rpc/lula_uid', { method: 'POST', body: '{}' });
+async function supa(label, path, init = {}) {
+  const res = await fetch(`${supabase}${path}`, {
+    ...init,
+    headers: {
+      apikey: publishable,
+      Authorization: `Bearer ${token}`,
+      'content-type': 'application/json',
+      ...(init.headers || {})
+    }
+  });
+  const text = await res.text();
+  console.log(label, res.status, text.slice(0, 320) || '(empty)');
+  return res.status;
+}
 
-const uid = signed.json.localId;
-const story = {
-  id: `s_probe_${stamp}`,
-  collection: 'stories',
+function story(id) {
+  return {
+    id,
+    collection: 'stories',
+    owner_id: uid,
+    payload: {
+      id, authorId: uid, createdAt: stamp, expiresAt: stamp + 86400000,
+      media: [], text: 'test', bgHue: 168, viewers: [], replies: [],
+      audience: 'public', spotlightId: null
+    },
+    updated_at: stamp
+  };
+}
+
+await supa('upsert-rep', '/rest/v1/records?on_conflict=collection,id', {
+  method: 'POST',
+  headers: { Prefer: 'resolution=merge-duplicates,return=representation' },
+  body: JSON.stringify(story(`s_up_${stamp}`))
+});
+await supa('upsert-min', '/rest/v1/records?on_conflict=collection,id', {
+  method: 'POST',
+  headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+  body: JSON.stringify(story(`s_min_${stamp}`))
+});
+await supa('insert-rep', '/rest/v1/records', {
+  method: 'POST',
+  headers: { Prefer: 'return=representation' },
+  body: JSON.stringify(story(`s_ir_${stamp}`))
+});
+
+// Mismatch: token uid vs a different owner. This is what a missing token looks
+// like only if the policy requires a match — here the token is present.
+await supa('mismatch', '/rest/v1/records', {
+  method: 'POST',
+  headers: { Prefer: 'return=minimal' },
+  body: JSON.stringify({ ...story(`s_mm_${stamp}`), owner_id: 'GJQBXZSjHYPp2UmGtdEOC23Vgl32', payload: { ...story(`s_mm_${stamp}`).payload, authorId: 'GJQBXZSjHYPp2UmGtdEOC23Vgl32' } })
+});
+
+const post = {
+  id: `p_${stamp}`,
+  collection: 'posts',
   owner_id: uid,
   payload: {
-    id: `s_probe_${stamp}`, authorId: uid, createdAt: stamp, expiresAt: stamp + 86400000,
-    audience: 'public', text: 'probe', media: [], replies: [], viewers: [], spotlightId: null, bgHue: 1
+    id: `p_${stamp}`, authorId: uid, type: 'general', title: 'test', body: 'test',
+    province: 'KZN', town: '', media: [], createdAt: stamp, updatedAt: stamp,
+    status: 'active', audience: 'public', spotlightId: null, upvotes: 0, downvotes: 0,
+    commentCount: 0, shares: 0, lookingCount: 0
   },
   updated_at: stamp
 };
-await supa('story-firebase', token, '/rest/v1/records', {
-  method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(story)
-});
-const spot = {
-  id: `sp_probe_${stamp}`,
-  collection: 'spotlights',
-  owner_id: uid,
-  payload: {
-    id: `sp_probe_${stamp}`, ownerId: uid, surname: 'probe', tagline: '', about: '',
-    adminIds: [uid], memberIds: [uid], postIds: [], coverHue: 1, province: 'KZN',
-    verified: false, createdAt: stamp, followers: 1
-  },
-  updated_at: stamp
-};
-await supa('spot-firebase', token, '/rest/v1/records', {
-  method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(spot)
+await supa('post-upsert', '/rest/v1/records?on_conflict=collection,id', {
+  method: 'POST',
+  headers: { Prefer: 'resolution=merge-duplicates,return=representation' },
+  body: JSON.stringify(post)
 });
 
-const gone = await identity('accounts:delete', { idToken: token });
-console.log('deleted', gone.status, gone.json.error?.message || 'ok');
+for (const id of [`s_up_${stamp}`, `s_min_${stamp}`, `s_ir_${stamp}`, `s_mm_${stamp}`, `p_${stamp}`]) {
+  await supa('del ' + id, `/rest/v1/records?id=eq.${id}`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } });
+}
+console.log('deleted-user', (await identity('accounts:delete', { idToken: token })).error?.message || 'ok');
