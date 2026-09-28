@@ -1,5 +1,3 @@
-// Compare the exact upsert the app sends with a plain insert, using a real
-// Firebase token. Deletes the throwaway user and any rows it managed to write.
 const apiKey = 'AIzaSyAn_rXPhvO0MZvpFhkycbIqM-qkv4rHPi8';
 const supabase = 'https://srwdtguxdjsjlkaydhet.supabase.co';
 const publishable = 'sb_publishable_bs3aTBGzkc3N6kpAH0oZGg_-i4v5AT3';
@@ -11,7 +9,8 @@ async function identity(path, body) {
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(body)
   });
-  return res.json();
+  const json = await res.json();
+  return { status: res.status, json };
 }
 
 const signed = await identity('accounts:signUp', {
@@ -19,83 +18,43 @@ const signed = await identity('accounts:signUp', {
   password: `Probe-${stamp}-Aa1`,
   returnSecureToken: true
 });
-const token = signed.idToken;
-const uid = signed.localId;
-console.log('signup', signed.error?.message || uid);
-if (!token) process.exit(0);
+const token = signed.json.idToken || '';
+const uid = signed.json.localId || null;
+console.log('signup', signed.status, signed.json.error?.message || uid, 'tokenLen', token.length);
 
-async function supa(label, path, init = {}) {
-  const res = await fetch(`${supabase}${path}`, {
-    ...init,
-    headers: {
-      apikey: publishable,
-      Authorization: `Bearer ${token}`,
-      'content-type': 'application/json',
-      ...(init.headers || {})
-    }
-  });
-  const text = await res.text();
-  console.log(label, res.status, text.slice(0, 320) || '(empty)');
-  return res.status;
-}
-
-function story(id) {
-  return {
-    id,
-    collection: 'stories',
-    owner_id: uid,
-    payload: {
-      id, authorId: uid, createdAt: stamp, expiresAt: stamp + 86400000,
-      media: [], text: 'test', bgHue: 168, viewers: [], replies: [],
-      audience: 'public', spotlightId: null
-    },
-    updated_at: stamp
+async function supa(label, bearer, path, init = {}) {
+  const headers = {
+    apikey: publishable,
+    'content-type': 'application/json',
+    ...(init.headers || {})
   };
+  if (bearer) headers.Authorization = `Bearer ${bearer}`;
+  const res = await fetch(`${supabase}${path}`, { ...init, headers });
+  const text = await res.text();
+  console.log(label, res.status, 'authLen', (headers.Authorization || '').length, text.slice(0, 240) || '(empty)');
 }
 
-await supa('upsert-rep', '/rest/v1/records?on_conflict=collection,id', {
-  method: 'POST',
-  headers: { Prefer: 'resolution=merge-duplicates,return=representation' },
-  body: JSON.stringify(story(`s_up_${stamp}`))
-});
-await supa('upsert-min', '/rest/v1/records?on_conflict=collection,id', {
-  method: 'POST',
-  headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
-  body: JSON.stringify(story(`s_min_${stamp}`))
-});
-await supa('insert-rep', '/rest/v1/records', {
-  method: 'POST',
-  headers: { Prefer: 'return=representation' },
-  body: JSON.stringify(story(`s_ir_${stamp}`))
-});
+await supa('uid', token, '/rest/v1/rpc/lula_uid', { method: 'POST', body: '{}' });
 
-// Mismatch: token uid vs a different owner. This is what a missing token looks
-// like only if the policy requires a match — here the token is present.
-await supa('mismatch', '/rest/v1/records', {
-  method: 'POST',
-  headers: { Prefer: 'return=minimal' },
-  body: JSON.stringify({ ...story(`s_mm_${stamp}`), owner_id: 'GJQBXZSjHYPp2UmGtdEOC23Vgl32', payload: { ...story(`s_mm_${stamp}`).payload, authorId: 'GJQBXZSjHYPp2UmGtdEOC23Vgl32' } })
-});
-
-const post = {
-  id: `p_${stamp}`,
-  collection: 'posts',
+const story = {
+  id: `s_probe_${stamp}`,
+  collection: 'stories',
   owner_id: uid,
   payload: {
-    id: `p_${stamp}`, authorId: uid, type: 'general', title: 'test', body: 'test',
-    province: 'KZN', town: '', media: [], createdAt: stamp, updatedAt: stamp,
-    status: 'active', audience: 'public', spotlightId: null, upvotes: 0, downvotes: 0,
-    commentCount: 0, shares: 0, lookingCount: 0
+    id: `s_probe_${stamp}`, authorId: uid, createdAt: stamp, expiresAt: stamp + 86400000,
+    audience: 'public', text: 'probe', media: [], replies: [], viewers: [], spotlightId: null, bgHue: 1
   },
   updated_at: stamp
 };
-await supa('post-upsert', '/rest/v1/records?on_conflict=collection,id', {
-  method: 'POST',
-  headers: { Prefer: 'resolution=merge-duplicates,return=representation' },
-  body: JSON.stringify(post)
+await supa('story', token, '/rest/v1/records', {
+  method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(story)
+});
+await supa('story-again', token, '/rest/v1/records', {
+  method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ ...story, id: `s_probeb_${stamp}`, payload: { ...story.payload, id: `s_probeb_${stamp}` } })
 });
 
-for (const id of [`s_up_${stamp}`, `s_min_${stamp}`, `s_ir_${stamp}`, `s_mm_${stamp}`, `p_${stamp}`]) {
-  await supa('del ' + id, `/rest/v1/records?id=eq.${id}`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } });
+// Clean the earlier probe rows if this caller is allowed to. Harmless if not.
+for (const id of ['s_probe_1790621681403', 'sp_probe_1790621681403', `s_probe_${stamp}`, `s_probeb_${stamp}`]) {
+  await supa('del ' + id, token, `/rest/v1/records?id=eq.${id}`, { method: 'DELETE', headers: { Prefer: 'return=representation' } });
 }
-console.log('deleted-user', (await identity('accounts:delete', { idToken: token })).error?.message || 'ok');
+if (token) console.log('deleted-user', (await identity('accounts:delete', { idToken: token })).json.error?.message || 'ok');
