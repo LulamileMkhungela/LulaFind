@@ -15,7 +15,7 @@
 create or replace function public.lula_post_interact(post_id text, next jsonb)
 returns jsonb language plpgsql security definer set search_path = pg_catalog as $$
 declare
-  me text := (select auth.uid()::text);
+  me text := (select public.lula_uid());
   cur jsonb;
   k text;
   allowed text[] := array[
@@ -181,7 +181,7 @@ $$;
 create or replace function public.lula_link_spotlight_post(spotlight_id text, post_id text, linking boolean)
 returns jsonb language plpgsql security definer set search_path = pg_catalog as $$
 declare
-  me text := (select auth.uid()::text);
+  me text := (select public.lula_uid());
   sp jsonb;
   ids jsonb;
 begin
@@ -223,5 +223,5 @@ $$;
 
 revoke all on function public.lula_post_interact(text, jsonb) from public;
 revoke all on function public.lula_link_spotlight_post(text, text, boolean) from public;
-grant execute on function public.lula_post_interact(text, jsonb) to authenticated;
-grant execute on function public.lula_link_spotlight_post(text, text, boolean) to authenticated;
+grant execute on function public.lula_post_interact(text, jsonb) to anon, authenticated;
+grant execute on function public.lula_link_spotlight_post(text, text, boolean) to anon, authenticated;

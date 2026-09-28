@@ -37,7 +37,8 @@ interface StoredAccount {
 /**
  * Auth + session.
  *
- * Live Supabase mode uses Supabase Auth for email/password, recovery and Google OAuth.
+ * Live mode: Firebase Auth for email/password, verification, recovery and
+ * Google; Supabase holds the data and trusts the Firebase ID token.
  * Mock mode keeps local hashed demo credentials so the journeys can be tested offline.
  *
  * Deliberately NO phone-number sign-up, per product decision.
@@ -72,9 +73,19 @@ export class AuthService {
     return this.injectedApi;
   }
 
-  /** The production adapter exposes its Supabase auth client; mock mode does not. */
+  /**
+   * The account provider. Live mode: Firebase Auth (through a bridge that
+   * speaks the supabase-js auth calls used below). Mock mode: none.
+   */
   private get supabaseAuth(): any | null {
-    return (this.api as LulaApi & { client?: { auth?: any } }).client?.auth ?? null;
+    const api = this.api as LulaApi & { authBridge?: any; client?: { auth?: any } };
+    if (api.authBridge) return api.authBridge;
+    return api.client?.auth ?? null;
+  }
+
+  /** True when Firebase Auth is the account provider. */
+  get usesFirebaseAuth(): boolean {
+    return !!(this.api as LulaApi & { authBridge?: unknown }).authBridge;
   }
 
   private redirectUrl(path = '/auth'): string {
@@ -86,7 +97,8 @@ export class AuthService {
     if (typeof window === 'undefined') return false;
     const query = new URLSearchParams(window.location.search);
     const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''));
-    return query.get('mode') === 'newpass' || query.get('type') === 'recovery' || hash.get('type') === 'recovery';
+    return query.get('mode') === 'newpass' || query.get('mode') === 'resetPassword'
+      || query.get('type') === 'recovery' || hash.get('type') === 'recovery';
   }
 
   private restored = false;
@@ -469,7 +481,13 @@ export class AuthService {
       if (error) throw error;
       if (!data.user) throw new Error('Sign-in did not return an account. Try again.');
       const storedProfile = await this.api.user(data.user.id);
-      if (!storedProfile) throw new Error('Your account needs profile setup. Contact support if you already completed it.');
+      if (!storedProfile) {
+        // First sign-in after confirming the email: build the profile from the sign-up details.
+        await this.resolveSupabaseUser(data.user);
+        const created = this.user();
+        if (created) { this.passwordRecovery.set(false); return created; }
+        throw new Error('NEW_ACCOUNT');
+      }
       const profile = this.withTrustedSupabaseRole(storedProfile, data.user);
       this.store.set('session', profile.id);
       this.user.set(profile);
@@ -499,6 +517,16 @@ export class AuthService {
   /** Start the real OAuth redirect when Supabase is configured. */
   async signInWithProvider(provider: AuthProvider): Promise<UserProfile> {
     const supa = this.supabaseAuth;
+    if (supa && supa.redirects === false) {
+      // Firebase: native Google sheet or a web popup - the account comes straight back.
+      const { data, error } = await supa.signInWithOAuth({ provider });
+      if (error) throw error;
+      await this.resolveSupabaseUser(data.user);
+      const u = this.user();
+      if (u) return u;
+      if (this.pendingProvider()) throw new Error('NEW_ACCOUNT');
+      throw new Error('That sign-in did not complete.');
+    }
     if (supa) {
       const { error } = await supa.signInWithOAuth({
         provider,

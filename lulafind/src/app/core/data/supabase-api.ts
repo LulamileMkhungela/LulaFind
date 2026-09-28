@@ -1,5 +1,6 @@
 import { Observable, Subject } from 'rxjs';
 import { createClient, SupabaseClient, RealtimeChannel } from '@supabase/supabase-js';
+import { FirebaseAuthBridge, firebaseAuthConfigured } from './firebase-auth';
 import { LulaApi } from './api';
 import { SUPABASE_URL, SUPABASE_KEY, supabaseNotice } from './supabase-client';
 import { LocalDb } from './local-db';
@@ -22,14 +23,27 @@ export class SupabaseApi implements LulaApi {
   private channel: RealtimeChannel | null = null;
   private tick = 0;
 
+  /**
+   * Firebase Auth owns accounts. Supabase is told who is calling by the
+   * Firebase ID token (Third-Party Auth), so supabase.auth is not used.
+   */
+  readonly authBridge: FirebaseAuthBridge | null;
+
   constructor() {
-    this.client = createClient(SUPABASE_URL, SUPABASE_KEY, {
-      auth: {
-        persistSession: true,
-        autoRefreshToken: true,
-        detectSessionInUrl: true
-      }
-    });
+    this.authBridge = firebaseAuthConfigured() ? new FirebaseAuthBridge() : null;
+    const bridge = this.authBridge;
+    this.client = bridge
+      ? createClient(SUPABASE_URL, SUPABASE_KEY, { accessToken: () => bridge.idToken() })
+      : createClient(SUPABASE_URL, SUPABASE_KEY, {
+          auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
+        });
+  }
+
+  /** Who is calling - the Firebase UID when Firebase Auth is on. */
+  private async currentUid(): Promise<string | null> {
+    if (this.authBridge) return this.authBridge.uid();
+    const { data } = await this.client.auth.getSession();
+    return data.session?.user?.id ?? null;
   }
 
   async init(): Promise<void> {
@@ -201,8 +215,7 @@ export class SupabaseApi implements LulaApi {
 
   async user(id: string): Promise<UserProfile | undefined> {
     try {
-      const { data: sessionData } = await this.client.auth.getUser();
-      if (sessionData.user?.id === id) return this.getOne<UserProfile>('users', id);
+      if ((await this.currentUid()) === id) return this.getOne<UserProfile>('users', id);
       const { data, error } = await this.client
         .from('lula_user_profiles_public')
         .select('payload')
@@ -319,8 +332,7 @@ export class SupabaseApi implements LulaApi {
    * narrow changes - see supabase/post-interactions.sql.
    */
   async savePost(p: Post): Promise<void> {
-    const { data } = await this.client.auth.getSession();
-    const me = data.session?.user?.id ?? null;
+    const me = await this.currentUid();
     if (!me || me === p.authorId) {
       await this.upsert('posts', p, p.authorId);
       return;
@@ -381,9 +393,7 @@ export class SupabaseApi implements LulaApi {
   }
 
   async setSpotlightMembership(id: string, memberId: string, joining: boolean): Promise<Spotlight | undefined> {
-    const { data: authData, error: authError } = await this.client.auth.getUser();
-    if (authError) throw new Error(`Could not verify your account: ${authError.message}`);
-    if (!authData.user || authData.user.id !== memberId) throw new Error('Sign in to change your Spotlight membership');
+    if ((await this.currentUid()) !== memberId) throw new Error('Sign in to change your Spotlight membership');
     const { data, error } = await this.client.rpc('lula_set_spotlight_membership', {
       spotlight_id: id,
       joining
@@ -473,9 +483,9 @@ export class SupabaseApi implements LulaApi {
 
   async saveMessage(m: ChatMessage): Promise<void> {
     // System bubbles are still written by a signed-in participant. The sender
-    // label is deliberately `system` in the payload, but `owner_id` is a UUID.
+    // label is deliberately `system` in the payload; `owner_id` is the caller's UID.
     const ownerId = m.fromUserId === 'system'
-      ? (await this.client.auth.getUser()).data.user?.id
+      ? await this.currentUid()
       : m.fromUserId;
     await this.upsert('messages', m, ownerId ?? undefined);
   }
@@ -558,8 +568,7 @@ export class SupabaseApi implements LulaApi {
   }
 
   async pushNotification(n: Notification): Promise<void> {
-    const { data } = await this.client.auth.getUser();
-    await this.upsert('notifications', n, data.user?.id ?? n.userId);
+    await this.upsert('notifications', n, (await this.currentUid()) ?? n.userId);
   }
 
   async markNotificationsRead(userId: string): Promise<void> {

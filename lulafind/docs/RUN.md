@@ -121,7 +121,7 @@ The app runs on its own without touching these. Saving a new account, post, foll
 
    Add the exact Arena preview origin as well if your Supabase project rejects wildcard preview URLs. In **Authentication → Providers → Google**, enable Google and add the Supabase callback URL shown on that page to the Google OAuth client's authorised redirect URIs. Google opens its own account-consent screen, then returns to LulaFind at `/auth`; it does not send the user to Gmail.
 
-3. The base `records` table SQL has already been run. Do not rerun the old `editor.sql` or the historical `wire-fix.sql`; their broad update/read policies have been removed from the current scripts. Run `supabase/story-privacy.sql` on the existing project to migrate embedded story replies/viewers, scrub those projections from story rows, and replace the known RLS policies. It is safe to re-run if the SQL editor reports an interrupted migration.
+3. Run `supabase/schema.sql`, then `supabase/post-interactions.sql` (both safe to re-run; they switch RLS to Firebase UIDs). Do not run anything in `supabase/legacy/`. Turn on Supabase → Authentication → Third-Party Auth → Firebase (`lulafinds-app`) first — see `docs/SETUP.md`.
 
 The publishable (anon) key is already in `src/environments/environment.ts`. Do not put the service-role secret, the database password, or any Firebase Admin key in the app source.
 

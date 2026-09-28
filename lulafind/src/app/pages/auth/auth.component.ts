@@ -740,6 +740,15 @@ export class AuthComponent implements OnInit {
       await this.auth.signIn(this.f.email, this.f.password);
       await this.afterAuth();
     } catch (e: any) {
+      if (e?.message === 'NEW_ACCOUNT') {
+        // Verified, but the sign-up details were entered on another device: finish them here.
+        const pending = this.auth.pendingProvider();
+        if (pending) { this.f.email = pending.email; this.f.displayName = pending.displayName; }
+        this.notice.set('Email confirmed. Add a few details to finish your account.');
+        this.mode.set('signup');
+        this.signupStep.set(1);
+        return;
+      }
       this.error.set(e?.message ?? 'Could not log in');
     } finally {
       this.busy.set(false);

@@ -23,7 +23,9 @@ const config: CapacitorConfig = {
       showSpinner: false
     },
     Keyboard: { resize: 'ionic', resizeOnFullScreen: true },
-    PushNotifications: { presentationOptions: ['badge', 'sound', 'alert'] }
+    PushNotifications: { presentationOptions: ['badge', 'sound', 'alert'] },
+    // Native Google sheet; the Firebase JS SDK then holds the session (skipNativeAuth).
+    FirebaseAuthentication: { skipNativeAuth: true, providers: ['google.com'] }
   }
 };
 

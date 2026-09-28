@@ -23,7 +23,7 @@ browser before you open Android Studio or Xcode.
 | UI | **Ionic 9 + Angular 22** (standalone components, signals, zoneless change detection) | Native-feel mobile components, fastest render path Angular has, one codebase for both stores |
 | Native shell | **Capacitor 8** | Real Android + iOS builds, first-class plugin access, targets Android 16 (API 36) as Play now requires |
 | Data | **Supabase** `records` table for posts, chat, follows, stories, and profiles | Firebase is only the three account emails. No Firestore. |
-| Auth | Email through Firebase templates. Google through Supabase. | No phone. No Apple. |
+| Auth | Firebase Auth: email + password (verified) and Google. Data in Supabase. | No phone. No Apple. |
 | Tests | **Vitest** | Run `npm test` on Node 22. A passing test is not a phone test. |
 | Icons | Inline SVG registry | No icon font, no network request, identical on web/Android/iOS |
 
@@ -193,6 +193,9 @@ they do not want to come home · free support lines · what makes a poster work 
 share widely but never a home address.
 
 ### Auth — email first, no phone number
+Accounts are **Firebase Auth**; everything else is **Supabase**, which trusts the
+Firebase ID token (Third-Party Auth). Setup steps: [`docs/SETUP.md`](docs/SETUP.md).
+
 A modern sign-in / sign-up screen. **Email is the default.** Google, Apple and the
 demo account follow the same flow. There is no phone-number sign-up and no LinkedIn.
 
