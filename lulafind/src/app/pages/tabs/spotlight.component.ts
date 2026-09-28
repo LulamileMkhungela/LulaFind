@@ -33,7 +33,7 @@ const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
     IonSelectOption, IonItem, IonLabel, IonSearchbar, RouterLink, IconComponent, EmptyComponent
   ],
   template: `
-    <lf-top-nav title="Spotlight" backTo="/home" />
+    <lf-top-nav />
 
     <ion-content class="lf-page">
       <h1 class="page-title">Spotlight</h1>

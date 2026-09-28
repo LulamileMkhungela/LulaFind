@@ -129,8 +129,11 @@ interface MissingField { key: string; label: string; }
           </div>
         } @else {
           <section class="post-fields" aria-label="Post content">
-            <input class="heading-input" type="text" maxlength="120" placeholder="Add a short heading (optional)"
-                   [value]="f().title" (input)="patch({ title: $any($event.target).value })" />
+            <label class="field full heading-field">
+              <span>Short heading <small>(optional)</small></span>
+              <input class="heading-input" type="text" maxlength="120" placeholder="Type a short heading"
+                     [value]="f().title" (input)="patch({ title: $any($event.target).value })" />
+            </label>
             <textarea class="body-input" rows="5" maxlength="5000" data-field="body" [placeholder]="bodyPlaceholder()"
                       [value]="f().body" (input)="patch({ body: $any($event.target).value })"></textarea>
             @if (fieldError('body')) { <p class="field-error">{{ fieldError('body') }}</p> }
@@ -309,10 +312,8 @@ interface MissingField { key: string; label: string; }
     .start-hint p { margin: 0; font-size: 15px; }
     .hint-icon { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 50%; background: var(--lf-primary-soft); color: var(--lf-primary-soft-text); }
     .post-fields { display: flex; flex-direction: column; gap: 11px; padding-top: 13px; }
-    .heading-input, .body-input { width: 100%; box-sizing: border-box; border: 0; background: transparent; color: var(--fb-text); font: inherit; outline: 0; resize: vertical; }
-    .heading-input { min-height: 36px; font-size: 16px; font-weight: 600; }
-    .heading-input::placeholder { color: var(--lf-muted); font-weight: 500; }
-    .body-input { min-height: 112px; padding: 8px 0; font-size: 15px; line-height: 1.5; }
+    .body-input { width: 100%; box-sizing: border-box; min-height: 112px; padding: 8px 0; border: 0;
+      background: transparent; color: var(--fb-text); font: inherit; font-size: 15px; line-height: 1.5; outline: 0; resize: vertical; }
     .body-input::placeholder { color: var(--lf-muted); }
     .location-grid, .fields-two { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
     .field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
@@ -323,6 +324,9 @@ interface MissingField { key: string; label: string; }
     .field input, .field select, .field textarea { width: 100%; min-height: 38px; box-sizing: border-box; padding: 8px 10px; border: 1px solid var(--fb-line); border-radius: 6px; background: var(--lf-card); color: var(--fb-text); font: inherit; font-size: 15px; outline: none; transition: border-color .16s ease, box-shadow .16s ease; }
     .field textarea { resize: vertical; min-height: 58px; }
     .field input:focus, .field select:focus, .field textarea:focus { border-color: var(--lf-primary); box-shadow: 0 0 0 2px rgba(var(--lf-primary-rgb), .18); }
+    .heading-field .heading-input { min-height: 46px; padding: 10px 12px; font-size: 16px; font-weight: 600; }
+    .heading-field .heading-input::placeholder { color: var(--lf-muted); font-weight: 500; opacity: 1; }
+    .heading-field .heading-input:focus-visible { border-color: var(--lf-primary); box-shadow: 0 0 0 2px rgba(var(--lf-primary-rgb), .18); }
     .media-preview { display: flex; flex-wrap: wrap; gap: 7px; }
     .media-tile { position: relative; width: 84px; height: 84px; border-radius: 8px; overflow: hidden; background: var(--fb-soft); }
     .media-tile img, .media-tile video { width: 100%; height: 100%; object-fit: cover; }

@@ -13,6 +13,7 @@ import { FilterBarComponent } from '../shared/components/filter-bar.component';
 import { PostCardComponent } from '../shared/components/post-card.component';
 import { AuthComponent } from '../pages/auth/auth.component';
 import { SpotlightComponent } from '../pages/tabs/spotlight.component';
+import { MeComponent } from '../pages/tabs/me.component';
 import { CreatePostComponent } from '../pages/post/create-post.component';
 import { CreateStoryComponent } from '../pages/story/create-story.component';
 import { ProfileComponent } from '../pages/user/profile.component';
@@ -202,6 +203,33 @@ describe('Components render', () => {
     expect(html).toContain('What are you posting?');
     expect(html).toContain('Missing person');
     expect(f.componentInstance.mySpotlights().map((s: any) => s.surname)).toEqual(['Mokoena']);
+
+    f.componentInstance.type.set('missing');
+    f.detectChanges();
+    const composerHtml: string = (f.nativeElement as HTMLElement).innerHTML;
+    expect(composerHtml).toContain('Short heading');
+    expect(composerHtml).toContain('Type a short heading');
+    expect(composerHtml).toContain('class="heading-input"');
+  });
+
+  it('organizes the Menu into shortcuts, posts, and saved sections', async () => {
+    const auth = TestBed.inject(AuthService);
+    const data = TestBed.inject(DataService);
+    await auth.signInDemo();
+    await data.loadFeed();
+    await data.loadStatic();
+
+    const f = TestBed.createComponent(MeComponent);
+    f.detectChanges();
+    await f.whenStable();
+
+    const el = f.nativeElement as HTMLElement;
+    const tabs = Array.from(el.querySelectorAll('[role="tab"]')).map((tab) => tab.textContent?.trim());
+    expect(tabs).toEqual(['All shortcuts', 'Posts', 'Saved']);
+
+    f.componentInstance.menuTab.set('saved');
+    f.detectChanges();
+    expect((f.nativeElement as HTMLElement).innerHTML).toContain('Saved posts');
   });
 
   it('handles media in the composer', async () => {
