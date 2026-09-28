@@ -10,11 +10,12 @@ export const routes: Routes = [
       { path: 'home', loadComponent: () => import('./pages/tabs/home.component').then((m) => m.HomeComponent) },
       { path: 'spotlight', loadComponent: () => import('./pages/tabs/spotlight.component').then((m) => m.SpotlightComponent) },
       { path: 'create', redirectTo: '/new', pathMatch: 'full' },
-      { path: 'chats', loadComponent: () => import('./pages/tabs/chats.component').then((m) => m.ChatsComponent) },
-      { path: 'notifications', canActivate: [authGuard], loadComponent: () => import('./pages/notifications/notifications.component').then((m) => m.NotificationsComponent) },
-          { path: 'me', loadComponent: () => import('./pages/tabs/me.component').then((m) => m.MeComponent) }
+      { path: 'me', loadComponent: () => import('./pages/tabs/me.component').then((m) => m.MeComponent) }
     ]
   },
+  // Chats and Notifications are reached from the top navigation, not the bottom bar.
+  { path: 'chats', loadComponent: () => import('./pages/tabs/chats.component').then((m) => m.ChatsComponent) },
+  { path: 'notifications', canActivate: [authGuard], loadComponent: () => import('./pages/notifications/notifications.component').then((m) => m.NotificationsComponent) },
   { path: 'auth', loadComponent: () => import('./pages/auth/auth.component').then((m) => m.AuthComponent) },
   { path: 'auth/confirm', loadComponent: () => import('./pages/auth/auth.component').then((m) => m.AuthComponent) },
   {

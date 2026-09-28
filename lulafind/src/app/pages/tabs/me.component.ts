@@ -1,7 +1,6 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import { IonContent } from '@ionic/angular/ion-content';
-import { IonHeader } from '@ionic/angular/ion-header';
 import { IonModal } from '@ionic/angular/ion-modal';
 import { IonInput } from '@ionic/angular/ion-input';
 import { IonTextarea } from '@ionic/angular/ion-textarea';
@@ -13,6 +12,7 @@ import { IonToggle } from '@ionic/angular/ion-toggle';
 import { ToastController } from '@ionic/angular/toast-controller';
 import { AlertController } from '@ionic/angular/alert-controller';
 import { IconComponent } from '../../shared/components/icon.component';
+import { TopNavComponent } from '../../shared/components/top-nav.component';
 import { AvatarComponent } from '../../shared/components/avatar.component';
 import { EmptyComponent } from '../../shared/components/empty.component';
 import { ChatState, PostCardComponent } from '../../shared/components/post-card.component';
@@ -29,21 +29,17 @@ import { MediaService } from '../../core/services/media.service';
   selector: 'lf-me',
   standalone: true,
   imports: [
-    IonContent, IonHeader, IonModal, IonInput, IonTextarea, IonSelect, IonSelectOption, IonItem, IonLabel, IonToggle,
+    IonContent, TopNavComponent, IonModal, IonInput, IonTextarea, IonSelect, IonSelectOption, IonItem, IonLabel, IonToggle,
     RouterLink, IconComponent, AvatarComponent, EmptyComponent, PostCardComponent
   ],
   template: `
-    <ion-header class="fb-head">
-      <div class="fb-head__bar">
-        <h1 class="fb-head__title">Menu</h1>
-        <div class="fb-head__tools">
-          <button class="lf-round-btn" routerLink="/settings" aria-label="Settings"><lf-icon name="settings" [size]="20" /></button>
-          <button class="lf-round-btn" routerLink="/search" aria-label="Search"><lf-icon name="search" [size]="20" [weight]="2.4" /></button>
-        </div>
-      </div>
-    </ion-header>
+    <lf-top-nav title="Menu" backTo="/home" />
 
     <ion-content class="lf-page">
+      <div class="page-title">
+        <h1>Menu</h1>
+        <a class="lf-round-btn" routerLink="/settings" aria-label="Settings"><lf-icon name="settings" [size]="19" /></a>
+      </div>
       @if (!me()) {
         <lf-empty icon="user" title="You are browsing as a guest"
                   message="You can read every public case. Sign in to post, vote, comment and chat."
@@ -71,7 +67,6 @@ import { MediaService } from '../../core/services/media.service';
             <button type="button" (click)="openPeople('followers')"><strong>{{ data.followerIds().length }}</strong><span>followers</span></button>
             <button type="button" (click)="openPeople('following')"><strong>{{ data.followingIds().length }}</strong><span>following</span></button>
             <div><strong>{{ compact(me()!.karma) }}</strong><span>help points</span></div>
-            <div><strong>{{ myPosts().length }}</strong><span>posts</span></div>
           </div>
           @if (people()) {
             <div class="requests">
@@ -478,15 +473,32 @@ export class MeComponent {
       if (this.media.lastError()) this.formError.set(this.media.lastError()!);
       return;
     }
-    const src = await this.media.compress(item.src, 480);
-    await this.auth.updateProfile({ avatarUrl: src });
-    this.data.touchAuthor(this.me()!);
-    await this.toast.create({ message: 'Profile photo saved', duration: 1400, position: 'bottom' }).then((x) => x.present());
+    this.saving.set(true);
+    try {
+      // 360px is plenty for a round avatar and keeps the profile row small.
+      const src = await this.media.compress(item.src, 360);
+      await this.auth.updateProfile({ avatarUrl: src });
+      this.data.touchAuthor(this.me()!);
+      await this.toast.create({ message: 'Profile photo saved', duration: 1400, position: 'bottom' }).then((x) => x.present());
+    } catch (e: any) {
+      // Never claim success when the write did not land.
+      this.formError.set(e?.message ?? 'Could not save the photo. Try a smaller picture.');
+    } finally {
+      this.saving.set(false);
+    }
   }
 
   async removePhoto(): Promise<void> {
-    await this.auth.updateProfile({ avatarUrl: '' });
-    this.data.touchAuthor(this.me()!);
+    this.formError.set('');
+    this.saving.set(true);
+    try {
+      await this.auth.updateProfile({ avatarUrl: '' });
+      this.data.touchAuthor(this.me()!);
+    } catch (e: any) {
+      this.formError.set(e?.message ?? 'Could not remove the photo.');
+    } finally {
+      this.saving.set(false);
+    }
   }
 
   async save(): Promise<void> {
@@ -511,6 +523,8 @@ export class MeComponent {
       this.data.touchAuthor(this.me()!);
       this.editing.set(false);
       void this.loadBadge();
+      // Re-read the row so the screen shows what the database actually holds.
+      void this.data.refreshProfile(this.me()!.id);
       await this.toast.create({ message: 'Profile saved', duration: 1600, position: 'bottom' }).then((t) => t.present());
     } catch (e: any) {
       this.formError.set(e?.message ?? 'Could not save your profile');

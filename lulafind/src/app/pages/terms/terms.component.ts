@@ -2,12 +2,13 @@ import { Component, inject } from '@angular/core';
 import { Location } from '@angular/common';
 import { Router } from '@angular/router';
 import { IonContent } from '@ionic/angular/ion-content';
-import { IonHeader } from '@ionic/angular/ion-header';
-import { IonToolbar } from '@ionic/angular/ion-toolbar';
-import { IonButtons } from '@ionic/angular/ion-buttons';
-import { IonBackButton } from '@ionic/angular/ion-back-button';
-import { IonTitle } from '@ionic/angular/ion-title';
+
+
+
+
+
 import { IconComponent } from '../../shared/components/icon.component';
+import { TopNavComponent } from '../../shared/components/top-nav.component';
 import { environment } from '../../../environments/environment';
 import { SUPPORT_EMAIL, SUPPORT_NAME } from '../../core/config';
 
@@ -19,14 +20,9 @@ import { SUPPORT_EMAIL, SUPPORT_NAME } from '../../core/config';
 @Component({
   selector: 'lf-terms',
   standalone: true,
-  imports: [IonContent, IonHeader, IonToolbar, IonButtons, IonBackButton, IonTitle, IconComponent],
+  imports: [IonContent, IconComponent, TopNavComponent],
   template: `
-    <ion-header translucent="true">
-      <ion-toolbar>
-        <ion-buttons slot="start"><ion-back-button defaultHref="/settings" text=""></ion-back-button></ion-buttons>
-        <ion-title>Terms and privacy</ion-title>
-      </ion-toolbar>
-    </ion-header>
+    <lf-top-nav backTo="/settings" />
 
     <ion-content class="lf-page">
       <div class="wrap">

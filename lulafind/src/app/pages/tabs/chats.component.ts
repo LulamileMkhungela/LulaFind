@@ -1,8 +1,8 @@
 import { Component, computed, inject } from '@angular/core';
 import { Router } from '@angular/router';
 import { IonContent } from '@ionic/angular/ion-content';
-import { IonHeader } from '@ionic/angular/ion-header';
 import { IconComponent } from '../../shared/components/icon.component';
+import { TopNavComponent } from '../../shared/components/top-nav.component';
 import { AvatarComponent } from '../../shared/components/avatar.component';
 import { EmptyComponent } from '../../shared/components/empty.component';
 import { ChatService } from '../../core/services/chat.service';
@@ -13,18 +13,15 @@ import { clockTime, timeAgo } from '../../core/utils/format';
 @Component({
   selector: 'lf-chats',
   standalone: true,
-  imports: [IonContent, IonHeader, IconComponent, AvatarComponent, EmptyComponent],
+  imports: [IonContent, TopNavComponent, IconComponent, AvatarComponent, EmptyComponent],
   template: `
-    <ion-header class="fb-head">
-      <div class="fb-head__bar">
-        <h1 class="fb-head__title">Chats</h1>
-        <div class="fb-head__tools">
-          <button class="lf-round-btn" (click)="goHome()" aria-label="Find a case to help with"><lf-icon name="edit" [size]="19" /></button>
-        </div>
-      </div>
-    </ion-header>
+    <lf-top-nav title="Chats" backTo="/home" />
 
     <ion-content class="lf-page lf-plain">
+      <div class="page-title">
+        <h1>Chats</h1>
+        <button class="lf-round-btn" (click)="goHome()" aria-label="Find a case to help with"><lf-icon name="edit" [size]="19" /></button>
+      </div>
       <div class="gate-note">
         <span class="fb-row__icon"><lf-icon name="lock" [size]="18" /></span>
         <div>

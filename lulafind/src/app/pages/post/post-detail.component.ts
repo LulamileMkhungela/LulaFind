@@ -1,17 +1,18 @@
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { IonContent } from '@ionic/angular/ion-content';
-import { IonHeader } from '@ionic/angular/ion-header';
-import { IonToolbar } from '@ionic/angular/ion-toolbar';
-import { IonButtons } from '@ionic/angular/ion-buttons';
-import { IonBackButton } from '@ionic/angular/ion-back-button';
-import { IonTitle } from '@ionic/angular/ion-title';
+
+
+
+
+
 import { IonTextarea } from '@ionic/angular/ion-textarea';
 import { IonSkeletonText } from '@ionic/angular/ion-skeleton-text';
 import { ToastController } from '@ionic/angular/toast-controller';
 import { AlertController } from '@ionic/angular/alert-controller';
 import { ActionSheetController } from '@ionic/angular/action-sheet-controller';
 import { IconComponent } from '../../shared/components/icon.component';
+import { TopNavComponent } from '../../shared/components/top-nav.component';
 import { AvatarComponent } from '../../shared/components/avatar.component';
 import { DataService } from '../../core/services/data.service';
 import { AuthService } from '../../core/services/auth.service';
@@ -28,25 +29,18 @@ import { leadMarkView } from '../../core/utils/mark-check';
 @Component({
   selector: 'lf-post-detail',
   standalone: true,
-  imports: [
-    IonContent, IonHeader, IonToolbar, IonButtons, IonBackButton, IonTitle, IonTextarea,
-    IonSkeletonText, RouterLink, IconComponent, AvatarComponent
-  ],
+  imports: [IonContent, IonTextarea, IonSkeletonText, RouterLink, IconComponent, AvatarComponent, TopNavComponent],
   template: `
-    <ion-header translucent="true">
-      <ion-toolbar>
-        <ion-buttons slot="start"><ion-back-button defaultHref="/home" text=""></ion-back-button></ion-buttons>
-        <ion-title>{{ p() ? POST_TYPE_META[p()!.type].label : 'Post' }}</ion-title>
-        <ion-buttons slot="end">
-          @if (data.canEdit(p())) {
-            <button class="lf-icon-btn" routerLink="/post/{{ p()?.id }}/edit" aria-label="Edit">
-              <lf-icon name="edit" [size]="19" />
-            </button>
-          }
-          <button class="lf-icon-btn" (click)="more()"><lf-icon name="more" [size]="20" /></button>
-        </ion-buttons>
-      </ion-toolbar>
-    </ion-header>
+    <lf-top-nav [title]="p() ? POST_TYPE_META[p()!.type].label : 'Post'" backTo="/home">
+      @if (data.canEdit(p())) {
+        <button class="lf-icon-btn" lf-nav-end routerLink="/post/{{ p()?.id }}/edit" aria-label="Edit">
+          <lf-icon name="edit" [size]="19" />
+        </button>
+      }
+      <button class="lf-icon-btn" lf-nav-end (click)="more()" aria-label="More">
+        <lf-icon name="more" [size]="20" />
+      </button>
+    </lf-top-nav>
 
     <ion-content class="lf-page" id="comments">
       @if (!p()) {

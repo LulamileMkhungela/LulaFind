@@ -20,7 +20,7 @@ import { MediaService } from '../../core/services/media.service';
   standalone: true,
   imports: [IonContent, IonHeader, IonToolbar, IonButtons, IonBackButton, IonTextarea, RouterLink, IconComponent, AvatarComponent],
   template: `
-    <ion-header translucent="true">
+    <ion-header [translucent]="false">
       <ion-toolbar>
         <ion-buttons slot="start"><ion-back-button defaultHref="/chats" text=""></ion-back-button></ion-buttons>
         <div class="peer">

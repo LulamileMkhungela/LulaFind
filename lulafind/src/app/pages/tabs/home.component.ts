@@ -1,7 +1,6 @@
 import { Component, computed, effect, inject, signal } from '@angular/core';
-import { Router, RouterLink } from '@angular/router';
+import { Router } from '@angular/router';
 import { IonContent } from '@ionic/angular/ion-content';
-import { IonHeader } from '@ionic/angular/ion-header';
 import { IonRefresher } from '@ionic/angular/ion-refresher';
 import { IonRefresherContent } from '@ionic/angular/ion-refresher-content';
 import { IonInfiniteScroll } from '@ionic/angular/ion-infinite-scroll';
@@ -11,6 +10,7 @@ import { ToastController } from '@ionic/angular/toast-controller';
 import { ActionSheetController } from '@ionic/angular/action-sheet-controller';
 import { AlertController } from '@ionic/angular/alert-controller';
 import { IconComponent } from '../../shared/components/icon.component';
+import { TopNavComponent } from '../../shared/components/top-nav.component';
 import { EmptyComponent } from '../../shared/components/empty.component';
 import { ChatState, PostCardComponent } from '../../shared/components/post-card.component';
 import { StoryRailComponent } from '../../shared/components/story-rail.component';
@@ -28,30 +28,12 @@ import { POST_TYPE_META, Post } from '../../core/models/types';
   selector: 'lf-home',
   standalone: true,
   imports: [
-    IonContent, IonHeader, IonRefresher, IonRefresherContent,
+    IonContent, IonRefresher, IonRefresherContent,
     IonInfiniteScroll, IonInfiniteScrollContent, IonSkeletonText,
-    RouterLink, IconComponent, EmptyComponent, PostCardComponent, StoryRailComponent, FilterBarComponent
+    TopNavComponent, IconComponent, EmptyComponent, PostCardComponent, StoryRailComponent, FilterBarComponent
   ],
   template: `
-    <ion-header class="fb-head home-head">
-      <div class="fb-head__bar">
-        <span class="brand" aria-label="LulaFind">lulafind</span>
-        <div class="fb-head__tools">
-          <button class="lf-round-btn" (click)="onPromptClick()" aria-label="Create post">
-            <lf-icon name="plus" [size]="20" [weight]="2.4" />
-          </button>
-          <button class="lf-round-btn" routerLink="/search" aria-label="Search">
-            <lf-icon name="search" [size]="20" [weight]="2.4" />
-          </button>
-          <button class="lf-round-btn" routerLink="/chats" aria-label="Chats">
-            <lf-icon name="messenger" [size]="20" [weight]="2" />
-            @if (chat.unreadTotal() > 0) {
-              <span class="count">{{ chat.unreadTotal() }}</span>
-            }
-          </button>
-        </div>
-      </div>
-    </ion-header>
+    <lf-top-nav />
 
     <ion-content class="lf-page" [scrollY]="!isGuestLocked()">
       <ion-refresher slot="fixed" (ionRefresh)="onRefresh($event)">
@@ -128,33 +110,6 @@ import { POST_TYPE_META, Post } from '../../core/models/types';
     </ion-content>
   `,
   styles: [`
-    .brand {
-      font-size: 29px;
-      font-weight: 700;
-      color: var(--lf-primary);
-      letter-spacing: -1.2px;
-      line-height: 1;
-      font-family: Helvetica, Arial, var(--ion-font-family);
-    }
-    :host-context(.lf-dark) .brand { color: #e4e6eb; }
-    .lf-round-btn .count {
-      position: absolute;
-      top: -4px;
-      right: -4px;
-      background: var(--lf-badge);
-      color: #fff;
-      font-size: 11px;
-      font-weight: 700;
-      border-radius: 999px;
-      min-width: 18px;
-      height: 18px;
-      padding: 0 4px;
-      box-sizing: border-box;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-    }
-
     .skel {
       background: var(--lf-card);
       margin: 0 0 8px;
@@ -232,22 +187,16 @@ export class HomeComponent {
     void this.router.navigate(['/auth']);
   }
 
-  async onPromptClick(): Promise<void> {
-    if (!this.auth.signedIn()) {
-      void this.router.navigate(['/auth'], { queryParams: { next: '/new' } });
-      return;
-    }
-    void this.router.navigate(['/new']);
-  }
-
   private async recomputeGates(): Promise<void> {
-    const gates: Record<string, ChatState> = {};
-    for (const p of this.data.feed()) {
-      if (!p.chatEnabled) { gates[p.id] = 'off'; continue; }
+    // One round trip per post, all at once. Awaiting them in a loop made the
+    // feed take visibly longer to settle after every refresh.
+    const entries = await Promise.all(this.data.feed().map(async (p): Promise<[string, ChatState]> => {
+      if (!p.chatEnabled) return [p.id, 'off' as ChatState];
       const g = await this.chat.gate(p, p.khumbu?.claimedByUserId === this.auth.viewerId);
-      gates[p.id] = g.allowed ? 'open' : g.step === 'vote' ? 'locked-vote' : g.step === 'follow' ? 'locked-follow' : 'off';
-    }
-    this.chatGates.set(gates);
+      const state: ChatState = g.allowed ? 'open' : g.step === 'vote' ? 'locked-vote' : g.step === 'follow' ? 'locked-follow' : 'off';
+      return [p.id, state];
+    }));
+    this.chatGates.set(Object.fromEntries(entries));
   }
 
   chatStateOf(p: Post): ChatState {

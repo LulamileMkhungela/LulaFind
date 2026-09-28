@@ -26,7 +26,7 @@ import { uid } from '../../core/utils/format';
     IonContent, IonHeader, IonToolbar, IonButtons, IonBackButton, IonTitle, IonSkeletonText, IonTextarea, IconComponent
   ],
   template: `
-    <ion-header translucent="true">
+    <ion-header [translucent]="false">
       <ion-toolbar>
         <ion-buttons slot="start"><ion-back-button [defaultHref]="'/post/' + id" text=""></ion-back-button></ion-buttons>
         <ion-title>Location & consent</ion-title>

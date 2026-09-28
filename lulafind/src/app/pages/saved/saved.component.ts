@@ -1,12 +1,12 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import { IonContent } from '@ionic/angular/ion-content';
-import { IonHeader } from '@ionic/angular/ion-header';
 import { IonRefresher } from '@ionic/angular/ion-refresher';
 import { IonRefresherContent } from '@ionic/angular/ion-refresher-content';
 import { ActionSheetController } from '@ionic/angular/action-sheet-controller';
 import { ToastController } from '@ionic/angular/toast-controller';
 import { IconComponent } from '../../shared/components/icon.component';
+import { TopNavComponent } from '../../shared/components/top-nav.component';
 import { EmptyComponent } from '../../shared/components/empty.component';
 import { DataService } from '../../core/services/data.service';
 import { PlatformService } from '../../core/services/platform.service';
@@ -23,22 +23,18 @@ import { timeAgo } from '../../core/utils/format';
 @Component({
   selector: 'lf-saved',
   standalone: true,
-  imports: [IonContent, IonHeader, IonRefresher, IonRefresherContent, RouterLink, IconComponent, EmptyComponent],
+  imports: [IonContent, TopNavComponent, IonRefresher, IonRefresherContent, RouterLink, IconComponent, EmptyComponent],
   template: `
-    <ion-header class="fb-head">
-      <div class="fb-head__bar">
-        <button class="lf-round-btn back" (click)="back()" aria-label="Back"><lf-icon name="arrowLeft" [size]="20" [weight]="2.4" /></button>
-        <h1 class="fb-head__title sm">Saved</h1>
-      </div>
-      <div class="seg" role="tablist">
+    <lf-top-nav title="Saved" backTo="/me" />
+
+    <ion-content class="lf-page">
+      <ion-refresher slot="fixed" (ionRefresh)="refresh($event)"><ion-refresher-content></ion-refresher-content></ion-refresher>
+
+      <div class="seg" role="tablist" aria-label="Filter saved posts">
         @for (f of filters; track f.key) {
           <button class="pill" role="tab" [class.on]="show() === f.key" (click)="show.set(f.key)">{{ f.label }}</button>
         }
       </div>
-    </ion-header>
-
-    <ion-content class="lf-page">
-      <ion-refresher slot="fixed" (ionRefresh)="refresh($event)"><ion-refresher-content></ion-refresher-content></ion-refresher>
 
       <p class="hint lf-small lf-muted">
         <lf-icon name="bell" [size]="14" /> We let you know when a saved post gets a new Idea or the person is found.

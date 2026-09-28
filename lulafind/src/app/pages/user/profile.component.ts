@@ -1,14 +1,15 @@
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { IonContent } from '@ionic/angular/ion-content';
-import { IonHeader } from '@ionic/angular/ion-header';
-import { IonToolbar } from '@ionic/angular/ion-toolbar';
-import { IonButtons } from '@ionic/angular/ion-buttons';
-import { IonBackButton } from '@ionic/angular/ion-back-button';
+
+
+
+
 import { IonSkeletonText } from '@ionic/angular/ion-skeleton-text';
 import { ToastController } from '@ionic/angular/toast-controller';
 import { AlertController } from '@ionic/angular/alert-controller';
 import { IconComponent } from '../../shared/components/icon.component';
+import { TopNavComponent } from '../../shared/components/top-nav.component';
 import { AvatarComponent } from '../../shared/components/avatar.component';
 import { EmptyComponent } from '../../shared/components/empty.component';
 import { PostCardComponent } from '../../shared/components/post-card.component';
@@ -25,21 +26,15 @@ import { cover } from '../../core/data/seed';
 @Component({
   selector: 'lf-profile',
   standalone: true,
-  imports: [
-    IonContent, IonHeader, IonToolbar, IonButtons, IonBackButton, IonSkeletonText,
-    RouterLink, IconComponent, AvatarComponent, EmptyComponent, PostCardComponent
-  ],
+  imports: [IonContent, IonSkeletonText, RouterLink, IconComponent, AvatarComponent, EmptyComponent, PostCardComponent, TopNavComponent],
   template: `
-    <ion-header translucent="true">
-      <ion-toolbar>
-        <ion-buttons slot="start"><ion-back-button defaultHref="/home" text=""></ion-back-button></ion-buttons>
-        <ion-buttons slot="end">
-          <button class="lf-icon-btn" (click)="more()" aria-label="More"><lf-icon name="more" [size]="20" /></button>
-        </ion-buttons>
-      </ion-toolbar>
-    </ion-header>
+    <lf-top-nav backTo="/home" />
 
     <ion-content class="lf-page">
+      <div class="page-title">
+        <h1>Profile</h1>
+        <button class="lf-icon-btn" (click)="more()" aria-label="More"><lf-icon name="more" [size]="20" /></button>
+      </div>
       @if (!u()) {
         <div class="lf-card"><ion-skeleton-text style="height:200px"></ion-skeleton-text></div>
       } @else {
@@ -139,7 +134,9 @@ import { cover } from '../../core/data/seed';
         }
 
         <h3 class="section">Posts</h3>
-        @if (!posts().length) {
+        @if (postsLoading()) {
+          <p class="lf-muted lf-small">Loading posts…</p>
+        } @else if (!posts().length) {
           <lf-empty icon="book" title="No public posts yet" message="Posts set to followers-only or spotlight-only will not appear here." />
         }
         @for (p of posts(); track p.id) {
@@ -277,10 +274,13 @@ export class ProfileComponent implements OnInit {
   readonly avatar = computed(() => this.data.avatarFor(this.u()));
   readonly banner = computed(() => cover(this.u()?.surname || this.u()?.displayName || 'LulaFind'));
   readonly location = computed(() => this.auth.locationLabel(this.u()));
-  readonly posts = computed(() => {
-    const id = this.u()?.id;
-    return this.data.feed().filter((p) => p.authorId === id);
-  });
+  /**
+   * Loaded from the database in `ngOnInit`, not by filtering the viewer's
+   * feed: the feed is audience-filtered, so someone else's profile used to
+   * show "0 posts" even when they had written plenty.
+   */
+  readonly posts = signal<Post[]>([]);
+  readonly postsLoading = signal(false);
   readonly spotlights = computed(() => {
     const id = this.u()?.id;
     return id ? this.data.spotlights().filter((s) => s.memberIds.includes(id)) : [];
@@ -307,10 +307,21 @@ export class ProfileComponent implements OnInit {
     const id = this.route.snapshot.paramMap.get('id');
     if (!id) return;
     this.u.set((await this.data.profile(id)) ?? null);
-    const followState = await this.data.followStatus(id);
+    const [followState] = await Promise.all([this.data.followStatus(id), this.loadPosts(id)]);
     this.following.set(followState === 'accepted');
     this.followRequested.set(followState === 'pending');
     await this.loadBadge();
+  }
+
+  private async loadPosts(id: string): Promise<void> {
+    this.postsLoading.set(true);
+    try {
+      this.posts.set(await this.data.postsByAuthor(id));
+    } catch {
+      this.posts.set([]);
+    } finally {
+      this.postsLoading.set(false);
+    }
   }
 
   private async loadBadge(): Promise<void> {

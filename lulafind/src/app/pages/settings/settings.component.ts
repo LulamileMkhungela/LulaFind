@@ -1,11 +1,11 @@
 import { Component, computed, inject } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import { IonContent } from '@ionic/angular/ion-content';
-import { IonHeader } from '@ionic/angular/ion-header';
-import { IonToolbar } from '@ionic/angular/ion-toolbar';
-import { IonButtons } from '@ionic/angular/ion-buttons';
-import { IonBackButton } from '@ionic/angular/ion-back-button';
-import { IonTitle } from '@ionic/angular/ion-title';
+
+
+
+
+
 import { IonItem } from '@ionic/angular/ion-item';
 import { IonLabel } from '@ionic/angular/ion-label';
 import { IonToggle } from '@ionic/angular/ion-toggle';
@@ -15,6 +15,7 @@ import { IonRange } from '@ionic/angular/ion-range';
 import { AlertController } from '@ionic/angular/alert-controller';
 import { ToastController } from '@ionic/angular/toast-controller';
 import { IconComponent } from '../../shared/components/icon.component';
+import { TopNavComponent } from '../../shared/components/top-nav.component';
 import { SettingsService, ThemeMode } from '../../core/services/settings.service';
 import { AuthService } from '../../core/services/auth.service';
 import { DataService } from '../../core/services/data.service';
@@ -28,17 +29,9 @@ import { SUPPORT_EMAIL, SUPPORT_NAME } from '../../core/config';
 @Component({
   selector: 'lf-settings',
   standalone: true,
-  imports: [
-    IonContent, IonHeader, IonToolbar, IonButtons, IonBackButton, IonTitle, IonItem, IonLabel, IonToggle,
-    IonSelect, IonSelectOption, IonRange, RouterLink, IconComponent
-  ],
+  imports: [IonContent, IonItem, IonLabel, IonToggle, IonSelect, IonSelectOption, IonRange, RouterLink, IconComponent, TopNavComponent],
   template: `
-    <ion-header translucent="true">
-      <ion-toolbar>
-        <ion-buttons slot="start"><ion-back-button defaultHref="/me" text=""></ion-back-button></ion-buttons>
-        <ion-title>Settings</ion-title>
-      </ion-toolbar>
-    </ion-header>
+    <lf-top-nav title="Settings" backTo="/me" />
 
     <ion-content class="lf-page">
       <section class="card">

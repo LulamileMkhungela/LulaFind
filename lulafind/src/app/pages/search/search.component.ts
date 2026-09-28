@@ -1,12 +1,13 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import { IonContent } from '@ionic/angular/ion-content';
-import { IonHeader } from '@ionic/angular/ion-header';
-import { IonToolbar } from '@ionic/angular/ion-toolbar';
-import { IonButtons } from '@ionic/angular/ion-buttons';
-import { IonBackButton } from '@ionic/angular/ion-back-button';
+
+
+
+
 import { IonSearchbar } from '@ionic/angular/ion-searchbar';
 import { IconComponent } from '../../shared/components/icon.component';
+import { TopNavComponent } from '../../shared/components/top-nav.component';
 import { AvatarComponent } from '../../shared/components/avatar.component';
 import { EmptyComponent } from '../../shared/components/empty.component';
 import { PostCardComponent } from '../../shared/components/post-card.component';
@@ -16,25 +17,21 @@ import { UserProfile, Post, PROVINCES } from '../../core/models/types';
 @Component({
   selector: 'lf-search',
   standalone: true,
-  imports: [
-    IonContent, IonHeader, IonToolbar, IonButtons, IonBackButton, IonSearchbar,
-    RouterLink, IconComponent, AvatarComponent, EmptyComponent, PostCardComponent
-  ],
+  imports: [IonContent, IonSearchbar, RouterLink, IconComponent, AvatarComponent, EmptyComponent, PostCardComponent, TopNavComponent],
   template: `
-    <ion-header translucent="true">
-      <ion-toolbar>
-        <ion-buttons slot="start"><ion-back-button defaultHref="/home" text=""></ion-back-button></ion-buttons>
+    <lf-top-nav title="Search" backTo="/home" />
+
+    <ion-content class="lf-page">
+      <!-- The search field and its quick chips scroll with the results instead
+           of being pinned under a translucent bar, where they were clipped by
+           the status bar on notched phones. -->
+      <div class="search-top">
         <ion-searchbar placeholder="Name, surname, case number, town…" [debounce]="220" showCancelButton="never"
                        (ionInput)="onQuery($any($event.target).value)"></ion-searchbar>
-      </ion-toolbar>
-      <ion-toolbar>
         <div class="lf-scroller quick">
           @for (c of quick; track c) { <button class="chip" (click)="apply(c)">{{ c }}</button> }
         </div>
-      </ion-toolbar>
-    </ion-header>
-
-    <ion-content class="lf-page">
+      </div>
       @if (!query()) {
         <div class="lf-pad">
           <h3 class="lf-h2" style="margin:16px 0 8px">Start with a surname</h3>

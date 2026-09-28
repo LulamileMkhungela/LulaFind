@@ -524,8 +524,75 @@ ion-back-button {
   cursor: pointer;
   position: relative;
   flex-shrink: 0;
+  text-decoration: none;
 }
 .lf-round-btn:active { filter: brightness(.92); }
+
+/* Unread pip on a top-nav round button. */
+.lf-round-btn .dot {
+  position: absolute;
+  top: -4px;
+  right: -5px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: var(--lf-badge);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+/* Facebook's big left title inside a page, under the top navigation. */
+.page-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 52px;
+  padding: 6px var(--lf-gap);
+  max-width: var(--lf-maxw);
+  margin: 0 auto;
+  box-sizing: border-box;
+}
+.page-title h1 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -.4px;
+  line-height: 1.1;
+  color: var(--ion-text-color);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+@media (min-width: 700px) {
+  .page-title { max-width: var(--lf-maxw); }
+}
+
+/* The LulaFind brand in the top navigation. */
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  text-decoration: none;
+  color: inherit;
+}
+.brand .wordmark {
+  font-size: 25px;
+  font-weight: 700;
+  letter-spacing: -1.1px;
+  line-height: 1;
+  color: var(--lf-primary);
+}
+:host-context(.lf-dark) .brand .wordmark,
+.lf-dark .brand .wordmark { color: #e4e6eb; }
 
 /* ========================= action bar ========================== */
 
