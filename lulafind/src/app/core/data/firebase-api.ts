@@ -2,7 +2,7 @@ import { Observable, Subject } from 'rxjs';
 import {
   ChatMessage, ChatThread, Comment, FeedFilter, FollowEdge, MediaItem, Notification, Post, Spotlight, Story, StoryReply, StoryView, Tip, UserProfile
 } from '../models/types';
-import { LulaApi } from './api';
+import { LulaApi, SavePostOptions } from './api';
 
 /*
  * Cloud Firestore + Firebase Auth implementation.
@@ -123,6 +123,11 @@ export class FirebaseApi implements LulaApi {
   async posts() {
     return this.getList<Post>(this.q.query(this.col('posts'), this.q.orderBy('updatedAt', 'desc'), this.q.limit(200)));
   }
+  async postsByAuthor(authorId: string) {
+    return (await this.posts())
+      .filter((p) => p.authorId === authorId)
+      .sort((a, b) => b.createdAt - a.createdAt);
+  }
   async queryFeed(f: FeedFilter, _viewerId: string | null) {
     // Firestore cannot express every filter combination server-side, so we pull
     // the newest slice and refine in memory. Swap in composite indexes when the
@@ -143,7 +148,17 @@ export class FirebaseApi implements LulaApi {
     }
     return all;
   }
-  async savePost(p: Post) { await this.set(`posts/${p.id}`, p as unknown as Record<string, unknown>); }
+  async savePost(p: Post, options?: SavePostOptions) {
+    // Firestore has no conditional update through this adapter, so re-read and
+    // compare in the client before overwriting. Racy in the same way the app
+    // already is with two devices, but it stops the common single-device case.
+    if (options?.ifUnchangedSince !== undefined) {
+      const current = await this.getOne<Post>(`posts/${p.id}`);
+      if (current && current.updatedAt !== options.ifUnchangedSince) return false;
+    }
+    await this.set(`posts/${p.id}`, p as unknown as Record<string, unknown>);
+    return true;
+  }
   async deletePost(id: string) { await this.remove(`posts/${id}`); }
 
   /* comments */
