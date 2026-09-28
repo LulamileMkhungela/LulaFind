@@ -1,8 +1,8 @@
 import { Component, computed, inject } from '@angular/core';
 import { Router } from "@angular/router";
 import { IonContent } from '@ionic/angular/ion-content';
-import { IonHeader } from '@ionic/angular/ion-header';
 import { IconComponent } from '../../shared/components/icon.component';
+import { TopNavComponent } from '../../shared/components/top-nav.component';
 import { EmptyComponent } from '../../shared/components/empty.component';
 import { DataService } from '../../core/services/data.service';
 import { Notification } from '../../core/models/types';
@@ -11,18 +11,15 @@ import { timeAgo } from '../../core/utils/format';
 @Component({
   selector: 'lf-notifications',
   standalone: true,
-  imports: [IonContent, IonHeader, IconComponent, EmptyComponent],
+  imports: [IonContent, TopNavComponent, IconComponent, EmptyComponent],
   template: `
-    <ion-header class="fb-head">
-      <div class="fb-head__bar">
-        <h1 class="fb-head__title">Notifications</h1>
-        <div class="fb-head__tools">
-          <button class="lf-round-btn" (click)="readAll()" aria-label="Mark all as read"><lf-icon name="check" [size]="20" [weight]="2.4" /></button>
-        </div>
-      </div>
-    </ion-header>
+    <lf-top-nav title="Notifications" backTo="/home" />
 
     <ion-content class="lf-page lf-plain">
+      <div class="page-title">
+        <h1>Notifications</h1>
+        <button class="lf-round-btn" (click)="readAll()" aria-label="Mark all as read"><lf-icon name="check" [size]="20" [weight]="2.4" /></button>
+      </div>
       @if (!items().length) {
         <lf-empty icon="bell" title="No alerts yet"
                   message="You will get pinged when someone votes, comments, follows, or when a case you posted is escalated." />

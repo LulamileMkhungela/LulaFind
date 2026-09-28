@@ -211,9 +211,9 @@ describe('Components render', () => {
     const f = TestBed.createComponent(CreatePostComponent);
     f.detectChanges();
     f.componentInstance.type.set('missing');
-    f.componentInstance.f.media = [{ id: 'v', kind: 'video', src: 'data:video/mp4,' }];
+    f.componentInstance.f.update((v) => ({ ...v, media: [{ id: 'v', kind: 'video', src: 'data:video/mp4,' } as never] }));
     f.detectChanges();
-    expect(f.componentInstance.f.media.some((m) => m.kind === 'video')).toBe(true);
+    expect(f.componentInstance.f().media.some((m) => m.kind === 'video')).toBe(true);
   });
 
   it('renders the story composer with a visibility choice', async () => {
@@ -602,6 +602,8 @@ describe('Email and Google sign-in', () => {
     await new Promise((resolve) => setTimeout(resolve, 10));
     expect(auth.user()?.id).toBe('u_demo');
 
+    // Google already knows the name and the address, so the app uses them
+    // instead of asking the person to type what Google has.
     callback?.('SIGNED_IN', {
       user: {
         id: '00000000-0000-4000-8000-000000000199',
@@ -611,10 +613,26 @@ describe('Email and Google sign-in', () => {
       }
     });
     await new Promise((resolve) => setTimeout(resolve, 10));
-    expect(auth.user()).toBe(null);
-    expect(auth.pendingProvider()).toMatchObject({
-      provider: 'google', email: 'oauth.new@example.com', displayName: 'New OAuth Member'
+    expect(auth.pendingProvider()).toBe(null);
+    expect(auth.user()).toMatchObject({
+      email: 'oauth.new@example.com', displayName: 'New OAuth Member', surname: 'OAuth'
     });
+    // and the profile is really in the data layer, not just on screen
+    expect((await api.user('00000000-0000-4000-8000-000000000199'))?.email).toBe('oauth.new@example.com');
+
+    // A Google account with no usable name still asks - for the name only, and
+    // without pretending a half-built account is signed in.
+    callback?.('SIGNED_IN', {
+      user: {
+        id: '00000000-0000-4000-8000-000000000200',
+        email: '',
+        user_metadata: {},
+        app_metadata: { provider: 'google' }
+      }
+    });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(auth.user()).toBe(null);
+    expect(auth.pendingProvider()).toMatchObject({ provider: 'google' });
   });
 
   it('Google: a brand new email is handed to the sign-up form, not auto-created', async () => {

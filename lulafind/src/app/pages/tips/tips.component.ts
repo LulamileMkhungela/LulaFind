@@ -1,12 +1,13 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { Router } from "@angular/router";
 import { IonContent } from '@ionic/angular/ion-content';
-import { IonHeader } from '@ionic/angular/ion-header';
-import { IonToolbar } from '@ionic/angular/ion-toolbar';
-import { IonButtons } from '@ionic/angular/ion-buttons';
-import { IonBackButton } from '@ionic/angular/ion-back-button';
-import { IonTitle } from '@ionic/angular/ion-title';
+
+
+
+
+
 import { IconComponent } from '../../shared/components/icon.component';
+import { TopNavComponent } from '../../shared/components/top-nav.component';
 import { DataService } from '../../core/services/data.service';
 import { PlatformService } from '../../core/services/platform.service';
 import { Tip } from '../../core/models/types';
@@ -23,21 +24,9 @@ const CATS = [
 @Component({
   selector: 'lf-tips',
   standalone: true,
-  imports: [IonContent, IonHeader, IonToolbar, IonButtons, IonBackButton, IonTitle, IconComponent],
+  imports: [IonContent, IconComponent, TopNavComponent],
   template: `
-    <ion-header translucent="true">
-      <ion-toolbar>
-        <ion-buttons slot="start"><ion-back-button defaultHref="/home" text=""></ion-back-button></ion-buttons>
-        <ion-title>Safety & tips</ion-title>
-      </ion-toolbar>
-      <ion-toolbar>
-        <div class="lf-scroller cats">
-          @for (c of cats; track c.key) {
-            <button class="chip" [class.on]="cat() === c.key" (click)="cat.set(c.key)">{{ c.label }}</button>
-          }
-        </div>
-      </ion-toolbar>
-    </ion-header>
+    <lf-top-nav backTo="/home" />
 
     <ion-content class="lf-page">
       <button class="lf-banner lf-banner--danger help-jump" type="button" (click)="router.navigate(['/help'])">

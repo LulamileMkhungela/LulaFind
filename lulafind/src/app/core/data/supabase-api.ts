@@ -1,13 +1,69 @@
 import { Observable, Subject } from 'rxjs';
 import { createClient, SupabaseClient, RealtimeChannel } from '@supabase/supabase-js';
 import { FirebaseAuthBridge, firebaseAuthConfigured } from './firebase-auth';
-import { LulaApi } from './api';
+import { LulaApi, SavePostOptions } from './api';
 import { SUPABASE_URL, SUPABASE_KEY, supabaseNotice } from './supabase-client';
 import { LocalDb } from './local-db';
 import {
   ChatMessage, ChatThread, Comment, FeedFilter, FollowEdge, MediaItem,
   Notification, Post, Spotlight, Story, StoryReply, StoryView, Tip, UserProfile
 } from '../models/types';
+
+/**
+ * True when Postgres refused the row because it could not identify the caller.
+ *
+ * `lula_uid()` (supabase/schema.sql) reads the Firebase UID out of the request
+ * token. When that comes back NULL, every policy comparing it to a row's
+ * owner_id is denied, and PostgREST reports it as a row-level-security error
+ * on insert. The same wording appears when the token has simply expired.
+ */
+function isIdentityError(message: string): boolean {
+  return /row-level security|invalid JWT|JWT expired|not authenticated|401|PGRST301/i.test(message ?? '');
+}
+
+/**
+ * What `lula_debug_identity()` reports about the current request. Every field
+ * maps to a condition the write policies actually test, so a NULL or FALSE here
+ * is a specific, fixable problem rather than a generic "write failed".
+ */
+export interface IdentityReportFields {
+  /** The UID the database reads out of the request token. NULL = signed out as far as Postgres is concerned. */
+  dbUid: string | null;
+  /** The UID the app believes is signed in. */
+  appUid: string | null;
+  /** `dbUid === appUid`. FALSE with both non-null means the roles/claims setup is wrong. */
+  dbUidMatchesAppUid: boolean;
+  /** A suspended account is refused by the insert policy, exactly like an identity failure. */
+  suspended: boolean;
+  /** The one-line verdict: FALSE means an INSERT cannot succeed yet. */
+  canWrite: boolean;
+  /** supabase/post-interactions.sql was run. Voting, sharing and Spotlight edits go through this RPC. */
+  postInteractRpc: boolean;
+  /** Also from post-interactions.sql; missing it breaks Spotlight linking only. */
+  spotlightRpc: boolean;
+}
+
+/** The fields the database reported, plus the app's reading of them. */
+export interface IdentityReport extends IdentityReportFields {
+  /** Plain English, ready to paste into a bug report. */
+  message: string;
+}
+
+/** Turns the report above into the next action to take. */
+function describeIdentity(r: IdentityReportFields): string {
+  if (r.dbUidMatchesAppUid && !r.suspended) {
+    return 'Supabase recognises this account and allows writes. If a write still fails, the collection is not this one - check the app banner.';
+  }
+  if (r.suspended) {
+    return 'This account is suspended. Every write is refused by row-level security until an admin lifts it in the Admin screen.';
+  }
+  if (r.dbUid && r.appUid && !r.dbUidMatchesAppUid) {
+    return `The app is signed in as ${r.appUid} but the database sees ${r.dbUid}. ` +
+      'Two accounts are in play - sign out and in again, and check that the Firebase custom claim role is set the same way in both places.';
+  }
+  return 'Supabase cannot see your Firebase account (dbUid is null), so every write is denied by row-level security. ' +
+    'Turn on Authentication -> Third-Party Auth -> Firebase for project "lulafinds-app", then sign out and in.';
+}
 
 /**
  * SupabaseApi — production LulaApi implementation with automatic local storage fallback.
@@ -47,6 +103,11 @@ export class SupabaseApi implements LulaApi {
   }
 
   async init(): Promise<void> {
+    // `await window.__lulaDebugWhoAmI()` in the console answers "who does the
+    // database think I am?". Documented in supabase/check-setup.sql.
+    if (typeof window !== 'undefined') {
+      (window as unknown as Record<string, unknown>)['__lulaDebugWhoAmI'] = () => this.whoAmI();
+    }
     try {
       this.channel = this.client
         .channel('records-changes')
@@ -58,8 +119,6 @@ export class SupabaseApi implements LulaApi {
         .subscribe((status) => {
           if (status === 'CHANNEL_ERROR') {
             supabaseNotice.set('Live updates unavailable. Pull to refresh manually.');
-          } else {
-            supabaseNotice.set('');
           }
         });
     } catch (e: any) {
@@ -69,6 +128,36 @@ export class SupabaseApi implements LulaApi {
 
   async reset(): Promise<void> {
     this.localDb.reset();
+  }
+
+  /**
+   * Diagnostics. `window.__lulaDebugWhoAmI()` answers "who does the database
+   * think I am?" using the same token and the same helper the write policies
+   * use. It is the quickest way to tell an app bug from a backend switch that
+   * has not been flipped yet.
+   */
+  async whoAmI(): Promise<IdentityReport> {
+    const appUid = await this.currentUid();
+    // Preferred: the database tells us, in one call, everything the write
+    // policies depend on - including the two things that look identical from
+    // the outside ("violates row-level security policy"): a UID that does not
+    // match, and a suspended account.
+    const { data, error } = await this.client.rpc('lula_debug_identity', { app_uid: appUid ?? '' });
+    if (!error && data && typeof data === 'object') {
+      const r = data as IdentityReport;
+      return { ...r, appUid, message: describeIdentity(r) };
+    }
+    // Fall back to the bare identity when schema.sql has not been re-run.
+    const bare = await this.client.rpc('lula_uid');
+    if (bare.error) {
+      return { dbUid: null, appUid, dbUidMatchesAppUid: false, suspended: false,
+        canWrite: false, postInteractRpc: false, spotlightRpc: false,
+        message: `lula_debug_identity() is not available (${bare.error.message}). Re-run supabase/schema.sql.` };
+    }
+    const uid = (bare.data as string | null) ?? null;
+    const r: IdentityReportFields = { dbUid: uid, appUid, dbUidMatchesAppUid: !!uid && uid === appUid,
+      suspended: false, canWrite: !!uid, postInteractRpc: false, spotlightRpc: false };
+    return { ...r, message: describeIdentity(r) };
   }
 
   changes(): Observable<number> {
@@ -155,39 +244,134 @@ export class SupabaseApi implements LulaApi {
   private async upsert<T extends { id: string }>(
     collection: string,
     item: T,
-    ownerId?: string
-  ): Promise<void> {
-    try {
-      const { error } = await this.client
+    ownerId?: string,
+    options?: SavePostOptions
+  ): Promise<boolean> {
+    // Row security compares owner_id with the Firebase UID in the request
+    // token. Never let a null slip through - a null owner_id can never equal a
+    // caller, which is exactly what "new row violates row-level security
+    // policy" means.
+    const owner = ownerId ?? (await this.currentUid());
+    const row = {
+      id: item.id,
+      collection,
+      owner_id: owner ?? null,
+      payload: this.persistRecordMedia(collection, item),
+      updated_at: Date.now()
+    };
+    if (options?.ifUnchangedSince !== undefined) {
+      // Compare-and-set: only write if nobody else has touched the record since
+      // it was read. A background write that was overtaken therefore changes
+      // nothing instead of putting back a version the person has moved on from.
+      const base = (item as unknown as { updatedAt?: number }).updatedAt;
+      const { data, error } = await this.client
         .from('records')
-        .upsert({
-          id: item.id,
-          collection,
-          owner_id: ownerId ?? null,
-          payload: this.persistRecordMedia(collection, item),
-          updated_at: Date.now()
-        });
-      if (error) throw new Error(error.message);
-      this.rx.next(++this.tick);
-    } catch (e: any) {
-      console.warn(`Supabase upsert(${collection}) failed:`, e?.message);
-      throw new Error(`Could not save ${collection}: ${e?.message ?? 'check your connection and try again'}`);
+        .update({ payload: row.payload, updated_at: row.updated_at })
+        .eq('id', item.id)
+        .eq('collection', collection)
+        .eq('payload->>updatedAt', String(options.ifUnchangedSince))
+        .select('id');
+      if (error) {
+        // The row may not exist yet, or the caller may not be allowed to update
+        // it. Fall back to the ordinary write rather than losing the change.
+        console.warn(`Supabase conditional update(${collection}) fell back:`, error.message);
+        await this.write(collection, () => this.client.from('records').upsert(row), { owner });
+        return true;
+      }
+      if (base === undefined) return true;
+      const applied = (data ?? []).length > 0;
+      if (applied) {
+        this.rx.next(++this.tick);
+        supabaseNotice.set('');
+      } else {
+        console.info(`Supabase conditional update(${collection}) skipped ${item.id}: it changed after it was read.`);
+      }
+      return applied;
     }
+    await this.write(collection, () => this.client.from('records').upsert(row), { owner });
+    return true;
+  }
+
+  /**
+   * Every write goes through here.
+   *
+   * A row-level-security rejection means the database could not see who was
+   * calling, so the row is retried once with a freshly minted ID token. If it
+   * still fails, the person is told what actually went wrong instead of a raw
+   * Postgres message, and the reason is written to the banner so it is visible
+   * on the page and not only in the console.
+   */
+  private async write(
+    collection: string,
+    send: () => PromiseLike<{ error: { message: string; code?: string } | null }>,
+    ctx: { owner?: string | null } = {}
+  ): Promise<void> {
+    let error = (await send()).error;
+    if (error && isIdentityError(error.message)) {
+      // Force a new ID token and try the same write once more.
+      await this.refreshIdentity();
+      const retry = await send();
+      if (!retry.error) {
+        this.rx.next(++this.tick);
+        return;
+      }
+      error = retry.error;
+    }
+    if (!error) {
+      this.rx.next(++this.tick);
+      supabaseNotice.set('');
+      return;
+    }
+    const reason = this.explain(collection, error.message, ctx.owner ?? null);
+    console.warn(`Supabase upsert(${collection}) failed:`, error.message, '-', reason);
+    throw new Error(reason);
+  }
+
+  /** Ask Firebase for a brand new ID token. */
+  private async refreshIdentity(): Promise<void> {
+    const bridge = this.authBridge as (FirebaseAuthBridge & { forceToken?: () => Promise<void> }) | null;
+    if (!bridge) return;
+    try { await bridge.forceToken?.(); } catch { /* the retry below reports the real error */ }
+  }
+
+  /**
+   * Turns a Postgres/PostgREST error into something a person can act on.
+   * The `lula_uid()` helper returns NULL when Supabase cannot read the
+   * Firebase UID out of the request, and every write is then denied - so that
+   * case gets its own message and its own banner.
+   */
+  private explain(collection: string, message: string, owner: string | null): string {
+    if (isIdentityError(message)) {
+      supabaseNotice.set(
+        'LulaFind cannot confirm your account with the database yet, so nothing was saved. ' +
+        'Sign out and sign in again. If it keeps happening, the Supabase Firebase link needs switching on.'
+      );
+      return 'Your sign-in could not be verified, so nothing was saved. Sign out and sign in again.';
+    }
+    if (/row-level security/i.test(message)) {
+      return `LulaFind could not save this because the database would not accept it. Please try again.`;
+    }
+    if (/duplicate key/i.test(message)) {
+      return 'That already exists.';
+    }
+    if (/Failed to fetch|NetworkError|fetch failed/i.test(message)) {
+      return 'No connection. Check your internet and try again.';
+    }
+    void collection; void owner;
+    return `Could not save: ${message}`;
   }
 
   private async remove(collection: string, id: string): Promise<void> {
-    try {
-      const { error } = await this.client
-        .from('records')
-        .delete()
-        .eq('collection', collection)
-        .eq('id', id);
-      if (error) throw new Error(error.message);
-      this.rx.next(++this.tick);
-    } catch (e: any) {
-      console.warn(`Supabase remove(${collection}, ${id}) failed:`, e?.message);
-      throw new Error(`Could not delete ${collection}: ${e?.message ?? 'check your connection and try again'}`);
+    const { error } = await this.client
+      .from('records')
+      .delete()
+      .eq('collection', collection)
+      .eq('id', id);
+    if (error) {
+      console.warn(`Supabase remove(${collection}, ${id}) failed:`, error.message);
+      throw new Error(`Could not delete ${collection}: ${error.message}`);
     }
+    this.rx.next(++this.tick);
   }
 
   private async getAllWhere<T>(
@@ -249,6 +433,32 @@ export class SupabaseApi implements LulaApi {
 
   async posts(): Promise<Post[]> {
     return this.getAll<Post>('posts');
+  }
+
+  /**
+   * Posts written by one person, for their profile page.
+   *
+   * The home feed is filtered for the viewer, so filtering *it* by author used
+   * to show "0 posts" on someone else's profile. RLS still decides what comes
+   * back: followers-only and Spotlight-only posts are removed unless the viewer
+   * is allowed to see them, so the number matches the list.
+   */
+  async postsByAuthor(authorId: string): Promise<Post[]> {
+    if (!authorId) return [];
+    try {
+      const { data, error } = await this.client
+        .from('records')
+        .select('payload')
+        .eq('collection', 'posts')
+        .eq('payload->>authorId', authorId)
+        .order('updated_at', { ascending: false })
+        .limit(200);
+      if (error) throw new Error(error.message);
+      return await Promise.all((data ?? []).map((row) => this.signRecordMedia('posts', row.payload as Post)));
+    } catch {
+      // Older rows may predate the indexed payload; fall back to a scan.
+      return (await this.posts()).filter((p) => p.authorId === authorId);
+    }
   }
 
   async queryFeed(f: FeedFilter, viewerId: string | null): Promise<Post[]> {
@@ -331,11 +541,10 @@ export class SupabaseApi implements LulaApi {
    * reports) goes through lula_post_interact, which accepts only those
    * narrow changes - see supabase/post-interactions.sql.
    */
-  async savePost(p: Post): Promise<void> {
+  async savePost(p: Post, options?: SavePostOptions): Promise<boolean> {
     const me = await this.currentUid();
     if (!me || me === p.authorId) {
-      await this.upsert('posts', p, p.authorId);
-      return;
+      return this.upsert('posts', p, p.authorId, options);
     }
     const { error } = await this.client.rpc('lula_post_interact', {
       post_id: p.id,
@@ -344,12 +553,12 @@ export class SupabaseApi implements LulaApi {
     if (error) {
       // Admins moderate with a direct write.
       if (/Authors and admins/i.test(error.message)) {
-        await this.upsert('posts', p, p.authorId);
-        return;
+        return this.upsert('posts', p, p.authorId, options);
       }
       throw new Error(error.message);
     }
     this.rx.next(++this.tick);
+    return true;
   }
 
   async linkSpotlightPost(spotlightId: string, postId: string, linking: boolean): Promise<void> {
@@ -436,6 +645,9 @@ export class SupabaseApi implements LulaApi {
   }
 
   async saveStory(s: Story): Promise<void> {
+    // Stories are written straight with the author's UID as owner_id. A story
+    // that gets rejected here is the one the person is trying to share right
+    // now, so it fails loudly rather than falling back to a local copy.
     await this.upsert('stories', s, s.authorId);
   }
 

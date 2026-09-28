@@ -22,7 +22,7 @@ import { escalationNote } from '../../core/data/sa-help';
     RouterLink, IconComponent
   ],
   template: `
-    <ion-header translucent="true">
+    <ion-header [translucent]="false">
       <ion-toolbar>
         <ion-buttons slot="start"><ion-back-button [defaultHref]="'/post/' + id" text=""></ion-back-button></ion-buttons>
         <ion-title>Call for help</ion-title>

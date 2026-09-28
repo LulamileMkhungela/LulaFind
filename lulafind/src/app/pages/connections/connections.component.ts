@@ -1,10 +1,10 @@
 import { Component, computed, effect, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { IonContent } from '@ionic/angular/ion-content';
-import { IonHeader } from '@ionic/angular/ion-header';
 import { AlertController } from '@ionic/angular/alert-controller';
 import { ToastController } from '@ionic/angular/toast-controller';
-import { IconComponent } from '../../shared/components/icon.component';
+
+import { TopNavComponent } from '../../shared/components/top-nav.component';
 import { AvatarComponent } from '../../shared/components/avatar.component';
 import { EmptyComponent } from '../../shared/components/empty.component';
 import { DataService } from '../../core/services/data.service';
@@ -19,23 +19,19 @@ type Tab = 'requests' | 'following' | 'followers';
 @Component({
   selector: 'lf-connections',
   standalone: true,
-  imports: [IonContent, IonHeader, RouterLink, IconComponent, AvatarComponent, EmptyComponent],
+  imports: [IonContent, TopNavComponent, RouterLink, AvatarComponent, EmptyComponent],
   template: `
-    <ion-header class="fb-head">
-      <div class="fb-head__bar">
-        <button class="lf-round-btn back" (click)="back()" aria-label="Back"><lf-icon name="arrowLeft" [size]="20" [weight]="2.4" /></button>
-        <h1 class="fb-head__title sm">Friends</h1>
-      </div>
-      <div class="seg" role="tablist">
+    <lf-top-nav title="Friends" backTo="/me" />
+
+    <ion-content class="lf-page">
+      <div class="seg" role="tablist" aria-label="Friends">
         <button class="pill" role="tab" [class.on]="tab() === 'requests'" (click)="tab.set('requests')">
           Requests @if (data.followRequests().length) { <em class="lf-badge">{{ data.followRequests().length }}</em> }
         </button>
         <button class="pill" role="tab" [class.on]="tab() === 'following'" (click)="tab.set('following')">Following · {{ data.followingIds().length }}</button>
         <button class="pill" role="tab" [class.on]="tab() === 'followers'" (click)="tab.set('followers')">Followers · {{ data.followerIds().length }}</button>
       </div>
-    </ion-header>
 
-    <ion-content class="lf-page">
       @if (!rows().length) {
         <lf-empty icon="users" [title]="emptyTitle()" [message]="emptyText()" />
       } @else {

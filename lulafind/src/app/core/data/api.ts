@@ -25,8 +25,18 @@ export abstract class LulaApi {
   /* posts */
   abstract post(id: string): Promise<Post | undefined>;
   abstract posts(): Promise<Post[]>;
+  /** Posts written by one person, for their profile. RLS still applies. */
+  abstract postsByAuthor(authorId: string): Promise<Post[]>;
   abstract queryFeed(f: FeedFilter, viewerId: string | null): Promise<Post[]>;
-  abstract savePost(p: Post): Promise<void>;
+  /**
+   * Write a post. Returns true when the record was actually stored.
+   *
+   * `options.ifUnchangedSince` makes it a compare-and-set: the write is skipped
+   * unless the stored record still has that `updatedAt`. Background jobs that
+   * read a post and write it back moments later use it, so a case closed or
+   * edited in the meantime is never quietly reverted.
+   */
+  abstract savePost(p: Post, options?: SavePostOptions): Promise<boolean>;
   abstract deletePost(id: string): Promise<void>;
 
   /* comments */
@@ -89,6 +99,12 @@ export abstract class LulaApi {
   abstract changes(): Observable<number>;
 }
 
+/** See `LulaApi.savePost`. */
+export interface SavePostOptions {
+  /** Only write if the stored record still has this `updatedAt`. */
+  ifUnchangedSince?: number;
+}
+
 export const LULA_API = new InjectionToken<LulaApi>('LULA_API');
 
 /** Thin adapter so the mock engine satisfies the async contract. */
@@ -108,10 +124,11 @@ export class MockApi implements LulaApi {
 
   async post(id: string) { return this.db.post(id); }
   async posts() { return this.db.posts(); }
+  async postsByAuthor(authorId: string) { return this.db.postsByAuthor(authorId); }
   async queryFeed(f: FeedFilter, viewerId: string | null) {
     return this.db.filtered(f, viewerId, viewerId ? this.db.user(viewerId) : undefined);
   }
-  async savePost(p: Post) { this.db.upsertPost(p); }
+  async savePost(p: Post, options?: SavePostOptions) { return this.db.upsertPost(p, options); }
   async deletePost(id: string) { this.db.deletePost(id); }
 
   async commentsFor(postId: string) { return this.db.commentsFor(postId); }

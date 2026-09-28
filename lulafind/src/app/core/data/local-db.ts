@@ -341,15 +341,36 @@ export class LocalDb {
 
   /* ------------------------- posts ------------------------- */
   posts(): Post[] { return this.db.posts.map((p) => clone(p)); }
+  postsByAuthor(authorId: string): Post[] { return this.db.posts.filter((p) => p.authorId === authorId).map((p) => clone(p)); }
   post(id: string): Post | undefined {
     const p = this.db.posts.find((x) => x.id === id);
     return p ? clone(p) : undefined;
   }
 
-  upsertPost(p: Post): void {
+  /**
+   * Last write wins, by the app's own `updatedAt` clock, and an optional
+   * compare-and-set for background writes.
+   *
+   * A background job (the "did you get help?" nudge) reads a post, then writes
+   * it back a moment later. If you edited or closed the case in between, that
+   * late write would quietly undo your change - which is exactly how a saved
+   * edit appears to vanish. `ifUnchangedSince` makes the write conditional, and
+   * an incoming record older than the stored one is always dropped.
+   * Returns true when the record was stored.
+   */
+  upsertPost(p: Post, options?: { ifUnchangedSince?: number }): boolean {
     const i = this.db.posts.findIndex((x) => x.id === p.id);
-    if (i >= 0) this.db.posts[i] = p; else this.db.posts.unshift(p);
+    if (i < 0) {
+      this.db.posts.unshift(p);
+      this.persist();
+      return true;
+    }
+    const stored = this.db.posts[i];
+    if (options?.ifUnchangedSince !== undefined && stored.updatedAt !== options.ifUnchangedSince) return false;
+    if ((stored.updatedAt ?? 0) > (p.updatedAt ?? 0)) return false;
+    this.db.posts[i] = p;
     this.persist();
+    return true;
   }
   deletePost(id: string): void {
     this.db.posts = this.db.posts.filter((p) => p.id !== id);

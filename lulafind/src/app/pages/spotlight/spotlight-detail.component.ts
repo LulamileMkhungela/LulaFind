@@ -1,15 +1,16 @@
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { IonContent } from '@ionic/angular/ion-content';
-import { IonHeader } from '@ionic/angular/ion-header';
-import { IonToolbar } from '@ionic/angular/ion-toolbar';
-import { IonButtons } from '@ionic/angular/ion-buttons';
-import { IonBackButton } from '@ionic/angular/ion-back-button';
+
+
+
+
 import { IonSearchbar } from '@ionic/angular/ion-searchbar';
 import { IonSkeletonText } from '@ionic/angular/ion-skeleton-text';
 import { ToastController } from '@ionic/angular/toast-controller';
 import { AlertController } from '@ionic/angular/alert-controller';
 import { IconComponent } from '../../shared/components/icon.component';
+import { TopNavComponent } from '../../shared/components/top-nav.component';
 import { AvatarComponent } from '../../shared/components/avatar.component';
 import { EmptyComponent } from '../../shared/components/empty.component';
 import { ChatState, PostCardComponent } from '../../shared/components/post-card.component';
@@ -23,16 +24,9 @@ import { cover } from '../../core/data/seed';
 @Component({
   selector: 'lf-spotlight-detail',
   standalone: true,
-  imports: [
-    IonContent, IonHeader, IonToolbar, IonButtons, IonBackButton, IonSearchbar, IonSkeletonText,
-    IconComponent, EmptyComponent, PostCardComponent
-  ],
+  imports: [IonContent, IonSearchbar, IonSkeletonText, IconComponent, EmptyComponent, PostCardComponent, TopNavComponent],
   template: `
-    <ion-header translucent="true">
-      <ion-toolbar>
-        <ion-buttons slot="start"><ion-back-button defaultHref="/spotlight" text=""></ion-back-button></ion-buttons>
-      </ion-toolbar>
-    </ion-header>
+    <lf-top-nav backTo="/spotlight" />
 
     <ion-content class="lf-page">
       @if (!sp()) {

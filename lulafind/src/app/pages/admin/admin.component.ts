@@ -1,15 +1,16 @@
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import { IonContent } from '@ionic/angular/ion-content';
-import { IonHeader } from '@ionic/angular/ion-header';
-import { IonToolbar } from '@ionic/angular/ion-toolbar';
-import { IonButtons } from '@ionic/angular/ion-buttons';
-import { IonBackButton } from '@ionic/angular/ion-back-button';
-import { IonTitle } from '@ionic/angular/ion-title';
+
+
+
+
+
 import { IonSearchbar } from '@ionic/angular/ion-searchbar';
 import { AlertController } from '@ionic/angular/alert-controller';
 import { ToastController } from '@ionic/angular/toast-controller';
 import { IconComponent } from '../../shared/components/icon.component';
+import { TopNavComponent } from '../../shared/components/top-nav.component';
 import { EmptyComponent } from '../../shared/components/empty.component';
 import { AvatarComponent } from '../../shared/components/avatar.component';
 import { ModerationService } from '../../core/services/moderation.service';
@@ -27,17 +28,9 @@ import { timeAgo } from '../../core/utils/format';
 @Component({
   selector: 'lf-admin',
   standalone: true,
-  imports: [
-    IonContent, IonHeader, IonToolbar, IonButtons, IonBackButton, IonTitle, IonSearchbar,
-    RouterLink, IconComponent, EmptyComponent, AvatarComponent
-  ],
+  imports: [IonContent, IonSearchbar, RouterLink, IconComponent, EmptyComponent, AvatarComponent, TopNavComponent],
   template: `
-    <ion-header translucent="true">
-      <ion-toolbar>
-        <ion-buttons slot="start"><ion-back-button defaultHref="/me" text=""></ion-back-button></ion-buttons>
-        <ion-title>Admin</ion-title>
-      </ion-toolbar>
-    </ion-header>
+    <lf-top-nav title="Admin" backTo="/me" />
 
     <ion-content class="lf-page">
       @if (!mod.isAdmin()) {

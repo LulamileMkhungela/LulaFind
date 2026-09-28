@@ -19,7 +19,7 @@ import { SAPS_MISSING_LIST } from '../../core/data/sa-help';
   standalone: true,
   imports: [IonContent, IonHeader, IonToolbar, IonButtons, IonBackButton, IonTitle, IconComponent],
   template: `
-    <ion-header translucent="true">
+    <ion-header [translucent]="false">
       <ion-toolbar>
         <ion-buttons slot="start"><ion-back-button [defaultHref]="'/post/' + id" text=""></ion-back-button></ion-buttons>
         <ion-title>Poster</ion-title>

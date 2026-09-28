@@ -22,7 +22,8 @@ import {
   standalone: true,
   imports: [IonContent, IonHeader, IonToolbar, IonButtons, IonTitle, IconComponent],
   template: `
-    <ion-header translucent="true">
+    <!-- Deliberately no back button: leaving help clears history on purpose (see leave()). -->
+    <ion-header [translucent]="false">
       <ion-toolbar>
         <ion-title>Get help</ion-title>
         <ion-buttons slot="end">

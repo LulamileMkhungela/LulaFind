@@ -1,17 +1,19 @@
 import { Component, computed, inject, signal } from '@angular/core';
+import { Router } from '@angular/router';
 import { IonTabs } from '@ionic/angular/ion-tabs';
 import { IonLabel } from '@ionic/angular/ion-label';
 import { IonTabBar, IonTabButton } from '@ionic/angular';
 import { IconComponent } from '../../shared/components/icon.component';
 import { AvatarComponent } from '../../shared/components/avatar.component';
-import { ChatService } from '../../core/services/chat.service';
 import { DataService } from '../../core/services/data.service';
 import { AuthService } from '../../core/services/auth.service';
 
 /**
- * Facebook-style bottom navigation: Home, Spotlight, Chats, Notifications, Menu.
- * Creating a post lives where Facebook puts it: the "+" in the Home header and
- * the "What's on your mind?" composer.
+ * Bottom navigation: Home, Spotlight, Create, Search, Menu.
+ *
+ * Create and Search used to sit in the Home header; they are thumb targets, so
+ * they live down here now. Chats and Notifications moved up to the top
+ * navigation (`lf-top-nav`) where they are one tap away on every screen.
  */
 @Component({
   selector: 'lf-tabs',
@@ -30,21 +32,15 @@ import { AuthService } from '../../core/services/auth.service';
           <ion-label>Spotlight</ion-label>
         </ion-tab-button>
 
-        <ion-tab-button tab="chats">
-          <div class="wrap">
-            <lf-icon name="messenger" [size]="24" [weight]="active() === 'chats' ? 2.4 : 1.8" />
-            @if (unread() > 0) { <span class="count">{{ unread() > 99 ? '99+' : unread() }}</span> }
-          </div>
-          <ion-label>Chats</ion-label>
-        </ion-tab-button>
+        <button class="bar-btn create" type="button" (click)="create()" aria-label="Create a post">
+          <span class="create-disc"><lf-icon name="plus" [size]="24" [weight]="2.6" /></span>
+          <ion-label>Create</ion-label>
+        </button>
 
-        <ion-tab-button tab="notifications">
-          <div class="wrap">
-            <lf-icon name="bell" [size]="24" [filled]="active() === 'notifications'" />
-            @if (alerts() > 0) { <span class="count">{{ alerts() > 99 ? '99+' : alerts() }}</span> }
-          </div>
-          <ion-label>Notifications</ion-label>
-        </ion-tab-button>
+        <button class="bar-btn" type="button" (click)="search()" aria-label="Search LulaFind">
+          <lf-icon name="search" [size]="24" [weight]="2.2" />
+          <ion-label>Search</ion-label>
+        </button>
 
         <ion-tab-button tab="me">
           <div class="wrap">
@@ -91,25 +87,40 @@ import { AuthService } from '../../core/services/auth.service';
       white-space: nowrap;
     }
     ion-tab-button.tab-selected ion-label { font-weight: 600; }
-    .wrap { position: relative; display: inline-flex; }
-    .count {
-      position: absolute;
-      top: -5px;
-      left: 14px;
-      background: var(--lf-badge);
-      color: #fff;
-      font-size: 11px;
-      font-weight: 700;
-      border-radius: 999px;
-      min-width: 18px;
-      height: 18px;
-      padding: 0 5px;
-      box-sizing: border-box;
-      display: inline-flex;
+
+    /* Create and Search are plain buttons styled to sit in the same bar. */
+    .bar-btn {
+      flex: 1 1 0;
+      position: relative;
+      display: flex;
+      flex-direction: column;
       align-items: center;
       justify-content: center;
-      box-shadow: 0 0 0 2px var(--lf-tabbar);
+      min-width: 0;
+      padding: 4px 0 2px;
+      border: 0;
+      background: transparent;
+      color: var(--lf-muted);
+      font-family: inherit;
+      cursor: pointer;
     }
+    .bar-btn:active { filter: brightness(.92); }
+    .bar-btn ion-label { color: inherit; }
+    .create-disc {
+      display: grid;
+      place-items: center;
+      width: 34px;
+      height: 34px;
+      margin-top: 1px;
+      border-radius: 50%;
+      background: var(--lf-primary);
+      color: #fff;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, .28);
+    }
+    .bar-btn:active .create-disc { transform: scale(.94); }
+    .bar-btn.create ion-label { color: var(--lf-muted); font-weight: 600; }
+
+    .wrap { position: relative; display: inline-flex; }
     .me { display: inline-flex; border-radius: 50%; }
     .me.on { box-shadow: 0 0 0 2px var(--lf-tabbar), 0 0 0 4px var(--lf-primary); }
     .menu-pip {
@@ -129,11 +140,18 @@ import { AuthService } from '../../core/services/auth.service';
   `]
 })
 export class TabsComponent {
-  private chat = inject(ChatService);
-  private data = inject(DataService);
+  private router = inject(Router);
   protected auth = inject(AuthService);
+  private data = inject(DataService);
 
   readonly active = signal('home');
-  readonly unread = computed(() => this.chat.unreadTotal());
-  readonly alerts = computed(() => this.data.unreadNotifications());
+
+  create(): void {
+    const target = this.auth.signedIn() ? '/new' : '/auth?next=/new';
+    void this.router.navigateByUrl(target);
+  }
+
+  search(): void {
+    void this.router.navigateByUrl('/search');
+  }
 }

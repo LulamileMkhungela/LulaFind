@@ -61,7 +61,8 @@ export class AuthService {
   }
   readonly userAvatar = computed(() => {
     const u = this.user();
-    return u ? avatar(u.displayName, u.avatarHue) : avatar('Guest');
+    if (!u) return avatar('Guest');
+    return u.avatarUrl || avatar(u.displayName, u.avatarHue);
   });
 
   /**
@@ -104,6 +105,33 @@ export class AuthService {
   private restored = false;
   private authSubscription: { unsubscribe: () => void } | null = null;
 
+  /**
+   * "Sign me out if I didn't sign in."
+   *
+   * A sign-in only counts when it happened in this app, on this device. The
+   * marker is written by `rememberSignIn()` on a successful sign-in and erased
+   * by `signOut()`. On a cold start without the marker - a closed tab, a
+   * rebooted phone, a shared device - the stored Firebase session is thrown
+   * away and the app opens signed out, instead of quietly reusing it.
+   *
+   * Password-recovery and email-confirmation links are exempt: the person did
+   * not sign in, they followed a link, and signing them out would break the
+   * screen they are on.
+   */
+  private readonly signInMarker = 'lulafind.auth.signedIn';
+
+  private rememberSignIn(): void {
+    try { localStorage.setItem(this.signInMarker, String(Date.now())); } catch { /* private mode */ }
+  }
+
+  private hadExplicitSignIn(): boolean {
+    try { return !!localStorage.getItem(this.signInMarker); } catch { return false; }
+  }
+
+  private forgetSignIn(): void {
+    try { localStorage.removeItem(this.signInMarker); } catch { /* private mode */ }
+  }
+
   attachApi(_api?: LulaApi): void {
     if (this.restored) return;
     this.restored = true;
@@ -142,8 +170,12 @@ export class AuthService {
         if (this.recoveryLinkPresent()) this.passwordRecovery.set(true);
         const { data, error } = await supa.getSession();
         if (error) throw error;
-        if (data.session?.user) await this.resolveSupabaseUser(data.session.user);
-        else {
+        if (data.session?.user && !this.hadExplicitSignIn() && !this.recoveryLinkPresent()) {
+          // Nobody signed in on this device since the last sign-out.
+          await this.dropStoredSession(supa);
+        } else if (data.session?.user) {
+          await this.resolveSupabaseUser(data.session.user);
+        } else {
           // A local demo session must never impersonate a Supabase account.
           this.store.remove('session');
           if (this.recoveryLinkPresent()) this.passwordRecovery.set(true);
@@ -163,6 +195,15 @@ export class AuthService {
     }
   }
 
+  /** Ends a session that nobody started from this device. */
+  private async dropStoredSession(supa: any): Promise<void> {
+    this.forgetSignIn();
+    this.store.remove('session');
+    this.pendingProvider.set(null);
+    try { await supa.signOut(); } catch { /* already gone */ }
+    this.user.set(null);
+  }
+
   private isTrustedSupabaseAdmin(authUser: any): boolean {
     const role = String(authUser?.app_metadata?.role ?? '').toLowerCase();
     return role === 'admin' || role === 'moderator';
@@ -180,6 +221,7 @@ export class AuthService {
       this.user.set(profile);
       this.store.set('session', existing.id);
       this.pendingProvider.set(null);
+      this.rememberSignIn();
       return;
     }
 
@@ -200,20 +242,60 @@ export class AuthService {
         this.user.set(profile);
         this.store.set('session', profile.id);
         this.pendingProvider.set(null);
+        this.rememberSignIn();
         return;
       }
     }
 
-    const email = String(authUser.email ?? '');
-    const displayName = String(metadata.full_name ?? metadata.name ?? metadata.displayName ?? email.split('@')[0] ?? 'LulaFind member');
+    // Google already told us who this is. Take the name and the address from
+    // the account instead of asking the person to type what Google has, then
+    // send them straight to the one step LulaFind actually needs: province.
+    const email = String(authUser.email ?? metadata.email ?? '').trim();
+    const googleName = String(
+      metadata.full_name ?? metadata.name ?? metadata.displayName ?? email.split('@')[0] ?? ''
+    ).trim();
+    const parsed = parseFullName(googleName);
+    if (parsed) {
+      const profile = this.withTrustedSupabaseRole(await this.makeProfile({
+        displayName: parsed.full,
+        email: email || `${authUser.id}@google.lulafind`,
+        password: '', surname: parsed.surname,
+        // The province is confirmed in onboarding, where the name is shown back.
+        province: null, town: '',
+        over18: true, acceptedTerms: true
+      }, authUser.id), authUser);
+      await this.api.saveUser(profile);
+      this.user.set(profile);
+      this.store.set('session', profile.id);
+      this.pendingProvider.set(null);
+      this.rememberSignIn();
+      return;
+    }
+
+    // Google gave us an address but no usable name: ask for nothing but the name.
     const provider = (authUser.app_metadata?.provider === 'apple' ? 'apple' : 'google') as AuthProvider;
-    this.pendingProvider.set({ provider, displayName, email, surname: parseFullName(displayName)?.surname ?? '' });
+    this.pendingProvider.set({ provider, displayName: googleName, email, surname: '' });
     this.user.set(null);
   }
 
   /** Public browsing is allowed; this is the profile shown when signed out. */
   get viewerId(): string | null {
     return this.user()?.id ?? null;
+  }
+
+  /**
+   * Is there already an account for this address?
+   *
+   * Null means "Firebase would not say" (email enumeration protection is on),
+   * which is a valid answer, not a failure: sign-up then relies on Firebase's
+   * own `auth/email-already-in-use` and shows the same message.
+   */
+  async emailAlreadyRegistered(email: string): Promise<boolean | null> {
+    const address = email.trim().toLowerCase();
+    const bridge = (this.api as LulaApi & { authBridge?: { emailInUse?: (e: string) => Promise<boolean | null> } }).authBridge;
+    if (bridge?.emailInUse) return bridge.emailInUse(address);
+    // Offline mock mode: the addresses this device created are the ones we know.
+    return this.accounts().some((a) => a.email === address) ? true : null;
   }
 
   /* --------------------------- email OTP --------------------------- */
@@ -321,6 +403,7 @@ export class AuthService {
     const u = await this.api.user(userId);
     if (u) this.user.set(u);
     this.passwordRecovery.set(false);
+    this.rememberSignIn();
     return u ?? null;
   }
 
@@ -467,6 +550,7 @@ export class AuthService {
     this.store.set('session', id);
     this.user.set(signedInProfile);
     this.pendingProvider.set(null);
+    this.rememberSignIn();
     return signedInProfile;
   }
 
@@ -492,6 +576,7 @@ export class AuthService {
       this.store.set('session', profile.id);
       this.user.set(profile);
       this.passwordRecovery.set(false);
+      this.rememberSignIn();
       return profile;
     }
 
@@ -511,6 +596,7 @@ export class AuthService {
     this.store.set('session', acc.userId);
     this.user.set(u);
     this.passwordRecovery.set(false);
+    this.rememberSignIn();
     return u;
   }
 
@@ -541,6 +627,7 @@ export class AuthService {
     if (found) {
       this.store.set('session', found.id);
       this.user.set(found);
+      this.rememberSignIn();
       return found;
     }
     this.pendingProvider.set({ provider, ...info });
@@ -591,6 +678,7 @@ export class AuthService {
     if (!u) throw new Error('Demo data missing - reset app data from Settings');
     this.store.set('session', u.id);
     this.user.set(u);
+    this.rememberSignIn();
     return u;
   }
 
@@ -599,6 +687,7 @@ export class AuthService {
       const { error } = await this.supabaseAuth.signOut();
       if (error) throw error;
     }
+    this.forgetSignIn();
     this.store.remove('session');
     this.pendingProvider.set(null);
     this.passwordRecovery.set(false);
@@ -661,6 +750,7 @@ export class AuthService {
     const id = this.user()!.id;
     await this.api.deleteUser(id);
     this.store.set('accounts', this.accounts().filter((a) => a.userId !== id));
+    this.forgetSignIn();
     this.store.remove('session');
     this.user.set(null);
     await this.router.navigate(['/auth']);

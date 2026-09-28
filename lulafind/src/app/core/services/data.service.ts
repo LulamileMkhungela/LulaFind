@@ -220,21 +220,35 @@ export class DataService {
     this.cache.set({ ...this.cache(), [post.id]: post });
   }
 
+  /**
+   * Fold fetched posts into the cache.
+   *
+   * Two requests for the same post can land out of order - the feed arrives
+   * after you have already edited the case, or a background check finishes
+   * late. Writing blindly meant the older copy won and the edit silently
+   * vanished from the screen. The cache therefore keeps whichever record was
+   * updated most recently, and only writes when something actually changed.
+   */
   private mergeCache(posts: Post[]): void {
     const next = { ...this.cache() };
-    for (const p of posts) next[p.id] = p;
-    this.cache.set(next);
+    let changed = false;
+    for (const p of posts) {
+      const held = next[p.id];
+      if (held && (held.updatedAt ?? 0) > (p.updatedAt ?? 0)) continue;
+      if (held === p) continue;
+      next[p.id] = p;
+      changed = true;
+    }
+    if (changed) this.cache.set(next);
     void this.cacheAuthors(posts.map((p) => p.authorId));
   }
 
   private async cacheAuthors(ids: string[]): Promise<void> {
     const missing = [...new Set(ids.filter(Boolean))].filter((id) => !this.authors()[id]);
     if (!missing.length) return;
+    const loaded = await Promise.all(missing.map((id) => this.api.user(id)));
     const found: Record<string, UserProfile> = {};
-    for (const id of missing) {
-      const u = await this.api.user(id);
-      if (u) found[id] = u;
-    }
+    missing.forEach((id, i) => { if (loaded[i]) found[id] = loaded[i]!; });
     this.authors.set({ ...this.authors(), ...found });
   }
 
@@ -259,7 +273,10 @@ export class DataService {
     const [spots, rawStories, tips] = await Promise.all([this.api.spotlights(), this.api.stories(), this.api.tips()]);
     this.spotlights.set(spots);
     const me = this.auth.viewerId;
-    const stories = await Promise.all(rawStories.map(async (story) => {
+    // The story rail only ever shows the first handful, and each story costs an
+    // extra view query. Cap it so a long history cannot stall the feed.
+    const capped = rawStories.slice(0, 24);
+    const stories = await Promise.all(capped.map(async (story) => {
       const [views, replies] = await Promise.all([
         this.api.storyViewsFor(story.id),
         story.authorId === me ? this.api.storyRepliesFor(story.id) : Promise.resolve([] as StoryReply[])
@@ -305,7 +322,7 @@ export class DataService {
     this.followingIds.set(following.map((edge) => edge.followingId));
     this.followerIds.set(followers.map((edge) => edge.followerId));
     this.followRequests.set(requests);
-    void this.loadStatic().then(() => this.checkWatched());
+    void this.checkWatched();
   }
 
   /* ------------------------- voting ---------------------------- */
@@ -1008,6 +1025,19 @@ export class DataService {
     return list.sort((a, b) => b.createdAt - a.createdAt);
   }
 
+  /**
+   * Posts on someone's profile, straight from the database rather than by
+   * filtering the viewer's feed. Returns them and caches the authors so the
+   * cards render with names and avatars.
+   */
+  async postsByAuthor(authorId: string): Promise<Post[]> {
+    const list = (await this.api.postsByAuthor(authorId))
+      .filter((p) => !this.hiddenIds().includes(p.id))
+      .sort((a, b) => b.createdAt - a.createdAt);
+    this.mergeCache(list);
+    return list;
+  }
+
   spotlightPosts(id: string): Post[] {
     return this.feed().filter((p) => p.spotlightId === id);
   }
@@ -1051,7 +1081,10 @@ export class DataService {
       spotlightId: audience === 'surname' ? input.spotlightId ?? null : null
     };
     await this.api.saveStory(s);
-    await this.loadStatic();
+    // Put the new story straight in the rail. A full loadStatic() here was a
+    // round trip per story in the app, which is why posting felt like a stall.
+    this.stories.update((all) => [s, ...all.filter((x) => x.id !== s.id)]);
+    void this.loadStatic();
     return s;
   }
 
@@ -1081,7 +1114,15 @@ export class DataService {
     if (views.some((view) => view.viewerId === me)) return;
     const view: StoryView = { id: `sv_${storyId}_${me}`, storyId, viewerId: me, at: Date.now() };
     await this.api.saveStoryView(view);
-    await this.loadStatic();
+    this.patchStory(storyId, (story) =>
+      story.authorId === me
+        ? story
+        : { ...story, viewers: story.viewers.includes(me) ? story.viewers : [...story.viewers, me] });
+  }
+
+  /** Update one story in place, without re-querying the whole story rail. */
+  private patchStory(id: string, change: (story: Story) => Story): void {
+    this.stories.update((all) => all.map((s) => (s.id === id ? change(s) : s)));
   }
 
   async replyToStory(storyId: string, body: string): Promise<void> {
@@ -1103,7 +1144,10 @@ export class DataService {
         postId: null
       });
     }
-    await this.loadStatic();
+    this.patchStory(storyId, (story) =>
+      story.authorId === me && !story.replies.some((r) => r.id === reply.id)
+        ? { ...story, replies: [...story.replies, reply].sort((a, b) => a.at - b.at) }
+        : story);
   }
 
   async deleteStory(storyId: string): Promise<void> {
@@ -1111,7 +1155,7 @@ export class DataService {
     if (!s) return;
     if (s.authorId !== this.auth.viewerId) throw new Error('Only the person who shared this story can remove it');
     await this.api.saveStory({ ...s, expiresAt: 0 });
-    await this.loadStatic();
+    this.stories.update((all) => all.filter((x) => x.id !== storyId));
   }
 
   /* --------------------- outcome / found ----------------------- */
@@ -1179,12 +1223,21 @@ export class DataService {
     return next;
   }
 
+  /**
+   * Stamp a post with "we have already asked whether they were found".
+   *
+   * This runs in the background, minutes or hours after the post was read. The
+   * write is conditional on the record still being exactly what we read: if the
+   * case has since been edited or closed by someone else, the nudge is dropped
+   * rather than putting an old copy of the case back.
+   */
   async setOutcomeNudged(postId: string): Promise<void> {
     const p = await this.loadPost(postId);
     if (!p) return;
-    const next = { ...p, outcomeNudgeAt: Date.now() };
-    await this.api.savePost(next);
-    this.mergeCache([next]);
+    const now = Date.now();
+    const next = { ...p, outcomeNudgeAt: now, updatedAt: now };
+    const applied = await this.api.savePost(next, { ifUnchangedSince: p.updatedAt });
+    if (applied) this.mergeCache([next]);
   }
 
   /** Poster says "no, still looking" - resets the nudge timer. */
@@ -1374,6 +1427,17 @@ export class DataService {
   /* --------------------------- users --------------------------- */
   async profile(id: string): Promise<UserProfile | undefined> {
     return this.api.user(id);
+  }
+
+  /**
+   * Re-read one profile from the database and push it into the author cache.
+   * Called after a profile is saved so the screen shows what was actually
+   * stored, not what the form hoped for.
+   */
+  async refreshProfile(id: string): Promise<UserProfile | undefined> {
+    const u = await this.api.user(id);
+    if (u) this.touchAuthor(u);
+    return u;
   }
 
   /**
@@ -1570,8 +1634,16 @@ export class DataService {
   }
 
   /* --------------------------- misc ---------------------------- */
+  /**
+   * The picture to show for a person.
+   *
+   * A photo the person uploaded always wins. Falling straight through to the
+   * generated initials is what made "profile photo saved" look like nothing
+   * had happened: the row saved, but every avatar on the app ignored it.
+   */
   avatarFor(u?: UserProfile | null): string {
-    return avatar(u?.displayName ?? 'Anonymous', u?.avatarHue);
+    if (!u) return avatar('Anonymous');
+    return u.avatarUrl || avatar(u.displayName, u.avatarHue);
   }
 
   sceneFor(title: string, tone: 'street' | 'home' | 'map' | 'night' = 'street'): string {

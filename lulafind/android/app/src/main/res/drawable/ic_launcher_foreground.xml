@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- LulaFind mark: a magnifier holding the person you are looking for.
+     108dp adaptive-icon canvas, artwork kept inside the 66dp safe zone. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="512"
+    android:viewportHeight="512">
+    <group
+        android:pivotX="256"
+        android:pivotY="256"
+        android:scaleX="0.62"
+        android:scaleY="0.62">
+        <path
+            android:pathData="M316,206 A104,104 0 1 1 108,206 A104,104 0 1 1 316,206"
+            android:fillColor="#FFFFFF"
+            android:fillAlpha="0.16" />
+        <path
+            android:pathData="M316,206 A104,104 0 1 1 108,206 A104,104 0 1 1 316,206"
+            android:strokeColor="#FFFFFF"
+            android:strokeWidth="30"
+            android:fillColor="#00000000" />
+        <group
+            android:translateX="212"
+            android:translateY="212"
+            android:scaleX="0.82"
+            android:scaleY="0.82">
+            <path
+                android:pathData="M0,62 C-54,28 -70,2 -70,-22 c0,-22 17,-36 38,-36 16,0 26,10 32,22 6,-12 16,-22 32,-22 21,0 38,14 38,36 0,24 -16,50 -70,84 z"
+                android:fillColor="#FFFFFF" />
+        </group>
+        <path
+            android:pathData="M289,283 L398,392"
+            android:strokeColor="#FFFFFF"
+            android:strokeWidth="34"
+            android:strokeLineCap="round"
+            android:fillColor="#00000000" />
+    </group>
+</vector>

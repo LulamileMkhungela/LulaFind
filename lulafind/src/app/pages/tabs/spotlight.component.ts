@@ -1,7 +1,6 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import { IonContent } from '@ionic/angular/ion-content';
-import { IonHeader } from '@ionic/angular/ion-header';
 import { IonInput } from '@ionic/angular/ion-input';
 import { IonTextarea } from '@ionic/angular/ion-textarea';
 import { IonSelect } from '@ionic/angular/ion-select';
@@ -11,6 +10,7 @@ import { IonLabel } from '@ionic/angular/ion-label';
 import { IonSearchbar } from '@ionic/angular/ion-searchbar';
 import { ToastController } from '@ionic/angular/toast-controller';
 import { IconComponent } from '../../shared/components/icon.component';
+import { TopNavComponent } from '../../shared/components/top-nav.component';
 import { EmptyComponent } from '../../shared/components/empty.component';
 import { DataService } from '../../core/services/data.service';
 import { AuthService } from '../../core/services/auth.service';
@@ -29,14 +29,14 @@ const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
   selector: 'lf-spotlight',
   standalone: true,
   imports: [
-    IonContent, IonHeader, IonInput, IonTextarea, IonSelect,
+    IonContent, TopNavComponent, IonInput, IonTextarea, IonSelect,
     IonSelectOption, IonItem, IonLabel, IonSearchbar, RouterLink, IconComponent, EmptyComponent
   ],
   template: `
-    <ion-header class="fb-head">
-      <div class="fb-head__bar">
-        <h1 class="fb-head__title">Spotlight</h1>
-      </div>
+    <lf-top-nav title="Spotlight" backTo="/home" />
+
+    <ion-content class="lf-page">
+      <h1 class="page-title">Spotlight</h1>
       <!-- Two jobs only: find a surname, or start one. -->
       <div class="seg" role="tablist" aria-label="Spotlight">
         <button role="tab" class="seg__btn" [class.on]="mode() === 'view'" [attr.aria-selected]="mode() === 'view'"
@@ -48,9 +48,7 @@ const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
           <lf-icon name="plus" [size]="18" [weight]="2.4" /> Create
         </button>
       </div>
-    </ion-header>
 
-    <ion-content class="lf-page">
       @if (mode() === 'view') {
         <div class="find">
           <ion-searchbar placeholder="Search a surname, e.g. Ndlela" [debounce]="150" [value]="query()"
