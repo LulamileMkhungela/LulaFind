@@ -10,12 +10,12 @@ import {
 } from '../models/types';
 
 /**
- * True when Postgres refused the row because it could not identify the caller.
+ * True when Postgres refused the row and a fresh token is worth one retry.
  *
- * `lula_uid()` (supabase/schema.sql) reads the Firebase UID out of the request
- * token. When that comes back NULL, every policy comparing it to a row's
- * owner_id is denied, and PostgREST reports it as a row-level-security error
- * on insert. The same wording appears when the token has simply expired.
+ * A missing or expired Firebase token makes `lula_uid()` return NULL, and
+ * PostgREST reports that as a row-level-security error. The same wording is
+ * also what an upsert of a brand-new story or post produces — that case is
+ * avoided by inserting first (see `putRecord`), not by signing out.
  */
 function isIdentityError(message: string): boolean {
   return /row-level security|invalid JWT|JWT expired|not authenticated|401|PGRST301/i.test(message ?? '');
@@ -247,10 +247,8 @@ export class SupabaseApi implements LulaApi {
     ownerId?: string,
     options?: SavePostOptions
   ): Promise<boolean> {
-    // Row security compares owner_id with the Firebase UID in the request
-    // token. Never let a null slip through - a null owner_id can never equal a
-    // caller, which is exactly what "new row violates row-level security
-    // policy" means.
+    // The insert policy compares owner_id with the Firebase UID in the request
+    // token. A missing owner can never match, so fill it in before writing.
     const owner = ownerId ?? (await this.currentUid());
     const row = {
       id: item.id,
@@ -275,7 +273,7 @@ export class SupabaseApi implements LulaApi {
         // The row may not exist yet, or the caller may not be allowed to update
         // it. Fall back to the ordinary write rather than losing the change.
         console.warn(`Supabase conditional update(${collection}) fell back:`, error.message);
-        await this.write(collection, () => this.client.from('records').upsert(row), { owner });
+        await this.write(collection, () => this.putRecord(row), { owner });
         return true;
       }
       if (base === undefined) return true;
@@ -288,18 +286,43 @@ export class SupabaseApi implements LulaApi {
       }
       return applied;
     }
-    await this.write(collection, () => this.client.from('records').upsert(row), { owner });
+    await this.write(collection, () => this.putRecord(row), { owner });
     return true;
+  }
+
+  /**
+   * Insert a new row, or update it when that id is already stored.
+   *
+   * Do not use PostgREST upsert for this. `INSERT ... ON CONFLICT DO UPDATE`
+   * also runs the UPDATE policy, and the live update policy cannot see a story
+   * or a post that does not exist yet. That is reported as
+   * "new row violates row-level security policy" even though a plain insert of
+   * the same row is allowed — which is why a Spotlight could be saved and a
+   * story or post could not. An update of a row that is already there is fine.
+   */
+  private async putRecord(row: { id: string; collection: string; owner_id: string | null; payload: unknown; updated_at: number }): Promise<{ error: { message: string; code?: string } | null }> {
+    const inserted = await this.client.from('records').insert(row);
+    if (!inserted.error || !this.isDuplicate(inserted.error)) return inserted;
+    return this.client
+      .from('records')
+      .update({ payload: row.payload, updated_at: row.updated_at })
+      .eq('collection', row.collection)
+      .eq('id', row.id);
+  }
+
+  /** Postgres unique_violation, however PostgREST spells it. */
+  private isDuplicate(error: { code?: string; message?: string }): boolean {
+    return error.code === '23505' || /duplicate key|already exists/i.test(error.message ?? '');
   }
 
   /**
    * Every write goes through here.
    *
-   * A row-level-security rejection means the database could not see who was
-   * calling, so the row is retried once with a freshly minted ID token. If it
-   * still fails, the person is told what actually went wrong instead of a raw
-   * Postgres message, and the reason is written to the banner so it is visible
-   * on the page and not only in the console.
+   * A row-level-security rejection on a plain insert means the database could
+   * not see who was calling, so the row is retried once with a freshly minted
+   * ID token. If it still fails, the person is told what actually went wrong
+   * instead of a raw Postgres message, and the reason is written to the banner
+   * so it is visible on the page and not only in the console.
    */
   private async write(
     collection: string,
@@ -343,10 +366,10 @@ export class SupabaseApi implements LulaApi {
   private explain(collection: string, message: string, owner: string | null): string {
     if (isIdentityError(message)) {
       supabaseNotice.set(
-        'LulaFind cannot confirm your account with the database yet, so nothing was saved. ' +
-        'Sign out and sign in again. If it keeps happening, the Supabase Firebase link needs switching on.'
+        'That save was refused by the database, so nothing was stored. Try again. ' +
+        'If it keeps happening, sign out and sign in so the database can see this account.'
       );
-      return 'Your sign-in could not be verified, so nothing was saved. Sign out and sign in again.';
+      return 'Nothing was saved. Try again — you do not need to sign out first.';
     }
     if (/row-level security/i.test(message)) {
       return `LulaFind could not save this because the database would not accept it. Please try again.`;
