@@ -121,11 +121,15 @@ import { MediaService } from '../../core/services/media.service';
 
         <h2 class="fb-section-title">All shortcuts</h2>
         <div class="quick">
+          <a class="q" routerLink="/saved"><span class="qi qi-purple"><lf-icon name="bookmark" [size]="20" /></span><span>Saved</span>
+            @if (data.savedIds().length) { <em class="lf-count">{{ data.savedIds().length }}</em> }</a>
+          <a class="q" routerLink="/connections"><span class="qi qi-blue"><lf-icon name="users" [size]="20" /></span><span>Friends</span>
+            @if (data.followRequests().length) { <em class="lf-badge">{{ data.followRequests().length }}</em> }</a>
           <a class="q" routerLink="/notifications"><span class="qi qi-blue"><lf-icon name="bell" [size]="20" /></span><span>Alerts</span>
             @if (data.unreadNotifications() > 0) { <em class="lf-badge">{{ data.unreadNotifications() }}</em> }</a>
           <a class="q" routerLink="/safety"><span class="qi qi-green"><lf-icon name="shield" [size]="20" /></span><span>Safety</span></a>
           <a class="q" routerLink="/tips"><span class="qi qi-yellow"><lf-icon name="info" [size]="20" /></span><span>Tips</span></a>
-          <a class="q" routerLink="/spotlight"><span class="qi qi-blue"><lf-icon name="users" [size]="20" /></span><span>Spotlight</span></a>
+          <a class="q" routerLink="/spotlight"><span class="qi qi-teal"><lf-icon name="users" [size]="20" /></span><span>Spotlight</span></a>
           <a class="q" routerLink="/settings"><span class="qi qi-grey"><lf-icon name="lock" [size]="20" /></span><span>Privacy</span></a>
           @if (isAdmin()) {
             <a class="q" routerLink="/admin"><span class="qi qi-red"><lf-icon name="shield" [size]="20" /></span><span>Admin</span>
@@ -139,7 +143,7 @@ import { MediaService } from '../../core/services/media.service';
           <div class="requests">
             <div class="lf-row-between">
               <h3 class="lf-h2"><lf-icon name="users" [size]="16" /> Follow requests</h3>
-              <span class="lf-badge">{{ data.followRequests().length }}</span>
+              <a class="see-all" routerLink="/connections" [queryParams]="{ tab: 'requests' }">See all</a>
             </div>
             @for (r of requestPeople(); track r.id) {
               <div class="req">
@@ -306,6 +310,10 @@ import { MediaService } from '../../core/services/media.service';
     .qi-yellow { background: color-mix(in srgb, var(--lf-marigold) 20%, transparent); color: #c98f00; }
     .qi-red { background: color-mix(in srgb, var(--lf-signal) 14%, transparent); color: var(--lf-signal); }
     .qi-grey { background: var(--lf-card-2); color: var(--ion-text-color); }
+    .qi-purple { background: color-mix(in srgb, #a33bc2 16%, transparent); color: #a33bc2; }
+    .qi-teal { background: color-mix(in srgb, #1bb5a3 16%, transparent); color: #12998a; }
+    .q .lf-count { position: absolute; top: 14px; right: 14px; font-style: normal; font-size: 13px; color: var(--lf-muted); font-weight: 600; }
+    .see-all { color: var(--lf-link); font-size: 15px; font-weight: 600; text-decoration: none; }
     .tabs { display: flex; gap: 8px; padding: 0 var(--lf-gap) 10px; overflow-x: auto; scrollbar-width: none; }
     .tab { height: 36px; padding: 0 14px; border-radius: 999px; border: 0; background: var(--lf-card-2);
       color: var(--ion-text-color); font-family: inherit; font-weight: 600; font-size: 15px; cursor: pointer; white-space: nowrap; }
@@ -372,7 +380,7 @@ export class MeComponent {
   tab = signal<'posts' | 'saved' | 'khumbu'>('posts');
   tabs = [
     { key: 'posts' as const, label: 'My posts' },
-    { key: 'saved' as const, label: 'Watchlist' },
+    { key: 'saved' as const, label: 'Saved' },
     { key: 'khumbu' as const, label: 'KhumbulEkhaya' }
   ];
 
@@ -392,7 +400,7 @@ export class MeComponent {
   });
   readonly visible = computed(() => {
     switch (this.tab()) {
-      case 'saved': return this.data.feed().filter((p) => this.data.savedIds().includes(p.id));
+      case 'saved': return this.data.savedPosts();
       case 'khumbu': return this.myPosts().filter((p) => p.type === 'khumbulekhaya');
       default: return this.myPosts();
     }
@@ -402,6 +410,7 @@ export class MeComponent {
     this.syncForm();
     void this.loadRequests();
     void this.loadBadge();
+    void this.data.loadSaved();
   }
 
   /**
@@ -432,7 +441,7 @@ export class MeComponent {
   }
 
   emptyTitle(): string {
-    return this.tab() === 'saved' ? 'Your watchlist is empty' : 'You have not posted yet';
+    return this.tab() === 'saved' ? 'Nothing saved yet' : 'You have not posted yet';
   }
 
   touched = { name: false };

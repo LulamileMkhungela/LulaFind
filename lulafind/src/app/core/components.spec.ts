@@ -153,14 +153,15 @@ describe('Components render', () => {
     expect(f.componentInstance.usernamePreview()).toBe('doe');
   });
 
-  it('renders the Spotlight tab with an A-Z dropdown', async () => {
+  it('renders the Spotlight tab with View / Create and A-Z letters', async () => {
     const data = TestBed.inject(DataService);
     await data.loadStatic();
     const f = TestBed.createComponent(SpotlightComponent);
     f.detectChanges();
     await f.whenStable();
     const html: string = (f.nativeElement as HTMLElement).innerHTML;
-    expect(html).toContain('All letters');
+    expect(html).toContain('View');
+    expect(html).toContain('Create');
     expect(html).toContain('Ndlela');
     // picking a letter narrows the list
     f.componentInstance.letter.set('N');
@@ -180,11 +181,11 @@ describe('Components render', () => {
     f.componentInstance.form.surname = 'Ndlela';
     f.componentInstance.form.province = 'KZN';
     f.detectChanges();
-    expect(f.componentInstance.duplicate()).toBe(true);
+    expect(f.componentInstance.duplicate()).toBeTruthy();
     expect(f.componentInstance.surnameError()).toBe('');
     f.componentInstance.form.province = 'GP';
     f.detectChanges();
-    expect(f.componentInstance.duplicate()).toBe(false);
+    expect(f.componentInstance.duplicate()).toBeNull();
     f.componentInstance.form.surname = 'X';
     f.detectChanges();
     expect(f.componentInstance.surnameError()).toBeTruthy();
@@ -364,13 +365,18 @@ describe('Search boxes actually search', () => {
     expect(best.n).toBeGreaterThan(1);
     const f = TestBed.createComponent(SpotlightDetailComponent);
     f.componentInstance.sp.set(best.sp);
+    await f.componentInstance.reloadPosts();
     f.detectChanges();
     await f.whenStable();
     const all = f.componentInstance.posts().length;
-    expect(all).toBe(best.n);
+    // filed posts plus any post about someone with that surname
+    expect(all).toBeGreaterThanOrEqual(best.n);
+    const surname = best.sp.surname.toLowerCase();
+    expect(f.componentInstance.posts().every((p) => p.spotlightId === best.sp.id
+      || (p.subject?.surname ?? '').toLowerCase() === surname
+      || (p.subject?.name ?? '').toLowerCase().split(/\s+/).includes(surname))).toBe(true);
     type(f, f.componentInstance.posts()[1].title.slice(0, 6));
     expect(f.componentInstance.posts().length).toBeLessThan(all);
-    expect(f.componentInstance.posts().every((p) => p.spotlightId === best.sp.id)).toBe(true);
     type(f, 'zzzznothingmatches');
     expect(f.componentInstance.posts()).toEqual([]);
   });

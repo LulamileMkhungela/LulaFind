@@ -42,6 +42,8 @@ export abstract class LulaApi {
   /** Update only the signed-in member's Spotlight membership. */
   abstract setSpotlightMembership(id: string, memberId: string, joining: boolean): Promise<Spotlight | undefined>;
   abstract deleteSpotlight(id: string): Promise<void>;
+  /** File (or unfile) a post in a Spotlight. Members may do this, not only the owner. */
+  abstract linkSpotlightPost(spotlightId: string, postId: string, linking: boolean): Promise<void>;
 
   /* media */
   abstract uploadMedia(ownerId: string, item: MediaItem): Promise<MediaItem>;
@@ -187,6 +189,12 @@ export class MockApi implements LulaApi {
   async followingCount(userId: string) { return this.db.followingOf(userId).length; }
 
   async notifications(userId: string) { return this.db.notifications(userId); }
+  async linkSpotlightPost(spotlightId: string, postId: string, linking: boolean): Promise<void> {
+    const sp = await this.spotlight(spotlightId);
+    if (!sp) return;
+    const rest = sp.postIds.filter((x) => x !== postId);
+    await this.saveSpotlight({ ...sp, postIds: linking ? [postId, ...rest] : rest });
+  }
   async pushNotification(n: Notification) { this.db.pushNotification(n); }
   async markNotificationsRead(userId: string) { this.db.markNotificationsRead(userId); }
 

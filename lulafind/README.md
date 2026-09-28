@@ -67,6 +67,17 @@ in Settings -> Appearance (or "Match my phone").
 - **Tab screens** (Spotlight, Chats, Notifications, Menu) use Facebook's big
   left title with round buttons. Chats use Messenger bubbles. The Menu tab shows
   your profile with a cover and Facebook-style shortcut tiles.
+- **Home** opens straight onto stories, filters and the feed. New posts start
+  from the round **+** in the header.
+- **Spotlight** has two buttons, **View** and **Create**. View shows your own
+  surname's page first, then the spotlights you joined, then A-Z. A Spotlight
+  page lists posts filed into it **plus every post about someone with that
+  surname**, with All / Still missing / Found filters.
+- **Saved** (Menu → Saved) keeps every post you save, on your profile so it
+  follows you to any phone. You get an alert when a saved post, or a post in a
+  Spotlight you joined, gets a new Idea or is marked found.
+- **Friends** (Menu → Friends) lists follow requests (Confirm / Delete),
+  people you follow (Unfollow) and your followers (Follow back / Remove).
 - **Log in** is Facebook-style: round logo, pill **Log in**, **Continue with
   Google**, and an outlined **Create new account**.
 

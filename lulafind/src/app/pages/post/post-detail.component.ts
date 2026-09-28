@@ -988,8 +988,9 @@ export class PostDetailComponent implements OnInit {
   async save(): Promise<void> {
     const p = this.p();
     if (!p) return;
+    if (!this.auth.signedIn()) { void this.router.navigate(['/auth'], { queryParams: { next: `/post/${p.id}` } }); return; }
     this.saved.set(await this.data.toggleSaved(p.id));
-    await this.say(this.saved() ? 'Added to your watchlist' : 'Removed from watchlist');
+    await this.say(this.saved() ? 'Saved. Find it in Menu → Saved.' : 'Removed from Saved');
   }
 
   async share(): Promise<void> {

@@ -11,7 +11,6 @@ import { ToastController } from '@ionic/angular/toast-controller';
 import { ActionSheetController } from '@ionic/angular/action-sheet-controller';
 import { AlertController } from '@ionic/angular/alert-controller';
 import { IconComponent } from '../../shared/components/icon.component';
-import { AvatarComponent } from '../../shared/components/avatar.component';
 import { EmptyComponent } from '../../shared/components/empty.component';
 import { ChatState, PostCardComponent } from '../../shared/components/post-card.component';
 import { StoryRailComponent } from '../../shared/components/story-rail.component';
@@ -31,7 +30,7 @@ import { POST_TYPE_META, Post } from '../../core/models/types';
   imports: [
     IonContent, IonHeader, IonRefresher, IonRefresherContent,
     IonInfiniteScroll, IonInfiniteScrollContent, IonSkeletonText,
-    RouterLink, IconComponent, AvatarComponent, EmptyComponent, PostCardComponent, StoryRailComponent, FilterBarComponent
+    RouterLink, IconComponent, EmptyComponent, PostCardComponent, StoryRailComponent, FilterBarComponent
   ],
   template: `
     <ion-header class="fb-head home-head">
@@ -58,33 +57,6 @@ import { POST_TYPE_META, Post } from '../../core/models/types';
       <ion-refresher slot="fixed" (ionRefresh)="onRefresh($event)">
         <ion-refresher-content pullingText="Pull to refresh"></ion-refresher-content>
       </ion-refresher>
-
-      <!-- Facebook composer: "What's on your mind?" -->
-      <section class="composer">
-        <div class="composer__top">
-          <a class="composer__me" [routerLink]="auth.signedIn() ? '/me' : '/auth'" aria-label="Your profile">
-            <lf-avatar [src]="auth.userAvatar()" [name]="auth.user()?.displayName ?? 'Guest'" [size]="40" />
-          </a>
-          <button class="composer__input" (click)="onPromptClick()">What's on your mind? Report a case...</button>
-          <button class="composer__photo" (click)="goReportMissing()" aria-label="Add photo">
-            <lf-icon name="image" [size]="24" />
-          </button>
-        </div>
-        <div class="composer__actions">
-          <button class="composer__act" (click)="goReportMissing()">
-            <lf-icon name="search" [size]="20" class="ic-red" />
-            <span>Missing</span>
-          </button>
-          <button class="composer__act" (click)="goSighting()">
-            <lf-icon name="pin" [size]="20" class="ic-green" />
-            <span>Sighting</span>
-          </button>
-          <button class="composer__act" (click)="goDanger()">
-            <lf-icon name="alert" [size]="20" class="ic-yellow" />
-            <span>Danger</span>
-          </button>
-        </div>
-      </section>
 
       <!-- Facebook Stories Rail -->
       <lf-story-rail (addStory)="onAddStory()" />
@@ -183,72 +155,6 @@ import { POST_TYPE_META, Post } from '../../core/models/types';
       justify-content: center;
     }
 
-    /* Composer */
-    .composer {
-      background: var(--lf-card);
-      margin: 0 0 8px;
-      box-shadow: var(--lf-shadow);
-    }
-    .composer__top {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 10px 12px 10px 16px;
-    }
-    .composer__me { display: inline-flex; border-radius: 50%; }
-    .composer__input {
-      flex: 1;
-      min-width: 0;
-      height: 40px;
-      border-radius: 999px;
-      border: 1px solid var(--lf-line);
-      background: transparent;
-      padding: 0 14px;
-      text-align: left;
-      color: var(--ion-text-color);
-      font-family: inherit;
-      font-size: 15px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      cursor: pointer;
-    }
-    .composer__input:hover { background: var(--lf-hover); }
-    .composer__photo {
-      width: 40px; height: 40px;
-      border: 0; border-radius: 50%;
-      background: transparent;
-      color: #45bd62;
-      display: inline-flex; align-items: center; justify-content: center;
-      cursor: pointer;
-    }
-    .composer__photo:hover { background: var(--lf-hover); }
-    .composer__actions {
-      display: flex;
-      border-top: 1px solid var(--lf-line-soft);
-      padding: 4px;
-    }
-    .composer__act {
-      flex: 1;
-      height: 40px;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      border: 0;
-      border-radius: 6px;
-      background: transparent;
-      color: var(--lf-muted);
-      font-family: inherit;
-      font-size: 14px;
-      font-weight: 600;
-      cursor: pointer;
-    }
-    .composer__act:hover, .composer__act:active { background: var(--lf-hover); }
-    .ic-red { color: #f3425f; }
-    .ic-green { color: #45bd62; }
-    .ic-yellow { color: #f7b928; }
-
     .skel {
       background: var(--lf-card);
       margin: 0 0 8px;
@@ -334,30 +240,6 @@ export class HomeComponent {
     void this.router.navigate(['/new']);
   }
 
-  async goSighting(): Promise<void> {
-    if (!this.auth.signedIn()) {
-      void this.router.navigate(['/auth'], { queryParams: { next: '/create/sighting' } });
-      return;
-    }
-    void this.router.navigate(['/create/sighting']);
-  }
-
-  async goDanger(): Promise<void> {
-    if (!this.auth.signedIn()) {
-      void this.router.navigate(['/auth'], { queryParams: { next: '/create/danger' } });
-      return;
-    }
-    void this.router.navigate(['/create/danger']);
-  }
-
-  async goReportMissing(): Promise<void> {
-    if (!this.auth.signedIn()) {
-      void this.router.navigate(['/auth'], { queryParams: { next: '/create/missing' } });
-      return;
-    }
-    void this.router.navigate(['/create/missing']);
-  }
-
   private async recomputeGates(): Promise<void> {
     const gates: Record<string, ChatState> = {};
     for (const p of this.data.feed()) {
@@ -420,8 +302,9 @@ export class HomeComponent {
   }
 
   async onSave(p: Post): Promise<void> {
+    if (!(await this.needAuth())) return;
     const saved = await this.data.toggleSaved(p.id);
-    await this.show(saved ? 'Saved to watchlist' : 'Removed from watchlist');
+    await this.show(saved ? 'Saved. Find it in Menu → Saved.' : 'Removed from Saved');
   }
 
   async onChat(p: Post): Promise<void> {

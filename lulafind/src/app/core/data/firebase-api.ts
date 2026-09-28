@@ -164,6 +164,12 @@ export class FirebaseApi implements LulaApi {
   /* spotlights */
   async spotlights() { return this.getList<Spotlight>(this.col('spotlights')); }
   async spotlight(id: string) { return this.getOne<Spotlight>(`spotlights/${id}`); }
+  async linkSpotlightPost(spotlightId: string, postId: string, linking: boolean): Promise<void> {
+    const sp = await this.spotlight(spotlightId);
+    if (!sp) return;
+    const rest = sp.postIds.filter((x) => x !== postId);
+    await this.saveSpotlight({ ...sp, postIds: linking ? [postId, ...rest] : rest });
+  }
   async saveSpotlight(s: Spotlight) { await this.set(`spotlights/${s.id}`, s as unknown as Record<string, unknown>); }
   async setSpotlightMembership(id: string, memberId: string, joining: boolean) {
     const spotlight = await this.spotlight(id);

@@ -312,8 +312,40 @@ export class SupabaseApi implements LulaApi {
     return (post.upvotes * 3 + post.commentCount * 5 + post.shares * 2) / Math.pow(ageHours, 0.55);
   }
 
+  /**
+   * Authors save their own post directly. Everyone else (voting, sharing,
+   * "I'm looking", search zones, danger updates, KhumbulEkhaya answers,
+   * reports) goes through lula_post_interact, which accepts only those
+   * narrow changes - see supabase/post-interactions.sql.
+   */
   async savePost(p: Post): Promise<void> {
-    await this.upsert('posts', p, p.authorId);
+    const { data } = await this.client.auth.getSession();
+    const me = data.session?.user?.id ?? null;
+    if (!me || me === p.authorId) {
+      await this.upsert('posts', p, p.authorId);
+      return;
+    }
+    const { error } = await this.client.rpc('lula_post_interact', {
+      post_id: p.id,
+      next: this.persistRecordMedia('posts', p)
+    });
+    if (error) {
+      // Admins moderate with a direct write.
+      if (/Authors and admins/i.test(error.message)) {
+        await this.upsert('posts', p, p.authorId);
+        return;
+      }
+      throw new Error(error.message);
+    }
+    this.rx.next(++this.tick);
+  }
+
+  async linkSpotlightPost(spotlightId: string, postId: string, linking: boolean): Promise<void> {
+    const { error } = await this.client.rpc('lula_link_spotlight_post', {
+      spotlight_id: spotlightId, post_id: postId, linking
+    });
+    if (error) throw new Error(`Could not update the Spotlight: ${error.message}`);
+    this.rx.next(++this.tick);
   }
 
   async deletePost(id: string): Promise<void> {

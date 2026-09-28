@@ -37,6 +37,8 @@ export const routes: Routes = [
   { path: 'user/:id', loadComponent: () => import('./pages/user/profile.component').then((m) => m.ProfileComponent) },
   { path: 'spotlight/:id', loadComponent: () => import('./pages/spotlight/spotlight-detail.component').then((m) => m.SpotlightDetailComponent) },
   { path: 'story/:id', loadComponent: () => import('./pages/story/story-viewer.component').then((m) => m.StoryViewerComponent) },
+  { path: 'saved', canActivate: [authGuard], loadComponent: () => import('./pages/saved/saved.component').then((m) => m.SavedComponent) },
+  { path: 'connections', canActivate: [authGuard], loadComponent: () => import('./pages/connections/connections.component').then((m) => m.ConnectionsComponent) },
   { path: 'search', loadComponent: () => import('./pages/search/search.component').then((m) => m.SearchComponent) },
   { path: 'tips', loadComponent: () => import('./pages/tips/tips.component').then((m) => m.TipsComponent) },
   { path: 'help', loadComponent: () => import('./pages/help/help.component').then((m) => m.HelpComponent) },
