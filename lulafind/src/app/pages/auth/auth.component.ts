@@ -221,18 +221,39 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
             @if (signupStep() === 4) {
               <h2 class="snap-question">What's your email?</h2>
+              @if (pendingName()) {
+                <p class="snap-subtext">This is the address on your Google account. You do not need to type it.</p>
+                <div class="snap-ident-card">
+                  <lf-icon name="mail" [size]="20" />
+                  <div>
+                    <span class="k">FROM GOOGLE</span>
+                    <strong>{{ f.email || 'No address on this Google account' }}</strong>
+                  </div>
+                </div>
+              } @else {
               <div class="snap-field">
                 <label class="snap-label">Email</label>
-                <input class="snap-input" type="email" placeholder="you@example.co.za"
-                       [value]="f.email" [disabled]="!!pendingName()"
-                       (input)="f.email = $any($event.target).value" (blur)="touched.email = true" />
-                @if (touched.email && !emailOk()) {
+                <input class="snap-input" type="email" placeholder="you@example.co.za" autocomplete="email"
+                       [value]="f.email" [disabled]="checkingEmail"
+                       (input)="f.email = $any($event.target).value; emailError.set('')"
+                       (blur)="checkEmailNow()" />
+                @if (emailChecking()) {
+                  <p class="field-ok"><lf-icon name="refresh" [size]="13" /> Checking this address…</p>
+                } @else if (touched.email && !emailOk()) {
                   <p class="field-err">Enter a valid email address</p>
+                } @else if (emailError()) {
+                  <div class="field-err field-err--block" role="alert">
+                    <lf-icon name="alert" [size]="15" /> {{ emailError() }}
+                    <button type="button" class="linklike" (click)="goToSignIn()">Log in instead</button>
+                  </div>
+                } @else if (emailFree()) {
+                  <p class="field-ok"><lf-icon name="check" [size]="13" /> This email is free</p>
                 }
               </div>
+              }
               <div class="snap-footer-notes">
-                <button class="snap-btn snap-btn--blue snap-block" (click)="nextStep()">
-                  Continue
+                <button class="snap-btn snap-btn--blue snap-block" [disabled]="checkingEmail" (click)="nextStep()">
+                  {{ checkingEmail ? 'Checking…' : 'Continue' }}
                 </button>
               </div>
             }
@@ -511,6 +532,8 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
     .snap-check input { accent-color: var(--lf-primary); width: 20px; height: 20px; flex-shrink: 0; }
 
     .field-err { color: var(--lf-signal); font-size: 13px; font-weight: 500; margin: 2px 0 0; }
+    .field-err--block { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 8px; font-weight: 600; }
+    .field-ok { display: flex; align-items: center; gap: 5px; margin: 3px 0 0; color: var(--lf-ubuntu); font-size: 13px; font-weight: 600; }
     .err-msg { color: var(--lf-signal); font-size: 14px; margin: 12px 0 0; text-align: center; display: flex; align-items: center; justify-content: center; gap: 6px; }
     .ok-msg { color: var(--lf-ubuntu); font-size: 14px; margin: 12px 0 0; text-align: center; display: flex; align-items: center; justify-content: center; gap: 6px; }
 
@@ -538,6 +561,10 @@ export class AuthComponent implements OnInit {
   error = signal('');
   notice = signal('');
   legal = signal<string | null>(null);
+  /** Email step: is this address already registered? */
+  readonly emailChecking = signal(false);
+  readonly emailFree = signal(false);
+  readonly emailError = signal('');
   over18 = false;
   terms = false;
   saveLoginInfo = true;
@@ -609,6 +636,44 @@ export class AuthComponent implements OnInit {
     return EMAIL_RE.test(this.f.email.trim());
   }
 
+  /** Template shorthand: `[disabled]="checkingEmail"`. */
+  get checkingEmail(): boolean {
+    return this.emailChecking();
+  }
+
+  private emailTimer: ReturnType<typeof setTimeout> | null = null;
+
+  /**
+   * Ask once, the moment the person leaves the email field, instead of four
+   * screens later when the account is finally created. Null means Firebase
+   * will not answer (enumeration protection is on) and we stay quiet.
+   */
+  async checkEmailNow(): Promise<void> {
+    this.touched.email = true;
+    this.emailError.set('');
+    this.emailFree.set(false);
+    if (this.pendingName() || !this.emailOk()) return;
+    this.emailChecking.set(true);
+    try {
+      const taken = await this.auth.emailAlreadyRegistered(this.f.email);
+      if (taken === true) {
+        this.emailError.set('There is already an account with this email.');
+      } else if (taken === false) {
+        this.emailFree.set(true);
+      }
+    } catch {
+      /* could not check - the real check still happens when the account is made */
+    } finally {
+      this.emailChecking.set(false);
+    }
+  }
+
+  goToSignIn(): void {
+    this.emailError.set('');
+    this.signupStep.set(1);
+    this.mode.set('signin');
+  }
+
   startSignup(): void {
     this.error.set('');
     this.notice.set('');
@@ -648,12 +713,19 @@ export class AuthComponent implements OnInit {
       return;
     }
     if (step === 4) {
+      if (this.pendingName()) { this.signupStep.set(5); return; }
       if (!this.emailOk()) {
         this.touched.email = true;
         this.error.set('Enter a valid email address.');
         return;
       }
-      this.signupStep.set(5);
+      void this.checkEmailNow().then(() => {
+        if (this.emailError()) {
+          this.error.set('That email is already registered. Log in instead.');
+          return;
+        }
+        this.signupStep.set(5);
+      });
       return;
     }
   }
@@ -833,7 +905,10 @@ export class AuthComponent implements OnInit {
   private async afterAuth(): Promise<void> {
     this.auth.setGuestBrowsing(false);
     this.auth.passwordRecovery.set(false);
-    await this.data.refresh();
+    // Show the app first. Waiting for the feed, the stories, the tips and the
+    // follow lists before the first screen appears is what made sign-in feel
+    // like it was hanging; they now stream in behind the first paint.
     await this.router.navigateByUrl(this.next);
+    void this.data.refresh();
   }
 }

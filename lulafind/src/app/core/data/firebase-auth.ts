@@ -2,9 +2,9 @@ import { Capacitor } from '@capacitor/core';
 import { FirebaseApp, getApp, getApps, initializeApp } from 'firebase/app';
 import {
   Auth, GoogleAuthProvider, User, browserLocalPersistence, confirmPasswordReset, createUserWithEmailAndPassword,
-  getAuth, indexedDBLocalPersistence, initializeAuth, onIdTokenChanged, sendEmailVerification,
-  sendPasswordResetEmail, signInWithCredential, signInWithEmailAndPassword, signInWithPopup, signOut, updatePassword,
-  updateProfile, verifyPasswordResetCode
+  fetchSignInMethodsForEmail, getAuth, indexedDBLocalPersistence, initializeAuth, onIdTokenChanged,
+  sendEmailVerification, sendPasswordResetEmail, signInWithCredential, signInWithEmailAndPassword, signInWithPopup,
+  signOut, updatePassword, updateProfile, verifyPasswordResetCode
 } from 'firebase/auth';
 import { environment } from '../../../environments/environment';
 
@@ -93,6 +93,20 @@ export class FirebaseAuthBridge {
     return u && u.emailVerified ? u.uid : null;
   }
 
+  /**
+   * Throw away the cached ID token and get a new one.
+   *
+   * Supabase rejects a stale Firebase token as an unknown caller, which
+   * surfaces as a row-level-security error on the write. One forced refresh
+   * turns that from a dead end into a retry.
+   */
+  async forceToken(): Promise<void> {
+    await this.auth.authStateReady();
+    const u = this.auth.currentUser;
+    if (!u) return;
+    try { await u.getIdToken(true); } catch { /* the caller's retry reports the real error */ }
+  }
+
   /* ------------------------ supabase-shaped API ------------------------ */
 
   onAuthStateChange(fn: Listener): { data: { subscription: { unsubscribe: () => void } } } {
@@ -104,6 +118,28 @@ export class FirebaseAuthBridge {
     await this.auth.authStateReady();
     const u = this.auth.currentUser;
     return { data: { session: u && u.emailVerified ? { user: this.shape(u) } : null }, error: null };
+  }
+
+  /**
+   * Does an account already exist for this address?
+   *
+   * Returns `null` when Firebase will not say - "email enumeration protection"
+   * hides that from the client, and it must stay that way. The sign-up screen
+   * still surfaces Firebase's own `auth/email-already-in-use` the moment the
+   * account is created, so a `null` here never means "you may use this email".
+   */
+  async emailInUse(email: string): Promise<boolean | null> {
+    const address = email.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(address)) return null;
+    try {
+      const methods = await fetchSignInMethodsForEmail(this.auth, address);
+      return methods.length > 0;
+    } catch (e) {
+      const code = String((e as { code?: string })?.code ?? '');
+      // Enumeration protection is on: the answer is deliberately withheld.
+      if (code === 'auth/operation-not-allowed' || code === 'auth/admin-restricted-operation') return null;
+      return null;
+    }
   }
 
   /**
