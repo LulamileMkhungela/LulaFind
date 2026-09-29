@@ -6,6 +6,7 @@ import { IonContent } from '@ionic/angular/ion-content';
 
 
 import { IonSearchbar } from '@ionic/angular/ion-searchbar';
+import { ReactionKind } from '../../core/models/types';
 import { IconComponent } from '../../shared/components/icon.component';
 import { TopNavComponent } from '../../shared/components/top-nav.component';
 import { AvatarComponent } from '../../shared/components/avatar.component';
@@ -85,7 +86,7 @@ import { UserProfile, Post, PROVINCES } from '../../core/models/types';
         }
         @for (p of results(); track p.id) {
           <lf-post-card [post]="p" [author]="data.authorOf(p.authorId) ?? null" chatState="off"
-                        (vote)="vote(p, $event)" (comment)="open(p)" (share)="open(p)" (more)="open(p)" />
+                        (vote)="vote(p, $event)" (comment)="open(p)" />
         }
       }
     </ion-content>
@@ -142,7 +143,7 @@ export class SearchComponent {
     void this.router.navigate(['/home']);
   }
 
-  vote(p: Post, v: 'up' | 'down'): void {
+  vote(p: Post, v: ReactionKind): void {
     void this.data.vote(p.id, v);
   }
 

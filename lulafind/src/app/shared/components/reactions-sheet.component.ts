@@ -1,23 +1,23 @@
 import { Component, EventEmitter, Input, Output, computed, effect, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import { Post, UserProfile } from '../../core/models/types';
+import { Post, REACTIONS, ReactionKind, UserProfile, isReaction } from '../../core/models/types';
 import { AvatarComponent } from './avatar.component';
-import { IconComponent } from './icon.component';
+import { ReactionIconComponent } from './reaction-icon.component';
 import { DataService } from '../../core/services/data.service';
 import { AuthService } from '../../core/services/auth.service';
 
-type Tab = 'all' | 'up' | 'down';
+type Tab = 'all' | ReactionKind;
 
 /**
  * “Who reacted” bottom sheet.
  *
- * Facebook shows the faces behind the numbers — this does the same for Idea
- * (“I have an idea”) and No idea reactions on any post.
+ * LinkedIn shows the faces behind the numbers — this does the same for each
+ * reaction (Have an idea, Like, Support, Sad) on any post.
  */
 @Component({
   selector: 'lf-reactions-sheet',
   standalone: true,
-  imports: [RouterLink, AvatarComponent, IconComponent],
+  imports: [RouterLink, AvatarComponent, ReactionIconComponent],
   template: `
     @if (open) {
       <div class="sheetwrap" (click)="close.emit()">
@@ -25,20 +25,17 @@ type Tab = 'all' | 'up' | 'down';
           <div class="sheet__head">
             <h3>Reactions</h3>
             <button class="x" type="button" (click)="close.emit()" aria-label="Close">
-              <lf-icon name="x" [size]="20" />
+              &times;
             </button>
           </div>
 
           <div class="tabs" role="tablist">
-            <button role="tab" [class.on]="tab() === 'all'" (click)="tab.set('all')">
-              All {{ upIds().length + downIds().length }}
-            </button>
-            <button role="tab" [class.on]="tab() === 'up'" (click)="tab.set('up')">
-              <lf-icon name="bulb" [size]="14" /> Idea {{ upIds().length }}
-            </button>
-            <button role="tab" [class.on]="tab() === 'down'" (click)="tab.set('down')">
-              <lf-icon name="bulbOff" [size]="14" /> No idea {{ downIds().length }}
-            </button>
+            <button role="tab" [class.on]="tab() === 'all'" (click)="tab.set('all')">All {{ voters().length }}</button>
+            @for (r of kinds(); track r.key) {
+              <button role="tab" [class.on]="tab() === r.key" (click)="tab.set(r.key)">
+                <lf-reaction-icon [kind]="r.key" [size]="16" /> {{ r.count }}
+              </button>
+            }
           </div>
 
           <div class="rows">
@@ -46,9 +43,7 @@ type Tab = 'all' | 'up' | 'down';
               <p class="muted">Loading…</p>
             } @else if (!rows().length) {
               <p class="muted">
-                @if (tab() === 'up') { Nobody has tapped Idea yet. }
-                @else if (tab() === 'down') { Nobody has tapped No idea yet. }
-                @else { No reactions yet. }
+No reactions yet.
               </p>
             } @else {
               @for (u of rows(); track u.id) {
@@ -152,21 +147,20 @@ export class ReactionsSheetComponent {
   readonly me = computed(() => this.auth.viewerId);
   readonly followingIds = computed(() => this.data.followingIds());
 
-  readonly upIds = computed(() =>
-    Object.entries(this.post?.voterIds ?? {}).filter(([, v]) => v === 'up').map(([id]) => id));
-  readonly downIds = computed(() =>
-    Object.entries(this.post?.voterIds ?? {}).filter(([, v]) => v === 'down').map(([id]) => id));
+  /** Everyone who reacted, with the reaction they chose. */
+  readonly voters = computed(() =>
+    Object.entries(this.post?.voterIds ?? {}).filter(([, v]) => isReaction(v)).map(([id, v]) => ({ id, kind: v as ReactionKind })));
+
+  /** One tab per reaction that someone actually chose. */
+  readonly kinds = computed(() =>
+    REACTIONS.map((r) => ({ key: r.key, count: this.voters().filter((v) => v.kind === r.key).length })).filter((r) => r.count > 0));
 
   readonly rows = computed(() => {
     const t = this.tab();
     const list = this.people();
-    if (t === 'up') return list.filter((u) => this.upIds().includes(u.id));
-    if (t === 'down') return list.filter((u) => this.downIds().includes(u.id));
-    return [...list].sort((a, b) => {
-      const av = this.post.voterIds[a.id] === 'up' ? 0 : 1;
-      const bv = this.post.voterIds[b.id] === 'up' ? 0 : 1;
-      return av - bv || a.displayName.localeCompare(b.displayName);
-    });
+    const kindOf = (id: string) => this.post.voterIds[id];
+    const shown = t === 'all' ? list : list.filter((u) => kindOf(u.id) === t);
+    return [...shown].sort((a, b) => a.displayName.localeCompare(b.displayName));
   });
 
   constructor() {
@@ -176,13 +170,14 @@ export class ReactionsSheetComponent {
   }
 
   voteLabel(id: string): string {
-    return this.post?.voterIds[id] === 'down' ? 'No idea' : 'Idea';
+    const k = this.post?.voterIds[id];
+    return REACTIONS.find((r) => r.key === k)?.label ?? 'Reacted';
   }
 
   private async load(): Promise<void> {
     this.loading.set(true);
     try {
-      const ids = [...new Set([...this.upIds(), ...this.downIds()])].slice(0, 200);
+      const ids = this.voters().map((v) => v.id).slice(0, 200);
       // Author cache first so repeat opens are instant.
       const cached = ids.map((id) => this.data.authorOf(id)).filter((u): u is UserProfile => !!u);
       const missing = ids.filter((id) => !cached.some((u) => u.id === id));

@@ -60,7 +60,7 @@ export class ChatService {
 
   /**
    * Evaluates the three rules and tells the UI exactly which step is blocking,
-   * so the button can say "Upvote to unlock chat" or "Follow to unlock chat".
+   * so the button can say "Have an idea to unlock chat" or "Follow to unlock chat".
    */
   async gate(post: Post, claimedByViewer = false): Promise<ChatGate> {
     const me = this.auth.viewerId;
@@ -71,9 +71,9 @@ export class ChatService {
     if (me === post.authorId) return { allowed: true, reason: 'open' };
     if (claimedByViewer || post.khumbu?.claimedByUserId === me) return { allowed: true, reason: 'open' };
 
-    const voted = (post.voterIds[me] ?? null) === 'up';
-    if (!voted) {
-      return { allowed: false, step: 'vote', reason: 'Upvote this post ("I have an idea") to unlock private chat with the poster.' };
+    // Only "Have an idea" opens chat. Like, Support and Sad are just reactions.
+    if (post.voterIds[me] !== 'up') {
+      return { allowed: false, step: 'vote', reason: 'Tap "Have an idea" on this post to unlock private chat with the poster.' };
     }
     const mutual =
       (await this.api.isFollowing(me, post.authorId)) && (await this.api.isFollowing(post.authorId, me));

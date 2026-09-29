@@ -87,14 +87,14 @@ export const scene = (label: string, seedStr: string, tone: 'street' | 'home' | 
 export const posterPlaceholder = (title: string): string => scene(title, title, 'night');
 
 /**
- * Vivid radial used for story backgrounds, Facebook text-story style. The
- * outer stop used to sit at 10% lightness - near black - which is why a fresh
- * story composer opened on what looked like a black screen. It now lands at
- * a deep tone of the hue instead, so the default blue reads blue while white
- * text stays readable.
+ * A story background. `STORY_BLACK` (-1) is plain black and is the default;
+ * any other number is a colour hue, drawn as a vivid radial (Facebook
+ * text-story style) whose outer stop stays a deep tone of the hue rather than
+ * near-black, so white text stays readable.
  */
+export const STORY_BLACK = -1;
 export const storyBg = (hue: number): string =>
-  enc(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 500">
+  hue < 0 ? enc(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 500"><rect width="300" height="500" fill="#000"/></svg>`) : enc(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 500">
   <defs><radialGradient id="r" cx=".3" cy=".2" r="1">
     <stop offset="0" stop-color="hsl(${hue} 80% 58%)"/><stop offset="1" stop-color="hsl(${(hue + 60) % 360} 72% 34%)"/>
   </radialGradient></defs><rect width="300" height="500" fill="url(#r)"/></svg>`);
@@ -273,7 +273,6 @@ export const seedPosts = (): Post[] => {
     allowComments: true,
     allowShare: true,
     upvotes: 0,
-    downvotes: 0,
     commentCount: 0,
     shares: 0,
     views: 0,
@@ -348,7 +347,6 @@ export const seedPosts = (): Post[] => {
         relationship: 'Daughter'
       },
       upvotes: 412,
-      downvotes: 9,
       commentCount: 3,
       shares: 187,
       views: 9840,
@@ -435,7 +433,6 @@ export const seedPosts = (): Post[] => {
         wantedAnswers: { yes: 58, no: 31, myVote: null }
       },
       upvotes: 267,
-      downvotes: 24,
       commentCount: 3,
       shares: 94,
       views: 5310,
@@ -482,7 +479,6 @@ export const seedPosts = (): Post[] => {
       },
       spotlightId: 'sp_botha',
       upvotes: 189,
-      downvotes: 4,
       commentCount: 2,
       shares: 76,
       views: 3120,
@@ -517,7 +513,6 @@ export const seedPosts = (): Post[] => {
       createdAt: now - 5 * HOUR,
       updatedAt: now - 5 * HOUR,
       upvotes: 143,
-      downvotes: 2,
       commentCount: 1,
       shares: 33,
       views: 1880,
@@ -544,7 +539,6 @@ export const seedPosts = (): Post[] => {
       status: 'found',
       outcome: { found: true, foundAt: now - 2 * DAY - 3 * HOUR, whereaboutsFound: 'Shelter in Boksburg', closedBy: 'u_lerato', note: 'Found safe.' },
       upvotes: 934,
-      downvotes: 12,
       commentCount: 2,
       shares: 512,
       views: 21400,
@@ -599,7 +593,6 @@ export const seedPosts = (): Post[] => {
         wantedAnswers: { yes: 21, no: 9, myVote: null }
       },
       upvotes: 88,
-      downvotes: 6,
       commentCount: 1,
       shares: 29,
       views: 1410
@@ -620,7 +613,6 @@ export const seedPosts = (): Post[] => {
       status: 'found',
       outcome: { found: true, foundAt: now - 3 * DAY, whereaboutsFound: 'Safe at home, Nelspruit', closedBy: 'u_naledi', note: 'Tip from a spaza shop owner matched the blanket in the photo.' },
       upvotes: 2104,
-      downvotes: 5,
       commentCount: 1,
       shares: 1980,
       views: 48200,
@@ -664,7 +656,6 @@ export const seedPosts = (): Post[] => {
       createdAt: now - 30 * HOUR,
       updatedAt: now - 30 * HOUR,
       upvotes: 76,
-      downvotes: 3,
       commentCount: 1,
       shares: 18,
       views: 990,
@@ -770,7 +761,6 @@ export const seedPosts = (): Post[] => {
       createdAt: now - 1 * DAY,
       updatedAt: now - 5 * HOUR,
       upvotes: 134,
-      downvotes: 2,
       commentCount: 0,
       shares: 88,
       views: 2310
@@ -791,7 +781,6 @@ export const seedPosts = (): Post[] => {
       createdAt: now - 3 * DAY,
       updatedAt: now - 1 * DAY,
       upvotes: 212,
-      downvotes: 1,
       commentCount: 0,
       shares: 156,
       views: 4180
@@ -814,7 +803,6 @@ export const seedPosts = (): Post[] => {
       createdAt: now - 6 * DAY,
       updatedAt: now - 6 * DAY,
       upvotes: 401,
-      downvotes: 3,
       commentCount: 0,
       shares: 322,
       views: 9640,
@@ -836,7 +824,6 @@ export const seedPosts = (): Post[] => {
       createdAt: now - 2 * DAY,
       updatedAt: now - 8 * HOUR,
       upvotes: 97,
-      downvotes: 4,
       commentCount: 0,
       shares: 71,
       views: 1870
@@ -857,7 +844,6 @@ export const seedPosts = (): Post[] => {
       createdAt: now - 8 * DAY,
       updatedAt: now - 8 * DAY,
       upvotes: 528,
-      downvotes: 6,
       commentCount: 0,
       shares: 244,
       views: 11200,

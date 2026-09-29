@@ -104,3 +104,34 @@ Fixed with compare-and-set rather than a test workaround:
 - Story-token error explanation is written in `docs/SETUP.md` but unverified.
 - Report persistence (`ModerationService.report`) is still device-local.
 - `SUPPORT_EMAIL`, privacy policy URL, FCM, live Firebase key revocation.
+
+## Session: LinkedIn-style UI pass (2026-09-29)
+
+**Before you run the app**
+- Re-run BOTH `supabase/schema.sql` and `supabase/post-interactions.sql`. The vote RPCs now accept `up`, `like`, `support`, `sad` (and legacy `down`). Without this, reactions other than "Have an idea" are rejected by Supabase.
+- Android: `npm run build && npx cap sync android`, then rebuild the APK. `@capacitor/filesystem` was added (poster sharing) and `@capacitor-firebase/authentication` was missing from the generated gradle files. The Camera plugin error came from a stale native sync. `MediaService` now also falls back to the system file picker if the plugin is still missing.
+
+**What changed**
+- Theme: black by default, six selectable backgrounds in Settings (`SettingsService.BACKGROUNDS`).
+- Top nav: avatar, search, bell. Bottom tabs: Home, Spotlight, Create, Chats, Menu. Ask Lula lives only on the Chats page (rule-based, `core/data/ask-lula.ts`, not a live AI model).
+- Feed: a stories rail and a people rail alternate after every 8th post. Feeds shorter than 8 posts show the stories rail at the end.
+- Reactions: Have an idea (default tap), Like, Support, Sad; long press opens the picker. Any reaction unlocks chat.
+- Repost sheet + `/repost/:id` composer, Send, ⋯ menu (`PostActionsService`).
+- Post detail rewritten: read, react, comment (LinkedIn threading), then This is me / Not me (adult cases) or Mark as found / Still searching (poster). Facts, contact, help and chat sit under "Case details". The ground-search, danger and location-check panels were removed from this page (the routes and services still exist).
+- Vehicle, danger and story post types are retired (`RETIRED_POST_TYPES`): hidden from feeds, rejected by `createPost`. Existing rows are not deleted.
+- Poster: six canvas templates (Signal, Aurora, Editorial, Beacon, Ubuntu, Noir) in `core/utils/poster.ts`, shown after publishing a missing / left-home / pet post.
+- Stories: viewer pauses while typing, holding, hidden, or (owner) reading replies; longer time for text. Composer text is now a signal so Share enables while typing.
+
+### Follow-up (same day)
+- Only "Have an idea" (`up`) opens private chat. Like / Support / Sad are reactions only. The lock button on a card gives "Have an idea".
+- "No idea" is gone completely: no `down` vote, no `downvotes` field, no crossed-out bulb or thumb-down icons, and the SQL vote RPCs no longer accept or count it. Re-run both SQL files.
+- Story composer defaults to a black background (`STORY_BLACK = -1`), with other colours as options. The composer now follows the app theme instead of fixed light colours.
+- De-duplication: feeds and lists keep one copy per post id; a post's heading, name and last-seen lines are hidden when the text already says them; the Menu no longer repeats Alerts, Spotlight or Privacy (bell, tab and gear already do that).
+
+## Merge with main (PR #9 work from `arena/01a0ea80-lulafind`)
+
+Main had a parallel build of the same areas. Where both touched the same screen, this branch's version won because it matches the latest requirements (LinkedIn top nav, Ask Lula only on Chats, black default story, only "Have an idea" unlocks chat, no vehicle/danger/story types, six poster templates).
+
+Kept from main: `lastLike`/`lastComment` and the "X commented on this" line on cards, comment `likedIds`, the `repost` notification kind (now sent by `repost()`), `suggestedPeople` (now ranks the people rail), the "who reacted" sheet (rewritten for the four reactions, opens from the reaction count on cards and post detail), `.gitignore`/README changes.
+
+Dropped from main (still in git history at `2e94389`): floating Lula assistant, discover rail, text-template poster composer + `poster-parse` + `poster-visual`, `reshare()`/`reshareOf`/`repostCount` (duplicate of `repost()`/`repostOf`).

@@ -140,3 +140,18 @@ export function contributorLabel(n: number | null | undefined): string {
   if (c <= 0) return '';
   return `Contributor x${c}`;
 }
+
+/** True when `needle` already appears in any of the texts (ignores case and extra spaces). Used to stop a post repeating itself. */
+export function alreadySaid(needle: string | null | undefined, ...texts: (string | null | undefined)[]): boolean {
+  const n = (needle ?? '').toLowerCase().replace(/\s+/g, ' ').trim();
+  if (!n) return true;
+  return texts.some((t) => (t ?? '').toLowerCase().replace(/\s+/g, ' ').includes(n));
+}
+
+/** A heading that only repeats the start of the body is not worth showing twice. */
+export function headingIsNew(title: string | null | undefined, body: string | null | undefined): boolean {
+  const t = (title ?? '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  if (!t) return false;
+  const b = (body ?? '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  return !b.startsWith(t);
+}

@@ -686,7 +686,7 @@ declare
   cur jsonb;
   k text;
   allowed text[] := array[
-    'voterIds', 'upvotes', 'downvotes', 'commentCount', 'views', 'shares', 'lookingIds',
+    'voterIds', 'upvotes', 'commentCount', 'views', 'shares', 'lookingIds',
     'searchParty', 'danger', 'khumbu', 'flags', 'events', 'updatedAt', 'status', 'outcome'
   ];
   my_old text;
@@ -730,15 +730,13 @@ begin
   end if;
   my_old := cur->'voterIds'->>me;
   my_new := next->'voterIds'->>me;
-  if my_new is not null and my_new not in ('up', 'down') then
+  if my_new is not null and my_new not in ('up', 'like', 'support', 'sad') then
     raise exception 'Unknown vote';
   end if;
   merged := cur;
   merged := jsonb_set(merged, '{voterIds}', coalesce(next->'voterIds', '{}'::jsonb), true);
   merged := jsonb_set(merged, '{upvotes}', to_jsonb(greatest(0,
-    coalesce((cur->>'upvotes')::int, 0) + (case when my_new = 'up' then 1 else 0 end) - (case when my_old = 'up' then 1 else 0 end))), true);
-  merged := jsonb_set(merged, '{downvotes}', to_jsonb(greatest(0,
-    coalesce((cur->>'downvotes')::int, 0) + (case when my_new = 'down' then 1 else 0 end) - (case when my_old = 'down' then 1 else 0 end))), true);
+    coalesce((cur->>'upvotes')::int, 0) + (case when my_new is not null then 1 else 0 end) - (case when my_old is not null and my_old <> 'down' then 1 else 0 end))), true);
 
   -- 3. Counters: comments are counted, views and shares go up by one at most.
   merged := jsonb_set(merged, '{commentCount}', to_jsonb((

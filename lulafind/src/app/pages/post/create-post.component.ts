@@ -1,68 +1,47 @@
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
+import { ToastController } from '@ionic/angular/toast-controller';
 import { IonContent } from '@ionic/angular/ion-content';
 import { IonHeader } from '@ionic/angular/ion-header';
 import { IonToolbar } from '@ionic/angular/ion-toolbar';
 import { IonTitle } from '@ionic/angular/ion-title';
 import { IonButtons } from '@ionic/angular/ion-buttons';
-import { ActionSheetController } from '@ionic/angular/action-sheet-controller';
 import { IconComponent } from '../../shared/components/icon.component';
 import { AvatarComponent } from '../../shared/components/avatar.component';
-import { PostCardComponent } from '../../shared/components/post-card.component';
 import { AuthService } from '../../core/services/auth.service';
 import { DataService } from '../../core/services/data.service';
 import { MediaService } from '../../core/services/media.service';
-import { Audience, MediaItem, Post, PostType } from '../../core/models/types';
-import { POSTER_TEMPLATES, PosterCategory, ParsedPoster, parsePosterText } from '../../core/utils/poster-parse';
+import {
+  Audience, MediaItem, Post, PostType, PROVINCES, ProvinceCode
+} from '../../core/models/types';
 
 const CATEGORIES: { key: PostType; label: string; icon: string }[] = [
   { key: 'missing', label: 'Missing person', icon: 'search' },
   { key: 'khumbulekhaya', label: 'Left home', icon: 'home' },
-  { key: 'vehicle', label: 'Stolen vehicle', icon: 'car' },
   { key: 'pet', label: 'Lost pet', icon: 'paw' },
-  { key: 'sighting', label: 'Sighting', icon: 'pin' },
-  { key: 'danger', label: 'Danger nearby', icon: 'alert' }
+  { key: 'sighting', label: 'Sighting', icon: 'pin' }
 ];
 
-/** The location line's label per category, used by the validation messages. */
-const LOCATION_LABEL: Record<PosterCategory, string> = {
-  missing: 'Last seen', khumbulekhaya: 'Left home', vehicle: 'Taken from',
-  pet: 'Last seen', sighting: 'Where', danger: 'Where'
-};
+const blankSubject = () => ({
+  name: '', age: '', gender: 'unknown' as 'female' | 'male' | 'other' | 'unknown',
+  height: '', clothing: '', distinguishing: '', hair: '', vehicle: ''
+});
 
-const LOCATION_EXAMPLE = 'Soweto, Gauteng';
-
-/** Everything Generate pulls out of the textbox, ready to post. */
-interface BuiltPost {
-  title: string;
-  province: NonNullable<ParsedPoster['province']>;
-  town: string;
-  lastSeenWhere: string;
-  contactValue: string;
-  caseNumber: string | null;
-  subject: Post['subject'];
-  vehicleDetails: Post['vehicleDetails'];
-  danger: Post['danger'];
-  khumbu: Post['khumbu'];
+interface ComposerForm {
+  title: string; body: string; media: MediaItem[]; province: ProvinceCode | null; town: string;
+  lastSeenAt: string; lastSeenWhere: string; caseNumber: string; audience: Audience;
+  spotlightId: string | null; chatEnabled: boolean; allowComments: boolean; anonymous: boolean;
+  askWanted: boolean; contactLabel: string; contactValue: string;
+  contactVisibleTo: 'everyone' | 'verified' | 'owner';
 }
 
-/**
- * The poster composer: pick a category, fill in the example in the one
- * textbox, attach a photo, then Generate. Generate reads the labels back out
- * of the text, the app picks the poster background from the category, and the
- * preview is the real feed card - exactly what the post will look like once
- * it is shared. No province dropdowns, no optional sections: the town and
- * province live in the text (e.g. "Last seen: Soweto, Gauteng").
- *
- * The post body stays the full raw text, so search and the detail page see
- * everything typed. The parsed fields only add structure. Fields the text
- * cannot express (privacy switches, dates, votes, claims) keep their defaults
- * on a new post and are preserved untouched when editing.
- */
+/** One unfilled required field, used for both the checklist and the inline error. */
+interface MissingField { key: string; label: string; }
+
 @Component({
   selector: 'lf-create-post',
   standalone: true,
-  imports: [IonContent, IonHeader, IonToolbar, IonTitle, IonButtons, IconComponent, AvatarComponent, PostCardComponent],
+  imports: [IonContent, IonHeader, IonToolbar, IonTitle, IonButtons, IconComponent, AvatarComponent],
   template: `
     <ion-header class="fb-create-header" [translucent]="false">
       <ion-toolbar>
@@ -72,6 +51,11 @@ interface BuiltPost {
           </button>
         </ion-buttons>
         <ion-title>{{ editing() ? 'Edit post' : 'Create post' }}</ion-title>
+        <ion-buttons slot="end">
+          <button class="post-button" type="button" [disabled]="busy()" [class.ready]="canPost()" (click)="submit()">
+            {{ busy() ? 'Posting…' : 'Post' }}
+          </button>
+        </ion-buttons>
       </ion-toolbar>
     </ion-header>
 
@@ -83,21 +67,21 @@ interface BuiltPost {
             <strong>{{ userName() }}</strong>
             <label class="audience-picker" aria-label="Who can see this post">
               <lf-icon [name]="audienceIcon()" [size]="13" />
-              <select [value]="audience()" (change)="setAudience($any($event.target).value)">
+              <select [value]="f().audience" (change)="setAudience($any($event.target).value)">
                 <option value="public">Public</option>
                 <option value="followers">Followers</option>
-                <option value="surname">Spotlight</option>
+                <option value="surname" [disabled]="!mySpotlights().length">{{ mySpotlights().length ? 'Spotlight' : 'Spotlight (join one first)' }}</option>
               </select>
               <lf-icon name="chevronDown" [size]="12" />
             </label>
           </div>
         </div>
 
-        @if (audience() === 'surname') {
+        @if (f().audience === 'surname') {
           @if (mySpotlights().length) {
             <label class="spotlight-picker">
               <span>Share with</span>
-              <select [value]="spotlightId() ?? ''" (change)="spotlightId.set($any($event.target).value || null)">
+              <select [value]="f().spotlightId ?? ''" (change)="patch({ spotlightId: $any($event.target).value || null })">
                 <option value="">Choose a Spotlight</option>
                 @for (sp of mySpotlights(); track sp.id) { <option [value]="sp.id">{{ sp.surname }}</option> }
               </select>
@@ -121,27 +105,63 @@ interface BuiltPost {
                 @if (type() === category.key) { <lf-icon class="selected-check" name="check" [size]="14" /> }
               </button>
             }
+            @if (!editing()) {
+              <button type="button" class="category" (click)="goStory()">
+                <lf-icon name="camera" [size]="17" />
+                <span>Story</span>
+              </button>
+            }
           </div>
-          @if (editing()) { <p class="inline-note">A post's category cannot be changed after it is shared.</p> }
+          @if (editing()) { <p class="inline-note">A post's category cannot be changed after it is shared. Saving marks it as edited.</p> }
         </section>
+
+        @if (showFieldErrors() && missing().length) {
+          <div class="missing" role="alert">
+            <strong><lf-icon name="alert" [size]="15" /> Before you post</strong>
+            <ul>
+              @for (item of missing(); track item.key) { <li>{{ item.label }}</li> }
+            </ul>
+          </div>
+        }
 
         @if (!type()) {
           <div class="start-hint">
             <span class="hint-icon"><lf-icon name="edit" [size]="18" /></span>
             <p>Choose a category to start your post.</p>
           </div>
-        } @else if (step() === 'write') {
-          <section class="write-step" aria-label="Describe what happened">
-            <div class="section-heading">
-              <strong>Fill in the details</strong>
-              <span>{{ categoryLabel() }}</span>
+        } @else {
+          <section class="post-fields" aria-label="Post content">
+            <label class="field full heading-field">
+              <span>Short heading <small>(optional)</small></span>
+              <input class="heading-input" type="text" maxlength="120" placeholder="Type a short heading"
+                     [value]="f().title" (input)="patch({ title: $any($event.target).value })" />
+            </label>
+            <textarea class="body-input" rows="5" maxlength="5000" data-field="body" [placeholder]="bodyPlaceholder()"
+                      [value]="f().body" (input)="patch({ body: $any($event.target).value })"></textarea>
+            @if (fieldError('body')) { <p class="field-error">{{ fieldError('body') }}</p> }
+
+            <div class="location-grid">
+              <label class="field" [class.invalid]="fieldError('province')">
+                <span>Province <b aria-hidden="true">*</b></span>
+                <select [value]="f().province ?? ''" (change)="patch({ province: $any($event.target).value || null })">
+                  <option value="">Choose province</option>
+                  @for (province of provinces; track province.code) {
+                    <option [value]="province.code">{{ province.name }}</option>
+                  }
+                </select>
+                @if (fieldError('province')) { <small class="field-error">{{ fieldError('province') }}</small> }
+              </label>
+              <label class="field" [class.invalid]="fieldError('town')">
+                <span>Town or suburb <b aria-hidden="true">*</b></span>
+                <input type="text" maxlength="80" placeholder="e.g. Soweto" [value]="f().town"
+                       (input)="patch({ town: $any($event.target).value })" />
+                @if (fieldError('town')) { <small class="field-error">{{ fieldError('town') }}</small> }
+              </label>
             </div>
-            <p class="example-hint">Replace the example with the real details - Generate turns it into a poster.</p>
-            <textarea class="example-input" rows="10" maxlength="5000" data-field="body"
-                      [value]="body()" (input)="onBody($any($event.target).value)"></textarea>
-            @if (media().length) {
+
+            @if (f().media.length) {
               <div class="media-preview" aria-label="Attached media">
-                @for (item of media(); track item.id) {
+                @for (item of f().media; track item.id) {
                   <div class="media-tile">
                     @if (item.kind === 'video') {
                       <video [src]="item.src" controls preload="metadata"></video>
@@ -155,33 +175,82 @@ interface BuiltPost {
                 }
               </div>
             }
-            <div class="attach-row">
-              <button type="button" class="attach-button" (click)="attach()"
-                      [disabled]="busy() || hasVideo() || media().length >= 4">
-                <lf-icon name="image" [size]="18" /> <span>Attach</span>
+
+            <div class="attachment-actions">
+              <button type="button" class="attachment-button" (click)="addPhoto()"
+                      [disabled]="busy() || hasVideo() || f().media.length >= 4">
+                <lf-icon name="image" [size]="18" /> <span>Photo</span>
+              </button>
+              <button type="button" class="attachment-button" (click)="addVideo()"
+                      [disabled]="busy() || hasVideo() || f().media.length > 0">
+                <lf-icon name="video" [size]="18" /> <span>Video</span>
               </button>
               <span class="attachment-hint">Up to 4 photos or 1 video</span>
-              <button type="button" class="reset-link" (click)="fillExample()">Reset example</button>
             </div>
-            <button class="gen-btn" type="button" [disabled]="busy()" [class.ready]="canGenerate()" (click)="generate()">
-              <lf-icon name="sparkle" [size]="18" /> Generate poster
+
+            <button type="button" class="details-toggle" [attr.aria-expanded]="moreOpen()" (click)="moreOpen.set(!moreOpen())">
+              <span class="details-icon"><lf-icon name="plus" [size]="17" /></span>
+              <span class="details-copy"><strong>{{ detailsLabel() }}</strong><small>Optional details help people respond accurately</small></span>
+              <lf-icon [name]="moreOpen() ? 'chevronDown' : 'chevronRight'" [size]="17" />
             </button>
-          </section>
-        } @else {
-          <section class="preview-step lf-fade-in" aria-label="Poster preview">
-            <div class="preview-head">
-              <strong>Your poster</strong>
-              <span>Exactly how it will look in the feed.</span>
-            </div>
-            @if (draft(); as preview) {
-              <lf-post-card [post]="preview" [author]="me()" [preview]="true" />
+
+            @if (moreOpen()) {
+              <section class="extra-fields lf-fade-in" aria-label="Additional post details">
+                @if (type() === 'missing' || type() === 'khumbulekhaya') {
+                  <div class="section-heading compact"><strong>{{ type() === 'missing' ? 'Person details' : 'About the person' }}</strong><span>Optional</span></div>
+                  <label class="field full"><span>Full name</span><input placeholder="Name used by family" [value]="s().name" (input)="patchSubject({ name: $any($event.target).value })" /></label>
+                  <div class="fields-two">
+                    <label class="field"><span>Age</span><input type="number" min="0" max="120" inputmode="numeric" placeholder="Age" [value]="s().age" (input)="patchSubject({ age: $any($event.target).value })" /></label>
+                    <label class="field"><span>Gender</span><select [value]="s().gender" (change)="patchSubject({ gender: $any($event.target).value })">
+                      <option value="unknown">Not specified</option><option value="female">Female</option><option value="male">Male</option><option value="other">Other</option>
+                    </select></label>
+                  </div>
+                  <label class="field full"><span>Clothing or identifying details</span><textarea rows="2" placeholder="What were they wearing? Any details that could help identify them?" [value]="s().clothing" (input)="patchSubject({ clothing: $any($event.target).value })"></textarea></label>
+                  @if (type() === 'missing') {
+                    <label class="field full"><span>Private identifying detail <small>(kept off the public poster)</small></span><input placeholder="A mark only the family knows" [value]="s().distinguishing" (input)="patchSubject({ distinguishing: $any($event.target).value })" /></label>
+                  }
+                }
+
+                @if (type() === 'pet') {
+                  <div class="section-heading compact"><strong>Pet details</strong><span>Optional</span></div>
+                  <label class="field full"><span>Pet's name</span><input placeholder="Name and breed" [value]="s().name" (input)="patchSubject({ name: $any($event.target).value })" /></label>
+                  <label class="field full"><span>Colour, collar or identifying marks</span><input placeholder="A short description" [value]="s().distinguishing" (input)="patchSubject({ distinguishing: $any($event.target).value })" /></label>
+                }
+
+                @if (type() === 'sighting') {
+                  <div class="section-heading compact"><strong>Sighting details</strong><span>Optional</span></div>
+                  <label class="field full"><span>Where did you see them?</span><input placeholder="Nearest landmark or public place" [value]="f().lastSeenWhere" (input)="patch({ lastSeenWhere: $any($event.target).value })" /></label>
+                  <label class="field full"><span>Appearance</span><input placeholder="Describe only what you actually saw" [value]="s().clothing" (input)="patchSubject({ clothing: $any($event.target).value })" /></label>
+                }
+
+                @if (type() !== 'sighting') {
+                  <label class="field full"><span>Last seen near</span><input placeholder="Neighbourhood or public place" [value]="f().lastSeenWhere" (input)="patch({ lastSeenWhere: $any($event.target).value })" /></label>
+                }
+                @if (type() !== 'pet' && type() !== 'sighting') {
+                  <label class="field full"><span>SAPS case number <small>(optional)</small></span><input placeholder="Police case reference" [value]="f().caseNumber" (input)="patch({ caseNumber: $any($event.target).value })" /></label>
+                }
+                @if (type() === 'pet') {
+                  <label class="field full"><span>Last seen near</span><input placeholder="Neighbourhood or public place" [value]="f().lastSeenWhere" (input)="patch({ lastSeenWhere: $any($event.target).value })" /></label>
+                }
+                @if (type() === 'khumbulekhaya') {
+                  <label class="field full"><span>What might the family want them to know?</span><input placeholder="Optional — don't assume they want to come home" [value]="khumbuReason()" (input)="khumbuReason.set($any($event.target).value)" /></label>
+                  <label class="switch-row"><input type="checkbox" [checked]="f().askWanted" (change)="patch({ askWanted: $any($event.target).checked })" /><span><strong>Ask the community if they are being looked for</strong><small>People can answer yes or no.</small></span></label>
+                }
+
+                <label class="field full"><span>Last seen date and time <small>(optional)</small></span><input type="datetime-local" [value]="f().lastSeenAt" (input)="patch({ lastSeenAt: $any($event.target).value })" /></label>
+                <label class="field full"><span>Contact label</span><input placeholder="Family contact" [value]="f().contactLabel" (input)="patch({ contactLabel: $any($event.target).value })" /></label>
+                <label class="field full"><span>Contact details <small>(optional)</small></span><input placeholder="Phone or email" [value]="f().contactValue" (input)="patch({ contactValue: $any($event.target).value })" /></label>
+                <label class="field full"><span>Contact visibility</span><select [value]="f().contactVisibleTo" (change)="patch({ contactVisibleTo: $any($event.target).value })">
+                  <option value="everyone">Everyone</option><option value="verified">Verified members</option><option value="owner">Only me</option>
+                </select></label>
+
+                <div class="privacy-switches">
+                  <label class="switch-row"><input type="checkbox" [checked]="f().anonymous" (change)="patch({ anonymous: $any($event.target).checked })" /><span><strong>Post anonymously</strong><small>Your profile stays private on this post.</small></span></label>
+                  <label class="switch-row"><input type="checkbox" [checked]="f().allowComments" (change)="patch({ allowComments: $any($event.target).checked })" /><span><strong>Allow comments</strong><small>People can share leads in the thread.</small></span></label>
+                  <label class="switch-row"><input type="checkbox" [checked]="f().chatEnabled" (change)="patch({ chatEnabled: $any($event.target).checked })" /><span><strong>Allow private chat</strong><small>Chat still needs an idea vote and mutual follow.</small></span></label>
+                </div>
+              </section>
             }
-            <div class="preview-actions">
-              <button class="lf-btn" type="button" (click)="backToEdit()">Edit details</button>
-              <button class="gen-btn" type="button" [disabled]="busy()" (click)="submit()">
-                {{ busy() ? (editing() ? 'Saving…' : 'Posting…') : (editing() ? 'Save changes' : 'Post now') }}
-              </button>
-            </div>
           </section>
         }
 
@@ -193,8 +262,14 @@ interface BuiltPost {
   styles: [`
     :host { --fb-blue: var(--lf-primary); --fb-text: var(--ion-text-color); --fb-muted: var(--lf-muted); --fb-line: var(--lf-line); --fb-soft: var(--lf-input); }
     .fb-create-header { background: var(--lf-card); border-bottom: 1px solid var(--fb-line); }
+    .fb-create-topbar { min-height: 50px; display: grid; grid-template-columns: 40px 1fr 56px; align-items: center; gap: 8px; padding: 0 12px; }
+    .fb-create-topbar h1 { margin: 0; text-align: center; font-size: 16px; font-weight: 700; color: var(--fb-text); }
     .icon-button { width: 36px; height: 36px; border: 0; border-radius: 50%; display: grid; place-items: center; background: var(--fb-soft); color: var(--fb-text); cursor: pointer; transition: background .16s ease, transform .16s ease; }
     .icon-button:active { transform: scale(.94); }
+    .post-button { justify-self: end; min-width: 54px; height: 32px; padding: 0 12px; border: 0; border-radius: 6px; background: var(--fb-blue); color: #fff; font-size: 15px; font-weight: 600; cursor: pointer; transition: filter .15s ease, transform .15s ease; }
+    .post-button:disabled { opacity: .45; cursor: default; }
+    .post-button.ready { box-shadow: 0 0 0 2px color-mix(in srgb, var(--lf-primary) 22%, transparent); }
+    .post-button:active:not(:disabled) { transform: scale(.96); }
     .composer { width: min(100%, 600px); margin: 0 auto; padding: 14px 14px calc(26px + var(--lf-safe-bottom)); color: var(--fb-text); }
     .author-row { display: flex; align-items: center; gap: 10px; padding: 0 0 12px; }
     .author-meta { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
@@ -217,74 +292,129 @@ interface BuiltPost {
     .start-hint { display: flex; align-items: center; gap: 10px; margin: 14px 0 4px; padding: 12px; border-radius: 8px; background: var(--lf-card); border: 1px solid var(--fb-line); color: var(--fb-muted); }
     .start-hint p { margin: 0; font-size: 15px; }
     .hint-icon { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 50%; background: var(--lf-primary-soft); color: var(--lf-primary-soft-text); }
-    .write-step { display: flex; flex-direction: column; gap: 10px; padding-top: 13px; }
-    .write-step .section-heading { margin-bottom: 0; }
-    .example-hint { margin: 0; color: var(--fb-muted); font-size: 13.5px; line-height: 1.4; }
-    .example-input { width: 100%; box-sizing: border-box; min-height: 190px; padding: 12px; border: 1px solid var(--fb-line); border-radius: 8px; background: var(--lf-card); color: var(--fb-text); font: inherit; font-size: 15px; line-height: 1.55; outline: none; resize: vertical; transition: border-color .16s ease, box-shadow .16s ease; }
-    .example-input:focus { border-color: var(--lf-primary); box-shadow: 0 0 0 2px rgba(var(--lf-primary-rgb), .18); }
+    .post-fields { display: flex; flex-direction: column; gap: 11px; padding-top: 13px; }
+    .body-input { width: 100%; box-sizing: border-box; min-height: 112px; padding: 8px 0; border: 0;
+      background: transparent; color: var(--fb-text); font: inherit; font-size: 15px; line-height: 1.5; outline: 0; resize: vertical; }
+    .body-input::placeholder { color: var(--lf-muted); }
+    .location-grid, .fields-two { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+    .field.full { width: 100%; }
+    .field > span { color: var(--fb-muted); font-size: 13px; font-weight: 600; }
+    .field b { color: var(--lf-signal); }
+    .field small { font-size: 12px; font-weight: 500; }
+    .field input, .field select, .field textarea { width: 100%; min-height: 38px; box-sizing: border-box; padding: 8px 10px; border: 1px solid var(--fb-line); border-radius: 6px; background: var(--lf-card); color: var(--fb-text); font: inherit; font-size: 15px; outline: none; transition: border-color .16s ease, box-shadow .16s ease; }
+    .field textarea { resize: vertical; min-height: 58px; }
+    .field input:focus, .field select:focus, .field textarea:focus { border-color: var(--lf-primary); box-shadow: 0 0 0 2px rgba(var(--lf-primary-rgb), .18); }
+    .heading-field .heading-input { min-height: 46px; padding: 10px 12px; font-size: 16px; font-weight: 600; }
+    .heading-field .heading-input::placeholder { color: var(--lf-muted); font-weight: 500; opacity: 1; }
+    .heading-field .heading-input:focus-visible { border-color: var(--lf-primary); box-shadow: 0 0 0 2px rgba(var(--lf-primary-rgb), .18); }
     .media-preview { display: flex; flex-wrap: wrap; gap: 7px; }
     .media-tile { position: relative; width: 84px; height: 84px; border-radius: 8px; overflow: hidden; background: var(--fb-soft); }
     .media-tile img, .media-tile video { width: 100%; height: 100%; object-fit: cover; }
     .remove-media { position: absolute; right: 4px; top: 4px; display: grid; place-items: center; width: 23px; height: 23px; border: 0; border-radius: 50%; background: rgba(0,0,0,.68); color: #fff; cursor: pointer; }
-    .attach-row { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-top: 1px solid var(--lf-line-soft); border-bottom: 1px solid var(--lf-line-soft); }
-    .attach-button { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 12px; border: 0; border-radius: 6px; background: transparent; color: var(--fb-muted); font-size: 14px; font-weight: 600; cursor: pointer; }
-    .attach-button lf-icon { color: #45bd62; }
-    .attach-button:disabled { opacity: .4; cursor: default; }
-    .attachment-hint { color: var(--fb-muted); font-size: 12px; }
-    .reset-link { margin-left: auto; border: 0; background: none; padding: 6px 2px; color: var(--lf-link); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; }
-    .gen-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 46px; padding: 0 16px; border: 0; border-radius: 8px; background: var(--fb-blue); color: #fff; font-size: 16px; font-weight: 700; cursor: pointer; transition: filter .15s ease, transform .15s ease; }
-    .gen-btn:disabled { opacity: .45; cursor: default; }
-    .gen-btn.ready { box-shadow: 0 0 0 2px color-mix(in srgb, var(--lf-primary) 22%, transparent); }
-    .gen-btn:active:not(:disabled) { transform: scale(.98); }
-    .preview-step { display: flex; flex-direction: column; gap: 12px; padding-top: 13px; }
-    .preview-head { display: flex; flex-direction: column; gap: 2px; }
-    .preview-head strong { font-size: 16px; }
-    .preview-head span { color: var(--fb-muted); font-size: 13px; }
-    .preview-step lf-post-card { display: block; margin: 0 -14px; }
-    .preview-actions { display: grid; grid-template-columns: 1fr 1.4fr; gap: 8px; }
-    .preview-actions .lf-btn { min-height: 46px; font-size: 15px; }
+    .attachment-actions { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-top: 1px solid var(--lf-line-soft); border-bottom: 1px solid var(--lf-line-soft); }
+    .attachment-button { display: inline-flex; align-items: center; gap: 6px; min-height: 34px; padding: 0 9px; border: 0; border-radius: 6px; background: transparent; color: var(--fb-muted); font-size: 14px; font-weight: 600; cursor: pointer; }
+    .attachment-button:first-child lf-icon { color: #45bd62; }
+    .attachment-button:nth-child(2) lf-icon { color: #9360d8; }
+    .attachment-button:disabled { opacity: .4; cursor: default; }
+    .attachment-hint { margin-left: auto; color: var(--fb-muted); font-size: 12px; }
+    .details-toggle { display: flex; align-items: center; gap: 9px; width: 100%; min-height: 54px; padding: 7px 9px; border: 1px solid var(--fb-line); border-radius: 8px; background: var(--lf-card); color: var(--fb-text); text-align: left; cursor: pointer; transition: background .15s ease; }
+    .details-toggle:active { background: var(--fb-soft); }
+    .details-icon { width: 30px; height: 30px; display: grid; place-items: center; border-radius: 50%; background: var(--lf-primary-soft); color: var(--lf-primary-soft-text); }
+    .details-copy { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+    .details-copy strong { font-size: 14px; }
+    .details-copy small { color: var(--fb-muted); font-size: 12px; }
+    .extra-fields { display: flex; flex-direction: column; gap: 9px; padding: 12px; border: 1px solid var(--fb-line); border-radius: 8px; background: var(--lf-bg); }
+    .section-heading.compact { margin: 0; }
+    .switch-row { display: flex; align-items: flex-start; gap: 9px; padding: 9px 0; border-top: 1px solid var(--lf-line-soft); color: var(--fb-text); }
+    .switch-row input { width: 16px; height: 16px; margin: 1px 0 0; accent-color: var(--fb-blue); }
+    .switch-row span { display: flex; flex-direction: column; gap: 2px; }
+    .switch-row strong { font-size: 14px; }
+    .switch-row small { color: var(--fb-muted); font-size: 12px; line-height: 1.35; }
+    .privacy-switches { margin-top: 4px; }
     .error-message { display: flex; align-items: center; gap: 6px; padding: 9px 10px; margin: 12px 0 0; border-radius: 6px; background: color-mix(in srgb, var(--lf-signal) 12%, transparent); color: var(--lf-signal); font-size: 14px; }
+    .field-error { margin: 1px 0 0; color: var(--lf-signal); font-size: 13px; font-weight: 600; }
+    .field.invalid input, .field.invalid select, .field.invalid textarea,
+    .body-input.field-error { border-color: var(--lf-signal); box-shadow: 0 0 0 2px color-mix(in srgb, var(--lf-signal) 18%, transparent); }
+    .missing { margin: 12px 0 0; padding: 11px 13px; border-radius: 8px; background: color-mix(in srgb, var(--lf-signal) 9%, transparent); color: var(--fb-text); }
+    .missing strong { display: flex; align-items: center; gap: 6px; color: var(--lf-signal); font-size: 14px; }
+    .missing ul { margin: 7px 0 0; padding-left: 20px; }
+    .missing li { font-size: 14px; line-height: 1.45; color: var(--fb-muted); }
+    .fb-create-header { background: var(--lf-card); }
     .footnote { margin: 14px 0 0; color: var(--fb-muted); font-size: 12px; line-height: 1.4; }
-    @media (max-width: 370px) { .composer { padding-inline: 10px; } .preview-step lf-post-card { margin: 0 -10px; } .category-grid { gap: 5px; } .category { padding-inline: 7px; font-size: 13px; } }
+    @media (max-width: 370px) { .composer { padding-inline: 10px; } .category-grid { gap: 5px; } .category { padding-inline: 7px; font-size: 13px; } .location-grid, .fields-two { grid-template-columns: 1fr; } }
   `]
 })
 export class CreatePostComponent implements OnInit {
   protected data = inject(DataService);
   private auth = inject(AuthService);
-  private mediaSvc = inject(MediaService);
+  private media = inject(MediaService);
   private router = inject(Router);
   private route = inject(ActivatedRoute);
-  private sheetCtl = inject(ActionSheetController);
+  private toaster = inject(ToastController);
 
+  protected readonly provinces = PROVINCES;
   protected readonly categories = CATEGORIES;
+  protected readonly moreOpen = signal(false);
 
   type = signal<PostType | null>(null);
   editing = signal(false);
   busy = signal(false);
   error = signal('');
-  step = signal<'write' | 'preview'>('write');
   postId: string | null = null;
 
-  /** The one textbox, the attachments, and who sees the post. */
-  readonly body = signal('');
-  readonly media = signal<MediaItem[]>([]);
-  readonly audience = signal<Audience>('public');
-  readonly spotlightId = signal<string | null>(null);
+  /**
+   * The whole composer lives in signals. The app runs zoneless, so a plain
+   * field object mutated from an `(input)` handler never re-renders the Post
+   * button - the button stayed grey with every field filled in. Signals make
+   * every binding, and the validation below, update the moment something is
+   * typed.
+   */
+  readonly f = signal<ComposerForm>({
+    title: '', body: '', media: [], province: null, town: '', lastSeenAt: '', lastSeenWhere: '',
+    caseNumber: '', audience: 'public', spotlightId: null, chatEnabled: true, allowComments: true,
+    anonymous: false, askWanted: false, contactLabel: 'Family contact', contactValue: '', contactVisibleTo: 'verified'
+  });
+  readonly s = signal(blankSubject());
+  readonly khumbuReason = signal('');
 
-  /** The post being edited, if any - fields the text cannot express survive from here. */
-  readonly existing = signal<Post | null>(null);
-  /** What Generate pulled out of the text, and the feed-card preview built from it. */
-  readonly built = signal<BuiltPost | null>(null);
-  readonly draft = signal<Post | null>(null);
-
-  readonly me = computed(() => this.auth.user());
   readonly userAvatar = computed(() => this.data.avatarFor(this.auth.user()));
   readonly userName = computed(() => this.auth.user()?.displayName ?? 'You');
   readonly mySpotlights = computed(() => this.data.mySpotlights());
-  readonly canGenerate = computed(() => {
-    if (!this.type() || this.body().trim().length < 30) return false;
-    return this.audience() !== 'surname' || !!this.spotlightId();
+
+  patch(p: Partial<ComposerForm>): void {
+    this.f.update((f) => ({ ...f, ...p }));
+    if (this.error()) this.error.set('');
+  }
+
+  patchSubject(p: Partial<ReturnType<typeof blankSubject>>): void {
+    this.s.update((s) => ({ ...s, ...p }));
+  }
+
+  /**
+   * Everything still missing before this post can be shared, in the order the
+   * person will meet it. Empty means the Post button is live.
+   */
+  readonly missing = computed<MissingField[]>(() => {
+    const f = this.f();
+    const out: MissingField[] = [];
+    if (!this.type()) out.push({ key: 'type', label: 'Choose what you are posting' });
+    if (!f.body.trim()) out.push({ key: 'body', label: 'Write what happened so people know how to help' });
+    if (!f.province) out.push({ key: 'province', label: 'Choose the province' });
+    if (!f.town.trim()) out.push({ key: 'town', label: 'Add the town or suburb' });
+    if (f.audience === 'surname' && !f.spotlightId) out.push({ key: 'spotlightId', label: 'Choose a Spotlight community' });
+    return out;
   });
+
+  readonly canPost = computed(() => this.missing().length === 0);
+  /** Only highlighted once someone has actually tried to post. */
+  readonly showFieldErrors = signal(false);
+
+  /** The message under a field, or '' when it is fine. */
+  fieldError(key: string): string {
+    if (!this.showFieldErrors()) return '';
+    return this.missing().some((m) => m.key === key) ? 'This one is required.' : '';
+  }
 
   async ngOnInit(): Promise<void> {
     await this.data.loadStatic();
@@ -299,48 +429,68 @@ export class CreatePostComponent implements OnInit {
         return;
       }
       this.postId = post.id;
-      this.existing.set(post);
       this.editing.set(true);
       this.type.set(post.type);
-      this.body.set(post.body?.trim() ? post.body : this.templateFor(post.type));
-      this.media.set([...post.media]);
-      this.audience.set(post.audience);
-      this.spotlightId.set(post.spotlightId);
+      this.f.update((f) => ({
+        ...f,
+        title: post.title,
+        body: post.body,
+        media: [...post.media],
+        province: post.province,
+        town: post.town,
+        lastSeenAt: this.toLocalDateTime(post.lastSeenAt),
+        lastSeenWhere: post.lastSeenWhere,
+        caseNumber: post.caseNumber ?? '',
+        audience: post.audience,
+        spotlightId: post.spotlightId,
+        chatEnabled: post.chatEnabled,
+        allowComments: post.allowComments,
+        anonymous: post.anonymous,
+        askWanted: post.askWanted,
+        contactLabel: post.contactLabel,
+        contactValue: post.contactValue,
+        contactVisibleTo: post.contactVisibleTo
+      }));
+      if (post.subject) {
+        this.s.set({
+          ...this.s(), name: post.subject.name, age: post.subject.age === null ? '' : String(post.subject.age),
+          gender: post.subject.gender, height: post.subject.height, clothing: post.subject.clothing,
+          distinguishing: post.subject.distinguishing, hair: post.subject.hair
+        });
+      }
+      if (post.khumbu) this.khumbuReason.set(post.khumbu.reasonGuess);
+      this.moreOpen.set(true);
     }
   }
 
   setType(type: PostType): void {
     if (this.editing()) return;
     this.type.set(type);
-    this.step.set('write');
-    this.built.set(null);
-    this.draft.set(null);
-    if (!this.body().trim()) this.body.set(this.templateFor(type));
+    this.moreOpen.set(false);
+    this.s.set(blankSubject());
+    this.f.update((f) => ({
+      ...f,
+      caseNumber: '',
+      lastSeenAt: '',
+      lastSeenWhere: '',
+      askWanted: type === 'khumbulekhaya'
+    }));
+    this.khumbuReason.set('');
     this.error.set('');
-  }
-
-  /** The category's example, back in the box. */
-  fillExample(): void {
-    const type = this.type();
-    if (!type) return;
-    this.body.set(this.templateFor(type));
-    this.step.set('write');
-    this.error.set('');
-  }
-
-  onBody(value: string): void {
-    this.body.set(value);
-    if (this.error()) this.error.set('');
+    this.showFieldErrors.set(false);
   }
 
   setAudience(value: string): void {
     const audience = value as Audience;
-    this.audience.set(audience);
-    this.spotlightId.set(audience === 'surname' ? (this.spotlightId() ?? this.mySpotlights()[0]?.id ?? null) : null);
+    this.f.update((f) => ({
+      ...f,
+      audience,
+      spotlightId: audience === 'surname' ? (f.spotlightId ?? this.mySpotlights()[0]?.id ?? null) : null
+    }));
   }
 
   audienceIcon(): string {
-    const audience = this.audience();
+    const audience = this.f().audience;
     return audience === 'public' ? 'globe' : audience === 'followers' ? 'users' : 'award';
   }
 
@@ -348,321 +498,158 @@ export class CreatePostComponent implements OnInit {
     return this.categories.find((category) => category.key === this.type())?.label ?? 'Post';
   }
 
-  hasVideo(): boolean { return this.media().some((item) => item.kind === 'video'); }
-
-  async attach(): Promise<void> {
-    if (this.media().length >= 4 || this.hasVideo()) return;
-    const sheet = await this.sheetCtl.create({
-      header: 'Attach',
-      buttons: [
-        { text: 'Photo', icon: 'image' as const, handler: () => { void this.addPhoto(); } },
-        { text: 'Video', icon: 'videocam' as const, handler: () => { void this.addVideo(); } },
-        { text: 'Cancel', role: 'cancel' }
-      ]
-    });
-    await sheet.present();
+  bodyPlaceholder(): string {
+    switch (this.type()) {
+      case 'missing': return 'Share the important details. Where were they last seen? What might help someone recognise them?';
+      case 'khumbulekhaya': return 'Tell the family what they need to know. Keep in mind they may not want to return home.';
+      case 'pet': return 'Describe when and where your pet went missing and how people can help.';
+      case 'sighting': return 'Share only what you personally saw, when and where. Avoid guesses or naming suspects.';
+      default: return 'Write a short update for your community…';
+    }
   }
 
+  detailsLabel(): string {
+    switch (this.type()) {
+      case 'missing': return 'Add person and case details';
+      case 'khumbulekhaya': return 'Add family context';
+      case 'pet': return 'Add pet details';
+      case 'sighting': return 'Add sighting details';
+      default: return 'Add more details';
+    }
+  }
+
+  hasVideo(): boolean { return this.f().media.some((item) => item.kind === 'video'); }
+
   async addPhoto(): Promise<void> {
-    if (this.media().length >= 4 || this.hasVideo()) return;
-    const item = await this.mediaSvc.pickImage({ quality: 76 });
+    const f = this.f();
+    if (f.media.length >= 4 || this.hasVideo()) return;
+    const item = await this.media.pickImage({ quality: 76 });
     if (!item) {
-      if (this.mediaSvc.lastError()) this.error.set(this.mediaSvc.lastError()!);
+      if (this.media.lastError()) this.error.set(this.media.lastError()!);
       return;
     }
-    const src = await this.mediaSvc.compress(item.src, 1200);
-    this.media.update((current) => [...current, { ...item, src }]);
+    const src = await this.media.compress(item.src, 1200);
+    this.f.update((current) => ({ ...current, media: [...current.media, { ...item, src }] }));
   }
 
   async addVideo(): Promise<void> {
-    if (this.media().length) return;
-    const item = await this.mediaSvc.pickVideo();
+    if (this.f().media.length) return;
+    const item = await this.media.pickVideo();
     if (!item) {
-      if (this.mediaSvc.lastError()) this.error.set(this.mediaSvc.lastError()!);
+      if (this.media.lastError()) this.error.set(this.media.lastError()!);
       return;
     }
-    this.media.set([item]);
+    this.f.update((current) => ({ ...current, media: [item] }));
   }
 
   removeMedia(id: string): void {
-    this.media.update((current) => current.filter((item) => item.id !== id));
-  }
-
-  /**
-   * Reads the textbox and builds the poster. Throws the exact message the
-   * person needs when something is missing - never a silent dead end.
-   */
-  private build(): BuiltPost {
-    const type = this.type();
-    const raw = this.body().trim();
-    if (!type) throw new Error('Choose what you are posting first.');
-    if (raw.length < 30) {
-      throw new Error('Tell the full story in the box - at least 30 characters, so people can actually help.');
-    }
-    if (this.audience() === 'surname' && !this.spotlightId()) {
-      throw new Error('Choose which Spotlight community should see this.');
-    }
-    // The composer never offers the legacy 'story' type; the cast only says
-    // the parser treats it like any other category.
-    const parsed = parsePosterText(type as PosterCategory, raw);
-    const where = (LOCATION_LABEL as Record<string, string>)[type] ?? 'Last seen';
-    if (!parsed.province) {
-      throw new Error(`Which province did this happen in? Add it to the ${where} line, e.g. "${LOCATION_EXAMPLE}".`);
-    }
-    if (!parsed.town) {
-      throw new Error(`Add the town or suburb to the ${where} line, e.g. "${LOCATION_EXAMPLE}".`);
-    }
-
-    const prev = this.existing();
-    const prevSubject = prev?.subject;
-    const personType = type === 'missing' || type === 'khumbulekhaya' || type === 'pet';
-    const subject: Post['subject'] = personType || (type === 'sighting' && parsed.subjectName) ? {
-      name: parsed.subjectName,
-      age: parsed.subjectAge,
-      gender: prevSubject?.gender ?? 'unknown',
-      height: prevSubject?.height ?? '',
-      build: prevSubject?.build ?? '',
-      skinTone: prevSubject?.skinTone ?? '',
-      hair: prevSubject?.hair ?? '',
-      eyes: prevSubject?.eyes ?? '',
-      clothing: prevSubject?.clothing ?? '',
-      distinguishing: prevSubject?.distinguishing ?? '',
-      medical: prevSubject?.medical ?? '',
-      vehicle: prevSubject?.vehicle ?? '',
-      languages: prevSubject?.languages ?? '',
-      surname: parsed.subjectName.trim().split(/\s+/).at(-1) ?? '',
-      relationship: prevSubject?.relationship ?? ''
-    } : null;
-    const prevVehicle = prev?.vehicleDetails;
-    const vehicleDetails: Post['vehicleDetails'] = type === 'vehicle' ? {
-      makeModel: parsed.vehicleMakeModel,
-      registration: parsed.vehicleRegistration,
-      colour: parsed.vehicleColour,
-      bodyType: prevVehicle?.bodyType ?? ''
-    } : null;
-    const prevDanger = prev?.danger;
-    const danger: Post['danger'] = type === 'danger' ? {
-      kind: parsed.dangerKind,
-      stillIds: prevDanger?.stillIds ?? [],
-      clearIds: prevDanger?.clearIds ?? [],
-      clearedAt: prevDanger?.clearedAt ?? null
-    } : null;
-    const prevKhumbu = prev?.khumbu;
-    const khumbu: Post['khumbu'] = type === 'khumbulekhaya' ? {
-      daysOut: prevKhumbu?.daysOut ?? null,
-      leftHomeAt: prevKhumbu?.leftHomeAt ?? null,
-      reasonGuess: parsed.message,
-      claimedByUserId: prevKhumbu?.claimedByUserId ?? null,
-      claimedAt: prevKhumbu?.claimedAt ?? null,
-      subjectResponse: prevKhumbu?.subjectResponse ?? 'none',
-      subjectNote: prevKhumbu?.subjectNote ?? '',
-      wantedAnswers: prevKhumbu?.wantedAnswers ?? { yes: 0, no: 0, myVote: null }
-    } : null;
-
-    return {
-      title: this.makeTitle(type, parsed),
-      province: parsed.province,
-      town: parsed.town,
-      lastSeenWhere: parsed.lastSeenWhere || parsed.town,
-      contactValue: parsed.contact,
-      caseNumber: parsed.caseNumber || null,
-      subject,
-      vehicleDetails,
-      danger,
-      khumbu
-    };
-  }
-
-  private makeTitle(type: PostType, parsed: ParsedPoster): string {
-    const label = this.categoryLabel();
-    if (type === 'vehicle' && parsed.vehicleMakeModel) return `Stolen vehicle: ${parsed.vehicleMakeModel}`;
-    if (parsed.subjectName) return `${label}: ${parsed.subjectName}`;
-    const opening = type === 'danger' && parsed.alertRaw ? parsed.alertRaw : (parsed.narrative[0] ?? '');
-    const title = `${label}: ${opening.slice(0, 64).trim() || 'Community update'}`;
-    return title.trim().length >= 8 ? title : `${label}: community update`;
-  }
-
-  /** Generate: parse the text, then show the real feed card as the preview. */
-  generate(): void {
-    this.error.set('');
-    const me = this.auth.user();
-    if (!me) {
-      void this.router.navigate(['/auth'], { queryParams: { next: '/new' } });
-      return;
-    }
-    try {
-      const built = this.build();
-      this.built.set(built);
-      this.draft.set(this.draftPost(me.id, built));
-      this.step.set('preview');
-      this.scrollToTop();
-    } catch (e: any) {
-      this.error.set(e?.message ?? 'Could not read these details');
-      this.scrollToError();
-    }
-  }
-
-  backToEdit(): void {
-    this.step.set('write');
+    this.f.update((current) => ({ ...current, media: current.media.filter((item) => item.id !== id) }));
   }
 
   async submit(): Promise<void> {
-    const built = this.built();
-    const type = this.type();
     this.error.set('');
-    if (!built || !type) {
-      this.step.set('write');
+    const f = this.f();
+    const s = this.s();
+    const type = this.type();
+
+    // The Post button always answers a tap, so an unfinished form explains
+    // itself instead of sitting there looking broken.
+    this.showFieldErrors.set(true);
+    if (this.missing().length) {
+      this.error.set(this.missing()[0].label + '.');
+      this.scrollToError();
       return;
     }
-    const prev = this.existing();
+
+    const timestamp = f.lastSeenAt ? new Date(f.lastSeenAt).getTime() : null;
+    const personType = type === 'missing' || type === 'khumbulekhaya' || type === 'pet';
+    const subject = personType ? {
+      name: s.name.trim(),
+      age: s.age ? Number(s.age) : null,
+      gender: s.gender,
+      height: s.height.trim(), build: '', skinTone: '', hair: s.hair.trim(), eyes: '',
+      clothing: s.clothing.trim(), distinguishing: s.distinguishing.trim(), medical: '',
+      vehicle: '', languages: '', surname: s.name.trim().split(/\s+/).at(-1) ?? '', relationship: ''
+    } : (type === 'sighting' && (s.name || s.clothing) ? {
+      name: s.name.trim(), age: null, gender: 'unknown' as const, height: '', build: '', skinTone: '', hair: '', eyes: '',
+      clothing: s.clothing.trim(), distinguishing: '', medical: '', vehicle: '', languages: '', surname: '', relationship: ''
+    } : null);
+    const title = f.title.trim() || this.generatedTitle(type!, subject?.name ?? '');
+    const khumbu = type === 'khumbulekhaya' ? {
+      daysOut: timestamp ? Math.max(0, Math.floor((Date.now() - timestamp) / 86_400_000)) : null,
+      leftHomeAt: timestamp,
+      reasonGuess: this.khumbuReason().trim(), claimedByUserId: null, claimedAt: null,
+      subjectResponse: 'none' as const, subjectNote: '', wantedAnswers: { yes: 0, no: 0, myVote: null }
+    } : null;
+
+    let created: Post | null = null;
     this.busy.set(true);
     try {
       if (this.editing() && this.postId) {
         await this.data.updatePost(this.postId, {
-          title: built.title,
-          body: this.body().trim(),
-          media: this.media(),
-          province: built.province,
-          town: built.town,
-          lastSeenAt: prev?.lastSeenAt ?? null,
-          lastSeenWhere: built.lastSeenWhere,
-          caseNumber: built.caseNumber,
-          subject: built.subject,
-          vehicleDetails: built.vehicleDetails,
-          audience: this.audience(),
-          spotlightId: this.spotlightId(),
-          chatEnabled: prev?.chatEnabled ?? true,
-          allowComments: prev?.allowComments ?? true,
-          anonymous: prev?.anonymous ?? false,
-          askWanted: prev?.askWanted ?? type === 'khumbulekhaya',
-          contactLabel: prev?.contactLabel ?? 'Family contact',
-          contactValue: built.contactValue,
-          contactVisibleTo: prev?.contactVisibleTo ?? 'verified',
-          khumbu: built.khumbu,
-          danger: built.danger
+          title, body: f.body, media: f.media, province: f.province!, town: f.town.trim(),
+          lastSeenAt: timestamp, lastSeenWhere: (f.lastSeenWhere || f.town).trim(), caseNumber: f.caseNumber || null,
+          subject, vehicleDetails: null, audience: f.audience, spotlightId: f.spotlightId,
+          chatEnabled: f.chatEnabled, allowComments: f.allowComments, anonymous: f.anonymous,
+          askWanted: f.askWanted, contactLabel: f.contactLabel, contactValue: f.contactValue,
+          contactVisibleTo: f.contactVisibleTo, khumbu
         });
       } else {
-        await this.data.createPost({
-          type,
-          title: built.title,
-          body: this.body().trim(),
-          media: this.media(),
-          province: built.province,
-          town: built.town,
-          lastSeenAt: null,
-          lastSeenWhere: built.lastSeenWhere,
-          geo: null,
-          contactLabel: 'Family contact',
-          contactValue: built.contactValue,
-          contactVisibleTo: 'verified',
-          caseNumber: built.caseNumber,
-          reward: null,
-          subject: built.subject,
-          vehicleDetails: built.vehicleDetails,
-          audience: this.audience(),
-          spotlightId: this.spotlightId(),
-          chatEnabled: true,
-          allowComments: true,
-          anonymous: false,
-          askWanted: type === 'khumbulekhaya',
-          khumbu: built.khumbu,
-          danger: built.danger
+        const made = await this.data.createPost({
+          type: type!, title, body: f.body, media: f.media, province: f.province!, town: f.town.trim(),
+          lastSeenAt: timestamp, lastSeenWhere: (f.lastSeenWhere || f.town).trim(), geo: null,
+          contactLabel: f.contactLabel || 'Family contact', contactValue: f.contactValue,
+          contactVisibleTo: f.contactVisibleTo, caseNumber: f.caseNumber || null, reward: null,
+          subject, vehicleDetails: null, audience: f.audience, spotlightId: f.spotlightId,
+          chatEnabled: f.chatEnabled, allowComments: f.allowComments, anonymous: f.anonymous,
+          askWanted: f.askWanted, khumbu,
+          danger: null
         });
+        created = made;
       }
-      await this.router.navigate(['/home']);
+      this.showFieldErrors.set(false);
+      if (this.editing()) {
+        await this.toastMsg('Post updated. It now shows as edited.');
+        await this.router.navigate(['/post', this.postId]);
+      } else if (created && (type === 'missing' || type === 'khumbulekhaya' || type === 'pet')) {
+        await this.router.navigate(['/post', created.id, 'poster'], { queryParams: { new: '1' } });
+      } else {
+        await this.toastMsg('Posted');
+        await this.router.navigate(['/home']);
+      }
     } catch (e: any) {
       this.error.set(e?.message ?? 'Could not share this post');
-      this.scrollToError();
     } finally {
       this.busy.set(false);
     }
   }
 
-  /**
-   * The preview post. It mirrors what `DataService.createPost` would save -
-   * same defaults, same under-review rule for a missing child - so the card
-   * on this screen is pixel for pixel the card the feed will show. It is
-   * never saved; posting builds the real one.
-   */
-  private draftPost(authorId: string, built: BuiltPost): Post {
-    const type = this.type()!;
-    const now = Date.now();
-    const prev = this.existing();
-    return {
-      id: 'preview',
-      type,
-      status: type === 'missing' && (built.subject?.age ?? 99) < 18 ? 'under_review' : 'active',
-      authorId,
-      anonymous: prev?.anonymous ?? false,
-      askWanted: prev?.askWanted ?? type === 'khumbulekhaya',
-      title: built.title,
-      body: this.body().trim(),
-      media: this.media(),
-      province: built.province,
-      town: built.town,
-      lastSeenAt: prev?.lastSeenAt ?? null,
-      lastSeenWhere: built.lastSeenWhere,
-      geo: prev?.geo ?? null,
-      contactLabel: prev?.contactLabel ?? 'Family contact',
-      contactValue: built.contactValue,
-      contactVisibleTo: prev?.contactVisibleTo ?? 'verified',
-      caseNumber: built.caseNumber,
-      reward: prev?.reward ?? null,
-      createdAt: now,
-      updatedAt: now,
-      subject: built.subject,
-      vehicleDetails: built.vehicleDetails ?? null,
-      audience: this.audience(),
-      spotlightId: this.spotlightId(),
-      chatEnabled: prev?.chatEnabled ?? true,
-      allowComments: prev?.allowComments ?? true,
-      allowShare: true,
-      upvotes: 0,
-      downvotes: 0,
-      commentCount: 0,
-      shares: 0,
-      views: 0,
-      savedBy: 0,
-      voterIds: {},
-      escalation: { requested: false, consentGranted: false, consentAt: null, partners: [] },
-      consent: [],
-      sightingVerified: null,
-      searchParty: null,
-      locationCheck: {
-        subjectRegisteredInApp: false,
-        requestedBy: null,
-        requestedAt: null,
-        consentFromSubject: 'none',
-        consentAt: null,
-        points: [],
-        deviceReachable: false,
-        lastKnownAt: null,
-        note: ''
-      },
-      khumbu: built.khumbu,
-      danger: built.danger,
-      outcome: { found: false, foundAt: null, whereaboutsFound: '', closedBy: null, note: '' },
-      events: [{ at: now, kind: 'claimed', byUserId: authorId, note: type === 'danger' ? 'Danger alert posted' : 'Posted by family/close contact' }],
-      flags: [],
-      outcomeNudgeAt: null
-    };
-  }
-
-  private templateFor(type: PostType): string {
-    return (POSTER_TEMPLATES as Record<string, string>)[type] ?? POSTER_TEMPLATES.missing;
-  }
-
+  /** Brings the first empty required field into view. */
   private scrollToError(): void {
     if (typeof document === 'undefined') return;
     const target = document.querySelector('[data-field="body"]')
-      ?? document.querySelector('.composer');
+      ?? document.querySelector('.post-fields');
     target?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
   }
 
-  private scrollToTop(): void {
-    if (typeof document === 'undefined') return;
-    document.querySelector('.preview-step')?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+  private generatedTitle(type: PostType, name: string): string {
+    if (name) return `${this.categoryLabel()}: ${name}`;
+    const opening = this.f().body.trim().split(/[.!?\n]/)[0]?.trim() ?? '';
+    return `${this.categoryLabel()}: ${opening.slice(0, 64) || 'Community update'}`;
   }
+
+  private toLocalDateTime(timestamp: number | null): string {
+    if (!timestamp) return '';
+    const date = new Date(timestamp);
+    return new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
+  }
+
+  private async toastMsg(message: string): Promise<void> {
+    const t = await this.toaster.create({ message, duration: 2400, position: 'bottom' });
+    await t.present();
+  }
+
+  goStory(): void { void this.router.navigate(['/create-story']); }
 
   close(): void { void this.router.navigate(['/home']); }
 }

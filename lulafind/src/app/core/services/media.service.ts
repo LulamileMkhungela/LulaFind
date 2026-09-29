@@ -22,20 +22,31 @@ export class MediaService {
     this.lastError.set(null);
     try {
       if (this.platform.isNative) {
-        const photo = await Camera.getPhoto({
-          quality: opts.quality ?? 78,
-          allowEditing: false,
-          resultType: CameraResultType.DataUrl,
-          source: opts.source === 'camera' ? CameraSource.Camera : CameraSource.Prompt,
-          correctOrientation: true,
-          width: 1400
-        });
-        if (!photo.dataUrl) return null;
-        return { id: uid('m'), kind: 'image', src: photo.dataUrl };
+        try {
+          const photo = await Camera.getPhoto({
+            quality: opts.quality ?? 78,
+            allowEditing: false,
+            resultType: CameraResultType.DataUrl,
+            source: opts.source === 'camera' ? CameraSource.Camera : CameraSource.Prompt,
+            correctOrientation: true,
+            width: 1400
+          });
+          if (!photo.dataUrl) return null;
+          return { id: uid('m'), kind: 'image', src: photo.dataUrl };
+        } catch (e: any) {
+          if (!MediaService.pluginMissing(e)) throw e;
+          // The APK was built before the Camera plugin was synced in. The
+          // system photo picker still works, so the person can carry on.
+          return await this.pickViaInput('image/*', opts.source === 'camera');
+        }
       }
       return await this.pickViaInput();
     } catch (e: any) {
-      if (String(e?.message ?? '').toLowerCase().includes('cancel')) return null;
+      const msg = String(e?.message ?? '').toLowerCase();
+      if (msg.includes('cancel') || msg.includes('no image picked') || msg.includes('user denied')) {
+        if (msg.includes('denied')) this.lastError.set('Camera or photo access was turned off. Allow it in your phone settings, then try again.');
+        return null;
+      }
       this.lastError.set(e?.message ?? 'Could not pick image');
       return null;
     } finally {
@@ -59,11 +70,18 @@ export class MediaService {
     }
   }
 
-  private pickViaInput(accept = 'image/*'): Promise<MediaItem | null> {
+  /** "Camera plugin is not implemented on android" and its cousins. */
+  private static pluginMissing(e: any): boolean {
+    const msg = String(e?.message ?? e ?? '').toLowerCase();
+    return e?.code === 'UNIMPLEMENTED' || msg.includes('not implemented') || msg.includes('unimplemented') || msg.includes('not available');
+  }
+
+  private pickViaInput(accept = 'image/*', capture = false): Promise<MediaItem | null> {
     return new Promise((resolve) => {
       const input = document.createElement('input');
       input.type = 'file';
       input.accept = accept;
+      if (capture) input.setAttribute('capture', 'environment');
       input.style.display = 'none';
       document.body.appendChild(input);
       input.addEventListener('change', () => {

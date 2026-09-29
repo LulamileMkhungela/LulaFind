@@ -1,9 +1,8 @@
 import { Component, computed, inject, signal } from '@angular/core';
-import { Router } from '@angular/router';
+import { NavigationEnd, Router } from '@angular/router';
 import { IonTabs } from '@ionic/angular/ion-tabs';
 import { IonLabel } from '@ionic/angular/ion-label';
 import { IonTabBar, IonTabButton } from '@ionic/angular';
-import { ActionSheetController } from '@ionic/angular/action-sheet-controller';
 import { IconComponent } from '../../shared/components/icon.component';
 import { AvatarComponent } from '../../shared/components/avatar.component';
 import { DataService } from '../../core/services/data.service';
@@ -13,8 +12,9 @@ import { ChatService } from '../../core/services/chat.service';
 /**
  * Bottom navigation: Home, Spotlight, Create, Chats, Menu.
  *
- * Search moved up to the top navigation's search pill, and Chats moved down
- * here with their unread badge - messages are a thumb target now.
+ * Chats is a real tab, so it shows as selected while you are in it. Search
+ * lives in the top navigation's search bar and Notifications is the bell at
+ * its right end (`lf-top-nav`), like LinkedIn.
  */
 @Component({
   selector: 'lf-tabs',
@@ -38,15 +38,13 @@ import { ChatService } from '../../core/services/chat.service';
           <ion-label>Create</ion-label>
         </button>
 
-        <button class="bar-btn" type="button" (click)="chats()" aria-label="Chats">
-          <span class="chat-wrap">
-            <lf-icon name="messenger" [size]="24" [weight]="2" />
-            @if (unreadChats() > 0) {
-              <span class="chat-badge">{{ unreadChats() > 99 ? '99+' : unreadChats() }}</span>
-            }
-          </span>
+        <ion-tab-button tab="chats">
+          <div class="wrap">
+            <lf-icon name="messenger" [size]="24" [filled]="active() === 'chats'" [weight]="active() === 'chats' ? 2.4 : 2" />
+            @if (unread() > 0) { <span class="tab-dot">{{ unread() > 99 ? '99+' : unread() }}</span> }
+          </div>
           <ion-label>Chats</ion-label>
-        </button>
+        </ion-tab-button>
 
         <ion-tab-button tab="me">
           <div class="wrap">
@@ -94,7 +92,7 @@ import { ChatService } from '../../core/services/chat.service';
     }
     ion-tab-button.tab-selected ion-label { font-weight: 600; }
 
-    /* Create and Chats are plain buttons styled to sit in the same bar. */
+    /* Create and Search are plain buttons styled to sit in the same bar. */
     .bar-btn {
       flex: 1 1 0;
       position: relative;
@@ -112,25 +110,6 @@ import { ChatService } from '../../core/services/chat.service';
     }
     .bar-btn:active { filter: brightness(.92); }
     .bar-btn ion-label { color: inherit; }
-    .chat-wrap { position: relative; display: inline-flex; line-height: 0; }
-    .chat-badge {
-      position: absolute;
-      top: -7px;
-      right: -13px;
-      min-width: 18px;
-      height: 18px;
-      padding: 0 5px;
-      box-sizing: border-box;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      border-radius: 999px;
-      background: var(--lf-badge);
-      color: #fff;
-      font-size: 11px;
-      font-weight: 700;
-      line-height: 1;
-    }
     .create-disc {
       display: grid;
       place-items: center;
@@ -146,6 +125,11 @@ import { ChatService } from '../../core/services/chat.service';
     .bar-btn.create ion-label { color: var(--lf-muted); font-weight: 600; }
 
     .wrap { position: relative; display: inline-flex; }
+    .tab-dot {
+      position: absolute; top: -5px; right: -9px; min-width: 17px; height: 17px; padding: 0 4px;
+      border-radius: 9px; background: var(--lf-badge); color: #fff; font-size: 10.5px; font-weight: 700;
+      line-height: 17px; text-align: center; box-shadow: 0 0 0 2px var(--lf-tabbar); box-sizing: border-box;
+    }
     .me { display: inline-flex; border-radius: 50%; }
     .me.on { box-shadow: 0 0 0 2px var(--lf-tabbar), 0 0 0 4px var(--lf-primary); }
     .menu-pip {
@@ -169,41 +153,24 @@ export class TabsComponent {
   protected auth = inject(AuthService);
   private data = inject(DataService);
   private chat = inject(ChatService);
-  private sheetCtl = inject(ActionSheetController);
 
-  readonly active = signal('home');
-  readonly unreadChats = computed(() => this.chat.unreadTotal());
+  readonly unread = computed(() => this.chat.unreadTotal());
+  readonly active = signal(TabsComponent.tabOf(typeof location !== 'undefined' ? location.pathname : '/home'));
 
-  /**
-   * The + button offers both: a feed post and a 24-hour story.
-   * Guests are sent to sign in first, then straight to the form they picked.
-   */
-  async create(): Promise<void> {
-    const signedIn = this.auth.signedIn();
-    const go = (target: string): void => {
-      if (signedIn) void this.router.navigateByUrl(target);
-      else void this.router.navigate(['/auth'], { queryParams: { next: target } });
-    };
-    const sheet = await this.sheetCtl.create({
-      header: 'Create',
-      buttons: [
-        {
-          text: 'Create post',
-          icon: 'document-text' as const,
-          handler: () => go('/new')
-        },
-        {
-          text: 'Create story',
-          icon: 'camera' as const,
-          handler: () => go('/create-story')
-        },
-        { text: 'Cancel', role: 'cancel' }
-      ]
+  constructor() {
+    // Keeps the selected state right after a deep link or a Back press too.
+    this.router.events.subscribe((ev) => {
+      if (ev instanceof NavigationEnd) this.active.set(TabsComponent.tabOf(ev.urlAfterRedirects));
     });
-    await sheet.present();
   }
 
-  chats(): void {
-    void this.router.navigateByUrl('/chats');
+  private static tabOf(url: string): string {
+    const first = url.split(/[?#]/)[0].split('/').filter(Boolean)[0] ?? 'home';
+    return ['home', 'spotlight', 'chats', 'me'].includes(first) ? first : 'home';
+  }
+
+  create(): void {
+    const target = this.auth.signedIn() ? '/new' : '/auth?next=/new';
+    void this.router.navigateByUrl(target);
   }
 }

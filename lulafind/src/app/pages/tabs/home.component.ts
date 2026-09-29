@@ -7,14 +7,12 @@ import { IonInfiniteScroll } from '@ionic/angular/ion-infinite-scroll';
 import { IonInfiniteScrollContent } from '@ionic/angular/ion-infinite-scroll-content';
 import { IonSkeletonText } from '@ionic/angular/ion-skeleton-text';
 import { ToastController } from '@ionic/angular/toast-controller';
-import { ActionSheetController } from '@ionic/angular/action-sheet-controller';
-import { AlertController } from '@ionic/angular/alert-controller';
 import { IconComponent } from '../../shared/components/icon.component';
 import { TopNavComponent } from '../../shared/components/top-nav.component';
 import { EmptyComponent } from '../../shared/components/empty.component';
-import { AvatarComponent } from '../../shared/components/avatar.component';
 import { ChatState, PostCardComponent } from '../../shared/components/post-card.component';
-import { DiscoverRailComponent } from '../../shared/components/discover-rail.component';
+import { StoryRailComponent } from '../../shared/components/story-rail.component';
+import { PeopleRailComponent } from '../../shared/components/people-rail.component';
 import { FilterBarComponent } from '../../shared/components/filter-bar.component';
 import { CHECK_IN_COPY } from '../../core/services/safety.service';
 import { UserProfile } from '../../core/models/types';
@@ -22,10 +20,7 @@ import { DataService } from '../../core/services/data.service';
 import { AuthService } from '../../core/services/auth.service';
 import { ChatService } from '../../core/services/chat.service';
 import { PlatformService } from '../../core/services/platform.service';
-import { ModerationService } from '../../core/services/moderation.service';
-import { POST_TYPE_META, Post } from '../../core/models/types';
-import { timeAgo } from '../../core/utils/format';
-import { storyBg } from '../../core/data/seed';
+import { POST_TYPE_META, Post, ReactionKind } from '../../core/models/types';
 
 @Component({
   selector: 'lf-home',
@@ -33,8 +28,7 @@ import { storyBg } from '../../core/data/seed';
   imports: [
     IonContent, IonRefresher, IonRefresherContent,
     IonInfiniteScroll, IonInfiniteScrollContent, IonSkeletonText,
-    TopNavComponent, IconComponent, EmptyComponent, AvatarComponent,
-    PostCardComponent, DiscoverRailComponent, FilterBarComponent
+    TopNavComponent, IconComponent, EmptyComponent, PostCardComponent, StoryRailComponent, PeopleRailComponent, FilterBarComponent
   ],
   template: `
     <lf-top-nav />
@@ -43,13 +37,6 @@ import { storyBg } from '../../core/data/seed';
       <ion-refresher slot="fixed" (ionRefresh)="onRefresh($event)">
         <ion-refresher-content pullingText="Pull to refresh"></ion-refresher-content>
       </ion-refresher>
-
-      <!-- Stories first: the first card in the feed, like every social app -->
-      <lf-discover-rail
-        [people]="suggestions()"
-        (addStory)="onAddStory()"
-        (seeAll)="openSeeAll('stories')"
-        (removed)="dismissSuggestion($event)" />
 
       <!-- Facebook Feed Filter Chips -->
       <lf-filter-bar
@@ -75,18 +62,22 @@ import { storyBg } from '../../core/data/seed';
                   actionLabel="Reset filters" (action)="data.resetFilter()" />
       }
 
-      <!-- Posts, newest first. Stories live only in the top rail. -->
-      @for (p of displayedFeed(); track p.id) {
-        <lf-post-card
-          [post]="p"
-          [author]="data.authorOf(p.authorId) ?? null"
-          [chatState]="chatStateOf(p)"
-          (vote)="onVote(p, $event)"
-          (comment)="onComment(p)"
-          (share)="onShare(p)"
-          (chat)="onChat(p)"
-          (more)="onMore(p)"
-          (savedChange)="onSave(p)" />
+      <!-- Stories and People appear only between posts: after every 8th post, never at the top. -->
+      @for (item of feedItems(); track item.key) {
+        @if (item.post; as p) {
+          <lf-post-card
+            [post]="p"
+            [author]="data.authorOf(p.authorId) ?? null"
+            [chatState]="chatStateOf(p)"
+            (vote)="onVote(p, $event)"
+            (comment)="onComment(p)"
+            (chat)="onChat(p)"
+            (savedChange)="onSave(p)" />
+        } @else if (item.kind === 'stories') {
+          <lf-story-rail (addStory)="onAddStory()" />
+        } @else {
+          <lf-people-rail />
+        }
       }
 
       @if (isGuestLocked()) {
@@ -117,86 +108,6 @@ import { storyBg } from '../../core/data/seed';
         </ion-infinite-scroll>
       }
     </ion-content>
-
-    <!-- See-all sheet: Stories and People tabs (from either “See all”) -->
-    @if (storiesSheet()) {
-      <div class="sheetwrap" (click)="storiesSheet.set(false)">
-        <div class="sheet" role="dialog" aria-label="All stories and people" (click)="$event.stopPropagation()">
-          <div class="sheet__head">
-            <h3>Stories &amp; People</h3>
-            <button class="x" type="button" (click)="storiesSheet.set(false)" aria-label="Close">
-              <lf-icon name="x" [size]="20" />
-            </button>
-          </div>
-          <div class="sheet__tabs" role="tablist">
-            <button role="tab" type="button" [class.on]="seeAllTab() === 'stories'" (click)="seeAllTab.set('stories')">
-              Stories
-            </button>
-            <button role="tab" type="button" [class.on]="seeAllTab() === 'people'" (click)="seeAllTab.set('people')">
-              People
-            </button>
-          </div>
-          @if (seeAllTab() === 'stories') {
-            <button class="lf-btn lf-btn--primary lf-btn--block" type="button" (click)="onAddStory()">
-              <lf-icon name="plus" [size]="16" /> Create story
-            </button>
-            @if (!allStories().length) {
-              <p class="sheet__empty">No stories yet. Be the first — stories disappear after 24 hours.</p>
-            } @else {
-              <div class="story-grid">
-                @for (s of allStories(); track s.id) {
-                  <button class="story-cell" type="button" (click)="goStory(s.id)" [style.background]="storyBg(s.bgHue)">
-                    @if (s.media[0]?.src) {
-                      <img [src]="s.media[0].src" alt="" loading="lazy" />
-                    } @else if (s.text) {
-                      <span class="story-cell__txt">{{ s.text }}</span>
-                    }
-                    <span class="story-cell__who">
-                      <lf-avatar [src]="data.avatarFor(data.authorOf(s.authorId))" [name]="data.authorOf(s.authorId)?.displayName ?? 'Member'" [size]="26" />
-                      <span class="story-cell__meta">
-                        <strong>{{ data.authorOf(s.authorId)?.displayName ?? 'Member' }}</strong>
-                        <small>{{ timeAgo(s.createdAt) }}</small>
-                      </span>
-                    </span>
-                  </button>
-                }
-              </div>
-            }
-          } @else {
-            @if (!suggestions().length) {
-              <p class="sheet__empty">No suggestions right now. New people will appear here as they join.</p>
-              <button class="lf-btn lf-btn--block" type="button" (click)="goPeople()">
-                <lf-icon name="search" [size]="16" /> Search everyone
-              </button>
-            } @else {
-              <div class="people-list">
-                @for (u of suggestions(); track u.id) {
-                  <div class="person-row">
-                    <button class="person-row__who" type="button" (click)="goPerson(u.id)">
-                      <lf-avatar [src]="data.avatarFor(u)" [name]="u.displayName" [size]="46" />
-                      <span class="person-row__meta">
-                        <strong>{{ u.displayName }}</strong>
-                        <small>&#64;{{ u.handle }}@if (u.town) { · {{ u.town }} }</small>
-                      </span>
-                    </button>
-                    @if (sheetStateOf(u.id) === 'following') {
-                      <span class="person-row__add done">Following</span>
-                    } @else if (sheetStateOf(u.id) === 'requested') {
-                      <span class="person-row__add done">Requested</span>
-                    } @else {
-                      <button class="person-row__add" type="button"
-                              [disabled]="sheetBusy() === u.id" (click)="addFromSheet(u)">
-                        {{ sheetBusy() === u.id ? 'Adding…' : 'Add friend' }}
-                      </button>
-                    }
-                  </div>
-                }
-              </div>
-            }
-          }
-        </div>
-      </div>
-    }
   `,
   styles: [`
     .skel {
@@ -230,118 +141,6 @@ import { storyBg } from '../../core/data/seed';
       .composer, .skel, .guest-scroll-lock { max-width: var(--lf-maxw); margin-left: auto; margin-right: auto; border-radius: var(--lf-radius); }
       .composer { margin-top: 12px; }
     }
-
-    .sheetwrap {
-      position: fixed; inset: 0; z-index: 120;
-      background: var(--lf-scrim);
-      display: flex; align-items: flex-end; justify-content: center;
-    }
-    .sheet {
-      width: 100%; max-width: 520px;
-      max-height: 86vh;
-      overflow-y: auto;
-      background: var(--lf-card);
-      border-radius: 18px 18px 0 0;
-      padding: 14px 16px calc(24px + var(--lf-safe-bottom));
-      display: flex; flex-direction: column; gap: 10px;
-    }
-    .sheet__head { display: flex; align-items: center; justify-content: space-between; }
-    .sheet__head h3 { margin: 0; font-size: 18px; font-weight: 700; }
-    .x {
-      width: 36px; height: 36px;
-      border: 0; border-radius: 50%;
-      background: var(--lf-card-2);
-      color: var(--ion-text-color);
-      cursor: pointer;
-      display: grid; place-items: center;
-    }
-    .sheet__empty { color: var(--lf-muted); font-size: 14px; text-align: center; padding: 16px 0; }
-    .story-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-    .story-cell {
-      position: relative;
-      aspect-ratio: 3 / 4;
-      border: 0;
-      border-radius: 12px;
-      overflow: hidden;
-      cursor: pointer;
-      padding: 0;
-      color: #fff;
-      text-align: left;
-      font-family: inherit;
-    }
-    .story-cell img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-    .story-cell__txt {
-      position: absolute; inset: 0;
-      display: flex; align-items: center; justify-content: center;
-      padding: 12px;
-      font-size: 14px; font-weight: 700; line-height: 1.35;
-      text-align: center;
-    }
-    .story-cell__who {
-      position: absolute; left: 0; right: 0; bottom: 0;
-      display: flex; align-items: center; gap: 7px;
-      padding: 18px 8px 8px;
-      background: linear-gradient(transparent, rgba(0,0,0,.6));
-    }
-    .story-cell__meta { display: flex; flex-direction: column; min-width: 0; }
-    .story-cell__meta strong { font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .story-cell__meta small { font-size: 11px; opacity: .85; }
-    .sheet__tabs { display: flex; gap: 8px; }
-    .sheet__tabs button {
-      flex: 1;
-      height: 36px;
-      border: 0;
-      border-radius: 999px;
-      background: var(--lf-card-2);
-      color: var(--ion-text-color);
-      font-family: inherit;
-      font-size: 14px;
-      font-weight: 700;
-      cursor: pointer;
-    }
-    .sheet__tabs button.on { background: var(--lf-primary-soft); color: var(--lf-primary-soft-text); }
-    .people-list { display: flex; flex-direction: column; }
-    .person-row {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 9px 0;
-      border-top: 1px solid var(--lf-line-soft);
-    }
-    .person-row__who {
-      flex: 1;
-      min-width: 0;
-      display: flex;
-      align-items: center;
-      gap: 11px;
-      border: 0;
-      background: none;
-      color: inherit;
-      font-family: inherit;
-      text-align: left;
-      cursor: pointer;
-      padding: 0;
-    }
-    .person-row__meta { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
-    .person-row__meta strong { font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .person-row__meta small { font-size: 12.5px; color: var(--lf-muted); }
-    .person-row__add {
-      flex-shrink: 0;
-      height: 34px;
-      padding: 0 14px;
-      border: 0;
-      border-radius: 6px;
-      background: var(--lf-primary-soft);
-      color: var(--lf-primary-soft-text);
-      font-family: inherit;
-      font-size: 14px;
-      font-weight: 700;
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-    }
-    .person-row__add:disabled { opacity: .65; }
-    span.person-row__add.done { background: var(--lf-card-2); color: var(--lf-muted); }
   `]
 })
 export class HomeComponent {
@@ -351,12 +150,6 @@ export class HomeComponent {
   private platform = inject(PlatformService);
   private router = inject(Router);
   private toast = inject(ToastController);
-  private sheetCtl = inject(ActionSheetController);
-  private alertCtl = inject(AlertController);
-  private mod = inject(ModerationService);
-
-  protected readonly timeAgo = timeAgo;
-  protected readonly storyBg = storyBg;
 
   readonly missingPip = computed(() =>
     this.data.feed().filter((p) => p.type === 'missing' && p.status === 'active').length
@@ -372,88 +165,35 @@ export class HomeComponent {
     return feed;
   });
 
-  /** “People you may know” — shown in the first rail and the See-all sheet. */
-  readonly suggestions = signal<UserProfile[]>([]);
-  /** See-all sheet from either “See all”, with Stories and People tabs. */
-  readonly storiesSheet = signal(false);
-  readonly seeAllTab = signal<'stories' | 'people'>('stories');
-  readonly allStories = computed(() => this.data.visibleStories());
-  /** Add-friend state for rows inside the See-all sheet. */
-  readonly sheetBusy = signal<string | null>(null);
-  private sheetStates = signal<Record<string, 'following' | 'requested'>>({});
+  /**
+   * The feed with a carousel slotted in after every 8th post, alternating
+   * Stories then People. A feed shorter than 8 posts has no gap to put one in,
+   * so Stories goes at the very end - otherwise nobody could ever open one.
+   */
+  readonly feedItems = computed(() => {
+    const posts = this.displayedFeed();
+    const out: { key: string; kind: 'post' | 'stories' | 'people'; post?: Post }[] = [];
+    posts.forEach((p, i) => {
+      out.push({ key: p.id, kind: 'post', post: p });
+      const n = i + 1;
+      if (n % 8 === 0) {
+        const slot = n / 8;
+        out.push({ key: `slot-${slot}`, kind: slot % 2 === 1 ? 'stories' : 'people' });
+      }
+    });
+    if (posts.length > 0 && posts.length < 8 && this.auth.signedIn()) out.push({ key: 'slot-end', kind: 'stories' });
+    return out;
+  });
 
   private chatGates = signal<Record<string, ChatState>>({});
 
   constructor() {
     void this.chat.load();
-    void this.loadSuggestions();
     effect(() => {
       const n = this.data.feed().length;
       if (n >= 0) void this.recomputeGates();
     });
-    // Following someone refreshes the suggestions so the rail never goes stale.
-    effect(() => {
-      const n = this.data.followingIds().length + this.data.followRequests().length;
-      if (n >= 0) void this.loadSuggestions();
-    });
     this.data.startAutoSync();
-  }
-
-  async loadSuggestions(): Promise<void> {
-    try {
-      this.suggestions.set(await this.data.suggestedPeople(20));
-    } catch {
-      this.suggestions.set([]);
-    }
-  }
-
-  dismissSuggestion(id: string): void {
-    this.suggestions.update((all) => all.filter((u) => u.id !== id));
-  }
-
-  openSeeAll(tab: 'stories' | 'people'): void {
-    this.seeAllTab.set(tab);
-    this.storiesSheet.set(true);
-  }
-
-  sheetStateOf(id: string): 'following' | 'requested' | null {
-    return this.sheetStates()[id] ?? null;
-  }
-
-  async addFromSheet(u: UserProfile): Promise<void> {
-    if (!this.auth.signedIn()) {
-      this.storiesSheet.set(false);
-      await this.router.navigate(['/auth'], { queryParams: { next: '/home' } });
-      return;
-    }
-    this.sheetBusy.set(u.id);
-    try {
-      const following = await this.data.toggleFollow(u.id);
-      const status = await this.data.followStatus(u.id);
-      this.sheetStates.update((s) => ({
-        ...s,
-        [u.id]: following || status === 'accepted' ? 'following' : 'requested'
-      }));
-    } catch {
-      /* the profile page has the full follow control with feedback */
-    } finally {
-      this.sheetBusy.set(null);
-    }
-  }
-
-  goPeople(): void {
-    this.storiesSheet.set(false);
-    void this.router.navigate(['/search']);
-  }
-
-  goPerson(id: string): void {
-    this.storiesSheet.set(false);
-    void this.router.navigate(['/user', id]);
-  }
-
-  goStory(id: string): void {
-    this.storiesSheet.set(false);
-    void this.router.navigate(['/story', id]);
   }
 
   goSignUp(): void {
@@ -484,7 +224,6 @@ export class HomeComponent {
   async onRefresh(e: any): Promise<void> {
     await this.data.refresh();
     await this.chat.load();
-    await this.loadSuggestions();
     await this.recomputeGates();
     e.target.complete();
   }
@@ -505,7 +244,7 @@ export class HomeComponent {
     return false;
   }
 
-  async onVote(p: Post, v: 'up' | 'down'): Promise<void> {
+  async onVote(p: Post, v: ReactionKind): Promise<void> {
     if (!(await this.needAuth())) return;
     try {
       await this.data.vote(p.id, v);
@@ -521,13 +260,6 @@ export class HomeComponent {
     await this.router.navigate(['/post', p.id], { fragment: 'comments' });
   }
 
-  async onShare(p: Post): Promise<void> {
-    const text = `${p.title}\n\n${p.body.slice(0, 220)}\n\nShared from LulaFind`;
-    const mode = await this.platform.share(p.title, text, this.platform.link(`/post/${p.id}`));
-    await this.data.recordShare(p.id);
-    await this.show(mode === 'native' ? 'Shared' : 'Copied to clipboard');
-  }
-
   async onSave(p: Post): Promise<void> {
     if (!(await this.needAuth())) return;
     const saved = await this.data.toggleSaved(p.id);
@@ -536,67 +268,23 @@ export class HomeComponent {
 
   async onChat(p: Post): Promise<void> {
     if (!(await this.needAuth())) return;
-    const thread = await this.chat.ensureThread(p, p.authorId, 'vote');
-    if (thread) await this.router.navigate(['/chat', thread.id]);
-  }
-
-  async onMore(p: Post): Promise<void> {
-    const mine = this.data.canEdit(p);
-    const saved = this.data.savedIds().includes(p.id);
-    const downvoted = this.data.myVote(p) === 'down';
-    const sheet = await this.sheetCtl.create({
-      header: p.title.slice(0, 40),
-      buttons: [
-        { text: saved ? 'Unsave post' : 'Save post', icon: 'bookmark' as const, handler: () => void this.onSave(p) },
-        ...(!mine
-          ? [{ text: downvoted ? 'Remove my No idea' : 'No idea', icon: 'thumbdown' as const, handler: () => void this.onVote(p, 'down') }]
-          : []),
-        ...(mine
-          ? [
-            { text: 'Edit post', icon: 'pencil' as const, handler: () => void this.router.navigate(['/post', p.id, 'edit']) },
-            { text: 'Mark as found', icon: 'checkmark-circle' as const, handler: () => void this.router.navigate(['/post', p.id], { fragment: 'found' }) },
-            { text: 'Delete post', role: 'destructive' as const, icon: 'trash' as const, handler: async () => { await this.data.deletePost(p.id); } }
-          ]
-          : [
-            { text: 'Report', role: 'destructive' as const, icon: 'flag' as const, handler: () => this.report(p) }
-          ]),
-        { text: 'Cancel', role: 'cancel' }
-      ]
-    });
-    await sheet.present();
-  }
-
-  async report(p: Post): Promise<void> {
-    if (!this.auth.signedIn()) {
-      await this.show('Sign in to report a post');
-      await this.router.navigate(['/auth'], { queryParams: { next: '/home' } });
+    const g = await this.chat.gate(p, p.khumbu?.claimedByUserId === this.auth.viewerId);
+    if (g.allowed) {
+      const thread = await this.chat.ensureThread(p, p.authorId, 'vote');
+      if (thread) await this.router.navigate(['/chat', thread.id]);
       return;
     }
-    const reasons = this.mod.reasons;
-    const pick = await this.alertCtl.create({
-      header: 'Report this post',
-      inputs: reasons.map((r) => ({ name: 'reason', type: 'radio' as const, label: r.label, value: r.id })),
-      buttons: [
-        { text: 'Cancel', role: 'cancel' },
-        {
-          text: 'Send report',
-          handler: async (v: any) => {
-            try {
-              await this.mod.report({ target: 'post', targetId: p.id, summary: p.title, reason: v?.reason ?? 'other' });
-              await this.show('Report sent.');
-            } catch (e: any) {
-              await this.show(e?.message ?? 'Could not send report');
-            }
-          }
-        }
-      ]
-    });
-    await pick.present();
+    if (g.step === 'vote') {
+      // Only "Have an idea" opens chat, so the lock button gives that reaction.
+      await this.onVote(p, 'up');
+      await this.show('You have an idea on this post. Follow each other to open chat.');
+      return;
+    }
+    await this.router.navigate(['/post', p.id]);
   }
 
   async onAddStory(): Promise<void> {
     if (!(await this.needAuth())) return;
-    this.storiesSheet.set(false);
     await this.router.navigate(['/create-story']);
   }
 

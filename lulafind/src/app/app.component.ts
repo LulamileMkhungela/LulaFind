@@ -5,14 +5,14 @@ import { Router } from '@angular/router';
 import { AuthService } from './core/services/auth.service';
 import { PlatformService } from './core/services/platform.service';
 import { PrefetchService } from './core/services/prefetch.service';
-import { SettingsService } from './core/services/settings.service';
-import { AssistantComponent } from './shared/components/assistant.component';
+import { BACKGROUNDS, SettingsService } from './core/services/settings.service';
+import { RepostSheetComponent } from './shared/components/repost-sheet.component';
 import { supabaseNotice } from './core/data/supabase-client';
 
 @Component({
   selector: 'lf-root',
   standalone: true,
-  imports: [IonApp, IonRouterOutlet, AssistantComponent],
+  imports: [IonApp, IonRouterOutlet, RepostSheetComponent],
   template: `
     <ion-app>
       @if (notice()) {
@@ -39,9 +39,7 @@ import { supabaseNotice } from './core/data/supabase-client';
       }
 
       <ion-router-outlet></ion-router-outlet>
-
-      <!-- Floating Lula assistant: type a name, get every matching post + profile. -->
-      <lf-assistant />
+      <lf-repost-sheet />
     </ion-app>
   `,
   styles: [`
@@ -150,10 +148,18 @@ export class AppComponent implements OnInit {
     return mode === 'light' || (mode === 'system' && window.matchMedia?.('(prefers-color-scheme: light)').matches);
   }
 
+  /** The colour behind the status bar follows the chosen background. */
+  private barColor(): string {
+    if (this.isLight()) return '#FFFFFF';
+    const key = this.settings.settings().background;
+    return BACKGROUNDS.find((b) => b.key === key)?.card ?? '#000000';
+  }
+
   private async syncStatusBar(): Promise<void> {
     try {
       const { StatusBar, Style } = await import('@capacitor/status-bar');
       await StatusBar.setStyle({ style: this.isLight() ? Style.Light : Style.Dark });
+      await StatusBar.setBackgroundColor({ color: this.barColor() }).catch(() => undefined);
     } catch {
       /* plugin unavailable in this build target */
     }
@@ -185,6 +191,7 @@ export class AppComponent implements OnInit {
       const light = this.isLight();
       await StatusBar.setOverlaysWebView({ overlay: true });
       await StatusBar.setStyle({ style: light ? Style.Light : Style.Dark });
+      await StatusBar.setBackgroundColor({ color: this.barColor() }).catch(() => undefined);
       // The native splash screen is hidden after the in-app splash begins fading.
       await SplashScreen.hide({ fadeOutDuration: 300 });
     } catch {

@@ -5,6 +5,7 @@ import { IconComponent } from '../../shared/components/icon.component';
 import { TopNavComponent } from '../../shared/components/top-nav.component';
 import { AvatarComponent } from '../../shared/components/avatar.component';
 import { EmptyComponent } from '../../shared/components/empty.component';
+import { LogoComponent } from '../../shared/components/logo.component';
 import { ChatService } from '../../core/services/chat.service';
 import { DataService } from '../../core/services/data.service';
 import { AuthService } from '../../core/services/auth.service';
@@ -13,15 +14,22 @@ import { clockTime, timeAgo } from '../../core/utils/format';
 @Component({
   selector: 'lf-chats',
   standalone: true,
-  imports: [IonContent, TopNavComponent, IconComponent, AvatarComponent, EmptyComponent],
+  imports: [IonContent, TopNavComponent, IconComponent, AvatarComponent, EmptyComponent, LogoComponent],
   template: `
-    <lf-top-nav title="Chats" backTo="/home" />
+    <lf-top-nav heading="Chats" />
 
     <ion-content class="lf-page lf-plain">
-      <div class="page-title">
-        <h1>Chats</h1>
-        <button class="lf-round-btn" (click)="goHome()" aria-label="Find a case to help with"><lf-icon name="edit" [size]="19" /></button>
-      </div>
+      <!-- Ask Lula lives here and nowhere else in the app. -->
+      <button class="thread lula" type="button" (click)="askLula()" aria-label="Ask Lula, the help assistant">
+        <span class="lula-badge"><lf-logo [size]="30" label="Lula" /></span>
+        <div class="grow">
+          <div class="lf-row-between">
+            <strong>Ask Lula</strong>
+            <span class="pin"><lf-icon name="pin" [size]="11" /> Pinned</span>
+          </div>
+          <span class="lf-small lf-muted lf-ellipsis">Reporting, posters, safety and how LulaFind works</span>
+        </div>
+      </button>
       <div class="gate-note">
         <span class="fb-row__icon"><lf-icon name="lock" [size]="18" /></span>
         <div>
@@ -66,6 +74,9 @@ import { clockTime, timeAgo } from '../../core/utils/format';
       color: var(--lf-muted); background: var(--lf-card); border-bottom: 1px solid var(--lf-line-soft); }
     .gate-note strong { color: var(--ion-text-color); font-weight: 600; }
     .list { display: flex; flex-direction: column; background: var(--lf-card); padding: 4px 0 24px; }
+    .thread.lula { width: 100%; background: var(--lf-card); border-bottom: 1px solid var(--lf-line-soft); padding: 12px 16px; box-sizing: border-box; }
+    .lula-badge { display: grid; place-items: center; width: 50px; height: 50px; border-radius: 50%; background: var(--lf-card-2); flex-shrink: 0; }
+    .pin { display: inline-flex; align-items: center; gap: 3px; font-size: 11px; color: var(--lf-muted); }
     .thread { display: flex; gap: 12px; align-items: center; padding: 8px 16px; border: 0;
       background: transparent; color: inherit; text-align: left; cursor: pointer; font-family: inherit; }
     .thread:hover, .thread:active { background: var(--lf-hover); }
@@ -111,6 +122,10 @@ export class ChatsComponent {
 
   open(id: string): void {
     void this.router.navigate(['/chat', id]);
+  }
+
+  askLula(): void {
+    void this.router.navigate([this.auth.signedIn() ? '/ask-lula' : '/auth'], this.auth.signedIn() ? {} : { queryParams: { next: '/ask-lula' } });
   }
 
   goAuth(): void {

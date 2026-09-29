@@ -16,7 +16,7 @@ import { AlertController } from '@ionic/angular/alert-controller';
 import { ToastController } from '@ionic/angular/toast-controller';
 import { IconComponent } from '../../shared/components/icon.component';
 import { TopNavComponent } from '../../shared/components/top-nav.component';
-import { SettingsService, ThemeMode } from '../../core/services/settings.service';
+import { BACKGROUNDS, BackgroundKey, SettingsService, ThemeMode } from '../../core/services/settings.service';
 import { AuthService } from '../../core/services/auth.service';
 import { DataService } from '../../core/services/data.service';
 import { ModerationService } from '../../core/services/moderation.service';
@@ -39,11 +39,27 @@ import { SUPPORT_EMAIL, SUPPORT_NAME } from '../../core/config';
         <ion-item>
           <ion-label position="stacked">Theme</ion-label>
           <ion-select [value]="s().theme" (ionChange)="set({ theme: $any($event.detail).value })">
-            <ion-select-option value="light">Light (default)</ion-select-option>
-            <ion-select-option value="dark">Dark</ion-select-option>
+            <ion-select-option value="dark">Dark (default)</ion-select-option>
+            <ion-select-option value="light">Light</ion-select-option>
             <ion-select-option value="system">Match my phone</ion-select-option>
           </ion-select>
         </ion-item>
+        <div class="bg-picker" role="radiogroup" aria-label="Background colour">
+          <div class="bg-picker__head">
+            <strong>Background</strong>
+            <span class="lf-muted lf-small">{{ s().theme === 'light' ? 'Shown in Dark theme' : 'Pick the colour behind the app' }}</span>
+          </div>
+          <div class="bg-picker__row">
+            @for (b of backgrounds; track b.key) {
+              <button type="button" class="bg-dot" role="radio" [attr.aria-checked]="s().background === b.key"
+                      [attr.aria-label]="b.label" [class.on]="s().background === b.key"
+                      [style.background]="b.bg" [style.--ring]="b.line" (click)="pickBackground(b.key)">
+                <span class="bg-dot__card" [style.background]="b.card"></span>
+              </button>
+            }
+          </div>
+          <span class="lf-small lf-muted">{{ backgroundLabel() }}</span>
+        </div>
         <ion-item>
           <ion-label>Reduce motion</ion-label>
           <ion-toggle [checked]="s().reduceMotion" (ionChange)="set({ reduceMotion: $any($event.detail).checked })"></ion-toggle>
@@ -178,6 +194,13 @@ import { SUPPORT_EMAIL, SUPPORT_NAME } from '../../core/config';
     .card { margin: 8px var(--lf-gap); padding: 12px 16px; border-radius: var(--lf-radius);
       border: 0; box-shadow: var(--lf-shadow); background: var(--lf-card); }
     .card h3 { margin: 0 0 8px; font-size: 17px; font-weight: 700; }
+    .bg-picker { display: flex; flex-direction: column; gap: 8px; padding: 12px 16px; }
+    .bg-picker__head { display: flex; flex-direction: column; }
+    .bg-picker__row { display: flex; gap: 12px; flex-wrap: wrap; }
+    .bg-dot { position: relative; width: 44px; height: 44px; border-radius: 50%; padding: 0; cursor: pointer;
+      border: 2px solid var(--ring, var(--lf-line)); display: grid; place-items: center; }
+    .bg-dot__card { width: 22px; height: 22px; border-radius: 50%; }
+    .bg-dot.on { border-color: var(--lf-primary); box-shadow: 0 0 0 3px color-mix(in srgb, var(--lf-primary) 35%, transparent); }
     @media (min-width: 768px) { .card { max-width: var(--lf-maxw); margin-left: auto; margin-right: auto; } }
     .card p { line-height: 1.55; margin: 6px 0 10px; }
     code { background: var(--lf-card-2); padding: 1px 5px; border-radius: 5px; font-size: 12px; }
@@ -206,7 +229,14 @@ export class SettingsComponent {
   protected readonly provinces = PROVINCES;
   protected readonly version = environment.appVersion;
 
+  protected readonly backgrounds = BACKGROUNDS;
   readonly s = computed(() => this.settings.settings());
+  readonly backgroundLabel = computed(() => BACKGROUNDS.find((b) => b.key === this.s().background)?.label ?? 'Black');
+
+  /** Picking a colour is a request for a dark app, so it switches Light off. */
+  pickBackground(background: BackgroundKey): void {
+    this.settings.update({ background, theme: this.s().theme === 'light' ? 'dark' : this.s().theme });
+  }
   readonly findable = computed(() => this.auth.user()?.findableProfile ?? false);
   readonly platformLabel = computed(() =>
     this.platform.isNative ? (this.platform.kind === 'ios' ? 'iOS' : 'Android') : 'Web preview'

@@ -4,7 +4,7 @@ import { toObservable } from '@angular/core/rxjs-interop';
 import { LULA_API, LulaApi } from '../data/api';
 import {
   Audience, Comment, DangerAlert, FeedFilter, FollowEdge, Notification, Post, PostType, Spotlight, Story, StoryReply, StoryView, Tip, UserProfile,
-  VoteValue, VehicleDetails, dangerLabel, emptyFilter, provinceName
+  VoteValue, ReactionKind, REACTIONS, RETIRED_POST_TYPES, isReaction, VehicleDetails, dangerLabel, emptyFilter, provinceName
 } from '../models/types';
 import { avatar, cover, hueOf, scene } from '../data/seed';
 import { HOUR, DAY, compact, uid } from '../utils/format';
@@ -63,8 +63,6 @@ export interface CreatePostInput {
   askWanted: boolean;
   khumbu: Post['khumbu'];
   danger?: DangerAlert | null;
-  /** Set by `reshare` - the original post this wall post points back to. */
-  reshareOf?: Post['reshareOf'];
 }
 
 /**
@@ -72,6 +70,12 @@ export interface CreatePostInput {
  * follows, voting and consent flows need goes through here so that swapping
  * mock -> Firestore never touches a component.
  */
+/** Keeps the first copy of each post, so a list never shows the same post twice. */
+export function uniqueById<T extends { id: string }>(items: T[]): T[] {
+  const seen = new Set<string>();
+  return items.filter((x) => (seen.has(x.id) ? false : (seen.add(x.id), true)));
+}
+
 @Injectable({ providedIn: 'root' })
 export class DataService {
   private api = inject(LULA_API);
@@ -185,7 +189,7 @@ export class DataService {
   async loadFeed(f: FeedFilter = this.filter(), viewerId: string | null = this.auth.viewerId): Promise<Post[]> {
     this.loading.set(true);
     try {
-      const list = await this.api.queryFeed(f, viewerId);
+      const list = uniqueById((await this.api.queryFeed(f, viewerId)).filter((p) => !RETIRED_POST_TYPES.includes(p.type)));
       const hidden = this.hiddenIds();
       const visible = hidden.length ? list.filter((p) => !hidden.includes(p.id)) : list;
       this.feed.set(visible);
@@ -193,7 +197,7 @@ export class DataService {
       if (f.status === 'found') {
         this.broughtHome.set(visible);
       } else {
-        const found = await this.api.queryFeed({ ...f, status: 'found' }, viewerId);
+        const found = uniqueById((await this.api.queryFeed({ ...f, status: 'found' }, viewerId)).filter((p) => !RETIRED_POST_TYPES.includes(p.type)));
         const shown = (hidden.length ? found.filter((p) => !hidden.includes(p.id)) : found)
           .sort((a, b) => (b.outcome?.foundAt ?? b.updatedAt) - (a.outcome?.foundAt ?? a.updatedAt));
         this.broughtHome.set(shown);
@@ -328,33 +332,38 @@ export class DataService {
   }
 
   /* ------------------------- voting ---------------------------- */
-  async vote(postId: string, value: Exclude<VoteValue, null>): Promise<Post | undefined> {
+  /**
+   * React to a post. Tapping the reaction you already gave takes it back;
+   * tapping a different one swaps it. Every reaction except the retired
+   * "No idea" counts towards `upvotes`.
+   */
+  async vote(postId: string, value: ReactionKind): Promise<Post | undefined> {
     const me = this.auth.viewerId;
-    if (!me) throw new Error('Sign in to vote');
+    if (!me) throw new Error('Sign in to react');
     if (this.auth.user()?.suspended) throw new Error('Your account is suspended');
     const p = await this.loadPost(postId);
     if (!p) return undefined;
-    const current = p.voterIds[me] ?? null;
-    const next = current === value ? null : value;
+    const current: VoteValue = p.voterIds[me] ?? null;
+    const next: VoteValue = current === value ? null : value;
 
     const nextPost: Post = {
       ...p,
       voterIds: { ...p.voterIds, [me]: next },
-      upvotes: p.upvotes + (next === 'up' ? 1 : 0) - (current === 'up' ? 1 : 0),
-      downvotes: p.downvotes + (next === 'down' ? 1 : 0) - (current === 'down' ? 1 : 0),
-      // A fresh Idea refreshes the feed's "X liked this" line. Un-voting
-      // keeps the last known liker so the line never blinks empty.
-      lastLike: next === 'up'
+      upvotes: Math.max(0, p.upvotes + (isReaction(next) ? 1 : 0) - (isReaction(current) ? 1 : 0)),
+      // A fresh reaction refreshes the feed's "X reacted to this" line. Taking
+      // it back keeps the last known person so the line never blinks empty.
+      lastLike: isReaction(next)
         ? { userId: me, displayName: this.auth.user()?.displayName ?? 'Someone', at: Date.now() }
         : p.lastLike ?? null
     };
     await this.api.savePost(nextPost);
     this.mergeCache([nextPost]);
-    if (next === 'up' && current !== 'up' && p.authorId !== me) {
+    if (isReaction(next) && !isReaction(current) && p.authorId !== me) {
       const who = this.auth.user()?.displayName ?? 'Someone';
+      const label = REACTIONS.find((r) => r.key === next)?.label.toLowerCase() ?? 'reacted';
       await this.notify({
         userId: p.authorId, kind: 'vote',
-        title: `${who} has an idea about your post`,
+        title: next === 'up' ? `${who} has an idea about your post` : `${who} reacted (${label}) to your post`,
         body: `${p.subject?.name?.trim() || p.title} · open it to chat or read their comment.`,
         route: `/post/${p.id}`, postId: p.id
       }).catch(() => undefined);
@@ -444,21 +453,26 @@ export class DataService {
     await this.api.saveComment({ ...c, markCheck: result });
   }
 
-  /**
-   * LinkedIn-style comment like - toggles so a second tap removes it. The
-   * liker list drives the filled state; older comments without one still
-   * work, they just start unliked for everyone.
-   */
+  /** Like or un-like a comment. One like per person. */
   async voteComment(c: Comment): Promise<Comment> {
     const me = this.auth.viewerId;
     if (!me) throw new Error('Sign in to like a comment');
-    const liked = c.likedIds ?? [];
-    const has = liked.includes(me);
-    const next: Comment = {
-      ...c,
-      likedIds: has ? liked.filter((id) => id !== me) : [...liked, me],
-      upvotes: Math.max(0, c.upvotes + (has ? -1 : 1))
-    };
+    const likers = new Set(c.likedIds ?? []);
+    const had = likers.has(me);
+    if (had) likers.delete(me); else likers.add(me);
+    // Move the running count by one: older comments carry likes from before likers were tracked.
+    const next: Comment = { ...c, likedIds: [...likers], upvotes: Math.max(0, c.upvotes + (had ? -1 : 1)) };
+    await this.api.saveComment(next);
+    return next;
+  }
+
+  /** Change your own comment's text. It is then marked as edited. */
+  async editComment(c: Comment, body: string): Promise<Comment> {
+    const me = this.auth.viewerId;
+    if (!me || c.authorId !== me) throw new Error('You can only edit your own comment');
+    const text = body.trim();
+    if (!text) throw new Error('A comment cannot be empty');
+    const next: Comment = { ...c, body: text, editedAt: Date.now() };
     await this.api.saveComment(next);
     return next;
   }
@@ -493,6 +507,7 @@ export class DataService {
     const me = this.auth.user();
     if (!me) throw new Error('Sign in to post');
     if (me.suspended) throw new Error(`Your account is suspended. Contact ${SUPPORT_EMAIL} if you think this is a mistake.`);
+    if (RETIRED_POST_TYPES.includes(input.type)) throw new Error('That kind of post is no longer available.');
     if (input.title.trim().length < 8) throw new Error('Give your post a clear title (at least 8 characters)');
     if (input.body.trim().length < 30) throw new Error('Describe what happened in detail - at least 30 characters. Details save lives.');
     if (!input.province) throw new Error('Choose the province where this happened');
@@ -501,6 +516,7 @@ export class DataService {
     if (input.type === 'danger' && !input.danger?.kind) throw new Error('Choose what kind of danger you saw');
     if (input.type === 'khumbulekhaya' && !input.khumbu) throw new Error('Add the basic details about when they left home');
     if (input.audience === 'surname' && !input.spotlightId) throw new Error('Choose which Spotlight community should see this');
+    this.requireMembership(input.spotlightId);
     if (input.media.length > 1 && input.media.some((m) => m.kind === 'video')) {
       throw new Error('Choose photos or one video - not both');
     }
@@ -537,14 +553,11 @@ export class DataService {
       allowComments: input.allowComments,
       allowShare: true,
       upvotes: 0,
-      downvotes: 0,
       commentCount: 0,
       shares: 0,
       views: 0,
       savedBy: 0,
       voterIds: {},
-      reshareOf: input.reshareOf ?? null,
-      repostCount: 0,
       lastLike: null,
       lastComment: null,
       escalation: { requested: false, consentGranted: false, consentAt: null, partners: [] },
@@ -599,6 +612,8 @@ export class DataService {
       throw new Error('The description must be at least 30 characters');
     }
     if (patch.province !== undefined && !patch.province) throw new Error('Choose a province');
+    // Moving a post into a community is posting there, so it needs membership too.
+    if (patch.spotlightId && patch.spotlightId !== p.spotlightId) this.requireMembership(patch.spotlightId);
     const media = patch.media
       ? await Promise.all(patch.media.map((item) => this.api.uploadMedia(me.id, item)))
       : p.media;
@@ -628,7 +643,8 @@ export class DataService {
       askWanted: patch.askWanted ?? p.askWanted,
       khumbu: patch.khumbu !== undefined ? patch.khumbu : p.khumbu,
       danger: patch.danger !== undefined ? patch.danger : p.danger,
-      updatedAt: Date.now()
+      updatedAt: Date.now(),
+      editedAt: Date.now()
     };
 
     await this.api.savePost(next);
@@ -649,9 +665,107 @@ export class DataService {
     return next;
   }
 
-  async deletePost(id: string): Promise<void> {
+  /**
+   * Delete a post and confirm it is really gone: the post is read back after
+   * the delete, so a delete the server refused is reported instead of assumed.
+   * A repost of it stays but shows "This post is no longer available".
+   */
+  async deletePost(id: string): Promise<boolean> {
+    const before = await this.loadPost(id);
+    if (!before) return true;
     await this.api.deletePost(id);
+    this.feed.set(this.feed().filter((p) => p.id !== id));
+    this.savedPosts.set(this.savedPosts().filter((p) => p.id !== id));
+    this.cache.update((c) => { const rest = { ...c }; delete rest[id]; return rest; });
     await this.loadFeed();
+    const still = await this.api.post(id).catch(() => null);
+    return !still;
+  }
+
+  /* ------------------------- reposts --------------------------- */
+  /**
+   * Repost a public post to your own followers, like LinkedIn. With no
+   * `thoughts` it is an instant repost; with text it carries your comment above
+   * the original. Reposting a repost reposts the original, so cards never nest.
+   */
+  async repost(originalId: string, thoughts = ''): Promise<Post> {
+    const me = this.auth.user();
+    if (!me) throw new Error('Sign in to repost');
+    if (me.suspended) throw new Error('Your account is suspended');
+    const shown = await this.loadPost(originalId);
+    if (!shown) throw new Error('That post is not here any more');
+    const original = shown.repostOf ? (await this.loadPost(shown.repostOf)) ?? shown : shown;
+    if (original.authorId === me.id) throw new Error('You cannot repost your own post');
+    if (original.audience !== 'public') throw new Error('Only public posts can be reposted');
+    if (original.anonymous) throw new Error('Anonymous posts cannot be reposted');
+    if (!original.allowShare) throw new Error('The author turned off sharing for this post');
+    const now = Date.now();
+    const copy: Post = {
+      ...original,
+      id: uid('p'),
+      authorId: me.id,
+      anonymous: false,
+      title: original.title,
+      body: thoughts.trim(),
+      media: [],
+      repostOf: original.id,
+      createdAt: now,
+      updatedAt: now,
+      editedAt: null,
+      audience: 'public',
+      spotlightId: null,
+      chatEnabled: false,
+      allowComments: true,
+      allowShare: true,
+      subject: null,
+      vehicleDetails: null,
+      upvotes: 0, commentCount: 0, shares: 0, views: 0, savedBy: 0,
+      voterIds: {},
+      lookingIds: [],
+      searchParty: null,
+      khumbu: null,
+      danger: null,
+      sightingVerified: null,
+      escalation: { requested: false, consentGranted: false, consentAt: null, partners: [] },
+      consent: [],
+      events: [],
+      flags: [],
+      outcomeNudgeAt: null,
+      status: 'active',
+      contactValue: '',
+      caseNumber: null,
+      reward: null
+    };
+    await this.api.savePost(copy);
+    this.mergeCache([copy]);
+    await this.recordShare(original.id).catch(() => undefined);
+    if (original.authorId !== me.id) {
+      await this.notify({
+        userId: original.authorId, kind: 'repost',
+        title: `${me.displayName} reposted your post`,
+        body: thoughts.trim() ? thoughts.trim().slice(0, 120) : original.title,
+        route: `/post/${original.id}`, postId: original.id
+      }).catch(() => undefined);
+    }
+    await this.loadFeed();
+    return copy;
+  }
+
+  /** Your own repost of a post, if you made one. */
+  async myRepostOf(originalId: string): Promise<Post | null> {
+    const me = this.auth.viewerId;
+    if (!me) return null;
+    const mine = await this.api.postsByAuthor(me).catch(() => [] as Post[]);
+    return mine.find((p) => p.repostOf === originalId) ?? null;
+  }
+
+  private requireMembership(spotlightId: string | null | undefined): void {
+    if (!spotlightId) return;
+    if (this.auth.user()?.isAdmin === true && !this.spotlights().some((s) => s.id === spotlightId)) return;
+    if (!this.isMember(spotlightId)) {
+      const name = this.spotlights().find((s) => s.id === spotlightId)?.surname;
+      throw new Error(`Join ${name ? `the ${name} community` : 'that community'} before you post to it.`);
+    }
   }
 
   async registerView(postId: string): Promise<void> {
@@ -669,76 +783,6 @@ export class DataService {
     await this.api.savePost(next);
     this.mergeCache([next]);
     await this.loadFeed();
-  }
-
-  /**
-   * Reshare a post onto the viewer's wall (LinkedIn Repost). The wall post
-   * snapshots the original's content so its poster renders standalone, keeps
-   * the original's audience so resharing never widens who can see it, and
-   * points back at the original with `reshareOf`. Resharing a reshare
-   * flattens to the root - chains never form.
-   *
-   * Private chat stays off on wall posts: leads and chats belong with the
-   * family on the original, one tap away via "View original".
-   */
-  async reshare(postId: string): Promise<Post> {
-    const me = this.auth.user();
-    if (!me) throw new Error('Sign in to repost');
-    if (me.suspended) throw new Error(`Your account is suspended. Contact ${SUPPORT_EMAIL} if you think this is a mistake.`);
-    const original = await this.loadPost(postId);
-    if (!original) throw new Error('That post is not here any more');
-    const root = original.reshareOf ? (await this.loadPost(original.reshareOf.postId)) ?? original : original;
-    const rootAuthor =
-      (await this.profile(root.authorId).catch(() => undefined))?.displayName
-      ?? this.authorOf(root.authorId)?.displayName
-      ?? 'LulaFind member';
-    const post = await this.createPost({
-      type: root.type,
-      title: root.title,
-      body: root.body,
-      media: root.media.map((m) => ({ ...m, id: uid('m') })),
-      province: root.province,
-      town: root.town,
-      lastSeenAt: root.lastSeenAt,
-      lastSeenWhere: root.lastSeenWhere,
-      geo: root.geo,
-      contactLabel: root.contactLabel,
-      contactValue: root.contactValue,
-      contactVisibleTo: root.contactVisibleTo,
-      caseNumber: root.caseNumber,
-      reward: root.reward,
-      subject: root.subject ? { ...root.subject } : null,
-      vehicleDetails: root.vehicleDetails ? { ...root.vehicleDetails } : null,
-      audience: root.audience,
-      spotlightId: root.spotlightId,
-      chatEnabled: false,
-      allowComments: root.allowComments,
-      anonymous: false,
-      askWanted: false,
-      khumbu: root.type === 'khumbulekhaya'
-        ? {
-          daysOut: null, leftHomeAt: null, reasonGuess: '', claimedByUserId: null, claimedAt: null,
-          subjectResponse: 'none', subjectNote: '', wantedAnswers: { yes: 0, no: 0, myVote: null }
-        }
-        : null,
-      danger: root.type === 'danger' && root.danger
-        ? { kind: root.danger.kind, stillIds: [], clearIds: [], clearedAt: null }
-        : null,
-      reshareOf: { postId: root.id, authorId: root.authorId, authorName: rootAuthor }
-    });
-    const next = { ...root, repostCount: (root.repostCount ?? 0) + 1 };
-    await this.api.savePost(next);
-    this.mergeCache([next]);
-    if (root.authorId !== me.id) {
-      await this.notify({
-        userId: root.authorId, kind: 'repost',
-        title: `${me.displayName} reshared your post`,
-        body: `${root.title} · now on ${me.displayName}'s wall.`,
-        route: `/post/${post.id}`, postId: post.id
-      }).catch(() => undefined);
-    }
-    await this.loadFeed();
-    return post;
   }
 
   /* ------------------------- saved ----------------------------- */
@@ -1134,7 +1178,7 @@ export class DataService {
     const needle = sp.surname.trim().toLowerCase();
     const all = await this.api.queryFeed({ ...emptyFilter(), status: 'all', sort: 'recent' }, me);
     const hidden = this.hiddenIds();
-    const list = all.filter((p) => !hidden.includes(p.id) && (
+    const list = all.filter((p) => !RETIRED_POST_TYPES.includes(p.type) && !hidden.includes(p.id) && (
       p.spotlightId === sp.id ||
       (p.type !== 'danger' && !!needle && (
         (p.subject?.surname ?? '').trim().toLowerCase() === needle ||
@@ -1142,7 +1186,7 @@ export class DataService {
       ))
     ));
     this.mergeCache(list);
-    return list.sort((a, b) => b.createdAt - a.createdAt);
+    return uniqueById(list).sort((a, b) => b.createdAt - a.createdAt);
   }
 
   /**
@@ -1151,8 +1195,8 @@ export class DataService {
    * cards render with names and avatars.
    */
   async postsByAuthor(authorId: string): Promise<Post[]> {
-    const list = (await this.api.postsByAuthor(authorId))
-      .filter((p) => !this.hiddenIds().includes(p.id))
+    const list = uniqueById(await this.api.postsByAuthor(authorId))
+      .filter((p) => !RETIRED_POST_TYPES.includes(p.type) && !this.hiddenIds().includes(p.id))
       .sort((a, b) => b.createdAt - a.createdAt);
     this.mergeCache(list);
     return list;
