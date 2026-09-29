@@ -59,7 +59,7 @@ export type ChatState = 'off' | 'locked-vote' | 'locked-follow' | 'open';
               <span class="fb-dot">·</span>
               <button class="fb-follow-link" [class.on]="followingAuthor()" [class.requested]="followRequested()"
                       [attr.aria-pressed]="followingAuthor() || followRequested()" (click)="onFollow($event)">
-                {{ followingAuthor() ? 'Following' : followRequested() ? 'Requested' : 'Follow' }}
+                {{ followingAuthor() ? 'Following' : followRequested() ? 'Requested' : '+ Follow' }}
               </button>
             }
           </div>
