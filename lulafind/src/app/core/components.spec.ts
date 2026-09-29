@@ -101,7 +101,7 @@ describe('Components render', () => {
     const f = TestBed.createComponent(PostCardComponent);
     f.componentInstance.post = post;
     f.componentInstance.author = (await data.profile('u_demo'))!;
-    f.componentInstance.chatState = 'locked-vote';
+    f.componentInstance.chatState = 'locked-follow';
     f.detectChanges();
     await f.whenStable();
     const html: string = (f.nativeElement as HTMLElement).innerHTML;
@@ -341,11 +341,20 @@ describe('Components render', () => {
     f.detectChanges();
     await f.whenStable();
     const html: string = (f.nativeElement as HTMLElement).innerHTML;
-    expect(html).toContain('Who can see this story?');
+    // WhatsApp-style canvas: type on the story itself, with a privacy selector.
+    expect(html).toContain('Type a status');
+    expect(html).toContain('Background');
     expect(html).toContain('Everyone');
-    expect(html).toContain('My followers');
-    expect(html).toContain('People who follow you can view');
-    expect(html).toContain('My Spotlight');
+    expect(html).toContain('Share');
+
+    // open the privacy panel and check the three audiences are offered
+    f.componentInstance.toggle('privacy');
+    f.detectChanges();
+    const withPrivacy: string = (f.nativeElement as HTMLElement).innerHTML;
+    expect(withPrivacy).toContain('Who can see this story?');
+    expect(withPrivacy).toContain('My Spotlight');
+    expect(withPrivacy).toContain('My followers');
+    expect(withPrivacy).toContain('People who follow you can view');
   });
 
   it('renders a profile and hides what the owner hid', async () => {

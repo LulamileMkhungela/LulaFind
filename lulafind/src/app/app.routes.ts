@@ -45,6 +45,7 @@ export const routes: Routes = [
   { path: 'search', loadComponent: () => import('./pages/search/search.component').then((m) => m.SearchComponent) },
   { path: 'tips', loadComponent: () => import('./pages/tips/tips.component').then((m) => m.TipsComponent) },
   { path: 'help', loadComponent: () => import('./pages/help/help.component').then((m) => m.HelpComponent) },
+  { path: 'faqs', loadComponent: () => import('./pages/help/faqs.component').then((m) => m.FaqsComponent) },
   {
     path: 'create/:type',
     canActivate: [authGuard],

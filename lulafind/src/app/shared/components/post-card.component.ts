@@ -12,7 +12,7 @@ import { AuthService } from '../../core/services/auth.service';
 import { CHECK_IN_COPY } from '../../core/services/safety.service';
 import { PostActionsService } from '../../core/services/post-actions.service';
 
-export type ChatState = 'off' | 'locked-vote' | 'locked-follow' | 'open';
+export type ChatState = 'off' | 'locked-follow' | 'open';
 
 /**
  * The LinkedIn feed card, adapted to LulaFind's rules:
@@ -587,10 +587,9 @@ export class PostCardComponent implements OnInit, OnChanges {
 
   chatLabel(): string {
     switch (this.chatState) {
-      case 'open': return 'Private chat is open';
-      case 'locked-follow': return 'Follow each other to chat';
-      case 'locked-vote': return 'Have an idea to unlock chat';
-      default: return 'Chat with poster';
+      case 'open': return 'Message them';
+      case 'locked-follow': return 'Follow each other to message';
+      default: return 'Message the poster';
     }
   }
 

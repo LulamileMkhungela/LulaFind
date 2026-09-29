@@ -90,10 +90,7 @@ import { fullDate } from '../../core/utils/format';
           <lf-icon name="eye" [size]="20" />
           <h2 class="lf-h2" style="margin:0">Being found</h2>
         </div>
-        <p class="lf-small lf-muted">
-          If your name matches a KhumbulEkhaya post, LulaFind can ask <em>you</em> whether it is you.
-          It never tells the family where you are, and it never exposes your account automatically.
-        </p>
+        <p class="lf-small lf-muted">We can ask <em>you</em> if a case is about you. Your account is never handed to the family.</p>
         <ion-item>
           <ion-label><strong>Allow name matching</strong></ion-label>
           <ion-toggle [checked]="findable()" (ionChange)="setFindable($any($event.detail).checked)"></ion-toggle>

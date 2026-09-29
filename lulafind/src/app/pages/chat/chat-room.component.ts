@@ -47,7 +47,7 @@ import { MediaService } from '../../core/services/media.service';
 
       <div class="notice">
         <lf-icon name="lock" [size]="14" />
-        Private chat. Unlocked because you upvoted and follow each other. Never send money to a stranger.
+        Private chat - you follow each other. Never send money to a stranger.
       </div>
 
       <div class="msgs">

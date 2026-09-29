@@ -1,224 +1,324 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, ElementRef, ViewChild, computed, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { IonContent } from '@ionic/angular/ion-content';
-import { IonHeader } from '@ionic/angular/ion-header';
-import { IonToolbar } from '@ionic/angular/ion-toolbar';
-import { IonTitle } from '@ionic/angular/ion-title';
-import { IonButtons } from '@ionic/angular/ion-buttons';
 import { IconComponent } from '../../shared/components/icon.component';
+import { AvatarComponent } from '../../shared/components/avatar.component';
 import { DataService } from '../../core/services/data.service';
+import { AuthService } from '../../core/services/auth.service';
 import { MediaService } from '../../core/services/media.service';
 import { Audience, MediaItem } from '../../core/models/types';
 import { STORY_BLACK, storyBg } from '../../core/data/seed';
 
-const AUDIENCES: { key: Audience; icon: string; label: string }[] = [
-  { key: 'public', icon: 'globe', label: 'Everyone' },
-  { key: 'surname', icon: 'award', label: 'My Spotlight' },
-  { key: 'followers', icon: 'users', label: 'My followers' }
-];
-
-/** A 24-hour story with explicit audience controls and up to three photos. */
+/**
+ * The story composer, built the way a WhatsApp status is built:
+ *
+ *  - the whole screen IS the story (black to start), not a form with a preview
+ *    panel beside it;
+ *  - you tap the middle and type straight onto the canvas - white words on the
+ *    background, no input box;
+ *  - a row of tools sits at the bottom: Text, Photo, Colour, and a preview of
+ *    what you have attached;
+ *  - privacy is one chip above the tools ("Everyone", "My Spotlight",
+ *    "My followers") which opens the same choices as a sheet, and Spotlight
+ *    only offers communities you have actually joined;
+ *  - Share is the only action that leaves the screen.
+ */
 @Component({
   selector: 'lf-create-story',
   standalone: true,
-  imports: [IonContent, IonHeader, IonToolbar, IonTitle, IonButtons, IconComponent],
+  imports: [IonContent, IconComponent, AvatarComponent],
   template: `
-    <ion-header class="story-head" [translucent]="false">
-      <ion-toolbar>
-        <ion-buttons slot="start">
-          <button class="close" type="button" (click)="cancel()" aria-label="Close story composer"><lf-icon name="x" [size]="21" /></button>
-        </ion-buttons>
-        <ion-title>Create story</ion-title>
-        <ion-buttons slot="end">
-          <button class="publish-top" type="button" (click)="publish()" [disabled]="busy()">{{ busy() ? 'Posting…' : 'Share' }}</button>
-        </ion-buttons>
-      </ion-toolbar>
-    </ion-header>
+    <div class="stage" [style.background]="bg()">
+      @if (currentMedia(); as m) {
+        <img class="shot" [src]="m.src" alt="Story photo" />
+      }
+      <div class="scrim"></div>
 
-    <ion-content class="lf-page story-create">
-      <div class="layout">
-        <section class="preview-column">
-          <div class="preview" [style.background]="bg()">
-            @if (currentMedia()) { <img [src]="currentMedia()!.src" class="shot" alt="Story photo preview" /> }
-            <div class="preview-scrim"></div>
-            <textarea class="txt" rows="4" maxlength="600" placeholder="Say something to your community…"
-                      [value]="text()" (input)="text.set($any($event.target).value)"></textarea>
-            <p class="expires"><lf-icon name="clock" [size]="13" /> Disappears after 24 hours</p>
-            @if (!media().length) { <span class="empty-hint">Add up to three photos, a note, or both.</span> }
-          </div>
+      <!-- top bar -->
+      <header class="bar">
+        <button class="round" type="button" (click)="cancel()" aria-label="Close story composer">
+          <lf-icon name="x" [size]="22" />
+        </button>
+        <span class="grow"></span>
+        <button class="send" type="button" (click)="publish()" [disabled]="busy() || !canPublish()">
+          @if (busy()) { Sharing… } @else { <lf-icon name="send" [size]="17" [filled]="true" /> Share }
+        </button>
+      </header>
 
-          @if (media().length) {
-            <div class="photo-strip" aria-label="Story photos">
-              @for (item of media(); track item.id; let i = $index) {
-                <div class="photo-thumb" [class.active]="previewIndex() === i">
-                  <button type="button" (click)="previewIndex.set(i)" [attr.aria-label]="'Preview photo ' + (i + 1)"><img [src]="item.src" alt="" /></button>
-                  <button class="remove" type="button" (click)="removePhoto(item.id)" [attr.aria-label]="'Remove photo ' + (i + 1)"><lf-icon name="x" [size]="12" /></button>
-                </div>
-              }
-              @if (media().length < 3) {
-                <button type="button" class="add-more" (click)="addPhoto()" [disabled]="busy()" aria-label="Add another photo"><lf-icon name="plus" [size]="19" /></button>
-              }
-            </div>
-          }
-        </section>
+      <!-- the canvas: tap and type, WhatsApp style -->
+      <div class="canvas" (click)="focusText()">
+        <textarea #caption class="caption" rows="1" maxlength="600"
+                  [style.color]="inkColour()"
+                  [style.font-size.px]="captionSize()"
+                  placeholder="Type a status"
+                  [value]="text()"
+                  (input)="onType($event)"
+                  (focus)="typing.set(true)"
+                  (blur)="typing.set(false)"></textarea>
+        <p class="hint" [class.gone]="text().length > 0">Tap to type</p>
+      </div>
 
-        <section class="settings">
-          <div class="section-title"><strong>Who can see this story?</strong><span>Only your chosen audience can see it</span></div>
-          <div class="audience-list" role="group" aria-label="Who can see this story">
+      <!-- privacy + tools -->
+      <footer class="tools" [style.padding-bottom]="'calc(12px + var(--lf-safe-bottom) + var(--keyboard-offset))'">
+        @if (panel() === 'privacy') {
+          <div class="panel">
+            <p class="panel__title">Who can see this story?</p>
             @for (option of audiences; track option.key) {
-              <button class="audience" type="button" [class.selected]="audience() === option.key" (click)="pick(option.key)">
-                <span class="aud-icon"><lf-icon [name]="option.icon" [size]="17" /></span>
-                <span class="aud-copy"><strong>{{ option.label }}</strong><small>{{ audienceHelp(option.key) }}</small></span>
-                <span class="radio" [class.checked]="audience() === option.key"><i></i></span>
+              <button class="line" type="button" [class.on]="audience() === option.key" (click)="pick(option.key)">
+                <span class="line__ic"><lf-icon [name]="option.icon" [size]="17" /></span>
+                <span class="line__tx"><strong>{{ option.label }}</strong><small>{{ audienceHelp(option.key) }}</small></span>
+                @if (audience() === option.key) { <lf-icon name="check" [size]="18" /> }
               </button>
             }
-          </div>
-
-          @if (audience() === 'surname') {
-            @if (mySpotlights().length) {
-              <label class="spotlight-picker"><span>Choose a Spotlight</span>
-                <select [value]="spotlightId() ?? ''" (change)="spotlightId.set($any($event.target).value || null)">
-                  <option value="">Choose community</option>
-                  @for (spotlight of mySpotlights(); track spotlight.id) { <option [value]="spotlight.id">{{ spotlight.surname }}</option> }
-                </select>
-              </label>
-            } @else {
-              <div class="privacy-note"><lf-icon name="lock" [size]="16" /><span>You haven't joined a Spotlight yet. This story will <strong>not</strong> be shared publicly. Join one to share with a surname community.</span></div>
-              <button class="join-link" type="button" (click)="openSpotlights()">Find a Spotlight <lf-icon name="chevronRight" [size]="14" /></button>
+            @if (audience() === 'surname') {
+              @if (mySpotlights().length) {
+                <div class="panel__row">
+                  <span>Community</span>
+                  <select [value]="spotlightId() ?? ''" (change)="spotlightId.set($any($event.target).value || null)">
+                    <option value="">Choose a Spotlight</option>
+                    @for (spotlight of mySpotlights(); track spotlight.id) { <option [value]="spotlight.id">{{ spotlight.surname }}</option> }
+                  </select>
+                </div>
+              } @else {
+                <p class="panel__note">You have not joined a Spotlight yet, so this story will not be shared. Join one first.</p>
+                <button class="linkbtn" type="button" (click)="openSpotlights()">Find a Spotlight</button>
+              }
             }
-          }
-
-          <div class="background-setting">
-            <div><strong>Background</strong><small>Black to start. Pick another colour if you like.</small></div>
-            <button type="button" class="color-swatch" [style.background]="bg()" (click)="cycleBg()"
-                    [attr.aria-label]="'Change story background, currently ' + bg()"><lf-icon name="sparkle" [size]="16" /></button>
+            <p class="panel__note">Replies are private. Only you can read them.</p>
           </div>
-          <div class="bg-grid" role="radiogroup" aria-label="Story background colour">
-            @for (swatch of swatches; track swatch) {
-              <button type="button" class="bg-chip" role="radio" [attr.aria-checked]="hue() === swatch"
-                      [attr.aria-label]="swatch < 0 ? 'Black background' : 'Background colour ' + swatch"
-                      [class.on]="hue() === swatch" [style.background]="storyBg(swatch)"
-                      (click)="pickBg(swatch)"></button>
-            }
-          </div>
+        }
 
-          <div class="photo-setting">
-            <div class="photo-title"><span class="photo-icon"><lf-icon name="image" [size]="18" /></span><div><strong>Add photos</strong><small>{{ media().length }} of 3 selected</small></div></div>
-            <button type="button" class="add-photo" (click)="addPhoto()" [disabled]="media().length >= 3 || busy()"><lf-icon name="plus" [size]="16" /> Add photo</button>
+        @if (panel() === 'text') {
+          <div class="panel">
+            <p class="panel__title">Text colour</p>
+            <div class="row">
+              @for (c of inks; track c) {
+                <button class="ink" type="button" [class.on]="ink() === c" [style.background]="c"
+                        [style.color]="c" (click)="ink.set(c)" [attr.aria-label]="'Text colour ' + c">
+                  <span [style.color]="c === '#ffffff' ? '#111' : '#fff'">A</span>
+                </button>
+              }
+            </div>
+            <p class="panel__title">Text size</p>
+            <div class="row">
+              @for (s of sizes; track s) {
+                <button class="size" type="button" [class.on]="size() === s" (click)="size.set(s)">
+                  <span [style.font-size.px]="8 + s * 2">A</span>
+                </button>
+              }
+            </div>
           </div>
+        }
 
-          @if (notice()) { <p class="notice"><lf-icon name="info" [size]="15" /> {{ notice() }}</p> }
-          @if (error()) { <p class="error" role="alert"><lf-icon name="alert" [size]="15" /> {{ error() }}</p> }
-          <p class="privacy-caption">Story replies are private and only visible to you.</p>
-          <button class="share-bottom" type="button" (click)="publish()" [disabled]="busy() || !canPublish()">
-            <lf-icon name="send" [size]="17" /> {{ busy() ? 'Sharing…' : 'Share story' }}
+        @if (panel() === 'colour') {
+          <div class="panel">
+            <p class="panel__title">Background</p>
+            <div class="row">
+              @for (swatch of swatches; track swatch) {
+                <button class="chip" type="button" [class.on]="hue() === swatch" [style.background]="storyBg(swatch)"
+                        [attr.aria-label]="swatch < 0 ? 'Black background' : 'Background ' + swatch"
+                        (click)="hue.set(swatch)"></button>
+              }
+            </div>
+          </div>
+        }
+
+        <div class="toolbar">
+          <button class="tool" type="button" [class.on]="panel() === 'colour'" (click)="toggle('colour')">
+            <span class="tool__ic swatch" [style.background]="bg()"></span>
+            <span>Background</span>
           </button>
-        </section>
-      </div>
-    </ion-content>
+          <button class="tool" type="button" [class.on]="panel() === 'text'" (click)="toggle('text')">
+            <span class="tool__ic"><lf-icon name="edit" [size]="20" /></span>
+            <span>Text</span>
+          </button>
+          <button class="tool" type="button" (click)="addPhoto()" [disabled]="media().length >= 3 || busy()">
+            <span class="tool__ic"><lf-icon name="image" [size]="20" /></span>
+            <span>{{ media().length ? media().length + ' of 3' : 'Photo' }}</span>
+          </button>
+          <button class="tool" type="button" [class.on]="panel() === 'privacy'" (click)="toggle('privacy')">
+            <span class="tool__ic"><lf-icon [name]="audienceIcon()" [size]="20" /></span>
+            <span>{{ audienceShort() }}</span>
+          </button>
+        </div>
+
+        @if (media().length) {
+          <div class="thumbs">
+            @for (item of media(); track item.id; let i = $index) {
+              <div class="thumb" [class.on]="previewIndex() === i">
+                <button type="button" (click)="previewIndex.set(i)" [attr.aria-label]="'Show photo ' + (i + 1)"><img [src]="item.src" alt="" /></button>
+                <button class="thumb__x" type="button" (click)="removePhoto(item.id)" [attr.aria-label]="'Remove photo ' + (i + 1)">
+                  <lf-icon name="x" [size]="12" />
+                </button>
+              </div>
+            }
+          </div>
+        }
+
+        @if (notice()) { <p class="notice"><lf-icon name="info" [size]="14" /> {{ notice() }}</p> }
+        @if (error()) { <p class="error" role="alert"><lf-icon name="alert" [size]="14" /> {{ error() }}</p> }
+      </footer>
+    </div>
   `,
   styles: [`
-    :host { --fb-blue: var(--lf-primary); --fb-text: var(--ion-text-color); --fb-muted: var(--lf-muted); --fb-line: var(--lf-line); --fb-bg: var(--lf-bg); display: block; }
-    .story-create { --background: var(--fb-bg); }
-    .story-head { background: var(--lf-card); }
-    .close { width: 36px; height: 36px; display: grid; place-items: center; border: 0; border-radius: 50%; background: var(--lf-card-2); color: var(--ion-text-color); }
-    .publish-top { min-width: 54px; height: 32px; padding: 0 12px; border: 0; border-radius: 6px; color: #fff; background: var(--lf-primary); font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
-    .publish-top:disabled, .share-bottom:disabled { opacity: .45; cursor: default; }
-    .bg-grid { display: flex; flex-wrap: wrap; gap: 7px; }
-    .bg-chip { width: 34px; height: 34px; border: 2px solid var(--lf-line); border-radius: 8px; cursor: pointer; padding: 0; }
-    .bg-chip.on { border-color: var(--lf-primary); box-shadow: 0 0 0 2px color-mix(in srgb, var(--lf-primary) 25%, transparent); }
-    .color-swatch:active { transform: scale(.94); }
-    .layout { width: min(100%, 930px); box-sizing: border-box; display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(290px, .9fr); gap: 16px; margin: 0 auto; padding: 16px; }
-    .preview-column { min-width: 0; }
-    .preview { position: relative; height: min(67vh, 660px); min-height: 390px; display: flex; flex-direction: column; justify-content: flex-end; box-sizing: border-box; padding: 18px; overflow: hidden; border-radius: 12px; background-size: cover; background-position: center; box-shadow: 0 2px 12px rgba(0,0,0,.12); }
-    .shot { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-    .preview-scrim { position: absolute; inset: 0; pointer-events: none; background: linear-gradient(180deg, rgba(0,0,0,.12), transparent 25%, transparent 50%, rgba(0,0,0,.48)); }
-    .txt { position: relative; z-index: 1; width: 100%; box-sizing: border-box; min-height: 100px; border: 0; outline: 0; resize: vertical; background: transparent; color: #fff; text-align: center; font: 750 20px/1.35 system-ui,sans-serif; text-shadow: 0 1px 7px rgba(0,0,0,.38); }
-    .txt::placeholder { color: rgba(255,255,255,.84); }
-    .expires { position: relative; z-index: 1; display: flex; justify-content: center; align-items: center; gap: 5px; margin: 7px 0 0; color: rgba(255,255,255,.88); font-size: 11px; }
-    .empty-hint { position: absolute; inset: 18px 20px 45%; display: grid; place-items: center; color: rgba(255,255,255,.85); font-size: 13px; text-align: center; }
-    .photo-strip { display: flex; align-items: center; gap: 8px; overflow-x: auto; padding: 11px 2px 2px; }
-    .photo-thumb { position: relative; width: 54px; height: 54px; flex: 0 0 54px; border: 2px solid transparent; border-radius: 8px; overflow: visible; }
-    .photo-thumb.active { border-color: var(--fb-blue); }
-    .photo-thumb > button:first-child { width: 100%; height: 100%; padding: 0; overflow: hidden; border: 0; border-radius: 6px; background: var(--lf-card); }
-    .photo-thumb img { width: 100%; height: 100%; object-fit: cover; }
-    .photo-thumb .remove { position: absolute; z-index: 1; top: -6px; right: -6px; width: 20px; height: 20px; display: grid; place-items: center; border: 1px solid #fff; border-radius: 50%; background: rgba(28,30,33,.84); color: #fff; }
-    .add-more { width: 40px; height: 40px; display: grid; place-items: center; border: 1px dashed var(--lf-muted); border-radius: 8px; background: var(--lf-card); color: var(--fb-blue); }
-    .settings { display: flex; flex-direction: column; align-self: start; gap: 12px; min-width: 0; padding: 16px; border: 1px solid var(--lf-line); border-radius: 12px; background: var(--lf-card); box-shadow: 0 1px 3px rgba(0,0,0,.07); }
-    .section-title { display: flex; flex-direction: column; gap: 3px; padding-bottom: 6px; }
-    .section-title strong { color: var(--fb-text); font-size: 15px; }
-    .section-title span { color: var(--fb-muted); font-size: 11px; }
-    .audience-list { display: flex; flex-direction: column; gap: 3px; }
-    .audience { display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 8px; border: 1px solid transparent; border-radius: 8px; background: var(--lf-card); text-align: left; color: var(--fb-text); cursor: pointer; }
-    .audience.selected { background: var(--lf-primary-soft); border-color: var(--lf-line); }
-    .aud-icon { width: 32px; height: 32px; display: grid; place-items: center; flex: 0 0 32px; border-radius: 50%; background: var(--fb-bg); color: var(--fb-muted); }
-    .audience.selected .aud-icon { color: var(--fb-blue); background: var(--lf-primary-soft); }
-    .aud-copy { flex: 1; display: flex; flex-direction: column; gap: 2px; }
-    .aud-copy strong { font-size: 12.5px; }
-    .aud-copy small { color: var(--fb-muted); font-size: 10.5px; }
-    .radio { width: 17px; height: 17px; display: grid; place-items: center; border: 1.5px solid var(--lf-muted); border-radius: 50%; }
-    .radio.checked { border-color: var(--fb-blue); }
-    .radio i { width: 9px; height: 9px; border-radius: 50%; background: transparent; }
-    .radio.checked i { background: var(--fb-blue); }
-    .spotlight-picker { display: flex; flex-direction: column; gap: 5px; color: var(--fb-muted); font-size: 11px; font-weight: 600; }
-    .spotlight-picker select { min-height: 38px; padding: 0 10px; border: 1px solid var(--fb-line); border-radius: 7px; background: var(--lf-card); color: var(--fb-text); font-size: 12px; }
-    .privacy-note { display: flex; gap: 8px; align-items: flex-start; padding: 9px; border-radius: 8px; background: color-mix(in srgb, #f4b400 18%, transparent); color: var(--ion-text-color); font-size: 11px; line-height: 1.4; }
-    .privacy-note lf-icon { margin-top: 1px; }
-    .join-link { display: inline-flex; align-items: center; gap: 3px; align-self: flex-start; border: 0; padding: 0; background: none; color: var(--fb-blue); font-size: 11px; font-weight: 700; }
-    .background-setting { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-top: 1px solid var(--lf-line); border-bottom: 1px solid var(--lf-line); }
-    .background-setting div, .photo-title div { display: flex; flex-direction: column; gap: 2px; }
-    .background-setting strong, .photo-title strong { color: var(--fb-text); font-size: 12px; }
-    .background-setting small, .photo-title small { color: var(--fb-muted); font-size: 10.5px; }
-    .color-swatch { width: 32px; height: 32px; display: grid; place-items: center; border: 2px solid var(--lf-line); border-radius: 50%; color: #fff; }
-    .photo-setting { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-    .photo-title { display: flex; align-items: center; gap: 8px; }
-    .photo-icon { width: 31px; height: 31px; display: grid; place-items: center; border-radius: 50%; background: var(--lf-primary-soft); color: var(--fb-blue); }
-    .add-photo { display: inline-flex; align-items: center; gap: 4px; min-height: 32px; padding: 0 9px; border: 1px solid var(--fb-line); border-radius: 6px; background: var(--lf-card); color: var(--fb-blue); font-size: 11px; font-weight: 700; }
-    .add-photo:disabled { opacity: .4; }
-    .privacy-caption { margin: 0; color: var(--fb-muted); font-size: 10.5px; line-height: 1.35; }
-    .share-bottom { display: flex; justify-content: center; align-items: center; gap: 7px; min-height: 39px; border: 0; border-radius: 7px; background: var(--fb-blue); color: #fff; font-size: 12.5px; font-weight: 700; }
-    .error { display: flex; gap: 6px; align-items: flex-start; margin: 0; padding: 9px; border-radius: 7px; background: color-mix(in srgb, #e0392d 18%, transparent); color: #ff8a80; font-size: 11.5px; }
-    .notice { display: flex; gap: 6px; align-items: flex-start; margin: 0; padding: 9px; border-radius: 7px; background: var(--lf-primary-soft); color: var(--lf-primary-soft-text); font-size: 11.5px; line-height: 1.4; }
-    @media (max-width: 700px) {
-      .layout { grid-template-columns: 1fr; gap: 12px; padding: 10px 12px 20px; }
-      .preview { height: min(54vh, 540px); min-height: 320px; border-radius: 10px; }
-      .settings { padding: 13px; }
+    :host { display: block; }
+    .stage {
+      position: fixed; inset: 0; z-index: 300;
+      display: flex; flex-direction: column;
+      background-size: cover; background-position: center;
+      color: #fff; overflow: hidden;
+      padding-top: env(safe-area-inset-top);
+    }
+    .shot { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+    .scrim { position: absolute; inset: 0; pointer-events: none;
+      background: linear-gradient(180deg, rgba(0,0,0,.42), transparent 22%, transparent 55%, rgba(0,0,0,.55)); }
+
+    .bar { position: relative; z-index: 2; display: flex; align-items: center; gap: 8px; padding: 10px 12px; }
+    .round { width: 40px; height: 40px; display: grid; place-items: center; border: 0; border-radius: 50%;
+      background: rgba(0,0,0,.28); color: #fff; cursor: pointer; }
+    .grow { flex: 1; }
+    .send { display: inline-flex; align-items: center; gap: 7px; height: 40px; padding: 0 16px; border: 0; border-radius: 20px;
+      background: var(--lf-primary); color: #fff; font: inherit; font-size: 15px; font-weight: 700; cursor: pointer; }
+    .send:disabled { opacity: .45; }
+
+    /* the canvas IS the story: words typed straight onto it, centred like WhatsApp */
+    .canvas { position: relative; z-index: 1; flex: 1; display: flex; flex-direction: column; align-items: center;
+      justify-content: center; padding: 24px 22px; min-height: 0; }
+    .caption {
+      width: 100%; max-width: 620px; box-sizing: border-box;
+      border: 0; outline: 0; background: transparent; resize: none; overflow: hidden;
+      text-align: center; font: 700 28px/1.3 var(--ion-font-family); text-shadow: 0 2px 16px rgba(0,0,0,.5);
+      caret-color: #fff; field-sizing: content; min-height: 44px; max-height: 60vh;
+    }
+    .caption::placeholder { color: rgba(255,255,255,.6); font-weight: 600; }
+    .hint { margin: 6px 0 0; font-size: 12.5px; color: rgba(255,255,255,.65); transition: opacity .2s; }
+    .hint.gone { opacity: 0; }
+
+    .tools { position: relative; z-index: 2; padding: 10px 12px calc(12px + var(--lf-safe-bottom));
+      background: linear-gradient(transparent, rgba(0,0,0,.55)); display: flex; flex-direction: column; gap: 10px; }
+    .toolbar { display: flex; align-items: stretch; gap: 6px; }
+    .tool { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 4px;
+      padding: 7px 4px; border: 0; border-radius: 12px; background: transparent; color: rgba(255,255,255,.86);
+      font: inherit; font-size: 11px; font-weight: 600; cursor: pointer; }
+    .tool.on { background: rgba(255,255,255,.16); color: #fff; }
+    .tool:disabled { opacity: .5; }
+    .tool__ic { display: grid; place-items: center; width: 26px; height: 26px; }
+    .tool__ic.swatch { width: 24px; height: 24px; border-radius: 50%; border: 2px solid rgba(255,255,255,.75);
+      background-size: cover; }
+
+    .panel { display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 16px;
+      background: rgba(20,20,22,.92); backdrop-filter: blur(8px); }
+    .panel__title { margin: 0; font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: rgba(255,255,255,.7); }
+    .panel__row { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 13px; }
+    .panel__row select { min-height: 36px; padding: 0 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,.25);
+      background: rgba(255,255,255,.08); color: #fff; font: inherit; font-size: 13px; }
+    .panel__note { margin: 0; font-size: 12px; line-height: 1.4; color: rgba(255,255,255,.7); }
+    .line { display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 8px; border: 1px solid transparent;
+      border-radius: 10px; background: transparent; color: #fff; text-align: left; font: inherit; cursor: pointer; }
+    .line.on { background: rgba(255,255,255,.14); }
+    .line__ic { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: rgba(255,255,255,.12); }
+    .line__tx { flex: 1; display: flex; flex-direction: column; gap: 1px; }
+    .line__tx strong { font-size: 14px; }
+    .line__tx small { font-size: 11.5px; color: rgba(255,255,255,.65); }
+    .linkbtn { align-self: flex-start; border: 0; padding: 0; background: none; color: #8ec7ff; font: inherit; font-size: 13px; font-weight: 700; }
+
+    .row { display: flex; flex-wrap: wrap; gap: 8px; }
+    .chip { width: 34px; height: 34px; padding: 0; border: 2px solid rgba(255,255,255,.35); border-radius: 50%; cursor: pointer; }
+    .chip.on { border-color: #fff; box-shadow: 0 0 0 3px rgba(255,255,255,.28); }
+    .ink { width: 34px; height: 34px; display: grid; place-items: center; border: 2px solid rgba(255,255,255,.35);
+      border-radius: 50%; font-weight: 800; font-size: 14px; cursor: pointer; background: #fff; }
+    .ink.on { border-color: #fff; box-shadow: 0 0 0 3px rgba(255,255,255,.28); }
+    .size { width: 40px; height: 34px; display: grid; place-items: center; border: 1px solid rgba(255,255,255,.3);
+      border-radius: 8px; background: transparent; color: #fff; cursor: pointer; }
+    .size.on { background: rgba(255,255,255,.16); }
+
+    .thumbs { display: flex; gap: 8px; overflow-x: auto; padding: 2px 0; }
+    .thumb { position: relative; width: 46px; height: 46px; flex: 0 0 46px; border: 2px solid transparent; border-radius: 10px; }
+    .thumb.on { border-color: #fff; }
+    .thumb button:first-child { width: 100%; height: 100%; padding: 0; border: 0; border-radius: 8px; overflow: hidden; background: rgba(0,0,0,.3); }
+    .thumb img { width: 100%; height: 100%; object-fit: cover; }
+    .thumb__x { position: absolute; top: -6px; right: -6px; width: 20px; height: 20px; display: grid; place-items: center;
+      border: 1px solid #fff; border-radius: 50%; background: rgba(28,30,33,.9); color: #fff; }
+
+    .notice, .error { display: flex; align-items: center; gap: 6px; margin: 0; font-size: 12.5px; line-height: 1.35; }
+    .notice { color: rgba(255,255,255,.78); }
+    .error { color: #ffb4ad; }
+    @media (min-width: 720px) {
+      .caption { font-size: 34px; }
+      .tools { max-width: 720px; margin: 0 auto; width: 100%; box-sizing: border-box; }
     }
   `]
 })
 export class CreateStoryComponent {
   private data = inject(DataService);
+  private auth = inject(AuthService);
   private mediaSvc = inject(MediaService);
   private router = inject(Router);
 
-  /** A signal so Share lights up as you type (the app is zoneless). */
+  @ViewChild('caption') caption?: ElementRef<HTMLTextAreaElement>;
+
   readonly text = signal('');
-  /** A signal, not a plain field: the app is zoneless, so a bare `hue = 47`
-   *  never re-rendered and the background looked frozen. */
   readonly hue = signal(STORY_BLACK);
-  busy = signal(false);
-  error = signal('');
-  /** Not an error: e.g. this build has no camera module, your photos were opened. */
-  notice = signal('');
+  readonly ink = signal('#ffffff');
+  readonly size = signal(14);
   readonly media = signal<MediaItem[]>([]);
   readonly previewIndex = signal(0);
   readonly audience = signal<Audience>('public');
   readonly spotlightId = signal<string | null>(null);
+  readonly panel = signal<'none' | 'privacy' | 'text' | 'colour'>('none');
+  readonly typing = signal(false);
+  busy = signal(false);
+  error = signal('');
+  /** Not an error: e.g. this build has no camera module, your photos were opened. */
+  notice = signal('');
 
-  protected readonly audiences = AUDIENCES;
-  /** Background colours offered under the swatch. */
+  protected readonly audiences: { key: Audience; icon: string; label: string }[] = [
+    { key: 'public', icon: 'globe', label: 'Everyone' },
+    { key: 'surname', icon: 'award', label: 'My Spotlight' },
+    { key: 'followers', icon: 'users', label: 'My followers' }
+  ];
+  /** Text colours, WhatsApp-style: white first, then high-contrast choices. */
+  protected readonly inks = ['#ffffff', '#000000', '#ffd400', '#ff5a5a', '#7ef0ff', '#c7a3ff'];
+  protected readonly sizes = [12, 14, 17, 21];
+  /** Black is the default; the rest are the story hues. */
   protected readonly swatches = [STORY_BLACK, 221, 28, 340, 48, 120, 168, 265, 0];
-  /** Template helper for the swatch grid. */
   protected readonly storyBg = storyBg;
+
+  protected readonly me = computed(() => this.auth.user());
   readonly mySpotlights = computed(() => this.data.mySpotlights());
   readonly currentMedia = computed(() => this.media()[this.previewIndex()] ?? null);
 
   bg(): string { return storyBg(this.hue()); }
+  inkColour(): string { return this.ink(); }
+  captionSize(): number { return this.size(); }
+
+  audienceIcon(): string { return this.audiences.find((o) => o.key === this.audience())?.icon ?? 'globe'; }
+  audienceShort(): string {
+    switch (this.audience()) {
+      case 'followers': return 'Followers';
+      case 'surname': return 'Spotlight';
+      default: return 'Everyone';
+    }
+  }
 
   audienceHelp(value: Audience): string {
     if (value === 'public') return 'Anyone on LulaFind can view';
     if (value === 'followers') return 'People who follow you can view';
     return 'Members of one Spotlight community';
+  }
+
+  toggle(panel: 'privacy' | 'text' | 'colour'): void {
+    this.panel.set(this.panel() === panel ? 'none' : panel);
+    this.error.set('');
+  }
+
+  onType(ev: Event): void {
+    const el = ev.target as HTMLTextAreaElement;
+    this.text.set(el.value);
+  }
+
+  focusText(): void {
+    this.caption?.nativeElement.focus();
   }
 
   canPublish(): boolean {
@@ -233,17 +333,10 @@ export class CreateStoryComponent {
     if (audience !== 'surname') this.spotlightId.set(null);
   }
 
-  cycleBg(): void {
-    const i = this.swatches.indexOf(this.hue());
-    this.hue.set(this.swatches[(i + 1) % this.swatches.length]);
-  }
-
-  pickBg(hue: number): void { this.hue.set(hue); }
-
   async addPhoto(): Promise<void> {
     if (this.media().length >= 3) return;
     this.error.set('');
-    const item = await this.mediaSvc.pickImage({ quality: 72 });
+    const item = await this.mediaSvc.pickImage({ source: 'gallery', quality: 72 });
     if (this.mediaSvc.notice()) this.notice.set(this.mediaSvc.notice()!);
     if (!item) {
       if (this.mediaSvc.lastError()) this.error.set(this.mediaSvc.lastError()!);
@@ -261,10 +354,8 @@ export class CreateStoryComponent {
   }
 
   async publish(): Promise<void> {
-    if (this.media().length > 3) { this.error.set('A story can have up to three photos.'); return; }
-    if (!this.text().trim() && !this.media().length) { this.error.set('Add a photo or write a few words first.'); return; }
-    if (this.audience() === 'surname' && !this.mySpotlights().some((sp) => sp.id === this.spotlightId())) {
-      this.error.set('Choose a Spotlight you have joined. This story has not been shared.');
+    if (!this.canPublish() || this.busy()) {
+      this.error.set('Type something or add a photo first.');
       return;
     }
     this.busy.set(true);
@@ -278,8 +369,8 @@ export class CreateStoryComponent {
         spotlightId: this.audience() === 'surname' ? this.spotlightId() : null
       });
       await this.router.navigate(['/story', story.id]);
-    } catch (e: any) {
-      this.error.set(e?.message ?? 'Could not post the story');
+    } catch (e: unknown) {
+      this.error.set(e instanceof Error ? e.message : 'Could not post the story');
     } finally {
       this.busy.set(false);
     }

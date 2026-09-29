@@ -50,6 +50,9 @@ import { timeAgo } from '../../core/utils/format';
             Reports @if (mod.openCount() > 0) { <span class="lf-badge">{{ mod.openCount() }}</span> }
           </button>
           <button class="tab" [class.on]="tab() === 'people'" (click)="tab.set('people')">People</button>
+          <button class="tab" [class.on]="tab() === 'review'" (click)="tab.set('review')">
+            Review @if (mod.pendingCases().length > 0) { <span class="lf-badge">{{ mod.pendingCases().length }}</span> }
+          </button>
           <button class="tab" [class.on]="tab() === 'posts'" (click)="tab.set('posts')">Posts</button>
         </div>
 
@@ -113,6 +116,36 @@ import { timeAgo } from '../../core/utils/format';
           }
         }
 
+        @if (tab() === 'review') {
+          <p class="lf-small lf-muted" style="padding:0 var(--lf-gap) 4px">
+            A child case waits here until you confirm it. Nobody is alerted until you publish it.
+          </p>
+          @if (!mod.pendingCases().length) {
+            <lf-empty icon="check" title="Nothing waiting" message="Every child case has been checked." />
+          }
+          @for (p of mod.pendingCases(); track p.id) {
+            <div class="lf-card">
+              <div class="lf-card__body">
+                <div class="lf-row-between">
+                  <span class="lf-chip lf-chip--danger">{{ p.type }}</span>
+                  <span class="lf-meta">{{ timeAgo(p.createdAt) }}</span>
+                </div>
+                <h3 class="lf-h2" style="margin:8px 0 2px">{{ p.title }}</h3>
+                <p class="lf-small lf-muted">
+                  {{ p.subject?.name }}@if (p.subject?.age !== null && p.subject?.age !== undefined) { , {{ p.subject?.age }}}
+                  · {{ p.town }} · by {{ nameOf(p.authorId) }}
+                </p>
+                <p class="lf-small">{{ p.body }}</p>
+                <div class="acts">
+                  <button class="lf-btn lf-btn--sm lf-btn--success" (click)="approve(p.id)" [disabled]="mod.busy()">Publish and alert</button>
+                  <button class="lf-btn lf-btn--sm lf-btn--ghost" [routerLink]="'/post/' + p.id">Open</button>
+                  <button class="lf-btn lf-btn--sm lf-btn--danger" (click)="reject(p.id, p.title)">Reject</button>
+                </div>
+              </div>
+            </div>
+          }
+        }
+
         @if (tab() === 'posts') {
           <ion-searchbar placeholder="Search posts" [debounce]="200"
                          (ionInput)="query.set($any($event.detail).value ?? '')"></ion-searchbar>
@@ -156,7 +189,7 @@ export class AdminComponent implements OnInit {
 
   protected readonly timeAgo = timeAgo;
 
-  tab = signal<'reports' | 'people' | 'posts'>('reports');
+  tab = signal<'reports' | 'people' | 'review' | 'posts'>('reports');
   query = signal('');
   users = signal<UserProfile[]>([]);
 
@@ -233,6 +266,20 @@ export class AdminComponent implements OnInit {
     await this.mod.removePost(r.targetId, note);
     await this.data.refresh();
     await this.say('Post removed');
+  }
+
+  async approve(id: string): Promise<void> {
+    const reached = await this.mod.approveCase(id);
+    await this.data.refresh();
+    await this.say(reached ? `Live - ${reached} alert(s) sent` : 'Live - nobody in range to alert');
+  }
+
+  async reject(id: string, title: string): Promise<void> {
+    const note = await this.note('Keep this case off the feed?', title);
+    if (!note) return;
+    await this.mod.rejectCase(id, note);
+    await this.data.refresh();
+    await this.say('Case not published');
   }
 
   async removePostById(id: string, title: string): Promise<void> {

@@ -156,6 +156,19 @@ export interface CheckIn {
   liveShareOn: boolean;
 }
 
+/**
+ * Alert preferences. These live on the profile, not only on the phone, so a case
+ * published from another device can still be matched to the right area - exactly
+ * how AMBER-style alerts are geographically targeted.
+ */
+export interface AlertPrefs {
+  enabled: boolean;
+  /** Silence everything except cases where the missing person is under 18. */
+  childrenOnly: boolean;
+  province: ProvinceCode | 'all';
+  radiusKm: number;
+}
+
 export interface UserProfile {
   id: string;
   email: string;
@@ -187,6 +200,8 @@ export interface UserProfile {
   contributorCredits?: number;
   onboarded: boolean;
   blockedUserIds: string[];
+  /** Where case alerts should reach this member. Missing means "province, everything". */
+  alertPrefs?: AlertPrefs | null;
   /** spotlight (surname) communities this user administers */
   spotlightIds: string[];
   /** Posts this person saved. Kept on the profile so it follows them to any phone. */
@@ -541,7 +556,7 @@ export interface ChatThread {
   createdAt: number;
   lastMessageAt: number;
   unread: Record<string, number>;
-  /** provenance: how this private chat was unlocked */
+  /** How the thread opened. Reactions no longer unlock chat, so new threads say 'follow'. */
   unlockedVia: 'vote' | 'follow' | 'friend';
 }
 
@@ -564,7 +579,7 @@ export interface Notification {
   kind:
     | 'vote' | 'comment' | 'follow' | 'chat' | 'system'
     | 'escalation' | 'location_consent' | 'claim' | 'outcome' | 'spotlight'
-    | 'checkin' | 'moderation' | 'danger' | 'story_reply' | 'repost';
+    | 'checkin' | 'moderation' | 'danger' | 'story_reply' | 'repost' | 'missing';
   title: string;
   body: string;
   at: number;

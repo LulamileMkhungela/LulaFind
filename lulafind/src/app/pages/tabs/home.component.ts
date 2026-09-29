@@ -201,7 +201,7 @@ export class HomeComponent {
     const entries = await Promise.all(this.data.feed().map(async (p): Promise<[string, ChatState]> => {
       if (!p.chatEnabled) return [p.id, 'off' as ChatState];
       const g = await this.chat.gate(p, p.khumbu?.claimedByUserId === this.auth.viewerId);
-      const state: ChatState = g.allowed ? 'open' : g.step === 'vote' ? 'locked-vote' : g.step === 'follow' ? 'locked-follow' : 'off';
+      const state: ChatState = g.allowed ? 'open' : g.step === 'follow' ? 'locked-follow' : 'off';
       return [p.id, state];
     }));
     this.chatGates.set(Object.fromEntries(entries));
@@ -209,7 +209,7 @@ export class HomeComponent {
 
   chatStateOf(p: Post): ChatState {
     if (p.authorId === this.auth.viewerId) return 'off';
-    return this.chatGates()[p.id] ?? 'locked-vote';
+    return this.chatGates()[p.id] ?? 'locked-follow';
   }
 
   async onRefresh(e: any): Promise<void> {
@@ -265,13 +265,9 @@ export class HomeComponent {
       if (thread) await this.router.navigate(['/chat', thread.id]);
       return;
     }
-    if (g.step === 'vote') {
-      // Only "Have an idea" opens chat, so the lock button gives that reaction.
-      await this.onVote(p, 'up');
-      await this.show('You have an idea on this post. Follow each other to open chat.');
-      return;
-    }
-    await this.router.navigate(['/post', p.id]);
+    // Chat is mutual-follow only. Following is the honest next step, so the
+    // button takes you to the person rather than pretending a reaction helps.
+    await this.router.navigate(['/user', p.authorId]);
   }
 
   async onAddStory(): Promise<void> {

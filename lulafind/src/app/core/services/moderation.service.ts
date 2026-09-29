@@ -4,6 +4,7 @@ import { LULA_API } from '../data/api';
 import { REPORT_REASONS, ReportTarget, UserReport, UserProfile } from '../models/types';
 import { uid } from '../utils/format';
 import { AuthService } from './auth.service';
+import { DataService } from './data.service';
 
 export interface ReportInput {
   target: ReportTarget;
@@ -27,6 +28,7 @@ export interface ReportInput {
 export class ModerationService {
   private api = inject(LULA_API);
   private auth = inject(AuthService);
+  private data = inject(DataService);
   private store = new KvStore('lulafind.moderation');
 
   readonly reports = signal<UserReport[]>([]);
@@ -109,6 +111,64 @@ export class ModerationService {
     );
     this.reports.set(next);
     this.persist();
+  }
+
+  /**
+   * Cases waiting for review: every child case starts here.
+   *
+   * A missing-child post is never published straight away. An admin reads it,
+   * checks it is a real case, and only then does it go live and alert the area.
+   * That is what keeps the alert worth opening.
+   */
+  readonly pendingCases = computed(() => this.data.feed().filter((p) => p.status === 'under_review'));
+
+  /**
+   * Publish a case that was held for review, then send the area alert.
+   * Returns how many members the alert reached.
+   */
+  async approveCase(postId: string): Promise<number> {
+    this.requireAdmin();
+    this.busy.set(true);
+    try {
+      const post = await this.api.post(postId);
+      if (!post) throw new Error('That post does not exist');
+      const live = { ...post, status: 'active' as const, updatedAt: Date.now() };
+      await this.api.savePost(live);
+      this.data.touch(live);
+      await this.api.pushNotification({
+        id: uid('n'),
+        userId: post.authorId,
+        kind: 'missing',
+        title: 'Your case is live',
+        body: 'A LulaFind admin checked it. Alerts are going out to the area now.',
+        at: Date.now(),
+        read: false,
+        route: `/post/${post.id}`,
+        postId: post.id
+      });
+      return await this.data.alertCase(live);
+    } finally {
+      this.busy.set(false);
+    }
+  }
+
+  /** Keep a case off the feed: it never published and nobody was alerted. */
+  async rejectCase(postId: string, note: string): Promise<void> {
+    this.requireAdmin();
+    const post = await this.api.post(postId);
+    if (!post) return;
+    await this.api.savePost({ ...post, status: 'removed', updatedAt: Date.now() });
+    await this.api.pushNotification({
+      id: uid('n'),
+      userId: post.authorId,
+      kind: 'moderation',
+      title: 'Your case was not published',
+      body: note.trim() || 'A LulaFind admin could not confirm this case. Reply to this notice if that is wrong.',
+      at: Date.now(),
+      read: false,
+      route: `/post/${post.id}`,
+      postId: post.id
+    });
   }
 
   /** Admin removes a post and closes every open report against it. */

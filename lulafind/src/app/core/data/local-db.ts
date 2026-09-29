@@ -219,7 +219,7 @@ export class LocalDb {
       createdAt: Date.now() - 3600_000 * 5,
       lastMessageAt: Date.now() - 3600_000,
       unread: { u_demo: 1, u_kabelo: 0 },
-      unlockedVia: 'vote'
+      unlockedVia: 'follow'
     };
     db.threads = [t];
     db.messages = [

@@ -149,10 +149,22 @@ import { leadMarkView } from '../../core/utils/mark-check';
             <button class="act" type="button" (click)="send()"><lf-icon name="send" [size]="19" /><span>Send</span></button>
           </div>
 
+          @if (leads().length) {
+            <button class="leads" type="button" (click)="openLeads()">
+              <lf-icon name="search" [size]="16" />
+              <span class="leads__text">
+                <strong>{{ leads().length }} {{ leads().length === 1 ? 'lead' : 'leads' }}</strong>
+                · newest: {{ leads()[0].sighting ? leads()[0].sighting!.place : shortBody(leads()[0]) }}
+              </span>
+              @if (verified()) { <span class="leads__tick"><lf-icon name="check" [size]="12" [weight]="3" /> checked</span> }
+              <lf-icon name="chevronRight" [size]="15" />
+            </button>
+          }
+
           @if (!isMine() && p()!.chatEnabled && !p()!.repostOf) {
             <button class="chatline" type="button" [class.open]="gate().allowed" (click)="openChat()">
               <lf-icon [name]="gate().allowed ? 'unlock' : 'lock'" [size]="16" />
-              <span>{{ gate().allowed ? 'Private chat with the poster' : nextChatAction() }}</span>
+              <span>{{ nextChatAction() }}</span>
             </button>
           }
         </article>
@@ -251,6 +263,18 @@ import { leadMarkView } from '../../core/utils/mark-check';
                       @if (c.isLead) { <span class="lead">Lead</span> }
                       @if (c.sighting) {
                         <div class="sighting"><lf-icon name="pin" [size]="13" /> {{ c.sighting.place }} · {{ provinceName(c.sighting.province) }}@if (c.sighting.note) { · {{ c.sighting.note }} }</div>
+                      }
+                      @if (c.sighting && p()!.sightingVerified; as v) {
+                        <div class="checked"><lf-icon name="check" [size]="13" [weight]="3" /> Checked against {{ v.source }}@if (v.note) { · {{ v.note }} }</div>
+                      }
+                      @if (mod.isAdmin() && (c.sighting || c.isLead)) {
+                        <div class="edit__row">
+                          @if (p()!.sightingVerified) {
+                            <button class="pill" type="button" (click)="unverifyLead()">Remove check</button>
+                          } @else {
+                            <button class="pill" type="button" (click)="verifyLead()">Mark as checked</button>
+                          }
+                        </div>
                       }
                       @if (leadMark(c, isMine()); as mark) {
                         @if (mark.status) {
@@ -446,6 +470,14 @@ import { leadMarkView } from '../../core/utils/mark-check';
     .ccard__text { margin: 5px 0 6px; font-size: 14.5px; line-height: 1.42; white-space: pre-line; word-break: break-word; }
     .lead { display: inline-block; margin-bottom: 6px; padding: 1px 8px; border-radius: 10px; background: color-mix(in srgb, var(--lf-ubuntu) 18%, transparent); color: var(--lf-ubuntu); font-size: 11.5px; font-weight: 700; }
     .sighting { display: flex; align-items: center; gap: 5px; margin-bottom: 6px; font-size: 13px; color: var(--lf-muted); }
+    .checked { display: flex; align-items: center; gap: 5px; margin: 0 0 6px; font-size: 13px; font-weight: 600; color: var(--lf-ubuntu); }
+    .leads { display: flex; align-items: center; gap: 8px; width: 100%; margin: 2px 0 8px; padding: 10px 12px;
+      border: 1px solid color-mix(in srgb, var(--lf-signal) 40%, var(--lf-line)); border-radius: 8px;
+      background: color-mix(in srgb, var(--lf-signal) 8%, transparent); color: inherit; cursor: pointer;
+      font-family: inherit; font-size: 14px; text-align: left; }
+    .leads__text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .leads__tick { display: inline-flex; align-items: center; gap: 3px; padding: 2px 7px; border-radius: 999px;
+      background: var(--lf-ubuntu); color: #fff; font-size: 12px; font-weight: 700; }
     .mark { margin: 0 0 6px; font-size: 13px; color: var(--lf-muted); }
     .ccard__acts { display: flex; align-items: center; gap: 12px; padding: 6px 0 2px; border-top: 1px solid var(--lf-line-soft); }
     .ccard__acts button { display: inline-flex; align-items: center; gap: 5px; border: 0; background: transparent; color: var(--lf-muted); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; padding: 0; }
@@ -551,6 +583,17 @@ export class PostDetailComponent implements OnInit {
       : [...top].sort((a, b) => b.upvotes - a.upvotes || a.createdAt - b.createdAt);
   });
   readonly notMe = computed(() => this.dismissed().includes(this.p()?.id ?? ''));
+
+  /**
+   * Leads on this case: what people saw or know, newest first. The family reads
+   * these before anything else, so they are counted at the top of the case.
+   */
+  readonly leads = computed(() =>
+    this.comments()
+      .filter((c) => !c.parentId && (c.isLead || !!c.sighting))
+      .sort((a, b) => b.createdAt - a.createdAt)
+  );
+  readonly verified = computed(() => this.p()?.sightingVerified ?? null);
   private dismissed = signal<string[]>(this.prefs.get<string[]>('notMe', []));
 
   async ngOnInit(): Promise<void> {
@@ -639,6 +682,35 @@ export class PostDetailComponent implements OnInit {
   canLead(): boolean { const t = this.p()?.type; return !!t && !this.isMine() && (t === 'missing' || t === 'sighting' || t === 'pet' || t === 'khumbulekhaya'); }
 
   toggleSort(): void { this.sort.set(this.sort() === 'relevant' ? 'recent' : 'relevant'); }
+
+  /** One line of a lead, for the strip. */
+  shortBody(c: Comment): string {
+    const text = c.body.replace(/\s+/g, ' ').trim();
+    return text.length > 40 ? `${text.slice(0, 40)}\u2026` : text;
+  }
+
+  /** Jump to what people saw - the leads first. */
+  openLeads(): void {
+    this.sort.set('recent');
+    const el = typeof document !== 'undefined' ? document.getElementById('comments') : null;
+    el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  /**
+   * Admin checks a lead against something official (CCTV, police, records).
+   * The badge is what separates a rumour from a lead the family can act on.
+   */
+  async verifyLead(): Promise<void> {
+    await this.mod.verifySighting(this.p()!.id, 'police');
+    await this.reload();
+    await this.say('Lead marked as checked');
+  }
+
+  async unverifyLead(): Promise<void> {
+    await this.mod.unverifySighting(this.p()!.id);
+    await this.reload();
+    await this.say('Check removed');
+  }
   expand(id: string): void { this.expanded.update((s) => new Set(s).add(id)); }
 
   focusComment(): void {
@@ -953,11 +1025,10 @@ export class PostDetailComponent implements OnInit {
   /* ---------------------------- chat ---------------------------- */
   nextChatAction(): string {
     const g = this.gate();
-    if (!g || g.allowed) return 'Private chat';
-    if (g.step === 'sign_in') return 'Sign in to chat';
-    if (g.step === 'vote') return 'Have an idea to unlock chat';
-    if (g.step === 'follow') return 'Follow to unlock chat';
-    return 'Chat unavailable';
+    if (!g || g.allowed) return 'Message them';
+    if (g.step === 'sign_in') return 'Sign in to message';
+    if (g.step === 'follow') return 'Follow each other to message';
+    return 'Messaging unavailable';
   }
 
   async openChat(): Promise<void> {
@@ -970,13 +1041,6 @@ export class PostDetailComponent implements OnInit {
       if (thread) await this.router.navigate(['/chat', thread.id]);
       return;
     }
-    if (g.step === 'vote') {
-      await this.data.vote(p.id, 'up');
-      this.p.set(this.data.post(p.id) ?? null);
-      await this.refreshGate();
-      await this.say('You have an idea on this post. Now follow them to open chat.');
-      return;
-    }
     if (g.step === 'follow') {
       await this.data.toggleFollow(p.authorId);
       const state = await this.data.followStatus(p.authorId);
@@ -984,8 +1048,8 @@ export class PostDetailComponent implements OnInit {
       this.followRequested.set(state === 'pending');
       await this.refreshGate();
       await this.say(state === 'pending'
-        ? 'Follow request sent. Chat opens after they accept and follow you back.'
-        : 'Following. Chat opens when they follow you back.');
+        ? 'Follow request sent. You can message each other once they follow you back.'
+        : 'Following. You can message each other once they follow you back.');
       return;
     }
     await this.say((g as { reason?: string }).reason ?? 'Chat unavailable');

@@ -5,8 +5,9 @@ import { IconComponent } from '../../shared/components/icon.component';
 import { TopNavComponent } from '../../shared/components/top-nav.component';
 import { EmptyComponent } from '../../shared/components/empty.component';
 import { DataService } from '../../core/services/data.service';
+import { SettingsService } from '../../core/services/settings.service';
 import { Notification } from '../../core/models/types';
-import { timeAgo } from '../../core/utils/format';
+import { distanceKm, timeAgo } from '../../core/utils/format';
 
 @Component({
   selector: 'lf-notifications',
@@ -32,7 +33,7 @@ import { timeAgo } from '../../core/utils/format';
             <div class="lf-grow">
               <strong>{{ n.title }}</strong>
               <p>{{ n.body }}</p>
-              <span class="lf-tiny lf-muted">{{ timeAgo(n.at) }}</span>
+              <span class="lf-tiny lf-muted">{{ timeAgo(n.at) }}@if (away(n); as km) { · {{ km }} }</span>
             </div>
             @if (!n.read) { <span class="dot"></span> }
           </button>
@@ -55,7 +56,7 @@ import { timeAgo } from '../../core/utils/format';
     .row.unread .lf-tiny { color: var(--lf-primary-soft-text); font-weight: 600; }
     .ic { width: 56px; height: 56px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
       background: var(--lf-primary); color: #fff; flex-shrink: 0; }
-    .ic[data-kind="danger"] { background: var(--lf-signal); }
+    .ic[data-kind="danger"], .ic[data-kind="missing"] { background: var(--lf-signal); }
     .ic[data-kind="escalation"], .ic[data-kind="vote"] { background: var(--lf-ubuntu); }
     .ic[data-kind="outcome"], .ic[data-kind="claim"] { background: var(--lf-marigold); }
     .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--lf-primary); flex-shrink: 0; }
@@ -64,15 +65,32 @@ import { timeAgo } from '../../core/utils/format';
 export class NotificationsComponent {
   protected data = inject(DataService);
   private router = inject(Router);
+  private settings = inject(SettingsService);
 
   protected readonly timeAgo = timeAgo;
   readonly items = computed(() => this.data.notifications());
+
+  /**
+   * How far a case alert is from where this phone last was, when both points are
+   * known - so the alert radius in Settings is something the member can see.
+   * Returns '' when there is nothing honest to show.
+   */
+  away(n: Notification): string {
+    if (n.kind !== 'missing' || !n.postId) return '';
+    const post = this.data.post(n.postId);
+    const here = this.data.devicePoint();
+    const there = post?.geo ?? null;
+    if (!here || !there) return '';
+    const km = distanceKm(here, there);
+    const within = km <= this.settings.settings().pushRadiusKm;
+    return within ? `${km} km from you` : `${km} km away, outside your alert radius`;
+  }
 
   iconFor(kind: Notification['kind']): string {
     return ({
       vote: 'thumbup', comment: 'comment', follow: 'users', chat: 'chat', system: 'info',
       escalation: 'megaphone', location_consent: 'target', claim: 'user', outcome: 'award', spotlight: 'users', danger: 'alert',
-      repost: 'refresh'
+      repost: 'refresh', missing: 'search'
     } as Record<string, string>)[kind] ?? 'bell';
   }
 

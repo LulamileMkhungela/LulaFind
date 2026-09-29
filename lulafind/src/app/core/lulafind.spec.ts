@@ -13,7 +13,7 @@ import { LocationService } from './services/location.service';
 import { ModerationService } from './services/moderation.service';
 import { SafetyService } from './services/safety.service';
 import { defaultPrivacy, emptyFilter, Post } from './models/types';
-import { timeAgo, compact, urgency, parseFullName, contributorLabel } from './utils/format';
+import { timeAgo, compact, urgency, parseFullName, contributorLabel, distanceKm } from './utils/format';
 import { searchFocus } from './utils/search-focus';
 import { drawPoster, posterContent, publicPoster, POSTER_TEMPLATES } from './utils/poster';
 import { leadMarkView } from './utils/mark-check';
@@ -154,15 +154,28 @@ describe('DataService voting and comments', () => {
     expect(data.post('p_khumalo')!.upvotes).toBe(p0.upvotes);
   });
 
-  it('only Have an idea unlocks private chat; Like, Support and Sad do not', async () => {
+  it('keeps reactions and private chat apart: no reaction changes the gate', async () => {
     const data = svc<DataService>(DataService);
     const chat = svc<ChatService>(ChatService);
     await svc<AuthService>(AuthService).signInDemo();
     await data.loadFeed();
-    await data.vote('p_lindiwe', 'sad');
-    expect((await chat.gate(data.post('p_lindiwe')!) as any).step).toBe('vote');
-    await data.vote('p_lindiwe', 'up');
-    expect((await chat.gate(data.post('p_lindiwe')!) as any).step).not.toBe('vote');
+
+    // start from a clean slate: the seed has these two following each other
+    const post = data.post('p_lindiwe')!;
+    db.removeFollow(post.authorId, 'u_demo');
+    db.removeFollow('u_demo', post.authorId);
+
+    const before = await chat.gate(data.post(post.id)!);
+    expect(before.allowed).toBe(false);
+    expect((before as any).step).toBe('follow');
+
+    // every reaction, including "Have an idea", leaves chat exactly as it was
+    for (const kind of ['up', 'like', 'support', 'sad'] as const) {
+      await data.vote('p_lindiwe', kind);
+      const gate = await chat.gate(data.post('p_lindiwe')!);
+      expect(gate.allowed, kind).toBe(false);
+      expect((gate as any).step, kind).toBe('follow');
+    }
   });
 
   it('adds a comment, bumps the counter and notifies the poster', async () => {
@@ -280,49 +293,53 @@ describe('Repost and feed activity', () => {
   });
 });
 
-describe('ChatService - the three-rule private chat gate', () => {
+describe('ChatService - private chat is mutual follow only', () => {
   beforeEach(bed);
 
-  it('blocks chat until the viewer upvotes', async () => {
+  it('blocks chat when the viewer does not follow the poster', async () => {
     const data = svc<DataService>(DataService);
     const chat = svc<ChatService>(ChatService);
     await svc<AuthService>(AuthService).signInDemo();
     await data.loadFeed();
 
     const post = data.post('p_lindiwe')!;
-    const gate = await chat.gate(post);
+    if (await data.isFollowing(post.authorId)) await data.toggleFollow(post.authorId);
+    db.removeFollow(post.authorId, 'u_demo');
+
+    const gate = await chat.gate(data.post(post.id)!);
     expect(gate.allowed).toBe(false);
-    expect((gate as any).step).toBe('vote');
+    expect((gate as any).step).toBe('follow');
   });
 
-  it('after the upvote, blocks chat until both users follow each other', async () => {
+  it('a one-way follow is not enough; following back opens the chat', async () => {
     const data = svc<DataService>(DataService);
     const chat = svc<ChatService>(ChatService);
     await svc<AuthService>(AuthService).signInDemo();
     await data.loadFeed();
 
-    // u_ayanda posted p_khumalo. Drop any existing edge so we start one-way.
     const post = data.post('p_khumalo')!;
     expect(post.authorId).toBe('u_ayanda');
-    await data.vote(post.id, 'up');
-    if (await data.isFollowing(post.authorId)) await data.toggleFollow(post.authorId);
     db.removeFollow(post.authorId, 'u_demo');
+    db.removeFollow('u_demo', post.authorId);
 
-    const afterVote = await chat.gate(data.post(post.id)!);
-    expect(afterVote.allowed).toBe(false);
-    expect((afterVote as any).step).toBe('follow');
-
-    // a one-way follow is still not enough
-    await data.toggleFollow(post.authorId);
-    expect(await data.isFollowing(post.authorId)).toBe(true);
+    await data.toggleFollow(post.authorId); // I follow them
     const oneWay = await chat.gate(data.post(post.id)!);
     expect(oneWay.allowed).toBe(false);
     expect((oneWay as any).step).toBe('follow');
 
-    // the other side follows back -> chat opens
     await db.upsertFollow({ id: 'f_back', followerId: post.authorId, followingId: 'u_demo', at: Date.now(), status: 'accepted' });
-    const open = await chat.gate(data.post(post.id)!);
-    expect(open.allowed).toBe(true);
+    const mutual = await chat.gate(data.post(post.id)!);
+    expect(mutual.allowed).toBe(true);
+  });
+
+  it('never asks for a reaction first - there is no vote step left', async () => {
+    const data = svc<DataService>(DataService);
+    const chat = svc<ChatService>(ChatService);
+    await svc<AuthService>(AuthService).signInDemo();
+    await data.loadFeed();
+    const gate = await chat.gate(data.post('p_lindiwe')!);
+    expect((gate as any).step).not.toBe('vote');
+    expect(String((gate as any).reason ?? '')).not.toMatch(/have an idea|upvote|unlock/i);
   });
 
   it('respects a poster who switched chat off', async () => {
@@ -341,18 +358,14 @@ describe('ChatService - the three-rule private chat gate', () => {
     expect((gate as any).step).toBe('disabled');
   });
 
-  it('lets the subject of a KhumbulEkhaya post bypass the upvote rule', async () => {
+  it('lets the person a KhumbulEkhaya post is about reach the family', async () => {
     const data = svc<DataService>(DataService);
     const chat = svc<ChatService>(ChatService);
-    const auth = svc<AuthService>(AuthService);
-    await auth.signInDemo();
+    await svc<AuthService>(AuthService).signInDemo();
     await data.loadFeed();
 
-    // act as Lindiwe herself - the subject of the post
     signInAs('u_lindiwe');
-
-    const post = data.post('p_lindiwe')!;
-    const gate = await chat.gate(post, true);
+    const gate = await chat.gate(data.post('p_lindiwe')!, true);
     expect(gate.allowed).toBe(true);
   });
 
@@ -363,10 +376,11 @@ describe('ChatService - the three-rule private chat gate', () => {
     await data.loadFeed();
 
     const post = data.post('p_lindiwe')!;
-    const thread = await chat.ensureThread(post, post.authorId, 'vote');
+    const thread = await chat.ensureThread(post, post.authorId);
     expect(thread).not.toBeNull();
     expect(thread!.participantIds).toContain('u_demo');
     expect(thread!.postId).toBe(post.id);
+    expect(thread!.unlockedVia).toBe('follow');
 
     await chat.send('I think I saw her at the Isipingo salon.');
     const msgs = chat.messages();
@@ -1443,5 +1457,133 @@ describe('poster drawing', () => {
     for (const t of POSTER_TEMPLATES) {
       expect(() => drawPoster(stubCanvas(), t.id, content, photo), t.id).not.toThrow();
     }
+  });
+});
+
+describe('Case alerts - the message that actually finds someone', () => {
+  beforeEach(bed);
+
+  /** The same shape the create screen sends. */
+  const casePost = (over: Record<string, unknown> = {}) => ({
+    type: 'missing' as const,
+    title: 'Help find Test Person in Soweto',
+    body: 'This is a long enough description of what happened, when and where.',
+    media: [] as any[], province: 'GP' as const, town: 'Soweto',
+    lastSeenAt: Date.now(), lastSeenWhere: 'Orlando West', geo: null,
+    contactLabel: 'Call', contactValue: '0710000000', contactVisibleTo: 'everyone' as const,
+    caseNumber: null, reward: null,
+    subject: { name: 'Test Person', age: 31, gender: 'female' as const, height: '', build: '', skinTone: '', hair: '', eyes: '', clothing: '', distinguishing: '', medical: '', vehicle: '', languages: '', surname: '', relationship: '' },
+    audience: 'public' as const, spotlightId: null, chatEnabled: true, allowComments: true,
+    anonymous: false, askWanted: false, khumbu: null, ...over
+  });
+
+  /** Every member's inbox, keyed by id, for one-line assertions. */
+  async function inboxes(): Promise<Record<string, number>> {
+    const api = TestBed.inject(LULA_API) as MockApi;
+    const out: Record<string, number> = {};
+    for (const u of await api.users()) {
+      out[u.id] = (await api.notifications(u.id)).filter((n) => n.kind === 'missing').length;
+    }
+    return out;
+  }
+
+  it('alerts the province when a case goes live, and never the author', async () => {
+    const data = svc<DataService>(DataService);
+    await svc<AuthService>(AuthService).signInDemo();
+    const post = await data.createPost(casePost());
+    const boxes = await inboxes();
+    expect(boxes['u_demo']).toBe(0);
+    // u_lerato is a seeded member in GP, so a case in Soweto reaches her
+    expect(boxes['u_lerato']).toBeGreaterThan(0);
+    // u_sipho is in KZN: same country, different province, no alert
+    expect(boxes['u_sipho']).toBe(0);
+    expect(post.status).toBe('active');
+  });
+
+  it('honours the master switch, children only and a different province', async () => {
+    const api = TestBed.inject(LULA_API) as MockApi;
+    const off = { ...(await api.user('u_kabelo'))!, alertPrefs: { enabled: false, childrenOnly: false, province: 'all' as const, radiusKm: 50 } };
+    await api.saveUser(off);
+    // A member who asked for another province's alerts must not get a GP one.
+    const elsewhere = { ...(await api.user('u_bongani'))!, alertPrefs: { enabled: true, childrenOnly: false, province: 'WC' as const, radiusKm: 50 } };
+    await api.saveUser(elsewhere);
+    const kidsOnly = { ...(await api.user('u_lerato'))!, alertPrefs: { enabled: true, childrenOnly: true, province: 'all' as const, radiusKm: 50 } };
+    await api.saveUser(kidsOnly);
+
+    const data = svc<DataService>(DataService);
+    await svc<AuthService>(AuthService).signInDemo();
+    await data.createPost(casePost());           // an adult case
+    const boxes = await inboxes();
+    expect(boxes['u_kabelo']).toBe(0);           // switch off
+    expect(boxes['u_bongani']).toBe(0);          // asked for Western Cape alerts only
+    expect(boxes['u_lerato']).toBe(0);           // children only, adult case
+
+    // A child case is held for review, so its alert goes out when an admin
+    // publishes it - and then the children-only member gets it.
+    const child = await data.createPost(casePost({
+      title: 'Help find a missing child in Soweto',
+      subject: { ...casePost().subject, name: 'Test Child', age: 9 }
+    }));
+    expect(child.status).toBe('under_review');
+    signInAs('u_mod');
+    await svc<ModerationService>(ModerationService).approveCase(child.id);
+    const after = await inboxes();
+    expect(after['u_lerato']).toBeGreaterThan(0); // a child case always gets through
+    expect(after['u_kabelo']).toBe(0);            // still switched off
+  });
+
+  it('holds a child case for review and only alerts the area on approval', async () => {
+    const data = svc<DataService>(DataService);
+    const mod = svc<ModerationService>(ModerationService);
+    await svc<AuthService>(AuthService).signInDemo();
+    const child = await data.createPost(casePost({
+      title: 'Help find a missing child in Soweto',
+      subject: { ...casePost().subject, name: 'Test Child', age: 9 }
+    }));
+
+    expect(child.status).toBe('under_review');
+    expect((await inboxes())['u_lerato']).toBe(0);
+    expect(mod.pendingCases().some((p) => p.id === child.id)).toBe(true);
+
+    signInAs('u_mod');
+    const reached = await mod.approveCase(child.id);
+    expect(reached).toBeGreaterThan(0);
+    expect((await data.loadPost(child.id))?.status).toBe('active');
+    expect((await inboxes())['u_lerato']).toBeGreaterThan(0);
+  });
+
+  it('never alerts about a case an admin refused', async () => {
+    const data = svc<DataService>(DataService);
+    const mod = svc<ModerationService>(ModerationService);
+    await svc<AuthService>(AuthService).signInDemo();
+    const child = await data.createPost(casePost({
+      title: 'Help find a missing child in Soweto',
+      subject: { ...casePost().subject, name: 'Test Child', age: 9 }
+    }));
+    signInAs('u_mod');
+    await mod.rejectCase(child.id, 'Could not confirm this case.');
+    expect((await data.loadPost(child.id))?.status).toBe('removed');
+    expect((await inboxes())['u_lerato']).toBe(0);
+  });
+});
+
+describe('How far a case alert is', () => {
+  beforeEach(bed);
+
+  it('measures the distance between two points', () => {
+    const jhb = { lat: -26.2041, lng: 28.0473 };
+    const durban = { lat: -29.8587, lng: 31.0218 };
+    expect(distanceKm(jhb, durban)).toBeGreaterThan(480);
+    expect(distanceKm(jhb, durban)).toBeLessThan(520);
+    expect(distanceKm(jhb, jhb)).toBe(0);
+  });
+
+  it('reads a shared device fix back, and nothing when there is none', () => {
+    const data = svc<DataService>(DataService);
+    expect(data.devicePoint()).toBeNull();
+    localStorage.setItem('lulafind.lastLocation', JSON.stringify({ point: { lat: -26.2, lng: 28.04 }, at: Date.now() }));
+    expect(data.devicePoint()?.lat).toBe(-26.2);
+    localStorage.setItem('lulafind.lastLocation', 'not json');
+    expect(data.devicePoint()).toBeNull();
   });
 });

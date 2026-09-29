@@ -553,7 +553,7 @@ export const seedPosts = (): Post[] => {
       title: 'KhumbulEkhaya: Sibusiso Khumalo, 19, left Pietermaritzburg after matric results',
       body:
         'Sibusiso failed two subjects and told his mother he was going to Johannesburg to find work. That was nine days ago. He has R300 and no jacket.\n\n' +
-        'We are not looking to drag him back. We want to know he is alive. If you are Sibusiso, upvote this so we can chat - you can stay anonymous.',
+        'We are not looking to drag him back. We want to know he is alive. If you are Sibusiso, follow me and I will follow back, so we can chat privately - you can stay anonymous.',
       province: 'KZN',
       town: 'Pietermaritzburg',
       lastSeenAt: now - 9 * DAY,
@@ -945,7 +945,7 @@ export const seedComments = (): Comment[] => [
   },
   {
     id: 'c13', postId: 'p_khumalo', parentId: null, authorId: 'u_zanele', createdAt: now - 1 * DAY,
-    body: 'Sibusiso, if you are reading: upvoting this post unlocks a private chat with your uncle. Nobody else sees it. You do not have to come home today, just say you are alive.',
+    body: 'Sibusiso, if you are reading: follow me and I will follow back - then we can chat privately. Nobody else sees it. You do not have to come home today, just say you are alive.',
     upvotes: 77, isLead: false
   },
   {

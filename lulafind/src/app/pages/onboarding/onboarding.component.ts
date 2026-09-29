@@ -121,7 +121,7 @@ const STEPS = [
                 <lf-icon name="shield" [size]="20" />
                 <div>
                   <strong>Private chat has a gate</strong>
-                  <span>You upvote a post, then you both follow each other. That is when chat opens - never before.</span>
+                  <span>You follow someone and they follow you back. That is when you can message each other.</span>
                 </div>
               </div>
             </div>

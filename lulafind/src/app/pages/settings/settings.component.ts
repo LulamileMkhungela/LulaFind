@@ -19,6 +19,7 @@ import { TopNavComponent } from '../../shared/components/top-nav.component';
 import { BACKGROUNDS, BackgroundKey, SettingsService, ThemeMode } from '../../core/services/settings.service';
 import { AuthService } from '../../core/services/auth.service';
 import { DataService } from '../../core/services/data.service';
+import { AlertPrefs } from '../../core/models/types';
 import { ModerationService } from '../../core/services/moderation.service';
 import { PlatformService } from '../../core/services/platform.service';
 import { PermissionsService, PermKind } from '../../core/services/permissions.service';
@@ -93,7 +94,8 @@ import { SUPPORT_EMAIL, SUPPORT_NAME } from '../../core/config';
           </ion-select>
         </ion-item>
         <ion-item>
-          <ion-label position="stacked">Alert radius · {{ s().pushRadiusKm }} km</ion-label>
+          <ion-label position="stacked">Alert radius · {{ s().pushRadiusKm }} km<br />
+            <span class="lf-muted lf-small">How far from your last location you still want case alerts</span></ion-label>
           <ion-range [min]="5" [max]="200" [step]="5" [value]="s().pushRadiusKm"
                      (ionInput)="set({ pushRadiusKm: $any($event.detail).value })"></ion-range>
         </ion-item>
@@ -106,10 +108,8 @@ import { SUPPORT_EMAIL, SUPPORT_NAME } from '../../core/config';
         @if (auth.user()?.isAdmin) {
           <a class="row" routerLink="/admin"><lf-icon name="shield" [size]="18" /><span>Admin - reports and moderation</span><lf-icon name="chevronRight" [size]="16" /></a>
         }
-        <p class="lf-small lf-muted" style="margin-top:10px">
-          What other people see on your profile (your town, your numbers, your communities, whether they can message
-          you) is controlled from <strong>Me → Edit profile</strong>.
-        </p>
+        <a class="row" routerLink="/faqs"><lf-icon name="info" [size]="18" /><span>FAQs</span><lf-icon name="chevronRight" [size]="16" /></a>
+        <p class="lf-small lf-muted" style="margin-top:10px">Who sees your profile is set in <strong>Me → Edit profile</strong>.</p>
         <ion-item>
           <ion-label><strong>Let LulaFind match me to cases</strong><br />
             <span class="lf-muted lf-small">If a KhumbulEkhaya post matches your name we will ask you first</span></ion-label>
@@ -123,10 +123,7 @@ import { SUPPORT_EMAIL, SUPPORT_NAME } from '../../core/config';
 
       <section class="card">
         <h3 class="lf-h2">Phone permissions</h3>
-        <p class="lf-small lf-muted">
-          Each permission stays off until you tap Enable. LulaFind does not read location, camera, photos, or
-          notifications in the background.
-        </p>
+        <p class="lf-small lf-muted">Off until you tap Enable. Nothing is read in the background.</p>
         @for (row of perms.rows(); track row.kind) {
           <div class="perm">
             <div>
@@ -147,9 +144,7 @@ import { SUPPORT_EMAIL, SUPPORT_NAME } from '../../core/config';
 
       <section class="card">
         <h3 class="lf-h2">Your data</h3>
-        <p class="lf-small lf-muted">
-          Accounts, posts, chat, and photos go to Supabase once the tables exist. There is no sample missing person, chat, or account.
-        </p>
+        <p class="lf-small lf-muted">Your data lives in your account, not in this app's code.</p>
         <button class="lf-btn lf-btn--ghost lf-btn--block" (click)="clearPhone()">
           <lf-icon name="refresh" [size]="16" /> Clear cases on this phone
         </button>
@@ -244,6 +239,22 @@ export class SettingsComponent {
 
   set(patch: Partial<ReturnType<SettingsService['settings']>>): void {
     this.settings.update(patch as any);
+    // Alert choices also live on the profile, so a case posted from any phone
+    // can be matched to this member's area.
+    if ('pushEnabled' in patch || 'pushMissingOnly' in patch || 'pushProvince' in patch || 'pushRadiusKm' in patch) {
+      void this.saveAlertPrefs();
+    }
+  }
+
+  private async saveAlertPrefs(): Promise<void> {
+    if (!this.auth.signedIn()) return;
+    const a = this.s();
+    await this.data.saveAlertPrefs({
+      enabled: a.pushEnabled,
+      childrenOnly: a.pushMissingOnly,
+      province: a.pushProvince as AlertPrefs['province'],
+      radiusKm: a.pushRadiusKm
+    });
   }
 
   async setFindable(v: boolean): Promise<void> {
@@ -262,11 +273,15 @@ export class SettingsComponent {
     }
     const ok = await this.perms.enable('notifications');
     this.settings.update({ pushEnabled: ok });
+    await this.saveAlertPrefs();
   }
 
   async enablePerm(kind: PermKind): Promise<void> {
     const ok = await this.perms.enable(kind);
-    if (kind === 'notifications') this.settings.update({ pushEnabled: ok });
+    if (kind === 'notifications') {
+      this.settings.update({ pushEnabled: ok });
+      await this.saveAlertPrefs();
+    }
   }
 
   async openPermSettings(): Promise<void> {

@@ -112,7 +112,7 @@ interface MissingField { key: string; label: string; }
               </button>
             }
           </div>
-          @if (editing()) { <p class="inline-note">A post's category cannot be changed after it is shared. Saving marks it as edited.</p> }
+          @if (editing()) { <p class="inline-note">The category can’t change after posting. Saving marks it edited.</p> }
         </section>
 
         @if (showFieldErrors() && missing().length) {

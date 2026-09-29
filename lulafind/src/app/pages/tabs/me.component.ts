@@ -136,6 +136,7 @@ import { MediaService } from '../../core/services/media.service';
                 <a class="q" routerLink="/admin"><span class="qi qi-red"><lf-icon name="shield" [size]="20" /></span><span>Admin</span>
                   @if (mod.openCount() > 0) { <em class="lf-badge">{{ mod.openCount() }}</em> }</a>
               }
+              <a class="q" routerLink="/faqs"><span class="qi qi-blue"><lf-icon name="info" [size]="20" /></span><span>FAQs</span></a>
               <a class="q" routerLink="/help"><span class="qi qi-red"><lf-icon name="phone" [size]="20" /></span><span>Get help</span></a>
               <button class="q" type="button" (click)="signOut()"><span class="qi qi-grey"><lf-icon name="logout" [size]="20" /></span><span>Sign out</span></button>
             </div>
@@ -192,7 +193,7 @@ import { MediaService } from '../../core/services/media.service';
             </div>
             <lf-icon name="lock" [size]="15" />
           </div>
-          <p class="lf-small lf-muted">Your name was set from the full name you entered when you created the account. It cannot be edited. You can still follow, chat, comment, and add a photo.</p>
+          <p class="lf-small lf-muted">Your name is set from signup and cannot be changed. Everything else here is yours to edit.</p>
           <button class="lf-btn lf-btn--ghost lf-btn--block" type="button" (click)="addPhoto()">
             <lf-icon name="camera" [size]="15" /> {{ me()!.avatarUrl ? 'Change profile photo' : 'Add profile photo' }}
           </button>
@@ -211,7 +212,7 @@ import { MediaService } from '../../core/services/media.service';
           <ion-item>
             <ion-label>
               <strong>Let LulaFind match me to cases</strong><br />
-              <span class="lf-muted lf-small">If your name matches a KhumbulEkhaya post, we may ask if it is you. You can turn this off at any time.</span>
+              <span class="lf-muted lf-small">We ask you first if your name matches a case.</span>
             </ion-label>
             <ion-toggle [checked]="form.findableProfile" (ionChange)="form.findableProfile = $any($event.detail).checked"></ion-toggle>
           </ion-item>

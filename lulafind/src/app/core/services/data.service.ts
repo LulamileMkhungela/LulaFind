@@ -3,12 +3,13 @@ import { Subscription } from 'rxjs';
 import { toObservable } from '@angular/core/rxjs-interop';
 import { LULA_API, LulaApi } from '../data/api';
 import {
-  Audience, Comment, DangerAlert, FeedFilter, FollowEdge, Notification, Post, PostType, Spotlight, Story, StoryReply, StoryView, Tip, UserProfile,
+  AlertPrefs, Audience, Comment, DangerAlert, GeoPoint, FeedFilter, FollowEdge, Notification, Post, PostType, Spotlight, Story, StoryReply, StoryView, Tip, UserProfile,
   VoteValue, ReactionKind, REACTIONS, RETIRED_POST_TYPES, isReaction, VehicleDetails, dangerLabel, emptyFilter, provinceName
 } from '../models/types';
 import { avatar, cover, hueOf, scene } from '../data/seed';
 import { HOUR, DAY, compact, uid } from '../utils/format';
 import { AuthService } from './auth.service';
+import { SettingsService } from './settings.service';
 import { SUPPORT_EMAIL } from '../config';
 
 /** The subset of a post its author (or an admin) may change after publishing. */
@@ -80,6 +81,7 @@ export function uniqueById<T extends { id: string }>(items: T[]): T[] {
 export class DataService {
   private api = inject(LULA_API);
   private auth = inject(AuthService);
+  private settings = inject(SettingsService);
 
   /* --------------------------- state --------------------------- */
   readonly filter = signal<FeedFilter>(emptyFilter());
@@ -586,6 +588,8 @@ export class DataService {
     };
     await this.api.savePost(post);
     if (post.type === 'danger') await this.alertProvince(post);
+    // A child case is held for review first, so its alert goes out on approval.
+    if (isCasePost(post) && post.status === 'active') await this.alertCase(post);
     if (post.spotlightId) {
       // the post is already live; a failed Spotlight index must not look like a failed post
       await this.api.linkSpotlightPost(post.spotlightId, post.id, true).catch((e) => console.warn(e?.message));
@@ -1513,6 +1517,85 @@ export class DataService {
    * Tell other people in the same province. The poster already knows.
    * The alert stays on the feed for everyone; the notice is for people nearby.
    */
+  /* --------------------------- case alerts ---------------------- */
+
+  /**
+   * Tell the right people a new case is live.
+   *
+   * The whole point of a missing-person app is this one message, so the rules are
+   * explicit and each member's own alert preferences (Settings -> Alerts, kept on
+   * their profile) decide whether they get it:
+   *
+   *  - the master push switch off means nothing at all;
+   *  - "missing children only" silences everything except under-18 cases;
+   *  - the alert province narrows it to one province, or all nine;
+   *  - a case with no coordinates still goes out by province, because an address
+   *    nobody has yet must never stop an alert.
+   *
+   * Returns how many members were reached, which the admin review screen shows.
+   */
+  async alertCase(post: Post): Promise<number> {
+    if (!isCasePost(post) || post.status !== 'active') return 0;
+    const child = isChildCase(post);
+    const users = await this.api.users().catch(() => [] as UserProfile[]);
+    const place = [post.town, provinceName(post.province)].filter(Boolean).join(', ');
+    let sent = 0;
+    for (const u of users) {
+      if (u.id === post.authorId || u.suspended) continue;
+      const prefs = u.alertPrefs ?? null;
+      if (prefs) {
+        if (!prefs.enabled) continue;
+        if (prefs.childrenOnly && !child) continue;
+        if (prefs.province !== 'all' && prefs.province !== post.province) continue;
+      } else if (u.province && u.province !== post.province) {
+        // No saved preferences: province-level alerts, never a silent drop.
+        continue;
+      }
+      await this.api.pushNotification({
+        id: uid('n'),
+        userId: u.id,
+        kind: 'missing',
+        title: child ? 'A child is missing nearby' : 'A new missing case nearby',
+        body: `${post.subject?.name?.trim() || 'Someone'} · ${place}. Open the case for the poster.`,
+        at: Date.now(),
+        read: false,
+        route: `/post/${post.id}`,
+        postId: post.id
+      });
+      sent++;
+    }
+    return sent;
+  }
+
+  /**
+   * Where this phone last saw itself, if the member ever shared a location.
+   * Used only to say how far a case alert is from them. Nothing is uploaded.
+   */
+  devicePoint(): GeoPoint | null {
+    try {
+      const raw = typeof localStorage !== 'undefined' ? localStorage.getItem('lulafind.lastLocation') : null;
+      if (!raw) return null;
+      const parsed = JSON.parse(raw) as { point?: GeoPoint };
+      const point = parsed?.point;
+      return point && typeof point.lat === 'number' && typeof point.lng === 'number' ? point : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Keep the signed-in member's alert preferences on their profile, so a case
+   * posted from any phone can be matched to them.
+   */
+  async saveAlertPrefs(prefs: AlertPrefs): Promise<void> {
+    const me = this.auth.user();
+    if (!me) return;
+    const updated: UserProfile = { ...me, alertPrefs: prefs };
+    await this.api.saveUser(updated);
+    this.touchAuthor(updated);
+    this.auth.syncUser(updated);
+  }
+
   private async alertProvince(post: Post): Promise<void> {
     const users = await this.api.users();
     const kind = dangerLabel(post.danger?.kind);
@@ -1873,4 +1956,15 @@ export class DataService {
   get newestAt(): number {
     return this.feed().reduce((max, p) => Math.max(max, p.updatedAt), 0) || Date.now() - DAY;
   }
+}
+
+/** Public case types that deserve an alert when they go live. */
+function isCasePost(p: Post): boolean {
+  return p.type === 'missing' || p.type === 'khumbulekhaya';
+}
+
+/** A child case: the one kind that must never be silenced. */
+function isChildCase(p: Post): boolean {
+  const age = p.subject?.age;
+  return typeof age === 'number' && age < 18;
 }
