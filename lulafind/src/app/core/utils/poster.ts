@@ -396,7 +396,7 @@ function halo(c: Ctx, p: PosterContent, img: HTMLImageElement | null): void {
   grain(c, 0.045);
 
   // the frosted card everything sits in
-  const cx = 60, cy = 96, cw = 960, ch = 1160;
+  const cx = 60, cy = 80, cw = 960, ch = 1090;
   c.save();
   rr(c, cx, cy, cw, ch, 60);
   c.fillStyle = 'rgba(255,255,255,.075)'; c.fill();
@@ -413,7 +413,7 @@ function halo(c: Ctx, p: PosterContent, img: HTMLImageElement | null): void {
   spaced(c, false);
 
   // photo in a squircle with a soft outer ring
-  const px = cx + 40, py = cy + 130, pw = cw - 80, ph = 560;
+  const px = cx + 40, py = cy + 130, pw = cw - 80, ph = 500;
   c.save();
   rr(c, px - 8, py - 8, pw + 16, ph + 16, 46);
   c.strokeStyle = 'rgba(255,255,255,.22)'; c.lineWidth = 3; c.stroke();
@@ -427,12 +427,13 @@ function halo(c: Ctx, p: PosterContent, img: HTMLImageElement | null): void {
   nameGrad.addColorStop(0, '#ffffff'); nameGrad.addColorStop(1, '#a5b4fc');
   c.fillStyle = nameGrad;
   fitOneLine(c, p.name, pw, 96, 800, SANS, 48);
-  c.fillText(p.name, px, py + ph + 110);
-  if (p.ageLine) { c.fillStyle = '#8ee7f7'; c.font = `600 34px ${SANS}`; c.fillText(p.ageLine, px, py + ph + 158); }
-  facts(c, p.facts, px, py + ph + 220, pw, 'rgba(255,255,255,.55)', '#ffffff', 14, 3);
+  c.fillText(p.name, px, py + ph + 90);
+  if (p.ageLine) { c.fillStyle = '#8ee7f7'; c.font = `600 34px ${SANS}`; c.fillText(p.ageLine, px, py + ph + 136); }
+  // Two facts only, so the text can never run under the contact pill.
+  facts(c, p.facts, px, py + ph + 190, pw, 'rgba(255,255,255,.55)', '#ffffff', 14, 2);
 
   // contact in a glass pill
-  const by = POSTER_H - 168;
+  const by = POSTER_H - 140;
   rr(c, px, by, pw, 76, 38);
   const pill = c.createLinearGradient(px, 0, px + pw, 0);
   pill.addColorStop(0, 'rgba(124,92,255,.95)'); pill.addColorStop(1, 'rgba(34,211,238,.92)');
@@ -462,7 +463,7 @@ function pulse(c: Ctx, p: PosterContent, img: HTMLImageElement | null): void {
   c.restore();
 
   // portrait in a glowing ring
-  const cx = POSTER_W / 2, cy = 430, r = 235;
+  const cx = POSTER_W / 2, cy = 400, r = 205;
   const ring = c.createLinearGradient(cx - r, cy - r, cx + r, cy + r);
   ring.addColorStop(0, '#00e5ff'); ring.addColorStop(1, '#ff2d9b');
   c.beginPath(); c.arc(cx, cy, r + 20, 0, Math.PI * 2); c.fillStyle = ring; c.fill();
@@ -483,13 +484,13 @@ function pulse(c: Ctx, p: PosterContent, img: HTMLImageElement | null): void {
 
   c.textAlign = 'center';
   c.fillStyle = '#00e5ff'; spaced(c, true); c.font = `700 32px ${SANS}`;
-  c.fillText(p.kicker, cx, 150); spaced(c, false);
+  c.fillText(p.kicker, cx, 140); spaced(c, false);
   c.fillStyle = '#ffffff';
   fitOneLine(c, p.name, 900, 96, 800, SANS, 48);
-  c.fillText(p.name, cx, cy + r + 130);
-  if (p.ageLine) { c.fillStyle = '#ff8ad4'; c.font = `600 34px ${SANS}`; c.fillText(p.ageLine, cx, cy + r + 178); }
+  c.fillText(p.name, cx, cy + r + 120);
+  if (p.ageLine) { c.fillStyle = '#ff8ad4'; c.font = `600 34px ${SANS}`; c.fillText(p.ageLine, cx, cy + r + 166); }
   c.textAlign = 'left';
-  facts(c, p.facts, 110, cy + r + 240, 860, 'rgba(0,229,255,.75)', '#ffffff', 10, 3);
+  facts(c, p.facts, 110, cy + r + 220, 860, 'rgba(0,229,255,.75)', '#ffffff', 10, 3);
 
   c.fillStyle = '#00e5ff'; rr(c, 64, POSTER_H - 150, 952, 4, 2); c.fill();
   c.fillStyle = '#ffffff'; c.font = `800 28px ${SANS}`;

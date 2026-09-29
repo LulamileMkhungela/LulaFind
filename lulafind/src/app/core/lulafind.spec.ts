@@ -15,7 +15,7 @@ import { SafetyService } from './services/safety.service';
 import { defaultPrivacy, emptyFilter, Post } from './models/types';
 import { timeAgo, compact, urgency, parseFullName, contributorLabel } from './utils/format';
 import { searchFocus } from './utils/search-focus';
-import { publicPoster, POSTER_TEMPLATES } from './utils/poster';
+import { drawPoster, posterContent, publicPoster, POSTER_TEMPLATES } from './utils/poster';
 import { leadMarkView } from './utils/mark-check';
 import { GBV_CHANNEL_NOTE, HELP_LINES } from './data/sa-help';
 import { avatar } from './data/seed';
@@ -1382,6 +1382,52 @@ describe('poster templates', () => {
     for (const t of POSTER_TEMPLATES) {
       expect(t.swatch.length).toBe(3);
       expect(t.name.length).toBeGreaterThan(0);
+    }
+  });
+});
+
+describe('poster drawing', () => {
+  /** A canvas stub that accepts every 2D call the templates make. */
+  function stubContext(): CanvasRenderingContext2D {
+    const noop = (): void => undefined;
+    const gradient = { addColorStop: noop };
+    const ctx: Record<string, unknown> = {
+      save: noop, restore: noop, beginPath: noop, closePath: noop, moveTo: noop, lineTo: noop,
+      arc: noop, arcTo: noop, ellipse: noop, rect: noop, fill: noop, stroke: noop, clip: noop,
+      fillRect: noop, strokeRect: noop, clearRect: noop, fillText: noop, strokeText: noop,
+      drawImage: noop, translate: noop, scale: noop, rotate: noop, setTransform: noop,
+      measureText: (t: string) => ({ width: String(t ?? '').length * 17 }),
+      createLinearGradient: () => gradient,
+      createRadialGradient: () => gradient,
+      createPattern: () => null
+    };
+    return ctx as unknown as CanvasRenderingContext2D;
+  }
+
+  function stubCanvas(): HTMLCanvasElement {
+    return { width: 0, height: 0, getContext: () => stubContext() } as unknown as HTMLCanvasElement;
+  }
+
+  /** No TestBed here: the templates are pure canvas code. */
+  const post = {
+    id: 'p_poster', title: 'Help find Thato Mahlangu', type: 'missing', province: 'GP', town: 'Soweto',
+    lastSeenWhere: 'Orlando East', lastSeenAt: Date.now(), caseNumber: 'CAS 123/09/2026',
+    subject: { name: 'Thato Mahlangu', age: 9, gender: 'male', clothing: 'Blue school shirt', distinguishing: 'Scar' },
+    contactVisibleTo: 'everyone', contactLabel: 'Call the family', contactValue: '071 234 5678'
+  } as unknown as Post;
+
+  it('draws every template - including Halo and Pulse - without throwing', () => {
+    const content = posterContent(post, 'https://lulafind.app/post/p_poster', null);
+    for (const t of POSTER_TEMPLATES) {
+      expect(() => drawPoster(stubCanvas(), t.id, content, null), t.id).not.toThrow();
+    }
+  });
+
+  it('draws a template with a photo as well as without one', () => {
+    const content = posterContent(post, 'https://lulafind.app/post/p_poster', null);
+    const photo = { width: 800, height: 1000 } as unknown as HTMLImageElement;
+    for (const t of POSTER_TEMPLATES) {
+      expect(() => drawPoster(stubCanvas(), t.id, content, photo), t.id).not.toThrow();
     }
   });
 });
