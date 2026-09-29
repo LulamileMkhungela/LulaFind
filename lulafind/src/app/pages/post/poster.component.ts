@@ -7,6 +7,7 @@ import { IonButtons } from '@ionic/angular/ion-buttons';
 import { IonBackButton } from '@ionic/angular/ion-back-button';
 import { IonTitle } from '@ionic/angular/ion-title';
 import { IconComponent } from '../../shared/components/icon.component';
+import { PosterVisualComponent } from '../../shared/components/poster-visual.component';
 import { DataService } from '../../core/services/data.service';
 import { AuthService } from '../../core/services/auth.service';
 import { PlatformService } from '../../core/services/platform.service';
@@ -17,7 +18,7 @@ import { SAPS_MISSING_LIST } from '../../core/data/sa-help';
 @Component({
   selector: 'lf-poster',
   standalone: true,
-  imports: [IonContent, IonHeader, IonToolbar, IonButtons, IonBackButton, IonTitle, IconComponent],
+  imports: [IonContent, IonHeader, IonToolbar, IonButtons, IonBackButton, IonTitle, IconComponent, PosterVisualComponent],
   template: `
     <ion-header [translucent]="false">
       <ion-toolbar>
@@ -27,15 +28,9 @@ import { SAPS_MISSING_LIST } from '../../core/data/sa-help';
     </ion-header>
     <ion-content class="lf-page">
       @if (p(); as post) {
-        <article class="flyer">
-          <p class="kicker">{{ post.type === 'vehicle' ? 'STOLEN' : post.type === 'pet' ? 'LOST PET' : 'MISSING' }}</p>
-          <h1>{{ post.title }}</h1>
-          @if (photo()) { <img [src]="photo()" alt="" /> }
-          @for (line of flyer().lines; track line) { <p>{{ line }}</p> }
-          <p class="close">{{ post.type === 'vehicle'
-            ? 'LulaFind cannot track this vehicle. Report it at a police station. Do not buy it from a stranger.'
-            : 'If they are in danger, call 10111. This is not a police poster.' }}</p>
-        </article>
+        <div class="lf-pad">
+          <lf-poster-visual [post]="post" />
+        </div>
         @if (isMine() && flyer().withheld) {
           <p class="note">Not on this poster: {{ flyer().withheld }}. Ask a caller to name that mark before you trust them.</p>
         }
@@ -49,13 +44,6 @@ import { SAPS_MISSING_LIST } from '../../core/data/sa-help';
     </ion-content>
   `,
   styles: [`
-    .flyer { margin: 16px var(--lf-gap); padding: 18px; background: #fff4b8; color: #1a1200;
-      border: 3px solid #1a1200; border-radius: 8px; }
-    .kicker { margin: 0 0 6px; font-weight: 800; letter-spacing: 1px; color: #9a1b1b; }
-    h1 { margin: 0 0 10px; font-size: 26px; line-height: 1.15; }
-    img { width: 100%; max-height: 280px; object-fit: cover; border-radius: 4px; margin-bottom: 10px; }
-    p { margin: 0 0 8px; font-size: 16px; font-weight: 700; line-height: 1.35; }
-    .close { margin-top: 12px; font-size: 14px; }
     .note { margin: 0 var(--lf-gap) 8px; font-size: 13px; color: var(--lf-muted); }
     .actions { display: flex; flex-direction: column; gap: 8px; }
     a.lf-btn { text-decoration: none; }
@@ -80,10 +68,6 @@ export class PosterComponent implements OnInit {
 
   flyer() {
     return publicPoster(this.p()!);
-  }
-
-  photo(): string | null {
-    return this.p()?.media.find((m) => m.kind === 'image')?.src ?? null;
   }
 
   isMine(): boolean {

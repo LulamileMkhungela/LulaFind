@@ -223,6 +223,8 @@ export interface Comment {
   body: string;
   createdAt: number;
   upvotes: number;
+  /** Who liked this comment - drives the toggle state. Older records lack it. */
+  likedIds?: string[];
   isLead: boolean;
   /** sighting details attached to a comment on a case post */
   sighting?: Sighting;
@@ -344,6 +346,19 @@ export interface Post {
   views: number;
   savedBy: number;
   voterIds: Record<string, VoteValue>;
+
+  /* ---- reshare: this post shared onto someone else's wall ---- */
+  /**
+   * Set when this post is a reshare. The feed card shows who reshared it plus
+   * a "View original" link back to the post below. Null on originals.
+   */
+  reshareOf?: { postId: string; authorId: string; authorName: string } | null;
+  /** Times this post was reshared onto other walls (`shares` counts native shares). */
+  repostCount?: number;
+
+  /* ---- latest activity: drives the "X liked / commented" feed line ---- */
+  lastLike?: { userId: string; displayName: string; at: number } | null;
+  lastComment?: { userId: string; displayName: string; body: string; at: number } | null;
 
   /* ---- escalation + consent ---- */
   escalation: {
@@ -525,7 +540,7 @@ export interface Notification {
   kind:
     | 'vote' | 'comment' | 'follow' | 'chat' | 'system'
     | 'escalation' | 'location_consent' | 'claim' | 'outcome' | 'spotlight'
-    | 'checkin' | 'moderation' | 'danger' | 'story_reply';
+    | 'checkin' | 'moderation' | 'danger' | 'story_reply' | 'repost';
   title: string;
   body: string;
   at: number;

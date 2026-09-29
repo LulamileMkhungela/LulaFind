@@ -71,7 +71,8 @@ export class NotificationsComponent {
   iconFor(kind: Notification['kind']): string {
     return ({
       vote: 'thumbup', comment: 'comment', follow: 'users', chat: 'chat', system: 'info',
-      escalation: 'megaphone', location_consent: 'target', claim: 'user', outcome: 'award', spotlight: 'users', danger: 'alert'
+      escalation: 'megaphone', location_consent: 'target', claim: 'user', outcome: 'award', spotlight: 'users', danger: 'alert',
+      repost: 'refresh'
     } as Record<string, string>)[kind] ?? 'bell';
   }
 

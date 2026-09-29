@@ -104,8 +104,12 @@ describe('Components render', () => {
     const html: string = (f.nativeElement as HTMLElement).innerHTML;
     expect(html).toContain('Follow');
     expect(html).toContain('Idea');
-    expect(html).toContain('No idea');
+    expect(html).toContain('Repost');
+    expect(html).toContain('Share');
     expect(html).toContain('Comment');
+    // the seeded latest activity shows with its comment preview
+    expect(html).toContain('Lerato Mahlangu');
+    expect(html).toContain('commented on this');
   });
 
   it('renders the LulaFind welcome and login screens', async () => {
@@ -204,12 +208,14 @@ describe('Components render', () => {
     expect(html).toContain('Missing person');
     expect(f.componentInstance.mySpotlights().map((s: any) => s.surname)).toEqual(['Mokoena']);
 
-    f.componentInstance.type.set('missing');
+    f.componentInstance.setType('missing');
     f.detectChanges();
     const composerHtml: string = (f.nativeElement as HTMLElement).innerHTML;
-    expect(composerHtml).toContain('Short heading');
-    expect(composerHtml).toContain('Type a short heading');
-    expect(composerHtml).toContain('class="heading-input"');
+    expect(composerHtml).toContain('Generate poster');
+    expect(composerHtml).toContain('Attach');
+    expect(composerHtml).toContain('class="example-input"');
+    // the category's fill-in example lands in the one textbox
+    expect(f.componentInstance.body()).toContain('Last seen: Soweto, Gauteng');
   });
 
   it('organizes the Menu into shortcuts, posts, and saved sections', async () => {
@@ -238,10 +244,11 @@ describe('Components render', () => {
     await data.loadStatic();
     const f = TestBed.createComponent(CreatePostComponent);
     f.detectChanges();
-    f.componentInstance.type.set('missing');
-    f.componentInstance.f.update((v) => ({ ...v, media: [{ id: 'v', kind: 'video', src: 'data:video/mp4,' } as never] }));
+    f.componentInstance.setType('missing');
+    f.componentInstance.media.set([{ id: 'v', kind: 'video', src: 'data:video/mp4,' }]);
     f.detectChanges();
-    expect(f.componentInstance.f().media.some((m) => m.kind === 'video')).toBe(true);
+    expect(f.componentInstance.media().some((m) => m.kind === 'video')).toBe(true);
+    expect(f.componentInstance.hasVideo()).toBe(true);
   });
 
   it('renders the story composer with a visibility choice', async () => {

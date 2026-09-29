@@ -6,12 +6,13 @@ import { AuthService } from './core/services/auth.service';
 import { PlatformService } from './core/services/platform.service';
 import { PrefetchService } from './core/services/prefetch.service';
 import { SettingsService } from './core/services/settings.service';
+import { AssistantComponent } from './shared/components/assistant.component';
 import { supabaseNotice } from './core/data/supabase-client';
 
 @Component({
   selector: 'lf-root',
   standalone: true,
-  imports: [IonApp, IonRouterOutlet],
+  imports: [IonApp, IonRouterOutlet, AssistantComponent],
   template: `
     <ion-app>
       @if (notice()) {
@@ -38,6 +39,9 @@ import { supabaseNotice } from './core/data/supabase-client';
       }
 
       <ion-router-outlet></ion-router-outlet>
+
+      <!-- Floating Lula assistant: type a name, get every matching post + profile. -->
+      <lf-assistant />
     </ion-app>
   `,
   styles: [`
