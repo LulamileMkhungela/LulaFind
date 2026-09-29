@@ -226,3 +226,39 @@ Main had a parallel build of the same areas. Where both touched the same screen,
 Kept from main: `lastLike`/`lastComment` and the "X commented on this" line on cards, comment `likedIds`, the `repost` notification kind (now sent by `repost()`), `suggestedPeople` (now ranks the people rail), the "who reacted" sheet (rewritten for the four reactions, opens from the reaction count on cards and post detail), `.gitignore`/README changes.
 
 Dropped from main (still in git history at `2e94389`): floating Lula assistant, discover rail, text-template poster composer + `poster-parse` + `poster-visual`, `reshare()`/`reshareOf`/`repostCount` (duplicate of `repost()`/`repostOf`).
+
+## Round 4 — research round: alerts, review and leads (commit `68f3df0`)
+
+**Private chat is mutual follow only.** A reaction never unlocks chat, and no
+copy anywhere promises it: `ChatService`'s gate has no `'vote'` reason, and a
+test fails the build if the gate ever mentions a reaction again.
+
+**Case alerts exist now.** `DataService.alertCase()` sends a new missing or
+KhumbulEkhaya case to members in the province it happened in, honouring each
+member's own `alertPrefs` (switch, children-only, province) which Settings
+keeps on their profile. The author and suspended accounts are never alerted.
+Each alert shows a distance from the member's own last location fix.
+
+**A child case is checked before it is broadcast.** Under-18 cases are created
+`under_review`; the admin screen has a Review tab where an admin publishes
+(which sends the alert and reports how many members it reached) or rejects
+(off the feed, no alert). `ModerationService.pendingCases/approveCase/rejectCase`.
+
+**Leads are surfaced.** The case page counts leads, shows the newest one and how
+many are checked, and an admin can mark a sighting as checked against CCTV,
+police, records or a photo (`sightingVerified`, already modelled, now visible).
+
+**Density.** Help, settings, safety centre, profile and create-post prose were
+trimmed; the long answers live on `/faqs`, generated from `LULA_TOPICS` plus
+housekeeping entries. New answers: SAPS 55 form, the 24-hour myth, what never
+goes in a case post, spotting a scam, who receives an alert, and the review
+queue.
+
+**Story composer.** Full-screen black canvas by default, typing straight on it
+(WhatsApp-status style), with a privacy choice; colours are the fallback, not
+the default.
+
+**Research file.** `docs/RESEARCH-COMPETITORS.md` holds the SA figures with
+sources, the competitor matrix and the features mined but not built yet
+(search-party zones, first-72-hours checklist, post-quality guard, scam
+shortcut, cross-border flag, NGO/SAPS verification).
