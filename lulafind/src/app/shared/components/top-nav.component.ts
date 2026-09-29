@@ -4,10 +4,12 @@ import { IonHeader } from '@ionic/angular/ion-header';
 import { IonToolbar } from '@ionic/angular/ion-toolbar';
 import { IonTitle } from '@ionic/angular/ion-title';
 import { IonButtons } from '@ionic/angular/ion-buttons';
+import { ActionSheetController } from '@ionic/angular/action-sheet-controller';
 import { IconComponent } from './icon.component';
 import { LogoComponent } from './logo.component';
 import { ChatService } from '../../core/services/chat.service';
 import { DataService } from '../../core/services/data.service';
+import { AuthService } from '../../core/services/auth.service';
 
 /**
  * The app's top navigation.
@@ -18,12 +20,13 @@ import { DataService } from '../../core/services/data.service';
  * zero height and the page content scrolls over the bar (the "top nav is cut
  * off" bug).
  *
- * Chats and Notifications live here on every screen. Creating a post and
- * searching moved down to the bottom navigation, where the thumb already is.
+ * Create, Search, Chats and Notifications live here on every screen, next to
+ * the brand - like the classic header. Create and Search are also in the
+ * bottom navigation, where the thumb already is.
  *
  * A page that needs its own action on the right passes
- * `<button lf-nav-end>...</button>`; it is projected next to Chats and
- * Notifications rather than replacing them.
+ * `<button lf-nav-end>...</button>`; it is projected before the standard
+ * buttons rather than replacing them.
  */
 @Component({
   selector: 'lf-top-nav',
@@ -50,6 +53,12 @@ import { DataService } from '../../core/services/data.service';
 
         <ion-buttons slot="end">
           <ng-content select="[lf-nav-end]" />
+          <button class="lf-round-btn" type="button" (click)="create()" aria-label="Create a post or story">
+            <lf-icon name="plus" [size]="20" [weight]="2.4" />
+          </button>
+          <a class="lf-round-btn" routerLink="/search" aria-label="Search">
+            <lf-icon name="search" [size]="19" [weight]="2.2" />
+          </a>
           <a class="lf-round-btn" routerLink="/chats" aria-label="Chats">
             <lf-icon name="messenger" [size]="19" [weight]="2" />
             @if (chats() > 0) { <span class="dot">{{ chats() > 99 ? '99+' : chats() }}</span> }
@@ -68,6 +77,8 @@ export class TopNavComponent {
   private router = inject(Router);
   private chat = inject(ChatService);
   private data = inject(DataService);
+  private auth = inject(AuthService);
+  private sheetCtl = inject(ActionSheetController);
 
   /** Empty shows the LulaFind brand instead of a back button and a title. */
   readonly title = input('');
@@ -85,5 +96,35 @@ export class TopNavComponent {
       return;
     }
     void this.router.navigateByUrl(fallback);
+  }
+
+  /**
+   * Same Create sheet as the bottom tab's + button: a feed post or a
+   * 24-hour story. Guests are sent to sign in first, then straight to the
+   * form they picked.
+   */
+  async create(): Promise<void> {
+    const signedIn = this.auth.signedIn();
+    const go = (target: string): void => {
+      if (signedIn) void this.router.navigateByUrl(target);
+      else void this.router.navigate(['/auth'], { queryParams: { next: target } });
+    };
+    const sheet = await this.sheetCtl.create({
+      header: 'Create',
+      buttons: [
+        {
+          text: 'Create post',
+          icon: 'document-text' as const,
+          handler: () => go('/new')
+        },
+        {
+          text: 'Create story',
+          icon: 'camera' as const,
+          handler: () => go('/create-story')
+        },
+        { text: 'Cancel', role: 'cancel' }
+      ]
+    });
+    await sheet.present();
   }
 }
