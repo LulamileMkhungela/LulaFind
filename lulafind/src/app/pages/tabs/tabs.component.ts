@@ -8,13 +8,13 @@ import { IconComponent } from '../../shared/components/icon.component';
 import { AvatarComponent } from '../../shared/components/avatar.component';
 import { DataService } from '../../core/services/data.service';
 import { AuthService } from '../../core/services/auth.service';
+import { ChatService } from '../../core/services/chat.service';
 
 /**
- * Bottom navigation: Home, Spotlight, Create, Search, Menu.
+ * Bottom navigation: Home, Spotlight, Create, Chats, Menu.
  *
- * Create and Search used to sit in the Home header; they are thumb targets, so
- * they live down here now. Chats and Notifications moved up to the top
- * navigation (`lf-top-nav`) where they are one tap away on every screen.
+ * Search moved up to the top navigation's search pill, and Chats moved down
+ * here with their unread badge - messages are a thumb target now.
  */
 @Component({
   selector: 'lf-tabs',
@@ -38,9 +38,14 @@ import { AuthService } from '../../core/services/auth.service';
           <ion-label>Create</ion-label>
         </button>
 
-        <button class="bar-btn" type="button" (click)="search()" aria-label="Search LulaFind">
-          <lf-icon name="search" [size]="24" [weight]="2.2" />
-          <ion-label>Search</ion-label>
+        <button class="bar-btn" type="button" (click)="chats()" aria-label="Chats">
+          <span class="chat-wrap">
+            <lf-icon name="messenger" [size]="24" [weight]="2" />
+            @if (unreadChats() > 0) {
+              <span class="chat-badge">{{ unreadChats() > 99 ? '99+' : unreadChats() }}</span>
+            }
+          </span>
+          <ion-label>Chats</ion-label>
         </button>
 
         <ion-tab-button tab="me">
@@ -89,7 +94,7 @@ import { AuthService } from '../../core/services/auth.service';
     }
     ion-tab-button.tab-selected ion-label { font-weight: 600; }
 
-    /* Create and Search are plain buttons styled to sit in the same bar. */
+    /* Create and Chats are plain buttons styled to sit in the same bar. */
     .bar-btn {
       flex: 1 1 0;
       position: relative;
@@ -107,6 +112,25 @@ import { AuthService } from '../../core/services/auth.service';
     }
     .bar-btn:active { filter: brightness(.92); }
     .bar-btn ion-label { color: inherit; }
+    .chat-wrap { position: relative; display: inline-flex; line-height: 0; }
+    .chat-badge {
+      position: absolute;
+      top: -7px;
+      right: -13px;
+      min-width: 18px;
+      height: 18px;
+      padding: 0 5px;
+      box-sizing: border-box;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 999px;
+      background: var(--lf-badge);
+      color: #fff;
+      font-size: 11px;
+      font-weight: 700;
+      line-height: 1;
+    }
     .create-disc {
       display: grid;
       place-items: center;
@@ -144,9 +168,11 @@ export class TabsComponent {
   private router = inject(Router);
   protected auth = inject(AuthService);
   private data = inject(DataService);
+  private chat = inject(ChatService);
   private sheetCtl = inject(ActionSheetController);
 
   readonly active = signal('home');
+  readonly unreadChats = computed(() => this.chat.unreadTotal());
 
   /**
    * The + button offers both: a feed post and a 24-hour story.
@@ -177,7 +203,7 @@ export class TabsComponent {
     await sheet.present();
   }
 
-  search(): void {
-    void this.router.navigateByUrl('/search');
+  chats(): void {
+    void this.router.navigateByUrl('/chats');
   }
 }

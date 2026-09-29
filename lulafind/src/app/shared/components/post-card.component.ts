@@ -5,6 +5,7 @@ import { compact, timeAgo, urgency } from '../../core/utils/format';
 import { AvatarComponent } from './avatar.component';
 import { IconComponent } from './icon.component';
 import { ReactionsSheetComponent } from './reactions-sheet.component';
+import { PosterVisualComponent } from './poster-visual.component';
 import { DataService } from '../../core/services/data.service';
 import { AuthService } from '../../core/services/auth.service';
 import { CHECK_IN_COPY } from '../../core/services/safety.service';
@@ -21,12 +22,13 @@ export type ChatState = 'off' | 'locked-vote' | 'locked-follow' | 'open';
 @Component({
   selector: 'lf-post-card',
   standalone: true,
-  imports: [RouterLink, IconComponent, AvatarComponent, ReactionsSheetComponent],
+  imports: [RouterLink, IconComponent, AvatarComponent, ReactionsSheetComponent, PosterVisualComponent],
   template: `
     <article class="fb-card lf-fade-in"
              [class.fb-card--critical]="isCritical()"
-             [class.fb-card--found]="post.status === 'found'">
-      <header class="fb-card-header" [routerLink]="authorRoute()">
+             [class.fb-card--found]="post.status === 'found'"
+             [class.fb-card--preview]="preview">
+      <header class="fb-card-header" [routerLink]="preview ? null : authorRoute()">
         <lf-avatar [src]="authorAvatar()" [name]="authorName()" [size]="40"
                    [status]="authorStatus()" />
         <div class="fb-author-meta">
@@ -64,7 +66,10 @@ export type ChatState = 'off' | 'locked-vote' | 'locked-follow' | 'open';
         }
       </div>
 
-      <div class="fb-card-body" [routerLink]="'/post/' + post.id">
+      <div class="fb-card-body" [routerLink]="preview ? null : '/post/' + post.id">
+        @if (posterType()) {
+          <lf-poster-visual [post]="post" [showPhoto]="posterShowsPhoto()" />
+        } @else {
         <h3 class="fb-post-title">{{ post.title }}</h3>
         @if (post.type === 'vehicle') {
           <div class="fb-fact-row">
@@ -97,10 +102,11 @@ export type ChatState = 'off' | 'locked-vote' | 'locked-follow' | 'open';
             {{ expanded() ? 'See less' : 'See more' }}
           </button>
         }
+        }
       </div>
 
-      @if (post.media.length) {
-        <div class="fb-media" [routerLink]="'/post/' + post.id">
+      @if (post.media.length && !posterShowsPhoto()) {
+        <div class="fb-media" [routerLink]="preview ? null : '/post/' + post.id">
           @if (post.media.length === 1) {
             <img class="fb-media-img" [src]="post.media[0].src" [alt]="post.title" loading="lazy" />
           } @else {
@@ -136,7 +142,7 @@ export type ChatState = 'off' | 'locked-vote' | 'locked-follow' | 'open';
               </button>
             }
           </div>
-          <div class="fb-stats-right" [routerLink]="'/post/' + post.id">
+          <div class="fb-stats-right" [routerLink]="preview ? null : '/post/' + post.id">
             @if (post.commentCount > 0) { <span>{{ compact(post.commentCount) }} {{ post.commentCount === 1 ? 'comment' : 'comments' }}</span> }
             @if (post.shares > 0) { <span>{{ compact(post.shares) }} {{ post.shares === 1 ? 'share' : 'shares' }}</span> }
           </div>
@@ -187,6 +193,11 @@ export type ChatState = 'off' | 'locked-vote' | 'locked-follow' | 'open';
     }
     .fb-card--critical { box-shadow: var(--lf-shadow), inset 0 3px 0 var(--lf-signal); }
     .fb-card--found { box-shadow: var(--lf-shadow), inset 0 3px 0 var(--lf-ubuntu); }
+    .fb-card--preview .fb-card-header,
+    .fb-card--preview .fb-card-body,
+    .fb-card--preview .fb-media,
+    .fb-card--preview .fb-stats-bar,
+    .fb-card--preview .fb-stats-right { cursor: default; }
     @media (min-width: 700px) {
       .fb-card { border-radius: var(--lf-radius); max-width: var(--lf-maxw); margin: 0 auto 12px; }
     }
@@ -358,6 +369,11 @@ export class PostCardComponent implements OnInit, OnChanges {
   @Input({ required: true }) post!: Post;
   @Input() author: UserProfile | null = null;
   @Input() chatState: ChatState = 'off';
+  /**
+   * The composer's Generate preview: the exact feed card, but every link and
+   * action is inert so a tap cannot vote, follow or navigate mid-preview.
+   */
+  @Input() preview = false;
 
   @Output() vote = new EventEmitter<'up' | 'down'>();
   @Output() comment = new EventEmitter<void>();
@@ -406,6 +422,16 @@ export class PostCardComponent implements OnInit, OnChanges {
   readonly visibleMedia = computed(() => this.post?.media.slice(0, 4) ?? []);
   readonly extraMedia = computed(() => Math.max(0, (this.post?.media.length ?? 0) - 4));
 
+  /** Case posts render as generated posters; plain status posts keep the classic body. */
+  readonly posterType = computed(() => !!this.post && this.post.type !== 'story');
+  /**
+   * A single photo lives inside the poster. A video or a gallery stays in the
+   * media grid below it, and the poster renders text-only.
+   */
+  readonly posterShowsPhoto = computed(() =>
+    this.posterType() && this.post.media.length === 1 && this.post.media[0].kind === 'image'
+  );
+
   readonly showFollow = computed(() => {
     if (this.isMine()) return false;
     if (this.post?.anonymous) return false;
@@ -439,6 +465,7 @@ export class PostCardComponent implements OnInit, OnChanges {
   openReactions(e: Event): void {
     e.preventDefault();
     e.stopPropagation();
+    if (this.preview) return;
     this.showReactions.set(true);
   }
 
@@ -473,7 +500,7 @@ export class PostCardComponent implements OnInit, OnChanges {
   async onFollow(e: Event): Promise<void> {
     e.preventDefault();
     e.stopPropagation();
-    if (!this.post) return;
+    if (!this.post || this.preview) return;
     if (!this.auth.signedIn()) {
       await this.router.navigate(['/auth'], { queryParams: { mode: 'signin', next: this.router.url } });
       return;
@@ -514,6 +541,7 @@ export class PostCardComponent implements OnInit, OnChanges {
   }
 
   onVote(v: 'up' | 'down'): void {
+    if (this.preview) return;
     this.vote.emit(v);
   }
 

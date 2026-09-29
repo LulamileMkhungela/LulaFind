@@ -86,11 +86,17 @@ export const scene = (label: string, seedStr: string, tone: 'street' | 'home' | 
 
 export const posterPlaceholder = (title: string): string => scene(title, title, 'night');
 
-/** Simple radial used for story backgrounds. */
+/**
+ * Vivid radial used for story backgrounds, Facebook text-story style. The
+ * outer stop used to sit at 10% lightness - near black - which is why a fresh
+ * story composer opened on what looked like a black screen. It now lands at
+ * a deep tone of the hue instead, so the default blue reads blue while white
+ * text stays readable.
+ */
 export const storyBg = (hue: number): string =>
   enc(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 500">
   <defs><radialGradient id="r" cx=".3" cy=".2" r="1">
-    <stop offset="0" stop-color="hsl(${hue} 70% 42%)"/><stop offset="1" stop-color="hsl(${(hue + 60) % 360} 60% 10%)"/>
+    <stop offset="0" stop-color="hsl(${hue} 80% 58%)"/><stop offset="1" stop-color="hsl(${(hue + 60) % 360} 72% 34%)"/>
   </radialGradient></defs><rect width="300" height="500" fill="url(#r)"/></svg>`);
 
 /* ------------------------------------------------------------------ *

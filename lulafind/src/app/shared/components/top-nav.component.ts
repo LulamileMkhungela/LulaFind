@@ -4,15 +4,13 @@ import { IonHeader } from '@ionic/angular/ion-header';
 import { IonToolbar } from '@ionic/angular/ion-toolbar';
 import { IonTitle } from '@ionic/angular/ion-title';
 import { IonButtons } from '@ionic/angular/ion-buttons';
-import { ActionSheetController } from '@ionic/angular/action-sheet-controller';
 import { IconComponent } from './icon.component';
 import { LogoComponent } from './logo.component';
-import { ChatService } from '../../core/services/chat.service';
 import { DataService } from '../../core/services/data.service';
-import { AuthService } from '../../core/services/auth.service';
 
 /**
- * The app's top navigation.
+ * The app's top navigation, LinkedIn-style: the logo image on its own, then
+ * Search, then Notifications.
  *
  * Every page renders this instead of hand-rolling its own bar. It is a real
  * `ion-header` + `ion-toolbar`, which is what gives Ionic the height it needs
@@ -20,9 +18,10 @@ import { AuthService } from '../../core/services/auth.service';
  * zero height and the page content scrolls over the bar (the "top nav is cut
  * off" bug).
  *
- * Create, Search, Chats and Notifications live here on every screen, next to
- * the brand - like the classic header. Create and Search are also in the
- * bottom navigation, where the thumb already is.
+ * On brand pages the search pill stretches between the logo and the bell; on
+ * titled pages the title takes the middle, so search shrinks to its icon to
+ * keep every screen one tap from search. Chats live in the bottom navigation
+ * with their unread badge.
  *
  * A page that needs its own action on the right passes
  * `<button lf-nav-end>...</button>`; it is projected before the standard
@@ -43,26 +42,25 @@ import { AuthService } from '../../core/services/auth.service';
             </button>
           } @else {
             <a class="brand" routerLink="/home" aria-label="LulaFind home">
-              <lf-logo [size]="28" label="LulaFind" />
-              <span class="wordmark">lulafind</span>
+              <lf-logo [size]="32" label="LulaFind" />
             </a>
           }
         </ion-buttons>
 
         @if (title()) { <ion-title>{{ title() }}</ion-title> }
 
-        <ion-buttons slot="end">
+        <ion-buttons slot="end" class="nav-end" [class.grow]="!title()">
           <ng-content select="[lf-nav-end]" />
-          <button class="lf-round-btn" type="button" (click)="create()" aria-label="Create a post or story">
-            <lf-icon name="plus" [size]="20" [weight]="2.4" />
-          </button>
-          <a class="lf-round-btn" routerLink="/search" aria-label="Search">
-            <lf-icon name="search" [size]="19" [weight]="2.2" />
-          </a>
-          <a class="lf-round-btn" routerLink="/chats" aria-label="Chats">
-            <lf-icon name="messenger" [size]="19" [weight]="2" />
-            @if (chats() > 0) { <span class="dot">{{ chats() > 99 ? '99+' : chats() }}</span> }
-          </a>
+          @if (!title()) {
+            <a class="lf-search-pill" routerLink="/search" aria-label="Search LulaFind">
+              <lf-icon name="search" [size]="17" [weight]="2.2" />
+              <span>Search</span>
+            </a>
+          } @else {
+            <a class="lf-round-btn" routerLink="/search" aria-label="Search">
+              <lf-icon name="search" [size]="19" [weight]="2.2" />
+            </a>
+          }
           <a class="lf-round-btn" routerLink="/notifications" aria-label="Notifications">
             <lf-icon name="bell" [size]="19" [filled]="alerts() > 0" />
             @if (alerts() > 0) { <span class="dot">{{ alerts() > 99 ? '99+' : alerts() }}</span> }
@@ -71,21 +69,42 @@ import { AuthService } from '../../core/services/auth.service';
       </ion-toolbar>
     </ion-header>
   `,
-  styles: [`:host { display: block; }`]
+  styles: [`
+    :host { display: block; }
+    .nav-end { display: flex; align-items: center; gap: 8px; }
+    .nav-end.grow { flex: 1; min-width: 0; }
+    /* LinkedIn's search field next to the logo: a tap opens full search. */
+    .lf-search-pill {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      height: 34px;
+      padding: 0 10px;
+      border-radius: 7px;
+      background: var(--lf-card-2);
+      color: var(--lf-muted);
+      text-decoration: none;
+      font-size: 14px;
+    }
+    .lf-search-pill:active { filter: brightness(.94); }
+    .lf-search-pill span {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+  `]
 })
 export class TopNavComponent {
   private router = inject(Router);
-  private chat = inject(ChatService);
   private data = inject(DataService);
-  private auth = inject(AuthService);
-  private sheetCtl = inject(ActionSheetController);
 
-  /** Empty shows the LulaFind brand instead of a back button and a title. */
+  /** Empty shows the brand instead of a back button and a title. */
   readonly title = input('');
   /** Where the back button goes. Defaults to the browser history, then /home. */
   readonly backTo = input('/home');
 
-  readonly chats = computed(() => this.chat.unreadTotal());
   readonly alerts = computed(() => this.data.unreadNotifications());
 
   back(): void {
@@ -96,35 +115,5 @@ export class TopNavComponent {
       return;
     }
     void this.router.navigateByUrl(fallback);
-  }
-
-  /**
-   * Same Create sheet as the bottom tab's + button: a feed post or a
-   * 24-hour story. Guests are sent to sign in first, then straight to the
-   * form they picked.
-   */
-  async create(): Promise<void> {
-    const signedIn = this.auth.signedIn();
-    const go = (target: string): void => {
-      if (signedIn) void this.router.navigateByUrl(target);
-      else void this.router.navigate(['/auth'], { queryParams: { next: target } });
-    };
-    const sheet = await this.sheetCtl.create({
-      header: 'Create',
-      buttons: [
-        {
-          text: 'Create post',
-          icon: 'document-text' as const,
-          handler: () => go('/new')
-        },
-        {
-          text: 'Create story',
-          icon: 'camera' as const,
-          handler: () => go('/create-story')
-        },
-        { text: 'Cancel', role: 'cancel' }
-      ]
-    });
-    await sheet.present();
   }
 }
