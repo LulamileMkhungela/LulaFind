@@ -169,7 +169,7 @@ import { leadMarkView } from '../../core/utils/mark-check';
           }
         </article>
 
-        @if (p()!.outcome?.found) {
+        @if (p()!.outcome.found) {
           <p class="closed">
             <lf-icon name="check" [size]="15" [weight]="3" />
             <span>Found. The family confirmed it. To take the case off the police circulation list, complete a <strong>SAPS 92</strong> with the investigating officer.</span>
@@ -177,7 +177,7 @@ import { leadMarkView } from '../../core/utils/mark-check';
         }
 
         <!-- the line a family needs the moment a station turns them away -->
-        @if (isCase() && !p()!.outcome?.found) {
+        @if (isCase() && !p()!.outcome.found) {
           <a class="nowait" href="tel:0219183512">
             <lf-icon name="phone" [size]="15" />
             <span><strong>No waiting period.</strong> If a station says wait, escalate to the Bureau for Missing Persons on 021 918 3512.</span>

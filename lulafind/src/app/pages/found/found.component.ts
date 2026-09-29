@@ -47,14 +47,14 @@ import { DAY, HOUR, timeAgo } from '../../core/utils/format';
             <p class="card__line">
               {{ p.town }}, {{ provinceName(p.province) }}@if (daysToFind(p); as d) { · {{ d }}}
             </p>
-            @if (p.outcome?.finderName) {
+            @if (p.outcome.finderName) {
               <div class="finder">
                 <lf-avatar [name]="p.outcome!.finderName" [size]="28" />
                 <span><strong>{{ p.outcome!.finderName }}</strong> found them</span>
                 <span class="badge">Contributor x{{ credits(p) }}</span>
               </div>
             }
-            @if (p.outcome?.whereaboutsFound) {
+            @if (p.outcome.whereaboutsFound) {
               <p class="card__note">{{ p.outcome!.whereaboutsFound }}</p>
             }
           </a>
@@ -91,13 +91,13 @@ export class FoundComponent {
   /** Closed cases, most recent first. */
   readonly found = computed(() =>
     this.data.feed()
-      .filter((p) => p.outcome?.found === true)
+      .filter((p) => p.outcome.found === true)
       .sort((a, b) => b.updatedAt - a.updatedAt)
   );
 
   /** "found after 2 days" - the number that shows a share was worth it. */
   daysToFind(p: Post): string {
-    const at = p.outcome?.foundAt ?? null;
+    const at = p.outcome.foundAt ?? null;
     if (!at) return '';
     const ms = Math.max(0, at - p.createdAt);
     if (ms < HOUR) return 'found within the hour';
@@ -107,7 +107,7 @@ export class FoundComponent {
   }
 
   credits(p: Post): number {
-    const id = p.outcome?.finderUserId;
+    const id = p.outcome.finderUserId;
     return id ? this.data.authorOf(id)?.contributorCredits ?? 1 : 1;
   }
 }
