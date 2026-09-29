@@ -182,6 +182,103 @@ describe('DataService voting and comments', () => {
   });
 });
 
+describe('Repost and feed activity', () => {
+  beforeEach(bed);
+
+  it('stamps the last like onto the post when someone votes up', async () => {
+    const data = svc<DataService>(DataService);
+    await svc<AuthService>(AuthService).signInDemo();
+    await data.loadFeed();
+
+    await data.vote('p_lindiwe', 'up');
+    expect(data.post('p_lindiwe')!.lastLike).toMatchObject({ userId: 'u_demo', displayName: 'Thandi Mokoena' });
+
+    // un-voting keeps the last known liker so the feed line never blinks empty
+    await data.vote('p_lindiwe', 'up');
+    expect(data.post('p_lindiwe')!.lastLike?.userId).toBe('u_demo');
+  });
+
+  it('stamps the last top-level comment for the feed preview, ignoring replies', async () => {
+    const data = svc<DataService>(DataService);
+    await svc<AuthService>(AuthService).signInDemo();
+    await data.loadFeed();
+
+    const top = await data.addComment({ postId: 'p_lindiwe', body: 'I will check the clinic noticeboard tomorrow.' });
+    expect(data.post('p_lindiwe')!.lastComment).toMatchObject({
+      userId: 'u_demo', body: 'I will check the clinic noticeboard tomorrow.'
+    });
+
+    await data.addComment({ postId: 'p_lindiwe', body: 'Thanks!', parentId: top.id });
+    expect(data.post('p_lindiwe')!.lastComment?.body).toBe('I will check the clinic noticeboard tomorrow.');
+  });
+
+  it('toggles comment likes with voter tracking', async () => {
+    const data = svc<DataService>(DataService);
+    const auth = svc<AuthService>(AuthService);
+    await auth.signInDemo();
+    await data.loadFeed();
+
+    const before = (await data.comments('p_lindiwe')).find((c) => c.id === 'c4')!;
+    const liked = await data.voteComment(before);
+    expect(liked.upvotes).toBe(before.upvotes + 1);
+    expect(liked.likedIds).toContain('u_demo');
+
+    const unliked = await data.voteComment(liked);
+    expect(unliked.upvotes).toBe(before.upvotes);
+    expect(unliked.likedIds ?? []).not.toContain('u_demo');
+
+    await auth.signOut();
+    await expect(data.voteComment(unliked)).rejects.toThrow('Sign in to like a comment');
+  });
+
+  it('falls the comment preview back when the latest is deleted', async () => {
+    const data = svc<DataService>(DataService);
+    await svc<AuthService>(AuthService).signInDemo();
+    await data.loadFeed();
+
+    const first = await data.addComment({ postId: 'p_lindiwe', body: 'First new comment here.' });
+    const second = await data.addComment({ postId: 'p_lindiwe', body: 'Second new comment here.' });
+    expect(data.post('p_lindiwe')!.lastComment?.body).toBe('Second new comment here.');
+
+    await data.deleteComment(second);
+    expect(data.post('p_lindiwe')!.lastComment?.body).toBe('First new comment here.');
+
+    // deleting both falls back to the newest seeded comment
+    await data.deleteComment(first);
+    expect(data.post('p_lindiwe')!.lastComment?.userId).toBe('u_bongani');
+  });
+
+  it('reposts a post with a link back to the original and tells its author', async () => {
+    const data = svc<DataService>(DataService);
+    await svc<AuthService>(AuthService).signInDemo();
+    await data.loadFeed();
+
+    const rp = await data.repost('p_lindiwe', 'Please share, she is from our area.');
+    expect(rp.authorId).toBe('u_demo');
+    expect(rp.repostOf).toBe('p_lindiwe');
+    expect(rp.body).toBe('Please share, she is from our area.');
+    expect(data.post('p_lindiwe')!.shares).toBeGreaterThan(0);
+    const notes = db.notifications('u_sipho');
+    expect(notes.some((n) => n.kind === 'repost' && n.postId === 'p_lindiwe')).toBe(true);
+  });
+
+  it('flattens a repost of a repost back to the original post', async () => {
+    const data = svc<DataService>(DataService);
+    await svc<AuthService>(AuthService).signInDemo();
+    await data.loadFeed();
+
+    const first = await data.repost('p_lindiwe');
+    const second = await data.repost(first.id);
+    expect(second.repostOf).toBe('p_lindiwe');
+  });
+
+  it('guests cannot repost', async () => {
+    const data = svc<DataService>(DataService);
+    await data.loadFeed();
+    await expect(data.repost('p_thato')).rejects.toThrow('Sign in to repost');
+  });
+});
+
 describe('ChatService - the three-rule private chat gate', () => {
   beforeEach(bed);
 

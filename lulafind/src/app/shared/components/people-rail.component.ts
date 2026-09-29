@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, effect, inject, signal } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import { AvatarComponent } from './avatar.component';
 import { DataService } from '../../core/services/data.service';
@@ -56,13 +56,17 @@ export class PeopleRailComponent {
 
   readonly state = signal<Record<string, 'accepted' | 'pending' | null>>({});
 
-  readonly people = computed(() => {
-    const me = this.auth.viewerId;
-    const following = new Set(this.data.followingIds());
-    return Object.values(this.data.authors())
-      .filter((u) => u.id !== me && !following.has(u.id) && !u.suspended)
-      .slice(0, 12);
-  });
+  /** Ranked by `DataService.suggestedPeople`: same province, surname and town first. */
+  readonly people = signal<UserProfile[]>([]);
+
+  constructor() {
+    // Re-rank when who you follow changes, so a followed person leaves the rail.
+    effect(() => {
+      this.data.followingIds();
+      this.auth.viewerId;
+      void this.data.suggestedPeople(12).then((list) => this.people.set(list)).catch(() => undefined);
+    });
+  }
 
   place(u: UserProfile): string {
     if (u.privacy?.showLocation === true && u.town) return u.town;

@@ -243,6 +243,8 @@ export interface Comment {
   body: string;
   createdAt: number;
   upvotes: number;
+  /** People who liked this comment - drives the filled state; `upvotes` equals its length. Older records lack it. */
+  likedIds?: string[];
   isLead: boolean;
   /** sighting details attached to a comment on a case post */
   sighting?: Sighting;
@@ -250,8 +252,6 @@ export interface Comment {
   markGuess?: string;
   /** Family check. Public sees the result, not the words. */
   markCheck?: 'match' | 'no';
-  /** People who liked this comment. `upvotes` is kept equal to its length. */
-  likedBy?: string[];
   /** Set when the author changes the text after posting. */
   editedAt?: number | null;
 }
@@ -371,6 +371,10 @@ export interface Post {
   views: number;
   savedBy: number;
   voterIds: Record<string, VoteValue>;
+
+  /* ---- latest activity: drives the "X liked / commented" feed line ---- */
+  lastLike?: { userId: string; displayName: string; at: number } | null;
+  lastComment?: { userId: string; displayName: string; body: string; at: number } | null;
 
   /* ---- escalation + consent ---- */
   escalation: {
@@ -552,7 +556,7 @@ export interface Notification {
   kind:
     | 'vote' | 'comment' | 'follow' | 'chat' | 'system'
     | 'escalation' | 'location_consent' | 'claim' | 'outcome' | 'spotlight'
-    | 'checkin' | 'moderation' | 'danger' | 'story_reply';
+    | 'checkin' | 'moderation' | 'danger' | 'story_reply' | 'repost';
   title: string;
   body: string;
   at: number;

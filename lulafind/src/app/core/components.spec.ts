@@ -105,6 +105,11 @@ describe('Components render', () => {
     expect(html).toContain('Follow');
     expect(html).toContain('Idea');
     expect(html).not.toContain('No idea');
+    expect(html).toContain('Repost');
+    expect(html).toContain('Send');
+    // the seeded latest activity shows above the post, LinkedIn-style
+    expect(html).toContain('Lerato Mahlangu');
+    expect(html).toContain('commented on this');
     expect(html).toContain('Comment');
   });
 

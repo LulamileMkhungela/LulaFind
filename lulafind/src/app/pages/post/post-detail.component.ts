@@ -10,6 +10,7 @@ import { ActionSheetController } from '@ionic/angular/action-sheet-controller';
 import { IconComponent } from '../../shared/components/icon.component';
 import { TopNavComponent } from '../../shared/components/top-nav.component';
 import { AvatarComponent } from '../../shared/components/avatar.component';
+import { ReactionsSheetComponent } from '../../shared/components/reactions-sheet.component';
 import { ReactionButtonComponent } from '../../shared/components/reaction-button.component';
 import { ReactionIconComponent } from '../../shared/components/reaction-icon.component';
 import { DataService } from '../../core/services/data.service';
@@ -40,7 +41,7 @@ import { leadMarkView } from '../../core/utils/mark-check';
   standalone: true,
   imports: [
     IonContent, IonFooter, IonTextarea, IonSkeletonText, RouterLink, IconComponent, AvatarComponent,
-    TopNavComponent, ReactionButtonComponent, ReactionIconComponent
+    TopNavComponent, ReactionButtonComponent, ReactionIconComponent, ReactionsSheetComponent
   ],
   template: `
     <lf-top-nav title="Post" backTo="/home" />
@@ -153,8 +154,10 @@ import { leadMarkView } from '../../core/utils/mark-check';
             <div class="stats">
               <span class="stats__likes">
                 @if (p()!.upvotes > 0) {
-                  <span class="stack">@for (k of topKinds(); track k) { <lf-reaction-icon [kind]="k" [size]="18" [ring]="true" /> }</span>
-                  {{ compact(p()!.upvotes) }}
+                  <button type="button" class="stats__react" aria-label="See who reacted" (click)="reactionsOpen.set(true)">
+                    <span class="stack">@for (k of topKinds(); track k) { <lf-reaction-icon [kind]="k" [size]="18" [ring]="true" /> }</span>
+                    {{ compact(p()!.upvotes) }}
+                  </button>
                 }
               </span>
               <span class="stats__right">
@@ -312,6 +315,7 @@ import { leadMarkView } from '../../core/utils/mark-check';
         <p class="fine">LulaFind is a community tool. It does not replace SAPS. In an emergency call <strong>10111</strong>.</p>
       }
     </ion-content>
+    @if (p()) { <lf-reactions-sheet [post]="p()!" [open]="reactionsOpen()" (close)="reactionsOpen.set(false)" /> }
 
     <!-- Comment bar: stays above the keyboard while you type, like LinkedIn -->
     @if (p() && p()!.allowComments) {
@@ -419,6 +423,7 @@ import { leadMarkView } from '../../core/utils/mark-check';
     .stats { display: flex; align-items: center; justify-content: space-between; padding: 10px var(--edge) 8px; font-size: 14px; color: var(--lf-muted); }
     .stats__likes { display: inline-flex; align-items: center; gap: 6px; }
     .stack { display: inline-flex; } .stack lf-reaction-icon + lf-reaction-icon { margin-left: -5px; }
+    .stats__react { display: inline-flex; align-items: center; gap: 6px; border: 0; background: transparent; color: inherit; font: inherit; cursor: pointer; padding: 0; }
     .stats__right { display: inline-flex; gap: 12px; }
     .stats__right button { border: 0; background: transparent; color: inherit; font: inherit; cursor: pointer; padding: 0; }
     .actions { display: flex; margin: 0 8px; padding: 2px 0; border-top: 1px solid var(--lf-line-soft); }
@@ -545,6 +550,7 @@ export class PostDetailComponent implements OnInit {
     const o = this.original();
     return o ? (o.anonymous ? 'Anonymous' : this.data.authorOf(o.authorId)?.displayName ?? 'LulaFind member') : '';
   });
+  readonly reactionsOpen = signal(false);
   readonly topKinds = computed<ReactionKind[]>(() => {
     const counts = new Map<ReactionKind, number>();
     for (const v of Object.values(this.p()?.voterIds ?? {})) if (isReaction(v)) counts.set(v, (counts.get(v) ?? 0) + 1);
@@ -660,7 +666,7 @@ export class PostDetailComponent implements OnInit {
   }
   nameOf(id: string): string { return this.data.authorOf(id)?.displayName ?? 'LulaFind member'; }
   avatarOf(id: string): string { return this.data.avatarFor(this.data.authorOf(id)); }
-  liked(c: Comment): boolean { const me = this.me(); return !!me && (c.likedBy ?? []).includes(me); }
+  liked(c: Comment): boolean { const me = this.me(); return !!me && (c.likedIds ?? []).includes(me); }
   canLead(): boolean { const t = this.p()?.type; return !!t && !this.isMine() && (t === 'missing' || t === 'sighting' || t === 'pet' || t === 'khumbulekhaya'); }
 
   toggleSort(): void { this.sort.set(this.sort() === 'relevant' ? 'recent' : 'relevant'); }

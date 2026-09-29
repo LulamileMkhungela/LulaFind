@@ -349,7 +349,12 @@ export class DataService {
     const nextPost: Post = {
       ...p,
       voterIds: { ...p.voterIds, [me]: next },
-      upvotes: Math.max(0, p.upvotes + (isReaction(next) ? 1 : 0) - (isReaction(current) ? 1 : 0))
+      upvotes: Math.max(0, p.upvotes + (isReaction(next) ? 1 : 0) - (isReaction(current) ? 1 : 0)),
+      // A fresh reaction refreshes the feed's "X reacted to this" line. Taking
+      // it back keeps the last known person so the line never blinks empty.
+      lastLike: isReaction(next)
+        ? { userId: me, displayName: this.auth.user()?.displayName ?? 'Someone', at: Date.now() }
+        : p.lastLike ?? null
     };
     await this.api.savePost(nextPost);
     this.mergeCache([nextPost]);
@@ -396,6 +401,7 @@ export class DataService {
       body: input.body.trim(),
       createdAt: Date.now(),
       upvotes: 0,
+      likedIds: [],
       isLead: input.isLead ?? false,
       sighting: input.sighting,
       markGuess: input.markGuess || undefined
@@ -403,7 +409,18 @@ export class DataService {
     await this.api.saveComment(c);
     const p = await this.loadPost(input.postId);
     if (p) {
-      const next = { ...p, commentCount: (await this.api.commentsFor(p.id)).length, updatedAt: Date.now() };
+      // A top-level comment refreshes the feed's "X commented" preview.
+      // Replies stay inside the thread - the preview always shows a
+      // top-level comment.
+      const topLevel = !c.parentId;
+      const next = {
+        ...p,
+        commentCount: (await this.api.commentsFor(p.id)).length,
+        updatedAt: Date.now(),
+        lastComment: topLevel
+          ? { userId: me, displayName: this.auth.user()?.displayName ?? 'Someone', body: c.body.slice(0, 280), at: c.createdAt }
+          : p.lastComment ?? null
+      };
       await this.api.savePost(next);
       this.mergeCache([next]);
     }
@@ -436,13 +453,15 @@ export class DataService {
     await this.api.saveComment({ ...c, markCheck: result });
   }
 
-  /** Like or un-like a comment. One like per person; `upvotes` always equals the number of likers. */
+  /** Like or un-like a comment. One like per person. */
   async voteComment(c: Comment): Promise<Comment> {
     const me = this.auth.viewerId;
     if (!me) throw new Error('Sign in to like a comment');
-    const likers = new Set(c.likedBy ?? []);
-    if (likers.has(me)) likers.delete(me); else likers.add(me);
-    const next: Comment = { ...c, likedBy: [...likers], upvotes: likers.size };
+    const likers = new Set(c.likedIds ?? []);
+    const had = likers.has(me);
+    if (had) likers.delete(me); else likers.add(me);
+    // Move the running count by one: older comments carry likes from before likers were tracked.
+    const next: Comment = { ...c, likedIds: [...likers], upvotes: Math.max(0, c.upvotes + (had ? -1 : 1)) };
     await this.api.saveComment(next);
     return next;
   }
@@ -462,7 +481,22 @@ export class DataService {
     await this.api.deleteComment(c.id, c.postId);
     const p = await this.loadPost(c.postId);
     if (p) {
-      const next = { ...p, commentCount: Math.max(0, p.commentCount - 1) };
+      const remaining = await this.api.commentsFor(c.postId);
+      const latestTop = remaining
+        .filter((x) => !x.parentId)
+        .sort((a, b) => b.createdAt - a.createdAt)[0];
+      const next = {
+        ...p,
+        commentCount: remaining.length,
+        lastComment: latestTop
+          ? {
+              userId: latestTop.authorId,
+              displayName: this.authorOf(latestTop.authorId)?.displayName ?? 'Someone',
+              body: latestTop.body.slice(0, 280),
+              at: latestTop.createdAt
+            }
+          : null
+      };
       await this.api.savePost(next);
       this.mergeCache([next]);
     }
@@ -524,6 +558,8 @@ export class DataService {
       views: 0,
       savedBy: 0,
       voterIds: {},
+      lastLike: null,
+      lastComment: null,
       escalation: { requested: false, consentGranted: false, consentAt: null, partners: [] },
       consent: [],
       sightingVerified: null,
@@ -705,7 +741,7 @@ export class DataService {
     await this.recordShare(original.id).catch(() => undefined);
     if (original.authorId !== me.id) {
       await this.notify({
-        userId: original.authorId, kind: 'vote',
+        userId: original.authorId, kind: 'repost',
         title: `${me.displayName} reposted your post`,
         body: thoughts.trim() ? thoughts.trim().slice(0, 120) : original.title,
         route: `/post/${original.id}`, postId: original.id
@@ -1627,6 +1663,38 @@ export class DataService {
     } catch {
       return [];
     }
+  }
+
+  /**
+   * “People you may know” for the newsfeed.
+   *
+   * Everyone except you, anyone you already follow (or asked to follow), and
+   * suspended accounts. Same province first, then same surname community,
+   * then everyone else — newest accounts last so the rail feels alive.
+   */
+  async suggestedPeople(limit = 10): Promise<UserProfile[]> {
+    const me = this.auth.user();
+    const all = await this.api.users().catch(() => [] as UserProfile[]);
+    const following = new Set(this.followingIds());
+    const requested = new Set(this.followRequests().map((r) => r.followerId));
+    const scored = all
+      .filter((u) => {
+        if (!me && !u) return false;
+        if (me && u.id === me.id) return false;
+        if (u.suspended) return false;
+        if (following.has(u.id) || requested.has(u.id)) return false;
+        return true;
+      })
+      .map((u) => {
+        let score = 0;
+        if (me?.province && u.province === me.province) score += 30;
+        if (me?.surname && u.surname.toLowerCase() === me.surname.toLowerCase()) score += 20;
+        if (me?.town && u.town.toLowerCase() === me.town.toLowerCase()) score += 10;
+        if ((u.contributorCredits ?? 0) > 0) score += 5;
+        return { u, score };
+      })
+      .sort((a, b) => b.score - a.score || b.u.createdAt - a.u.createdAt);
+    return scored.slice(0, limit).map((s) => s.u);
   }
 
   /**

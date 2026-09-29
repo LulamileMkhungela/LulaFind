@@ -86,13 +86,17 @@ export const scene = (label: string, seedStr: string, tone: 'street' | 'home' | 
 
 export const posterPlaceholder = (title: string): string => scene(title, title, 'night');
 
-/** Simple radial used for story backgrounds. */
-/** A story background. `STORY_BLACK` (-1) is plain black, the default; any other number is a colour hue. */
+/**
+ * A story background. `STORY_BLACK` (-1) is plain black and is the default;
+ * any other number is a colour hue, drawn as a vivid radial (Facebook
+ * text-story style) whose outer stop stays a deep tone of the hue rather than
+ * near-black, so white text stays readable.
+ */
 export const STORY_BLACK = -1;
 export const storyBg = (hue: number): string =>
   hue < 0 ? enc(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 500"><rect width="300" height="500" fill="#000"/></svg>`) : enc(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 500">
   <defs><radialGradient id="r" cx=".3" cy=".2" r="1">
-    <stop offset="0" stop-color="hsl(${hue} 70% 42%)"/><stop offset="1" stop-color="hsl(${(hue + 60) % 360} 60% 10%)"/>
+    <stop offset="0" stop-color="hsl(${hue} 80% 58%)"/><stop offset="1" stop-color="hsl(${(hue + 60) % 360} 72% 34%)"/>
   </radialGradient></defs><rect width="300" height="500" fill="url(#r)"/></svg>`);
 
 /* ------------------------------------------------------------------ *
@@ -347,6 +351,8 @@ export const seedPosts = (): Post[] => {
       shares: 187,
       views: 9840,
       savedBy: 63,
+      lastComment: { userId: 'u_lerato', displayName: 'Lerato Mahlangu', body: 'Reminder: there is NO 24-hour waiting period in South Africa. If anyone at a station tells you to wait, escalate to the station commander immediately.', at: now - 1 * DAY },
+      lastLike: { userId: 'u_sipho', displayName: 'Sipho Ndlela', at: now - 2 * DAY },
       escalation: {
         requested: true,
         consentGranted: true,
@@ -430,7 +436,9 @@ export const seedPosts = (): Post[] => {
       commentCount: 3,
       shares: 94,
       views: 5310,
-      savedBy: 41
+      savedBy: 41,
+      lastLike: { userId: 'u_ayanda', displayName: 'Ayanda Khumalo', at: now - 2 * HOUR },
+      lastComment: { userId: 'u_bongani', displayName: 'Bongani Zulu', body: 'To whoever this is about: nobody is going to force you home. Just tell them you are alive.', at: now - 6 * HOUR }
     }),
 
     base({

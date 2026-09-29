@@ -4,6 +4,7 @@ import { Post, POST_TYPE_META, REACTIONS, ReactionKind, UserProfile, isReaction,
 import { alreadySaid, compact, headingIsNew, timeAgo, urgency } from '../../core/utils/format';
 import { AvatarComponent } from './avatar.component';
 import { IconComponent } from './icon.component';
+import { ReactionsSheetComponent } from './reactions-sheet.component';
 import { ReactionButtonComponent } from './reaction-button.component';
 import { ReactionIconComponent } from './reaction-icon.component';
 import { DataService } from '../../core/services/data.service';
@@ -22,12 +23,15 @@ export type ChatState = 'off' | 'locked-vote' | 'locked-follow' | 'open';
 @Component({
   selector: 'lf-post-card',
   standalone: true,
-  imports: [RouterLink, IconComponent, AvatarComponent, ReactionButtonComponent, ReactionIconComponent],
+  imports: [RouterLink, IconComponent, AvatarComponent, ReactionButtonComponent, ReactionIconComponent, ReactionsSheetComponent],
   template: `
     @if (!gone()) {
     <article class="fb-card lf-fade-in"
              [class.fb-card--critical]="isCritical()"
              [class.fb-card--found]="post.status === 'found'">
+      @if (activity(); as act) {
+        <a class="fb-activity" [routerLink]="['/user', act.userId]"><strong>{{ act.name }}</strong> {{ act.verb }}</a>
+      }
       <header class="fb-card-header" [routerLink]="authorRoute()">
         <lf-avatar [src]="authorAvatar()" [name]="authorName()" [size]="48"
                    [status]="authorStatus()" />
@@ -151,10 +155,10 @@ export type ChatState = 'off' | 'locked-vote' | 'locked-follow' | 'open';
         <div class="fb-stats-bar" [routerLink]="'/post/' + post.id">
           <div class="fb-stats-likes">
             @if (post.upvotes > 0) {
-              <span class="fb-stack">
+              <span class="fb-stack" role="button" tabindex="0" aria-label="See who reacted" (click)="openReactions($event)" (keydown.enter)="openReactions($event)">
                 @for (k of topKinds(); track k) { <lf-reaction-icon [kind]="k" [size]="18" [ring]="true" /> }
               </span>
-              <span>{{ compact(post.upvotes) }}</span>
+              <span role="button" tabindex="0" (click)="openReactions($event)" (keydown.enter)="openReactions($event)">{{ compact(post.upvotes) }}</span>
             }
           </div>
           <div class="fb-stats-right">
@@ -191,6 +195,7 @@ export type ChatState = 'off' | 'locked-vote' | 'locked-follow' | 'open';
         </button>
       }
     </article>
+    <lf-reactions-sheet [post]="post" [open]="reactionsOpen()" (close)="reactionsOpen.set(false)" />
     }
   `,
   styles: [`
@@ -208,6 +213,11 @@ export type ChatState = 'off' | 'locked-vote' | 'locked-follow' | 'open';
       .fb-card { border-radius: var(--lf-radius); max-width: var(--lf-maxw); margin: 0 auto 12px; }
     }
 
+    .fb-activity {
+      display: block; padding: 8px 16px 0; font-size: 12px; line-height: 1.3;
+      color: var(--lf-text-muted, #a8a8a8); text-decoration: none;
+    }
+    .fb-activity strong { font-weight: 600; color: inherit; }
     .fb-card-header {
       display: flex;
       align-items: center;
@@ -452,6 +462,21 @@ export class PostCardComponent implements OnInit, OnChanges {
     this.syncFollow();
     this.loadOriginal();
   }
+
+  /** LinkedIn's line above a post: who commented on it or reacted to it last. Not shown on your own activity or on reposts. */
+  activity(): { userId: string; name: string; verb: string } | null {
+    const p = this.post;
+    if (!p || p.repostOf) return null;
+    const me = this.auth.viewerId;
+    const c = p.lastComment, l = p.lastLike;
+    const useComment = !!c && (!l || c.at >= l.at);
+    const who = useComment ? c : l;
+    if (!who || who.userId === me || who.userId === p.authorId) return null;
+    return { userId: who.userId, name: who.displayName, verb: useComment ? 'commented on this' : 'reacted to this' };
+  }
+
+  readonly reactionsOpen = signal(false);
+  openReactions(e: Event): void { e.preventDefault(); e.stopPropagation(); this.reactionsOpen.set(true); }
 
   private loadOriginal(): void {
     const id = this.post?.repostOf;

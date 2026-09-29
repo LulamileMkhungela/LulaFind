@@ -127,3 +127,11 @@ Fixed with compare-and-set rather than a test workaround:
 - "No idea" is gone completely: no `down` vote, no `downvotes` field, no crossed-out bulb or thumb-down icons, and the SQL vote RPCs no longer accept or count it. Re-run both SQL files.
 - Story composer defaults to a black background (`STORY_BLACK = -1`), with other colours as options. The composer now follows the app theme instead of fixed light colours.
 - De-duplication: feeds and lists keep one copy per post id; a post's heading, name and last-seen lines are hidden when the text already says them; the Menu no longer repeats Alerts, Spotlight or Privacy (bell, tab and gear already do that).
+
+## Merge with main (PR #9 work from `arena/01a0ea80-lulafind`)
+
+Main had a parallel build of the same areas. Where both touched the same screen, this branch's version won because it matches the latest requirements (LinkedIn top nav, Ask Lula only on Chats, black default story, only "Have an idea" unlocks chat, no vehicle/danger/story types, six poster templates).
+
+Kept from main: `lastLike`/`lastComment` and the "X commented on this" line on cards, comment `likedIds`, the `repost` notification kind (now sent by `repost()`), `suggestedPeople` (now ranks the people rail), the "who reacted" sheet (rewritten for the four reactions, opens from the reaction count on cards and post detail), `.gitignore`/README changes.
+
+Dropped from main (still in git history at `2e94389`): floating Lula assistant, discover rail, text-template poster composer + `poster-parse` + `poster-visual`, `reshare()`/`reshareOf`/`repostCount` (duplicate of `repost()`/`repostOf`).
