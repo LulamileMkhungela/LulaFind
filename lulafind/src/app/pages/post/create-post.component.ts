@@ -1,5 +1,6 @@
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
+import { ToastController } from '@ionic/angular/toast-controller';
 import { IonContent } from '@ionic/angular/ion-content';
 import { IonHeader } from '@ionic/angular/ion-header';
 import { IonToolbar } from '@ionic/angular/ion-toolbar';
@@ -11,25 +12,20 @@ import { AuthService } from '../../core/services/auth.service';
 import { DataService } from '../../core/services/data.service';
 import { MediaService } from '../../core/services/media.service';
 import {
-  Audience, DANGER_KINDS, DangerKind, MediaItem, Post, PostType, PROVINCES,
-  ProvinceCode, VehicleDetails
+  Audience, MediaItem, Post, PostType, PROVINCES, ProvinceCode
 } from '../../core/models/types';
 
 const CATEGORIES: { key: PostType; label: string; icon: string }[] = [
   { key: 'missing', label: 'Missing person', icon: 'search' },
   { key: 'khumbulekhaya', label: 'Left home', icon: 'home' },
-  { key: 'vehicle', label: 'Stolen vehicle', icon: 'car' },
   { key: 'pet', label: 'Lost pet', icon: 'paw' },
-  { key: 'sighting', label: 'Sighting', icon: 'pin' },
-  { key: 'danger', label: 'Danger nearby', icon: 'alert' }
+  { key: 'sighting', label: 'Sighting', icon: 'pin' }
 ];
 
 const blankSubject = () => ({
   name: '', age: '', gender: 'unknown' as 'female' | 'male' | 'other' | 'unknown',
   height: '', clothing: '', distinguishing: '', hair: '', vehicle: ''
 });
-
-const blankVehicle = (): VehicleDetails => ({ makeModel: '', registration: '', colour: '', bodyType: '' });
 
 interface ComposerForm {
   title: string; body: string; media: MediaItem[]; province: ProvinceCode | null; town: string;
@@ -74,7 +70,7 @@ interface MissingField { key: string; label: string; }
               <select [value]="f().audience" (change)="setAudience($any($event.target).value)">
                 <option value="public">Public</option>
                 <option value="followers">Followers</option>
-                <option value="surname">Spotlight</option>
+                <option value="surname" [disabled]="!mySpotlights().length">{{ mySpotlights().length ? 'Spotlight' : 'Spotlight (join one first)' }}</option>
               </select>
               <lf-icon name="chevronDown" [size]="12" />
             </label>
@@ -109,8 +105,14 @@ interface MissingField { key: string; label: string; }
                 @if (type() === category.key) { <lf-icon class="selected-check" name="check" [size]="14" /> }
               </button>
             }
+            @if (!editing()) {
+              <button type="button" class="category" (click)="goStory()">
+                <lf-icon name="camera" [size]="17" />
+                <span>Story</span>
+              </button>
+            }
           </div>
-          @if (editing()) { <p class="inline-note">A post's category cannot be changed after it is shared.</p> }
+          @if (editing()) { <p class="inline-note">A post's category cannot be changed after it is shared. Saving marks it as edited.</p> }
         </section>
 
         @if (showFieldErrors() && missing().length) {
@@ -209,16 +211,6 @@ interface MissingField { key: string; label: string; }
                   }
                 }
 
-                @if (type() === 'vehicle') {
-                  <div class="section-heading compact"><strong>Vehicle details</strong><span>Optional</span></div>
-                  <label class="field full"><span>Make and model</span><input placeholder="e.g. Toyota Hilux" [value]="v().makeModel" (input)="patchVehicle({ makeModel: $any($event.target).value })" /></label>
-                  <div class="fields-two">
-                    <label class="field"><span>Registration</span><input placeholder="Plate number" [value]="v().registration" (input)="patchVehicle({ registration: $any($event.target).value })" /></label>
-                    <label class="field"><span>Colour</span><input placeholder="e.g. White" [value]="v().colour" (input)="patchVehicle({ colour: $any($event.target).value })" /></label>
-                  </div>
-                  <label class="field full"><span>SAPS case number <small>(optional)</small></span><input placeholder="Police case reference" [value]="f().caseNumber" (input)="patch({ caseNumber: $any($event.target).value })" /></label>
-                }
-
                 @if (type() === 'pet') {
                   <div class="section-heading compact"><strong>Pet details</strong><span>Optional</span></div>
                   <label class="field full"><span>Pet's name</span><input placeholder="Name and breed" [value]="s().name" (input)="patchSubject({ name: $any($event.target).value })" /></label>
@@ -228,27 +220,16 @@ interface MissingField { key: string; label: string; }
                 @if (type() === 'sighting') {
                   <div class="section-heading compact"><strong>Sighting details</strong><span>Optional</span></div>
                   <label class="field full"><span>Where did you see them?</span><input placeholder="Nearest landmark or public place" [value]="f().lastSeenWhere" (input)="patch({ lastSeenWhere: $any($event.target).value })" /></label>
-                  <label class="field full"><span>Appearance or vehicle</span><input placeholder="Describe only what you actually saw" [value]="s().clothing" (input)="patchSubject({ clothing: $any($event.target).value })" /></label>
+                  <label class="field full"><span>Appearance</span><input placeholder="Describe only what you actually saw" [value]="s().clothing" (input)="patchSubject({ clothing: $any($event.target).value })" /></label>
                 }
 
-                @if (type() === 'danger') {
-                  <div class="section-heading compact"><strong>Safety alert</strong><span>Keep it factual</span></div>
-                  <label class="field full" [class.invalid]="fieldError('dangerKind')"><span>What is happening?</span><select [value]="dangerKind() ?? ''" (change)="dangerKind.set($any($event.target).value || null)">
-                    <option value="">Choose alert type</option>
-                    @for (kind of dangerKinds; track kind.key) { <option [value]="kind.key">{{ kind.label }}</option> }
-                  </select>
-                  @if (fieldError('dangerKind')) { <small class="field-error">{{ fieldError('dangerKind') }}</small> }
-                  </label>
-                  <label class="field full"><span>Where did you see this?</span><input placeholder="Public place or landmark" [value]="f().lastSeenWhere" (input)="patch({ lastSeenWhere: $any($event.target).value })" /></label>
-                }
-
-                @if (type() !== 'danger' && type() !== 'sighting' && type() !== 'vehicle') {
+                @if (type() !== 'sighting') {
                   <label class="field full"><span>Last seen near</span><input placeholder="Neighbourhood or public place" [value]="f().lastSeenWhere" (input)="patch({ lastSeenWhere: $any($event.target).value })" /></label>
                 }
-                @if (type() !== 'vehicle' && type() !== 'pet' && type() !== 'danger' && type() !== 'sighting') {
+                @if (type() !== 'pet' && type() !== 'sighting') {
                   <label class="field full"><span>SAPS case number <small>(optional)</small></span><input placeholder="Police case reference" [value]="f().caseNumber" (input)="patch({ caseNumber: $any($event.target).value })" /></label>
                 }
-                @if (type() === 'vehicle' || type() === 'pet') {
+                @if (type() === 'pet') {
                   <label class="field full"><span>Last seen near</span><input placeholder="Neighbourhood or public place" [value]="f().lastSeenWhere" (input)="patch({ lastSeenWhere: $any($event.target).value })" /></label>
                 }
                 @if (type() === 'khumbulekhaya') {
@@ -370,12 +351,11 @@ export class CreatePostComponent implements OnInit {
   private media = inject(MediaService);
   private router = inject(Router);
   private route = inject(ActivatedRoute);
+  private toaster = inject(ToastController);
 
   protected readonly provinces = PROVINCES;
   protected readonly categories = CATEGORIES;
-  protected readonly dangerKinds = DANGER_KINDS;
   protected readonly moreOpen = signal(false);
-  protected readonly dangerKind = signal<DangerKind | null>(null);
 
   type = signal<PostType | null>(null);
   editing = signal(false);
@@ -396,7 +376,6 @@ export class CreatePostComponent implements OnInit {
     anonymous: false, askWanted: false, contactLabel: 'Family contact', contactValue: '', contactVisibleTo: 'verified'
   });
   readonly s = signal(blankSubject());
-  readonly v = signal<VehicleDetails>(blankVehicle());
   readonly khumbuReason = signal('');
 
   readonly userAvatar = computed(() => this.data.avatarFor(this.auth.user()));
@@ -412,10 +391,6 @@ export class CreatePostComponent implements OnInit {
     this.s.update((s) => ({ ...s, ...p }));
   }
 
-  patchVehicle(p: Partial<VehicleDetails>): void {
-    this.v.update((v) => ({ ...v, ...p }));
-  }
-
   /**
    * Everything still missing before this post can be shared, in the order the
    * person will meet it. Empty means the Post button is live.
@@ -428,7 +403,6 @@ export class CreatePostComponent implements OnInit {
     if (!f.province) out.push({ key: 'province', label: 'Choose the province' });
     if (!f.town.trim()) out.push({ key: 'town', label: 'Add the town or suburb' });
     if (f.audience === 'surname' && !f.spotlightId) out.push({ key: 'spotlightId', label: 'Choose a Spotlight community' });
-    if (this.type() === 'danger' && !this.dangerKind()) out.push({ key: 'dangerKind', label: 'Choose what kind of danger' });
     return out;
   });
 
@@ -484,8 +458,6 @@ export class CreatePostComponent implements OnInit {
           distinguishing: post.subject.distinguishing, hair: post.subject.hair
         });
       }
-      this.v.set({ ...this.v(), ...(post.vehicleDetails ?? {}) });
-      this.dangerKind.set(post.danger?.kind ?? null);
       if (post.khumbu) this.khumbuReason.set(post.khumbu.reasonGuess);
       this.moreOpen.set(true);
     }
@@ -496,7 +468,6 @@ export class CreatePostComponent implements OnInit {
     this.type.set(type);
     this.moreOpen.set(false);
     this.s.set(blankSubject());
-    this.v.set(blankVehicle());
     this.f.update((f) => ({
       ...f,
       caseNumber: '',
@@ -504,7 +475,6 @@ export class CreatePostComponent implements OnInit {
       lastSeenWhere: '',
       askWanted: type === 'khumbulekhaya'
     }));
-    this.dangerKind.set(null);
     this.khumbuReason.set('');
     this.error.set('');
     this.showFieldErrors.set(false);
@@ -532,10 +502,8 @@ export class CreatePostComponent implements OnInit {
     switch (this.type()) {
       case 'missing': return 'Share the important details. Where were they last seen? What might help someone recognise them?';
       case 'khumbulekhaya': return 'Tell the family what they need to know. Keep in mind they may not want to return home.';
-      case 'vehicle': return 'Describe what happened and where the vehicle was last seen. Do not include a home address.';
       case 'pet': return 'Describe when and where your pet went missing and how people can help.';
       case 'sighting': return 'Share only what you personally saw, when and where. Avoid guesses or naming suspects.';
-      case 'danger': return 'Describe the immediate safety risk clearly. Do not approach or confront anyone.';
       default: return 'Write a short update for your community…';
     }
   }
@@ -544,10 +512,8 @@ export class CreatePostComponent implements OnInit {
     switch (this.type()) {
       case 'missing': return 'Add person and case details';
       case 'khumbulekhaya': return 'Add family context';
-      case 'vehicle': return 'Add vehicle details';
       case 'pet': return 'Add pet details';
       case 'sighting': return 'Add sighting details';
-      case 'danger': return 'Add alert details';
       default: return 'Add more details';
     }
   }
@@ -584,7 +550,6 @@ export class CreatePostComponent implements OnInit {
     this.error.set('');
     const f = this.f();
     const s = this.s();
-    const v = this.v();
     const type = this.type();
 
     // The Post button always answers a tap, so an unfinished form explains
@@ -609,10 +574,7 @@ export class CreatePostComponent implements OnInit {
       name: s.name.trim(), age: null, gender: 'unknown' as const, height: '', build: '', skinTone: '', hair: '', eyes: '',
       clothing: s.clothing.trim(), distinguishing: '', medical: '', vehicle: '', languages: '', surname: '', relationship: ''
     } : null);
-    const vehicleDetails = type === 'vehicle' ? {
-      makeModel: v.makeModel.trim(), registration: v.registration.trim(), colour: v.colour.trim(), bodyType: v.bodyType.trim()
-    } : null;
-    const title = f.title.trim() || this.generatedTitle(type!, subject?.name ?? '', vehicleDetails?.makeModel ?? '');
+    const title = f.title.trim() || this.generatedTitle(type!, subject?.name ?? '');
     const khumbu = type === 'khumbulekhaya' ? {
       daysOut: timestamp ? Math.max(0, Math.floor((Date.now() - timestamp) / 86_400_000)) : null,
       leftHomeAt: timestamp,
@@ -620,31 +582,41 @@ export class CreatePostComponent implements OnInit {
       subjectResponse: 'none' as const, subjectNote: '', wantedAnswers: { yes: 0, no: 0, myVote: null }
     } : null;
 
+    let created: Post | null = null;
     this.busy.set(true);
     try {
       if (this.editing() && this.postId) {
         await this.data.updatePost(this.postId, {
           title, body: f.body, media: f.media, province: f.province!, town: f.town.trim(),
           lastSeenAt: timestamp, lastSeenWhere: (f.lastSeenWhere || f.town).trim(), caseNumber: f.caseNumber || null,
-          subject, vehicleDetails, audience: f.audience, spotlightId: f.spotlightId,
+          subject, vehicleDetails: null, audience: f.audience, spotlightId: f.spotlightId,
           chatEnabled: f.chatEnabled, allowComments: f.allowComments, anonymous: f.anonymous,
           askWanted: f.askWanted, contactLabel: f.contactLabel, contactValue: f.contactValue,
           contactVisibleTo: f.contactVisibleTo, khumbu
         });
       } else {
-        await this.data.createPost({
+        const made = await this.data.createPost({
           type: type!, title, body: f.body, media: f.media, province: f.province!, town: f.town.trim(),
           lastSeenAt: timestamp, lastSeenWhere: (f.lastSeenWhere || f.town).trim(), geo: null,
           contactLabel: f.contactLabel || 'Family contact', contactValue: f.contactValue,
           contactVisibleTo: f.contactVisibleTo, caseNumber: f.caseNumber || null, reward: null,
-          subject, vehicleDetails, audience: f.audience, spotlightId: f.spotlightId,
+          subject, vehicleDetails: null, audience: f.audience, spotlightId: f.spotlightId,
           chatEnabled: f.chatEnabled, allowComments: f.allowComments, anonymous: f.anonymous,
           askWanted: f.askWanted, khumbu,
-          danger: type === 'danger' ? { kind: this.dangerKind()!, stillIds: [], clearIds: [], clearedAt: null } : null
+          danger: null
         });
+        created = made;
       }
       this.showFieldErrors.set(false);
-      await this.router.navigate(['/home']);
+      if (this.editing()) {
+        await this.toastMsg('Post updated. It now shows as edited.');
+        await this.router.navigate(['/post', this.postId]);
+      } else if (created && (type === 'missing' || type === 'khumbulekhaya' || type === 'pet')) {
+        await this.router.navigate(['/post', created.id, 'poster'], { queryParams: { new: '1' } });
+      } else {
+        await this.toastMsg('Posted');
+        await this.router.navigate(['/home']);
+      }
     } catch (e: any) {
       this.error.set(e?.message ?? 'Could not share this post');
     } finally {
@@ -660,8 +632,7 @@ export class CreatePostComponent implements OnInit {
     target?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
   }
 
-  private generatedTitle(type: PostType, name: string, vehicle: string): string {
-    if (type === 'vehicle' && vehicle) return `Stolen vehicle: ${vehicle}`;
+  private generatedTitle(type: PostType, name: string): string {
     if (name) return `${this.categoryLabel()}: ${name}`;
     const opening = this.f().body.trim().split(/[.!?\n]/)[0]?.trim() ?? '';
     return `${this.categoryLabel()}: ${opening.slice(0, 64) || 'Community update'}`;
@@ -672,6 +643,13 @@ export class CreatePostComponent implements OnInit {
     const date = new Date(timestamp);
     return new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
   }
+
+  private async toastMsg(message: string): Promise<void> {
+    const t = await this.toaster.create({ message, duration: 2400, position: 'bottom' });
+    await t.present();
+  }
+
+  goStory(): void { void this.router.navigate(['/create-story']); }
 
   close(): void { void this.router.navigate(['/home']); }
 }

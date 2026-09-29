@@ -138,17 +138,30 @@ describe('DataService voting and comments', () => {
     expect(data.myVote(data.post('p_lindiwe')!)).toBeNull();
   });
 
-  it('switching from up to down moves both counters', async () => {
+  it('switching between reactions keeps one count and swaps the icon', async () => {
     const data = svc<DataService>(DataService);
     await svc<AuthService>(AuthService).signInDemo();
     await data.loadFeed();
 
     const p0 = data.post('p_khumalo')!;
     await data.vote('p_khumalo', 'up');
-    await data.vote('p_khumalo', 'down');
+    await data.vote('p_khumalo', 'support');
     const p1 = data.post('p_khumalo')!;
-    expect(p1.upvotes).toBe(p0.upvotes);
-    expect(p1.downvotes).toBe(p0.downvotes + 1);
+    expect(p1.upvotes).toBe(p0.upvotes + 1);
+    expect(data.myVote(p1)).toBe('support');
+    await data.vote('p_khumalo', 'support');
+    expect(data.post('p_khumalo')!.upvotes).toBe(p0.upvotes);
+  });
+
+  it('only Have an idea unlocks private chat; Like, Support and Sad do not', async () => {
+    const data = svc<DataService>(DataService);
+    const chat = svc<ChatService>(ChatService);
+    await svc<AuthService>(AuthService).signInDemo();
+    await data.loadFeed();
+    await data.vote('p_lindiwe', 'sad');
+    expect((await chat.gate(data.post('p_lindiwe')!) as any).step).toBe('vote');
+    await data.vote('p_lindiwe', 'up');
+    expect((await chat.gate(data.post('p_lindiwe')!) as any).step).not.toBe('vote');
   });
 
   it('adds a comment, bumps the counter and notifies the poster', async () => {
@@ -317,15 +330,15 @@ describe('EscalationService - a note is not a dispatch', () => {
   it('does not offer a fake Amber Alert, Pink Drive, or an unverified NGO', () => {
     const esc = svc<EscalationService>(EscalationService);
     const child: Post = { ...db.post('p_thato')! };
-    const vehicle: Post = { ...db.post('p_thato')!, type: 'vehicle' };
+    const pet: Post = { ...db.post('p_thato')!, type: 'pet' };
     const ids = (post: Post) => esc.partnersFor(post).map((p) => p.id);
     expect(ids(child)).not.toContain('amber-sa');
     expect(ids(child)).not.toContain('pink-drive');
     expect(ids(child)).not.toContain('missing-sa');
     expect(ids(child)).toContain('missing-children-sa');
     expect(ids(child)).toContain('pink-ladies');
-    expect(ids(vehicle)).not.toContain('pink-ladies');
-    expect(ids(vehicle)).toContain('saps-10111');
+    expect(ids(pet)).not.toContain('pink-ladies');
+    expect(ids(pet)).toContain('saps-10111');
   });
 
   it('lists checked South African numbers and does not invent a dispatch', () => {
@@ -370,7 +383,7 @@ describe('EscalationService - a note is not a dispatch', () => {
     expect(flyer.shareText).toContain('10111');
     expect(flyer.shareText).toContain('ORL/441/09/2026');
     expect(flyer.withheld).toMatch(/scar/i);
-    expect(publicPoster(db.post('p_found_car')!).shareText).toMatch(/cannot track/i);
+    expect(publicPoster(db.post('p_found_car')!).shareText).toMatch(/not a police poster/i);
   });
 
   it('nudges the poster about the outcome once a case has traction', async () => {
@@ -441,7 +454,7 @@ describe('KhumbulEkhaya flow', () => {
     expect(data.feed().some((p) => p.status === 'found')).toBe(false);
     const home = data.broughtHome();
     expect(home.some((p) => p.id === 'p_found')).toBe(true);
-    expect(home.some((p) => p.type === 'vehicle')).toBe(true);
+    expect(home.some((p) => p.type === 'vehicle')).toBe(false);
     expect(home.some((p) => p.type === 'pet')).toBe(true);
     expect(home.every((p) => p.status === 'found')).toBe(true);
   });
@@ -951,8 +964,8 @@ describe('Where to look first', () => {
     expect(f?.why).toContain('not a South African police score');
   });
 
-  it('does not use the walking distance on a vehicle case', () => {
-    const f = searchFocus({ ...base, type: 'vehicle' } as any);
+  it('does not use the walking distance when the person may have travelled by car', () => {
+    const f = searchFocus({ ...base, subject: { ...(base as any).subject, vehicle: 'White Toyota' } } as any);
     expect(f?.ring).toBe('red');
     expect(f?.why).not.toContain('5 miles');
   });
@@ -1070,86 +1083,35 @@ describe('Mock store consistency', () => {
 describe('Competitor-parity features', () => {
   beforeEach(bed);
 
-  it('reports hijacked vehicles and lost pets as first-class cases', async () => {
+  it('accepts lost pets, and no longer accepts vehicle, danger or story posts', async () => {
     const data = svc<DataService>(DataService);
     await data.refresh();
     const auth = svc<AuthService>(AuthService);
     await auth.signInDemo();
 
-    const before = data.feed().length;
     const base = {
       media: [], lastSeenAt: null, lastSeenWhere: '', geo: null,
       contactLabel: 'Call / WhatsApp', contactValue: '082 000 0000',
       contactVisibleTo: 'everyone' as const, caseNumber: null, reward: null,
       subject: null, spotlightId: null, chatEnabled: true, allowComments: true,
-      anonymous: false, askWanted: false, khumbu: null
+      anonymous: false, askWanted: false, khumbu: null,
+      province: 'GP' as const, town: 'Roodepoort', audience: 'public' as const
     };
-    const vehicle = await data.createPost({
-      ...base, type: 'vehicle', title: 'White Toyota Quantum taken in Roodepoort',
-      body: 'Taken outside the mall at 19:40. Plate BB 45 XX GP, silver sliding doors, dent on the rear bumper.',
-      province: 'GP', town: 'Roodepoort', audience: 'public'
-    });
-    expect(vehicle.type).toBe('vehicle');
-    await data.refresh();
-    expect(data.feed().length).toBe(before + 1);
-
     const pet = await data.createPost({
       ...base, type: 'pet', title: 'Brown Labrador "Bongani" - last seen Brixton',
-      body: 'Slipped his collar at the park. Red collar with a tag, very friendly, answers to Bongani.',
-      province: 'GP', town: 'Brixton', audience: 'public'
+      body: 'Slipped his collar at the park. Red collar with a tag, very friendly, answers to Bongani.'
     });
     expect(pet.type).toBe('pet');
+
+    for (const type of ['vehicle', 'danger', 'story'] as const) {
+      await expect(data.createPost({ ...base, type, title: 'x', body: 'y' })).rejects.toThrow(/no longer available/);
+    }
   });
 
-  it('alerts other people in the same province about a danger hotspot', async () => {
+  it('keeps retired vehicle and danger posts out of every feed', async () => {
     const data = svc<DataService>(DataService);
-    const auth = svc<AuthService>(AuthService);
-    await auth.signInDemo();
     await data.refresh();
-
-    const seeded = data.feed().find((p) => p.id === 'p_danger_bree');
-    expect(seeded?.danger?.kind).toBe('violence');
-    expect(seeded?.province).toBe('GP');
-
-    const alert = await data.createPost({
-      type: 'danger',
-      title: 'Robbery near Sandton City',
-      body: 'Two people grabbed a bag outside the mall entrance. It is still happening. Do not approach. Call 10111.',
-      media: [],
-      province: 'GP',
-      town: 'Sandton',
-      lastSeenAt: Date.now(),
-      lastSeenWhere: 'Sandton City, mall entrance',
-      geo: { lat: -26.1076, lng: 28.0567 },
-      contactLabel: 'Call / WhatsApp',
-      contactValue: '',
-      contactVisibleTo: 'owner',
-      caseNumber: null,
-      reward: null,
-      subject: null,
-      audience: 'public',
-      spotlightId: null,
-      chatEnabled: false,
-      allowComments: true,
-      anonymous: false,
-      askWanted: false,
-      khumbu: null,
-      danger: { kind: 'robbery', stillIds: [], clearIds: [], clearedAt: null }
-    });
-    expect(alert.danger?.kind).toBe('robbery');
-
-    const lerato = db.notifications('u_lerato').find((n) => n.postId === alert.id);
-    const pieter = db.notifications('u_pieter').find((n) => n.postId === alert.id);
-    const self = db.notifications('u_demo').find((n) => n.postId === alert.id);
-    expect(lerato?.kind).toBe('danger');
-    expect(lerato?.title).toContain('Robbery');
-    expect(pieter).toBeUndefined();
-    expect(self).toBeUndefined();
-
-    const still = await data.respondDanger(alert.id, true);
-    expect(still?.danger?.stillIds).toContain('u_demo');
-    const cleared = await data.respondDanger(seeded!.id, false);
-    expect(cleared?.danger?.clearedAt).toBeNull();
+    expect(data.feed().some((p) => p.type === 'vehicle' || p.type === 'danger' || p.type === 'story')).toBe(false);
   });
 
   it('lets only an admin verify a sighting, and records the source', async () => {

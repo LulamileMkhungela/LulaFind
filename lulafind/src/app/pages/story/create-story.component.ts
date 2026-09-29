@@ -9,7 +9,7 @@ import { IconComponent } from '../../shared/components/icon.component';
 import { DataService } from '../../core/services/data.service';
 import { MediaService } from '../../core/services/media.service';
 import { Audience, MediaItem } from '../../core/models/types';
-import { storyBg } from '../../core/data/seed';
+import { STORY_BLACK, storyBg } from '../../core/data/seed';
 
 const AUDIENCES: { key: Audience; icon: string; label: string }[] = [
   { key: 'public', icon: 'globe', label: 'Everyone' },
@@ -42,7 +42,7 @@ const AUDIENCES: { key: Audience; icon: string; label: string }[] = [
             @if (currentMedia()) { <img [src]="currentMedia()!.src" class="shot" alt="Story photo preview" /> }
             <div class="preview-scrim"></div>
             <textarea class="txt" rows="4" maxlength="600" placeholder="Say something to your community…"
-                      [value]="text" (input)="text = $any($event.target).value"></textarea>
+                      [value]="text()" (input)="text.set($any($event.target).value)"></textarea>
             <p class="expires"><lf-icon name="clock" [size]="13" /> Disappears after 24 hours</p>
             @if (!media().length) { <span class="empty-hint">Add up to three photos, a note, or both.</span> }
           </div>
@@ -89,14 +89,14 @@ const AUDIENCES: { key: Audience; icon: string; label: string }[] = [
           }
 
           <div class="background-setting">
-            <div><strong>Background</strong><small>Change the colour behind your text</small></div>
+            <div><strong>Background</strong><small>Black to start. Pick another colour if you like.</small></div>
             <button type="button" class="color-swatch" [style.background]="bg()" (click)="cycleBg()"
                     [attr.aria-label]="'Change story background, currently ' + bg()"><lf-icon name="sparkle" [size]="16" /></button>
           </div>
           <div class="bg-grid" role="radiogroup" aria-label="Story background colour">
             @for (swatch of swatches; track swatch) {
               <button type="button" class="bg-chip" role="radio" [attr.aria-checked]="hue() === swatch"
-                      [attr.aria-label]="'Background colour ' + swatch"
+                      [attr.aria-label]="swatch < 0 ? 'Black background' : 'Background colour ' + swatch"
                       [class.on]="hue() === swatch" [style.background]="storyBg(swatch)"
                       (click)="pickBg(swatch)"></button>
             }
@@ -117,14 +117,14 @@ const AUDIENCES: { key: Audience; icon: string; label: string }[] = [
     </ion-content>
   `,
   styles: [`
-    :host { --fb-blue: #1877f2; --fb-text: #1c1e21; --fb-muted: #65676b; --fb-line: #ced0d4; --fb-bg: #f0f2f5; display: block; }
+    :host { --fb-blue: var(--lf-primary); --fb-text: var(--ion-text-color); --fb-muted: var(--lf-muted); --fb-line: var(--lf-line); --fb-bg: var(--lf-bg); display: block; }
     .story-create { --background: var(--fb-bg); }
     .story-head { background: var(--lf-card); }
     .close { width: 36px; height: 36px; display: grid; place-items: center; border: 0; border-radius: 50%; background: var(--lf-card-2); color: var(--ion-text-color); }
     .publish-top { min-width: 54px; height: 32px; padding: 0 12px; border: 0; border-radius: 6px; color: #fff; background: var(--lf-primary); font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
     .publish-top:disabled, .share-bottom:disabled { opacity: .45; cursor: default; }
     .bg-grid { display: flex; flex-wrap: wrap; gap: 7px; }
-    .bg-chip { width: 34px; height: 34px; border: 2px solid transparent; border-radius: 8px; cursor: pointer; padding: 0; }
+    .bg-chip { width: 34px; height: 34px; border: 2px solid var(--lf-line); border-radius: 8px; cursor: pointer; padding: 0; }
     .bg-chip.on { border-color: var(--lf-primary); box-shadow: 0 0 0 2px color-mix(in srgb, var(--lf-primary) 25%, transparent); }
     .color-swatch:active { transform: scale(.94); }
     .layout { width: min(100%, 930px); box-sizing: border-box; display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(290px, .9fr); gap: 16px; margin: 0 auto; padding: 16px; }
@@ -139,44 +139,44 @@ const AUDIENCES: { key: Audience; icon: string; label: string }[] = [
     .photo-strip { display: flex; align-items: center; gap: 8px; overflow-x: auto; padding: 11px 2px 2px; }
     .photo-thumb { position: relative; width: 54px; height: 54px; flex: 0 0 54px; border: 2px solid transparent; border-radius: 8px; overflow: visible; }
     .photo-thumb.active { border-color: var(--fb-blue); }
-    .photo-thumb > button:first-child { width: 100%; height: 100%; padding: 0; overflow: hidden; border: 0; border-radius: 6px; background: #fff; }
+    .photo-thumb > button:first-child { width: 100%; height: 100%; padding: 0; overflow: hidden; border: 0; border-radius: 6px; background: var(--lf-card); }
     .photo-thumb img { width: 100%; height: 100%; object-fit: cover; }
     .photo-thumb .remove { position: absolute; z-index: 1; top: -6px; right: -6px; width: 20px; height: 20px; display: grid; place-items: center; border: 1px solid #fff; border-radius: 50%; background: rgba(28,30,33,.84); color: #fff; }
-    .add-more { width: 40px; height: 40px; display: grid; place-items: center; border: 1px dashed #8a8d91; border-radius: 8px; background: #fff; color: var(--fb-blue); }
-    .settings { display: flex; flex-direction: column; align-self: start; gap: 12px; min-width: 0; padding: 16px; border: 1px solid #e4e6eb; border-radius: 12px; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.07); }
+    .add-more { width: 40px; height: 40px; display: grid; place-items: center; border: 1px dashed var(--lf-muted); border-radius: 8px; background: var(--lf-card); color: var(--fb-blue); }
+    .settings { display: flex; flex-direction: column; align-self: start; gap: 12px; min-width: 0; padding: 16px; border: 1px solid var(--lf-line); border-radius: 12px; background: var(--lf-card); box-shadow: 0 1px 3px rgba(0,0,0,.07); }
     .section-title { display: flex; flex-direction: column; gap: 3px; padding-bottom: 6px; }
     .section-title strong { color: var(--fb-text); font-size: 15px; }
     .section-title span { color: var(--fb-muted); font-size: 11px; }
     .audience-list { display: flex; flex-direction: column; gap: 3px; }
-    .audience { display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 8px; border: 1px solid transparent; border-radius: 8px; background: #fff; text-align: left; color: var(--fb-text); cursor: pointer; }
-    .audience.selected { background: #e7f3ff; border-color: #c9ddfa; }
+    .audience { display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 8px; border: 1px solid transparent; border-radius: 8px; background: var(--lf-card); text-align: left; color: var(--fb-text); cursor: pointer; }
+    .audience.selected { background: var(--lf-primary-soft); border-color: var(--lf-line); }
     .aud-icon { width: 32px; height: 32px; display: grid; place-items: center; flex: 0 0 32px; border-radius: 50%; background: var(--fb-bg); color: var(--fb-muted); }
-    .audience.selected .aud-icon { color: var(--fb-blue); background: #dceafe; }
+    .audience.selected .aud-icon { color: var(--fb-blue); background: var(--lf-primary-soft); }
     .aud-copy { flex: 1; display: flex; flex-direction: column; gap: 2px; }
     .aud-copy strong { font-size: 12.5px; }
     .aud-copy small { color: var(--fb-muted); font-size: 10.5px; }
-    .radio { width: 17px; height: 17px; display: grid; place-items: center; border: 1.5px solid #8a8d91; border-radius: 50%; }
+    .radio { width: 17px; height: 17px; display: grid; place-items: center; border: 1.5px solid var(--lf-muted); border-radius: 50%; }
     .radio.checked { border-color: var(--fb-blue); }
     .radio i { width: 9px; height: 9px; border-radius: 50%; background: transparent; }
     .radio.checked i { background: var(--fb-blue); }
     .spotlight-picker { display: flex; flex-direction: column; gap: 5px; color: var(--fb-muted); font-size: 11px; font-weight: 600; }
-    .spotlight-picker select { min-height: 38px; padding: 0 10px; border: 1px solid var(--fb-line); border-radius: 7px; background: #fff; color: var(--fb-text); font-size: 12px; }
-    .privacy-note { display: flex; gap: 8px; align-items: flex-start; padding: 9px; border-radius: 8px; background: #fff4e5; color: #784900; font-size: 11px; line-height: 1.4; }
+    .spotlight-picker select { min-height: 38px; padding: 0 10px; border: 1px solid var(--fb-line); border-radius: 7px; background: var(--lf-card); color: var(--fb-text); font-size: 12px; }
+    .privacy-note { display: flex; gap: 8px; align-items: flex-start; padding: 9px; border-radius: 8px; background: color-mix(in srgb, #f4b400 18%, transparent); color: var(--ion-text-color); font-size: 11px; line-height: 1.4; }
     .privacy-note lf-icon { margin-top: 1px; }
     .join-link { display: inline-flex; align-items: center; gap: 3px; align-self: flex-start; border: 0; padding: 0; background: none; color: var(--fb-blue); font-size: 11px; font-weight: 700; }
-    .background-setting { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-top: 1px solid #e4e6eb; border-bottom: 1px solid #e4e6eb; }
+    .background-setting { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-top: 1px solid var(--lf-line); border-bottom: 1px solid var(--lf-line); }
     .background-setting div, .photo-title div { display: flex; flex-direction: column; gap: 2px; }
     .background-setting strong, .photo-title strong { color: var(--fb-text); font-size: 12px; }
     .background-setting small, .photo-title small { color: var(--fb-muted); font-size: 10.5px; }
-    .color-swatch { width: 32px; height: 32px; display: grid; place-items: center; border: 2px solid #e4e6eb; border-radius: 50%; color: #fff; }
+    .color-swatch { width: 32px; height: 32px; display: grid; place-items: center; border: 2px solid var(--lf-line); border-radius: 50%; color: #fff; }
     .photo-setting { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
     .photo-title { display: flex; align-items: center; gap: 8px; }
-    .photo-icon { width: 31px; height: 31px; display: grid; place-items: center; border-radius: 50%; background: #e7f3ff; color: var(--fb-blue); }
-    .add-photo { display: inline-flex; align-items: center; gap: 4px; min-height: 32px; padding: 0 9px; border: 1px solid var(--fb-line); border-radius: 6px; background: #fff; color: var(--fb-blue); font-size: 11px; font-weight: 700; }
+    .photo-icon { width: 31px; height: 31px; display: grid; place-items: center; border-radius: 50%; background: var(--lf-primary-soft); color: var(--fb-blue); }
+    .add-photo { display: inline-flex; align-items: center; gap: 4px; min-height: 32px; padding: 0 9px; border: 1px solid var(--fb-line); border-radius: 6px; background: var(--lf-card); color: var(--fb-blue); font-size: 11px; font-weight: 700; }
     .add-photo:disabled { opacity: .4; }
     .privacy-caption { margin: 0; color: var(--fb-muted); font-size: 10.5px; line-height: 1.35; }
     .share-bottom { display: flex; justify-content: center; align-items: center; gap: 7px; min-height: 39px; border: 0; border-radius: 7px; background: var(--fb-blue); color: #fff; font-size: 12.5px; font-weight: 700; }
-    .error { display: flex; gap: 6px; align-items: flex-start; margin: 0; padding: 9px; border-radius: 7px; background: #ffebe9; color: #b42318; font-size: 11.5px; }
+    .error { display: flex; gap: 6px; align-items: flex-start; margin: 0; padding: 9px; border-radius: 7px; background: color-mix(in srgb, #e0392d 18%, transparent); color: #ff8a80; font-size: 11.5px; }
     @media (max-width: 700px) {
       .layout { grid-template-columns: 1fr; gap: 12px; padding: 10px 12px 20px; }
       .preview { height: min(54vh, 540px); min-height: 320px; border-radius: 10px; }
@@ -189,10 +189,11 @@ export class CreateStoryComponent {
   private mediaSvc = inject(MediaService);
   private router = inject(Router);
 
-  text = '';
+  /** A signal so Share lights up as you type (the app is zoneless). */
+  readonly text = signal('');
   /** A signal, not a plain field: the app is zoneless, so a bare `hue = 47`
    *  never re-rendered and the background looked frozen. */
-  readonly hue = signal(221);
+  readonly hue = signal(STORY_BLACK);
   busy = signal(false);
   error = signal('');
   readonly media = signal<MediaItem[]>([]);
@@ -202,7 +203,7 @@ export class CreateStoryComponent {
 
   protected readonly audiences = AUDIENCES;
   /** Background colours offered under the swatch. */
-  protected readonly swatches = [221, 28, 340, 48, 120, 168, 265, 0];
+  protected readonly swatches = [STORY_BLACK, 221, 28, 340, 48, 120, 168, 265, 0];
   /** Template helper for the swatch grid. */
   protected readonly storyBg = storyBg;
   readonly mySpotlights = computed(() => this.data.mySpotlights());
@@ -217,7 +218,7 @@ export class CreateStoryComponent {
   }
 
   canPublish(): boolean {
-    const hasContent = !!this.text.trim() || this.media().length > 0;
+    const hasContent = !!this.text().trim() || this.media().length > 0;
     return hasContent && (this.audience() !== 'surname' || this.mySpotlights().some((sp) => sp.id === this.spotlightId()));
   }
 
@@ -228,7 +229,10 @@ export class CreateStoryComponent {
     if (audience !== 'surname') this.spotlightId.set(null);
   }
 
-  cycleBg(): void { this.hue.set((this.hue() + 47) % 360); }
+  cycleBg(): void {
+    const i = this.swatches.indexOf(this.hue());
+    this.hue.set(this.swatches[(i + 1) % this.swatches.length]);
+  }
 
   pickBg(hue: number): void { this.hue.set(hue); }
 
@@ -253,7 +257,7 @@ export class CreateStoryComponent {
 
   async publish(): Promise<void> {
     if (this.media().length > 3) { this.error.set('A story can have up to three photos.'); return; }
-    if (!this.text.trim() && !this.media().length) { this.error.set('Add a photo or write a few words first.'); return; }
+    if (!this.text().trim() && !this.media().length) { this.error.set('Add a photo or write a few words first.'); return; }
     if (this.audience() === 'surname' && !this.mySpotlights().some((sp) => sp.id === this.spotlightId())) {
       this.error.set('Choose a Spotlight you have joined. This story has not been shared.');
       return;
@@ -262,7 +266,7 @@ export class CreateStoryComponent {
     this.error.set('');
     try {
       const story = await this.data.createStory({
-        text: this.text,
+        text: this.text(),
         media: this.media(),
         bgHue: this.hue(),
         audience: this.audience(),

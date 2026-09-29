@@ -126,9 +126,6 @@ export class FilterBarComponent {
   }
 
   statusLabel(): string {
-    if (this.filter.type === 'danger') {
-      return { active: 'Still happening', all: 'All alerts', found: 'Found' }[this.filter.status];
-    }
     return { active: 'Still missing', all: 'All cases', found: 'Found' }[this.filter.status];
   }
 

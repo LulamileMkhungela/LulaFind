@@ -22,11 +22,11 @@ const MILE_GUIDE =
  */
 export function searchFocus(post: Post, now = Date.now()): SearchFocus | null {
   if (post.status !== 'active') return null;
-  if (post.type !== 'missing' && post.type !== 'pet' && post.type !== 'vehicle') return null;
+  if (post.type !== 'missing' && post.type !== 'pet') return null;
 
   const place = post.lastSeenWhere?.trim() || post.town?.trim() || 'the last-seen place';
   const hours = post.lastSeenAt ? (now - post.lastSeenAt) / 3_600_000 : 0;
-  const driven = post.type === 'vehicle' || !!post.subject?.vehicle?.trim();
+  const driven = !!post.subject?.vehicle?.trim();
 
   if (driven) {
     return {

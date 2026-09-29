@@ -9,12 +9,12 @@ export const routes: Routes = [
       { path: '', pathMatch: 'full', redirectTo: 'home' },
       { path: 'home', loadComponent: () => import('./pages/tabs/home.component').then((m) => m.HomeComponent) },
       { path: 'spotlight', loadComponent: () => import('./pages/tabs/spotlight.component').then((m) => m.SpotlightComponent) },
+      { path: 'chats', loadComponent: () => import('./pages/tabs/chats.component').then((m) => m.ChatsComponent) },
       { path: 'create', redirectTo: '/new', pathMatch: 'full' },
       { path: 'me', loadComponent: () => import('./pages/tabs/me.component').then((m) => m.MeComponent) }
     ]
   },
-  // Chats and Notifications are reached from the top navigation, not the bottom bar.
-  { path: 'chats', loadComponent: () => import('./pages/tabs/chats.component').then((m) => m.ChatsComponent) },
+  // Notifications is the bell in the top navigation. Chats is a bottom tab (above).
   { path: 'notifications', canActivate: [authGuard], loadComponent: () => import('./pages/notifications/notifications.component').then((m) => m.NotificationsComponent) },
   { path: 'auth', loadComponent: () => import('./pages/auth/auth.component').then((m) => m.AuthComponent) },
   { path: 'auth/confirm', loadComponent: () => import('./pages/auth/auth.component').then((m) => m.AuthComponent) },
@@ -28,6 +28,8 @@ export const routes: Routes = [
     canActivate: [authGuard],
     loadComponent: () => import('./pages/onboarding/onboarding.component').then((m) => m.OnboardingComponent)
   },
+  { path: 'ask-lula', canActivate: [authGuard], loadComponent: () => import('./pages/chat/ask-lula.component').then((m) => m.AskLulaComponent) },
+  { path: 'repost/:id', canActivate: [authGuard], loadComponent: () => import('./pages/post/repost.component').then((m) => m.RepostComponent) },
   { path: 'post/:id/poster', loadComponent: () => import('./pages/post/poster.component').then((m) => m.PosterComponent) },
   { path: 'post/:id', loadComponent: () => import('./pages/post/post-detail.component').then((m) => m.PostDetailComponent) },
   {

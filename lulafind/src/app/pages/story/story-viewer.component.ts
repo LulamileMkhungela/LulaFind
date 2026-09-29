@@ -6,7 +6,7 @@ import { DataService } from '../../core/services/data.service';
 import { AuthService } from '../../core/services/auth.service';
 import { Story } from '../../core/models/types';
 import { countdown, timeAgo } from '../../core/utils/format';
-import { storyBg } from '../../core/data/seed';
+import { STORY_BLACK, storyBg } from '../../core/data/seed';
 
 @Component({
   selector: 'lf-story-viewer',
@@ -40,11 +40,12 @@ import { storyBg } from '../../core/data/seed';
       @if (!story()) {
         <div class="ended"><span class="ended-icon"><lf-icon name="clock" [size]="22" /></span><strong>This story is no longer available</strong><p>Stories disappear 24 hours after they are shared.</p><button type="button" (click)="close()">Back to LulaFind</button></div>
       } @else {
-        <main class="story-canvas" (click)="advance()">
+        <main class="story-canvas" (click)="advance()" (pointerdown)="hold(true)" (pointerup)="hold(false)" (pointercancel)="hold(false)" (pointerleave)="hold(false)" (contextmenu)="$event.preventDefault()">
           @if (currentMedia()) { <img [src]="currentMedia()!.src" class="shot" alt="Story photo" /> }
           @if (story()!.text) { <div class="story-text" [class.over-photo]="!!currentMedia()">{{ story()!.text }}</div> }
           <button class="tap-zone tap-zone--left" type="button" aria-label="Previous photo" (click)="$event.stopPropagation(); previous()"></button>
           <button class="tap-zone tap-zone--right" type="button" aria-label="Next photo" (click)="$event.stopPropagation(); advance()"></button>
+          @if (paused()) { <span class="paused"><lf-icon name="clock" [size]="12" /> Paused</span> }
           @if (segmentCount() > 1) { <span class="image-count">{{ mediaIndex() + 1 }} / {{ segmentCount() }}</span> }
         </main>
 
@@ -83,6 +84,7 @@ import { storyBg } from '../../core/data/seed';
           <footer class="reply-footer">
             @if (me()) {
               <input #replyBox aria-label="Private story reply" placeholder="Reply privately…" [disabled]="sending()"
+                     (focus)="typing.set(true)" (blur)="typing.set(false)" (input)="typing.set(true)"
                      (keydown.enter)="sendReply(replyBox)" />
               <button class="send" type="button" (click)="sendReply(replyBox)" [disabled]="sending() || !replyBox.value.trim()" aria-label="Send private reply">
                 <lf-icon [name]="sending() ? 'clock' : 'send'" [size]="18" />
@@ -118,6 +120,7 @@ import { storyBg } from '../../core/data/seed';
     .tap-zone { position: absolute; z-index: 2; top: 0; bottom: 0; width: 30%; border: 0; background: transparent; }
     .tap-zone--left { left: 0; }
     .tap-zone--right { right: 0; }
+    .paused { position: absolute; z-index: 3; top: 12px; left: 12px; display: inline-flex; align-items: center; gap: 4px; padding: 4px 9px; border-radius: 999px; background: rgba(0,0,0,.5); font-size: 11px; font-weight: 600; pointer-events: none; }
     .image-count { position: absolute; z-index: 3; top: 12px; right: 12px; padding: 4px 8px; border-radius: 999px; background: rgba(0,0,0,.42); font-size: 10px; }
     .owner-insights { position: relative; z-index: 3; flex: 0 0 auto; max-height: 42vh; display: flex; flex-direction: column; border-radius: 13px 13px 0 0; background: rgba(255,255,255,.97); color: #1c1e21; backdrop-filter: blur(16px); box-shadow: 0 -4px 18px rgba(0,0,0,.12); }
     .insights-toggle { display: flex; align-items: center; justify-content: space-between; min-height: 42px; padding: 0 14px; border: 0; border-bottom: 1px solid #e4e6eb; background: transparent; color: #1c1e21; }
@@ -172,16 +175,24 @@ export class StoryViewerComponent implements OnInit, OnDestroy {
   mediaIndex = signal(0);
   sending = signal(false);
   errorMessage = signal('');
-  insightsOpen = signal(true);
+  insightsOpen = signal(false);
+  /** the reply box has focus or text in it */
+  typing = signal(false);
+  /** a finger is held on the story */
+  holding = signal(false);
+  private hidden = signal(typeof document !== 'undefined' && document.hidden);
+  private onVisibility = () => this.hidden.set(document.hidden);
   private timer: ReturnType<typeof setInterval> | null = null;
 
   readonly me = computed(() => this.auth.viewerId);
+  /** Nothing moves on while someone is typing, holding, reading replies or away. */
+  readonly paused = computed(() => this.typing() || this.holding() || this.hidden() || (this.isOwner() && this.insightsOpen()) || this.sending());
   readonly rail = computed(() => this.data.visibleStories());
   readonly story = computed(() => this.rail().find((item) => item.id === this.id()) ?? null);
   readonly isOwner = computed(() => !!this.story() && this.story()!.authorId === this.me());
   readonly authorName = computed(() => this.data.authorOf(this.story()?.authorId ?? '')?.displayName ?? 'Member');
   readonly avatar = computed(() => this.data.avatarFor(this.data.authorOf(this.story()?.authorId ?? '')));
-  readonly bg = computed(() => storyBg(this.story()?.bgHue ?? 220));
+  readonly bg = computed(() => storyBg(this.story()?.bgHue ?? STORY_BLACK));
   readonly currentMedia = computed(() => this.story()?.media[this.mediaIndex()] ?? null);
   readonly segments = computed(() => Array.from({ length: Math.max(1, this.story()?.media.length ?? 0) }));
 
@@ -190,11 +201,23 @@ export class StoryViewerComponent implements OnInit, OnDestroy {
     await this.data.loadUserScoped();
     await this.data.loadStatic();
     if (this.story()) await this.data.markStorySeen(this.id());
+    this.insightsOpen.set(false);
+    document.addEventListener('visibilitychange', this.onVisibility);
     this.start();
   }
 
   ngOnDestroy(): void {
     if (this.timer) clearInterval(this.timer);
+    document.removeEventListener('visibilitychange', this.onVisibility);
+  }
+
+  hold(on: boolean): void { this.holding.set(on); }
+
+  /** Time on screen: longer for words, so a caption can be read. */
+  private duration(): number {
+    const s = this.story();
+    const words = (s?.text ?? '').trim().split(/\s+/).filter(Boolean).length;
+    return Math.min(30_000, Math.max(7_000, 5_000 + words * 400));
   }
 
   segmentCount(): number { return Math.max(1, this.story()?.media.length ?? 0); }
@@ -208,10 +231,12 @@ export class StoryViewerComponent implements OnInit, OnDestroy {
     if (this.timer) clearInterval(this.timer);
     this.pct.set(0);
     let elapsed = 0;
+    const total = this.duration();
     this.timer = setInterval(() => {
-      elapsed += 2;
-      this.pct.set(Math.min(100, elapsed));
-      if (elapsed >= 100) this.advance();
+      if (this.paused()) return;
+      elapsed += 100;
+      this.pct.set(Math.min(100, (elapsed / total) * 100));
+      if (elapsed >= total) this.advance();
     }, 100);
   }
 
@@ -264,6 +289,7 @@ export class StoryViewerComponent implements OnInit, OnDestroy {
     try {
       await this.data.replyToStory(this.id(), text);
       input.value = '';
+      this.typing.set(false);
     } catch (e: any) {
       this.errorMessage.set(e?.message ?? 'Could not send reply');
     } finally {

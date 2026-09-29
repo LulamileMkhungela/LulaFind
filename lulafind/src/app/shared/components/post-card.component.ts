@@ -1,13 +1,15 @@
 import { Component, EventEmitter, Input, OnChanges, OnInit, Output, computed, inject, signal } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
-import { Post, POST_TYPE_META, UserProfile, provinceName } from '../../core/models/types';
-import { compact, timeAgo, urgency } from '../../core/utils/format';
+import { Post, POST_TYPE_META, REACTIONS, ReactionKind, UserProfile, isReaction, provinceName } from '../../core/models/types';
+import { alreadySaid, compact, headingIsNew, timeAgo, urgency } from '../../core/utils/format';
 import { AvatarComponent } from './avatar.component';
 import { IconComponent } from './icon.component';
+import { ReactionButtonComponent } from './reaction-button.component';
+import { ReactionIconComponent } from './reaction-icon.component';
 import { DataService } from '../../core/services/data.service';
 import { AuthService } from '../../core/services/auth.service';
 import { CHECK_IN_COPY } from '../../core/services/safety.service';
-import { SearchFocus, searchFocus } from '../../core/utils/search-focus';
+import { PostActionsService } from '../../core/services/post-actions.service';
 
 export type ChatState = 'off' | 'locked-vote' | 'locked-follow' | 'open';
 
@@ -20,13 +22,14 @@ export type ChatState = 'off' | 'locked-vote' | 'locked-follow' | 'open';
 @Component({
   selector: 'lf-post-card',
   standalone: true,
-  imports: [RouterLink, IconComponent, AvatarComponent],
+  imports: [RouterLink, IconComponent, AvatarComponent, ReactionButtonComponent, ReactionIconComponent],
   template: `
+    @if (!gone()) {
     <article class="fb-card lf-fade-in"
              [class.fb-card--critical]="isCritical()"
              [class.fb-card--found]="post.status === 'found'">
       <header class="fb-card-header" [routerLink]="authorRoute()">
-        <lf-avatar [src]="authorAvatar()" [name]="authorName()" [size]="40"
+        <lf-avatar [src]="authorAvatar()" [name]="authorName()" [size]="48"
                    [status]="authorStatus()" />
         <div class="fb-author-meta">
           <div class="fb-author-row">
@@ -40,42 +43,67 @@ export type ChatState = 'off' | 'locked-vote' | 'locked-follow' | 'open';
             }
           </div>
           <div class="fb-sub-meta">
-            <span>{{ timeAgo(post.updatedAt) }}</span>
+            <span>{{ timeAgo(post.createdAt) }}</span>
+            @if (post.editedAt) {
+              <span class="fb-dot">·</span>
+              <span class="fb-edited" [attr.title]="'Edited ' + timeAgo(post.editedAt)">Edited</span>
+            }
             <span class="fb-dot">·</span>
             <span>{{ provinceName(post.province) }}</span>
             <span class="fb-dot">·</span>
-            <lf-icon name="users" [size]="12" />
+            <lf-icon name="globe" [size]="12" />
           </div>
         </div>
         <button class="fb-more-btn" (click)="onMore($event)" aria-label="More options">
-          <lf-icon name="more" [size]="18" />
+          <lf-icon name="more" [size]="20" />
         </button>
       </header>
 
+      @if (post.repostOf) {
+        <!-- A repost: the reposter's own words, then the original inside a frame. -->
+        @if (post.body.trim()) {
+          <div class="fb-card-body fb-card-body--thoughts" [routerLink]="'/post/' + post.id">
+            <p class="fb-post-text" [class.lf-clamp-4]="!expanded()">{{ post.body }}</p>
+            @if (longBody()) {
+              <button class="fb-readmore" (click)="toggleExpand($event)">{{ expanded() ? 'See less' : '...see more' }}</button>
+            }
+          </div>
+        }
+        @if (original(); as o) {
+          <a class="fb-embed" [routerLink]="'/post/' + o.id">
+            <div class="fb-embed__head">
+              <lf-avatar [src]="originalAvatar()" [name]="originalName()" [size]="32" />
+              <div>
+                <strong>{{ originalName() }}</strong>
+                <span>{{ timeAgo(o.createdAt) }} · {{ provinceName(o.province) }}</span>
+              </div>
+            </div>
+            <h3 class="fb-post-title">{{ o.title }}</h3>
+            <p class="fb-embed__text">{{ o.body }}</p>
+            @if (o.media.length) { <img class="fb-embed__img" [src]="o.media[0].src" [alt]="o.title" loading="lazy" /> }
+          </a>
+        } @else {
+          <div class="fb-embed fb-embed--gone">
+            <lf-icon name="info" [size]="16" />
+            {{ originalMissing() ? 'This post is no longer available.' : 'Loading the original post…' }}
+          </div>
+        }
+      } @else {
       <div class="fb-chips">
-        <span class="fb-chip" [class.fb-chip--danger]="post.type === 'missing' || post.type === 'danger'"
+        <span class="fb-chip" [class.fb-chip--danger]="post.type === 'missing'"
               [class.fb-chip--success]="post.status === 'found'">
           <lf-icon [name]="meta().icon" [size]="12" /> {{ statusLabel() }}
         </span>
-        @if (post.reward) { <span class="fb-chip fb-chip--beacon">Reward offered</span> }
-        @if (post.escalation.consentGranted) {
-          <span class="fb-chip fb-chip--success">Family notified</span>
-        }
       </div>
 
       <div class="fb-card-body" [routerLink]="'/post/' + post.id">
-        <h3 class="fb-post-title">{{ post.title }}</h3>
-        @if (post.type === 'vehicle') {
-          <div class="fb-fact-row">
-            <lf-icon name="car" [size]="14" />
-            <span><strong>Stolen vehicle:</strong> {{ post.subject?.vehicle || post.title }}</span>
-          </div>
-        } @else if (post.type === 'pet') {
+        @if (showHeading()) { <h3 class="fb-post-title">{{ post.title }}</h3> }
+        @if (post.type === 'pet') {
           <div class="fb-fact-row">
             <lf-icon name="paw" [size]="14" />
             <span><strong>Lost pet:</strong> {{ post.subject?.name || 'Pet' }}</span>
           </div>
-        } @else if (post.subject?.name && post.type !== 'story' && post.type !== 'danger') {
+        } @else if (post.subject?.name && !said(post.subject.name)) {
           <div class="fb-fact-row">
             <lf-icon name="user" [size]="14" />
             <strong>{{ post.subject.name }}</strong>
@@ -84,7 +112,7 @@ export type ChatState = 'off' | 'locked-vote' | 'locked-follow' | 'open';
             }
           </div>
         }
-        @if (post.lastSeenWhere) {
+        @if (post.lastSeenWhere && !said(post.lastSeenWhere)) {
           <div class="fb-fact-row">
             <lf-icon name="pin" [size]="14" />
             <span>Last seen: {{ post.lastSeenWhere }}</span>
@@ -93,7 +121,7 @@ export type ChatState = 'off' | 'locked-vote' | 'locked-follow' | 'open';
         <p class="fb-post-text" [class.lf-clamp-4]="!expanded()">{{ post.body }}</p>
         @if (longBody()) {
           <button class="fb-readmore" (click)="toggleExpand($event)">
-            {{ expanded() ? 'See less' : 'See more' }}
+            {{ expanded() ? 'See less' : '...see more' }}
           </button>
         }
       </div>
@@ -116,62 +144,63 @@ export type ChatState = 'off' | 'locked-vote' | 'locked-follow' | 'open';
           }
         </div>
       }
+      }
 
-      <!-- Facebook reaction summary: real counts only, hidden when there are none -->
+      <!-- Reaction summary, like LinkedIn: the top reactions, then the count. Real counts only. -->
       @if (post.upvotes > 0 || post.commentCount > 0 || post.shares > 0) {
         <div class="fb-stats-bar" [routerLink]="'/post/' + post.id">
           <div class="fb-stats-likes">
             @if (post.upvotes > 0) {
-              <span class="fb-like-icon"><lf-icon name="bulb" [size]="11" [weight]="2.6" /></span>
-              <span>{{ compact(post.upvotes) }} {{ post.upvotes === 1 ? 'idea' : 'ideas' }}</span>
+              <span class="fb-stack">
+                @for (k of topKinds(); track k) { <lf-reaction-icon [kind]="k" [size]="18" [ring]="true" /> }
+              </span>
+              <span>{{ compact(post.upvotes) }}</span>
             }
           </div>
           <div class="fb-stats-right">
             @if (post.commentCount > 0) { <span>{{ compact(post.commentCount) }} {{ post.commentCount === 1 ? 'comment' : 'comments' }}</span> }
-            @if (post.shares > 0) { <span>{{ compact(post.shares) }} {{ post.shares === 1 ? 'share' : 'shares' }}</span> }
+            @if (post.shares > 0) { <span>{{ compact(post.shares) }} {{ post.shares === 1 ? 'repost' : 'reposts' }}</span> }
           </div>
         </div>
       }
 
-      <!-- Facebook action bar: Idea / No idea / Comment / Share -->
+      <!-- LinkedIn action bar: react (hold for more), Comment, Repost, Send -->
       <div class="fb-actions-row">
-        <button class="fb-action-btn" [class.active]="myVote() === 'up'" [attr.aria-pressed]="myVote() === 'up'" (click)="onVote('up')">
-          <lf-icon name="bulb" [size]="20" [filled]="myVote() === 'up'" />
-          <span>Idea</span>
-        </button>
-
-        <button class="fb-action-btn" [class.active-down]="myVote() === 'down'" [attr.aria-pressed]="myVote() === 'down'" (click)="onVote('down')">
-          <lf-icon name="bulbOff" [size]="20" />
-          <span>No idea</span>
-        </button>
+        <lf-reaction-button [value]="myVote()" (react)="onReact($event)" />
 
         <button class="fb-action-btn" (click)="comment.emit()">
-          <lf-icon name="comment" [size]="19" />
+          <lf-icon name="comment" [size]="20" />
           <span>Comment</span>
         </button>
 
-        <button class="fb-action-btn" (click)="share.emit()">
-          <lf-icon name="share" [size]="19" />
-          <span>Share</span>
+        <button class="fb-action-btn" (click)="onRepost()">
+          <lf-icon name="repost" [size]="20" />
+          <span>Repost</span>
+        </button>
+
+        <button class="fb-action-btn" (click)="onSend()">
+          <lf-icon name="send" [size]="19" />
+          <span>Send</span>
         </button>
       </div>
 
-      @if (post.chatEnabled && !isMine()) {
+      @if (post.chatEnabled && !isMine() && !post.repostOf) {
         <button class="fb-chat-cta" [class.open]="chatState === 'open'" (click)="chat.emit()">
           <lf-icon [name]="chatState === 'open' ? 'unlock' : 'lock'" [size]="15" />
           {{ chatLabel() }}
         </button>
       }
     </article>
+    }
   `,
   styles: [`
     /* Mobile Facebook: edge-to-edge cards separated by the grey page. */
     .fb-card {
       background: var(--lf-card);
       margin: 0 0 8px;
-      overflow: hidden;
       box-shadow: var(--lf-shadow);
       position: relative;
+      /* visible, so the reaction tray can open above the action bar */
     }
     .fb-card--critical { box-shadow: var(--lf-shadow), inset 0 3px 0 var(--lf-signal); }
     .fb-card--found { box-shadow: var(--lf-shadow), inset 0 3px 0 var(--lf-ubuntu); }
@@ -268,6 +297,22 @@ export type ChatState = 'off' | 'locked-vote' | 'locked-follow' | 'open';
       cursor: pointer;
     }
     .fb-stats-likes { display: flex; align-items: center; gap: 6px; }
+    .fb-stack { display: inline-flex; }
+    .fb-stack lf-reaction-icon + lf-reaction-icon { margin-left: -5px; }
+    .fb-edited { font-style: normal; }
+    .fb-card-body--thoughts { padding-bottom: 8px; }
+    .fb-embed { display: block; margin: 4px 16px 12px; padding: 12px; border: 1px solid var(--lf-line); border-radius: 8px;
+      color: inherit; text-decoration: none; background: transparent; }
+    .fb-embed:hover { background: var(--lf-hover); }
+    .fb-embed__head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+    .fb-embed__head div { display: flex; flex-direction: column; min-width: 0; }
+    .fb-embed__head strong { font-size: 14px; font-weight: 600; }
+    .fb-embed__head span { font-size: 12px; color: var(--lf-muted); }
+    .fb-embed__text { margin: 0; font-size: 14px; line-height: 1.35; color: var(--ion-text-color);
+      display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; white-space: pre-line; }
+    .fb-embed__img { display: block; width: calc(100% + 24px); margin: 10px -12px -12px; max-height: 260px; object-fit: cover; border-radius: 0 0 8px 8px; }
+    .fb-embed--gone { display: flex; align-items: center; gap: 8px; color: var(--lf-muted); font-size: 14px; }
+    .fb-media { border-radius: 0; }
     .fb-like-icon {
       width: 18px; height: 18px; border-radius: 50%;
       background: linear-gradient(180deg, #18afff, #0062df); color: #fff;
@@ -326,16 +371,20 @@ export class PostCardComponent implements OnInit, OnChanges {
   @Input() author: UserProfile | null = null;
   @Input() chatState: ChatState = 'off';
 
-  @Output() vote = new EventEmitter<'up' | 'down'>();
+  @Output() vote = new EventEmitter<ReactionKind>();
   @Output() comment = new EventEmitter<void>();
-  @Output() share = new EventEmitter<void>();
   @Output() chat = new EventEmitter<void>();
-  @Output() more = new EventEmitter<Post>();
   @Output() savedChange = new EventEmitter<void>();
   @Output() follow = new EventEmitter<Post>();
 
   private data = inject(DataService);
   private auth = inject(AuthService);
+  private actions = inject(PostActionsService);
+
+  /** Set once this card's post was deleted, so it disappears at once. */
+  readonly gone = signal(false);
+  readonly original = signal<Post | null>(null);
+  readonly originalMissing = signal(false);
 
   saved = signal(false);
   followingAuthor = signal(false);
@@ -346,13 +395,32 @@ export class PostCardComponent implements OnInit, OnChanges {
   protected readonly timeAgo = timeAgo;
   protected readonly provinceName = provinceName;
 
-  readonly meta = computed(() => POST_TYPE_META[this.post?.type ?? 'story']);
+  readonly meta = computed(() => POST_TYPE_META[this.post?.type ?? 'missing']);
   readonly isCritical = computed(() => urgency(this.post) === 'critical');
   readonly isMine = computed(() => this.post?.authorId === this.auth.viewerId);
   readonly myVote = computed(() => (this.post ? this.data.myVote(this.post) : null));
   readonly authorName = computed(() =>
     this.post?.anonymous && !this.isMine() ? 'Anonymous' : this.author?.displayName ?? 'LulaFind member'
   );
+  readonly originalName = computed(() => {
+    const o = this.original();
+    if (!o) return '';
+    return o.anonymous ? 'Anonymous' : this.data.authorOf(o.authorId)?.displayName ?? 'LulaFind member';
+  });
+  readonly originalAvatar = computed(() => {
+    const o = this.original();
+    return this.data.avatarFor(o && !o.anonymous ? this.data.authorOf(o.authorId) : null);
+  });
+  /** Up to three reaction kinds, most given first, for the little stack next to the count. */
+  readonly topKinds = computed<ReactionKind[]>(() => {
+    const counts = new Map<ReactionKind, number>();
+    for (const v of Object.values(this.post?.voterIds ?? {})) {
+      if (isReaction(v)) counts.set(v, (counts.get(v) ?? 0) + 1);
+    }
+    const order = REACTIONS.map((r) => r.key);
+    const kinds = [...counts.entries()].sort((a, b) => b[1] - a[1] || order.indexOf(a[0]) - order.indexOf(b[0])).map(([k]) => k);
+    return (kinds.length ? kinds : ['up' as ReactionKind]).slice(0, 3);
+  });
   readonly authorAvatar = computed(() => this.data.avatarFor(this.post?.anonymous && !this.isMine() ? null : this.author));
   readonly authorStatus = computed(() =>
     this.post?.anonymous && !this.isMine() ? null : this.data.statusOf(this.author));
@@ -376,11 +444,24 @@ export class PostCardComponent implements OnInit, OnChanges {
 
   async ngOnInit(): Promise<void> {
     this.syncFollow();
+    this.loadOriginal();
     this.saved.set(this.data.savedIds().includes(this.post?.id ?? ''));
   }
 
   ngOnChanges(): void {
     this.syncFollow();
+    this.loadOriginal();
+  }
+
+  private loadOriginal(): void {
+    const id = this.post?.repostOf;
+    if (!id) return;
+    const known = this.data.post(id);
+    if (known) this.original.set(known);
+    void this.data.loadPost(id).then((fresh) => {
+      if (fresh) { this.original.set(fresh); this.originalMissing.set(false); }
+      else if (!known) this.originalMissing.set(true);
+    }).catch(() => { if (!known) this.originalMissing.set(true); });
   }
 
   private syncFollow(): void {
@@ -415,6 +496,10 @@ export class PostCardComponent implements OnInit, OnChanges {
     return POST_TYPE_META[this.post.type].label;
   }
 
+  /** Heading, name and last-seen lines are shown only when the post has not already said them. */
+  showHeading(): boolean { return headingIsNew(this.post.title, this.post.body); }
+  said(value: string | null | undefined): boolean { return alreadySaid(value, this.post.title, this.post.body); }
+
   ageWord(): string {
     const age = this.post.subject?.age ?? 0;
     return age === 1 ? 'year old' : 'years old';
@@ -424,7 +509,7 @@ export class PostCardComponent implements OnInit, OnChanges {
     switch (this.chatState) {
       case 'open': return 'Private chat is open';
       case 'locked-follow': return 'Follow each other to chat';
-      case 'locked-vote': return 'Upvote to unlock chat';
+      case 'locked-vote': return 'Have an idea to unlock chat';
       default: return 'Chat with poster';
     }
   }
@@ -435,9 +520,12 @@ export class PostCardComponent implements OnInit, OnChanges {
     this.expanded.update((v) => !v);
   }
 
-  onVote(v: 'up' | 'down'): void {
-    this.vote.emit(v);
+  onReact(kind: ReactionKind): void {
+    this.vote.emit(kind);
   }
+
+  onRepost(): void { void this.actions.openRepost(this.post); }
+  onSend(): void { void this.actions.send(this.post); }
 
   onSave(): void {
     this.saved.update((s) => !s);
@@ -447,6 +535,6 @@ export class PostCardComponent implements OnInit, OnChanges {
   onMore(e: Event): void {
     e.preventDefault();
     e.stopPropagation();
-    this.more.emit(this.post);
+    void this.actions.openMenu(this.post, () => this.gone.set(true));
   }
 }

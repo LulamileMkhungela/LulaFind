@@ -1,5 +1,5 @@
 import { Component, computed, inject, signal } from '@angular/core';
-import { Router } from '@angular/router';
+import { NavigationEnd, Router } from '@angular/router';
 import { IonTabs } from '@ionic/angular/ion-tabs';
 import { IonLabel } from '@ionic/angular/ion-label';
 import { IonTabBar, IonTabButton } from '@ionic/angular';
@@ -7,13 +7,14 @@ import { IconComponent } from '../../shared/components/icon.component';
 import { AvatarComponent } from '../../shared/components/avatar.component';
 import { DataService } from '../../core/services/data.service';
 import { AuthService } from '../../core/services/auth.service';
+import { ChatService } from '../../core/services/chat.service';
 
 /**
- * Bottom navigation: Home, Spotlight, Create, Search, Menu.
+ * Bottom navigation: Home, Spotlight, Create, Chats, Menu.
  *
- * Create and Search used to sit in the Home header; they are thumb targets, so
- * they live down here now. Chats and Notifications moved up to the top
- * navigation (`lf-top-nav`) where they are one tap away on every screen.
+ * Chats is a real tab, so it shows as selected while you are in it. Search
+ * lives in the top navigation's search bar and Notifications is the bell at
+ * its right end (`lf-top-nav`), like LinkedIn.
  */
 @Component({
   selector: 'lf-tabs',
@@ -37,10 +38,13 @@ import { AuthService } from '../../core/services/auth.service';
           <ion-label>Create</ion-label>
         </button>
 
-        <button class="bar-btn" type="button" (click)="search()" aria-label="Search LulaFind">
-          <lf-icon name="search" [size]="24" [weight]="2.2" />
-          <ion-label>Search</ion-label>
-        </button>
+        <ion-tab-button tab="chats">
+          <div class="wrap">
+            <lf-icon name="messenger" [size]="24" [filled]="active() === 'chats'" [weight]="active() === 'chats' ? 2.4 : 2" />
+            @if (unread() > 0) { <span class="tab-dot">{{ unread() > 99 ? '99+' : unread() }}</span> }
+          </div>
+          <ion-label>Chats</ion-label>
+        </ion-tab-button>
 
         <ion-tab-button tab="me">
           <div class="wrap">
@@ -121,6 +125,11 @@ import { AuthService } from '../../core/services/auth.service';
     .bar-btn.create ion-label { color: var(--lf-muted); font-weight: 600; }
 
     .wrap { position: relative; display: inline-flex; }
+    .tab-dot {
+      position: absolute; top: -5px; right: -9px; min-width: 17px; height: 17px; padding: 0 4px;
+      border-radius: 9px; background: var(--lf-badge); color: #fff; font-size: 10.5px; font-weight: 700;
+      line-height: 17px; text-align: center; box-shadow: 0 0 0 2px var(--lf-tabbar); box-sizing: border-box;
+    }
     .me { display: inline-flex; border-radius: 50%; }
     .me.on { box-shadow: 0 0 0 2px var(--lf-tabbar), 0 0 0 4px var(--lf-primary); }
     .menu-pip {
@@ -143,15 +152,25 @@ export class TabsComponent {
   private router = inject(Router);
   protected auth = inject(AuthService);
   private data = inject(DataService);
+  private chat = inject(ChatService);
 
-  readonly active = signal('home');
+  readonly unread = computed(() => this.chat.unreadTotal());
+  readonly active = signal(TabsComponent.tabOf(typeof location !== 'undefined' ? location.pathname : '/home'));
+
+  constructor() {
+    // Keeps the selected state right after a deep link or a Back press too.
+    this.router.events.subscribe((ev) => {
+      if (ev instanceof NavigationEnd) this.active.set(TabsComponent.tabOf(ev.urlAfterRedirects));
+    });
+  }
+
+  private static tabOf(url: string): string {
+    const first = url.split(/[?#]/)[0].split('/').filter(Boolean)[0] ?? 'home';
+    return ['home', 'spotlight', 'chats', 'me'].includes(first) ? first : 'home';
+  }
 
   create(): void {
     const target = this.auth.signedIn() ? '/new' : '/auth?next=/new';
     void this.router.navigateByUrl(target);
-  }
-
-  search(): void {
-    void this.router.navigateByUrl('/search');
   }
 }

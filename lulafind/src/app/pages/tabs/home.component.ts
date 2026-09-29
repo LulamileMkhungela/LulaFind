@@ -7,13 +7,12 @@ import { IonInfiniteScroll } from '@ionic/angular/ion-infinite-scroll';
 import { IonInfiniteScrollContent } from '@ionic/angular/ion-infinite-scroll-content';
 import { IonSkeletonText } from '@ionic/angular/ion-skeleton-text';
 import { ToastController } from '@ionic/angular/toast-controller';
-import { ActionSheetController } from '@ionic/angular/action-sheet-controller';
-import { AlertController } from '@ionic/angular/alert-controller';
 import { IconComponent } from '../../shared/components/icon.component';
 import { TopNavComponent } from '../../shared/components/top-nav.component';
 import { EmptyComponent } from '../../shared/components/empty.component';
 import { ChatState, PostCardComponent } from '../../shared/components/post-card.component';
 import { StoryRailComponent } from '../../shared/components/story-rail.component';
+import { PeopleRailComponent } from '../../shared/components/people-rail.component';
 import { FilterBarComponent } from '../../shared/components/filter-bar.component';
 import { CHECK_IN_COPY } from '../../core/services/safety.service';
 import { UserProfile } from '../../core/models/types';
@@ -21,8 +20,7 @@ import { DataService } from '../../core/services/data.service';
 import { AuthService } from '../../core/services/auth.service';
 import { ChatService } from '../../core/services/chat.service';
 import { PlatformService } from '../../core/services/platform.service';
-import { ModerationService } from '../../core/services/moderation.service';
-import { POST_TYPE_META, Post } from '../../core/models/types';
+import { POST_TYPE_META, Post, ReactionKind } from '../../core/models/types';
 
 @Component({
   selector: 'lf-home',
@@ -30,7 +28,7 @@ import { POST_TYPE_META, Post } from '../../core/models/types';
   imports: [
     IonContent, IonRefresher, IonRefresherContent,
     IonInfiniteScroll, IonInfiniteScrollContent, IonSkeletonText,
-    TopNavComponent, IconComponent, EmptyComponent, PostCardComponent, StoryRailComponent, FilterBarComponent
+    TopNavComponent, IconComponent, EmptyComponent, PostCardComponent, StoryRailComponent, PeopleRailComponent, FilterBarComponent
   ],
   template: `
     <lf-top-nav />
@@ -39,9 +37,6 @@ import { POST_TYPE_META, Post } from '../../core/models/types';
       <ion-refresher slot="fixed" (ionRefresh)="onRefresh($event)">
         <ion-refresher-content pullingText="Pull to refresh"></ion-refresher-content>
       </ion-refresher>
-
-      <!-- Facebook Stories Rail -->
-      <lf-story-rail (addStory)="onAddStory()" />
 
       <!-- Facebook Feed Filter Chips -->
       <lf-filter-bar
@@ -67,17 +62,22 @@ import { POST_TYPE_META, Post } from '../../core/models/types';
                   actionLabel="Reset filters" (action)="data.resetFilter()" />
       }
 
-      @for (p of displayedFeed(); track p.id; let i = $index) {
-        <lf-post-card
-          [post]="p"
-          [author]="data.authorOf(p.authorId) ?? null"
-          [chatState]="chatStateOf(p)"
-          (vote)="onVote(p, $event)"
-          (comment)="onComment(p)"
-          (share)="onShare(p)"
-          (chat)="onChat(p)"
-          (more)="onMore(p)"
-          (savedChange)="onSave(p)" />
+      <!-- Stories and People appear only between posts: after every 8th post, never at the top. -->
+      @for (item of feedItems(); track item.key) {
+        @if (item.post; as p) {
+          <lf-post-card
+            [post]="p"
+            [author]="data.authorOf(p.authorId) ?? null"
+            [chatState]="chatStateOf(p)"
+            (vote)="onVote(p, $event)"
+            (comment)="onComment(p)"
+            (chat)="onChat(p)"
+            (savedChange)="onSave(p)" />
+        } @else if (item.kind === 'stories') {
+          <lf-story-rail (addStory)="onAddStory()" />
+        } @else {
+          <lf-people-rail />
+        }
       }
 
       @if (isGuestLocked()) {
@@ -150,9 +150,6 @@ export class HomeComponent {
   private platform = inject(PlatformService);
   private router = inject(Router);
   private toast = inject(ToastController);
-  private sheetCtl = inject(ActionSheetController);
-  private alertCtl = inject(AlertController);
-  private mod = inject(ModerationService);
 
   readonly missingPip = computed(() =>
     this.data.feed().filter((p) => p.type === 'missing' && p.status === 'active').length
@@ -166,6 +163,26 @@ export class HomeComponent {
       return feed.slice(0, 4);
     }
     return feed;
+  });
+
+  /**
+   * The feed with a carousel slotted in after every 8th post, alternating
+   * Stories then People. A feed shorter than 8 posts has no gap to put one in,
+   * so Stories goes at the very end - otherwise nobody could ever open one.
+   */
+  readonly feedItems = computed(() => {
+    const posts = this.displayedFeed();
+    const out: { key: string; kind: 'post' | 'stories' | 'people'; post?: Post }[] = [];
+    posts.forEach((p, i) => {
+      out.push({ key: p.id, kind: 'post', post: p });
+      const n = i + 1;
+      if (n % 8 === 0) {
+        const slot = n / 8;
+        out.push({ key: `slot-${slot}`, kind: slot % 2 === 1 ? 'stories' : 'people' });
+      }
+    });
+    if (posts.length > 0 && posts.length < 8 && this.auth.signedIn()) out.push({ key: 'slot-end', kind: 'stories' });
+    return out;
   });
 
   private chatGates = signal<Record<string, ChatState>>({});
@@ -227,7 +244,7 @@ export class HomeComponent {
     return false;
   }
 
-  async onVote(p: Post, v: 'up' | 'down'): Promise<void> {
+  async onVote(p: Post, v: ReactionKind): Promise<void> {
     if (!(await this.needAuth())) return;
     try {
       await this.data.vote(p.id, v);
@@ -243,13 +260,6 @@ export class HomeComponent {
     await this.router.navigate(['/post', p.id], { fragment: 'comments' });
   }
 
-  async onShare(p: Post): Promise<void> {
-    const text = `${p.title}\n\n${p.body.slice(0, 220)}\n\nShared from LulaFind`;
-    const mode = await this.platform.share(p.title, text, this.platform.link(`/post/${p.id}`));
-    await this.data.recordShare(p.id);
-    await this.show(mode === 'native' ? 'Shared' : 'Copied to clipboard');
-  }
-
   async onSave(p: Post): Promise<void> {
     if (!(await this.needAuth())) return;
     const saved = await this.data.toggleSaved(p.id);
@@ -258,58 +268,19 @@ export class HomeComponent {
 
   async onChat(p: Post): Promise<void> {
     if (!(await this.needAuth())) return;
-    const thread = await this.chat.ensureThread(p, p.authorId, 'vote');
-    if (thread) await this.router.navigate(['/chat', thread.id]);
-  }
-
-  async onMore(p: Post): Promise<void> {
-    const mine = this.data.canEdit(p);
-    const saved = this.data.savedIds().includes(p.id);
-    const sheet = await this.sheetCtl.create({
-      header: p.title.slice(0, 40),
-      buttons: [
-        { text: saved ? 'Unsave post' : 'Save post', icon: 'bookmark' as const, handler: () => void this.onSave(p) },
-        ...(mine
-          ? [
-            { text: 'Edit post', icon: 'pencil' as const, handler: () => void this.router.navigate(['/post', p.id, 'edit']) },
-            { text: 'Mark as found', icon: 'checkmark-circle' as const, handler: () => void this.router.navigate(['/post', p.id], { fragment: 'found' }) },
-            { text: 'Delete post', role: 'destructive' as const, icon: 'trash' as const, handler: async () => { await this.data.deletePost(p.id); } }
-          ]
-          : [
-            { text: 'Report', role: 'destructive' as const, icon: 'flag' as const, handler: () => this.report(p) }
-          ]),
-        { text: 'Cancel', role: 'cancel' }
-      ]
-    });
-    await sheet.present();
-  }
-
-  async report(p: Post): Promise<void> {
-    if (!this.auth.signedIn()) {
-      await this.show('Sign in to report a post');
-      await this.router.navigate(['/auth'], { queryParams: { next: '/home' } });
+    const g = await this.chat.gate(p, p.khumbu?.claimedByUserId === this.auth.viewerId);
+    if (g.allowed) {
+      const thread = await this.chat.ensureThread(p, p.authorId, 'vote');
+      if (thread) await this.router.navigate(['/chat', thread.id]);
       return;
     }
-    const reasons = this.mod.reasons;
-    const pick = await this.alertCtl.create({
-      header: 'Report this post',
-      inputs: reasons.map((r) => ({ name: 'reason', type: 'radio' as const, label: r.label, value: r.id })),
-      buttons: [
-        { text: 'Cancel', role: 'cancel' },
-        {
-          text: 'Send report',
-          handler: async (v: any) => {
-            try {
-              await this.mod.report({ target: 'post', targetId: p.id, summary: p.title, reason: v?.reason ?? 'other' });
-              await this.show('Report sent.');
-            } catch (e: any) {
-              await this.show(e?.message ?? 'Could not send report');
-            }
-          }
-        }
-      ]
-    });
-    await pick.present();
+    if (g.step === 'vote') {
+      // Only "Have an idea" opens chat, so the lock button gives that reaction.
+      await this.onVote(p, 'up');
+      await this.show('You have an idea on this post. Follow each other to open chat.');
+      return;
+    }
+    await this.router.navigate(['/post', p.id]);
   }
 
   async onAddStory(): Promise<void> {

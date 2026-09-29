@@ -61,7 +61,27 @@ export interface DangerAlert {
   clearedAt: number | null;
 }
 export type Audience = 'public' | 'followers' | 'surname';
-export type VoteValue = 'up' | 'down' | null;
+/**
+ * A reaction to a post, as on LinkedIn. `up` is "Have an idea" - the default
+ * when you tap the button - and keeps its old stored name so every post that
+ * already has ideas on it, and the server's vote rules, still make sense.
+ */
+export type ReactionKind = 'up' | 'like' | 'support' | 'sad';
+export type VoteValue = ReactionKind | null;
+
+export const REACTIONS: { key: ReactionKind; label: string; color: string }[] = [
+  { key: 'like', label: 'Like', color: '#378fe9' },
+  { key: 'support', label: 'Support', color: '#a06be3' },
+  { key: 'sad', label: 'Sad', color: '#e8a323' },
+  { key: 'up', label: 'Have an idea', color: '#f2b01e' }
+];
+
+/** Anything except the retired `down` is a reaction that counts. */
+export const isReaction = (v: VoteValue | string | undefined): v is ReactionKind =>
+  v === 'up' || v === 'like' || v === 'support' || v === 'sad';
+
+/** Post types that can no longer be created or shown. Old records may still carry them. */
+export const RETIRED_POST_TYPES: PostType[] = ['vehicle', 'danger', 'story'];
 export type PostStatus = 'active' | 'found' | 'closed' | 'not_going_home' | 'under_review' | 'removed';
 export type VerificationStatus = 'none' | 'pending' | 'verified' | 'rejected';
 
@@ -230,6 +250,10 @@ export interface Comment {
   markGuess?: string;
   /** Family check. Public sees the result, not the words. */
   markCheck?: 'match' | 'no';
+  /** People who liked this comment. `upvotes` is kept equal to its length. */
+  likedBy?: string[];
+  /** Set when the author changes the text after posting. */
+  editedAt?: number | null;
 }
 
 export interface Sighting {
@@ -307,6 +331,10 @@ export interface Post {
   reward: string | null;
   createdAt: number;
   updatedAt: number;
+  /** Set only when the author changes the post after publishing, so readers can see it was edited. */
+  editedAt?: number | null;
+  /** Set on a repost: the id of the original post. `body` is then the reposter's own thoughts (may be empty). */
+  repostOf?: string | null;
 
   /* ---- the subject (missing person / person who left home) ---- */
   subject: {
@@ -338,7 +366,6 @@ export interface Post {
 
   /* ---- engagement ---- */
   upvotes: number;
-  downvotes: number;
   commentCount: number;
   shares: number;
   views: number;
@@ -564,13 +591,10 @@ export const emptyFilter = (): FeedFilter => ({
 /** Post types exposed as feed chips. */
 export const FEED_TABS: { key: FeedFilter['type']; label: string; icon: string }[] = [
   { key: 'all', label: 'All', icon: 'grid' },
-  { key: 'danger', label: 'Danger', icon: 'alert' },
   { key: 'missing', label: 'Missing people', icon: 'search' },
   { key: 'khumbulekhaya', label: 'Left home', icon: 'home' },
   { key: 'sighting', label: 'Sightings', icon: 'pin' },
-  { key: 'vehicle', label: 'Vehicles', icon: 'car' },
-  { key: 'pet', label: 'Lost pets', icon: 'paw' },
-  { key: 'story', label: 'Stories', icon: 'book' }
+  { key: 'pet', label: 'Lost pets', icon: 'paw' }
 ];
 
 export const POST_TYPE_META: Record<PostType, { label: string; tone: string; icon: string; verb: string }> = {

@@ -9,6 +9,7 @@ import { IonSearchbar } from '@ionic/angular/ion-searchbar';
 import { IonSkeletonText } from '@ionic/angular/ion-skeleton-text';
 import { ToastController } from '@ionic/angular/toast-controller';
 import { AlertController } from '@ionic/angular/alert-controller';
+import { ReactionKind } from '../../core/models/types';
 import { IconComponent } from '../../shared/components/icon.component';
 import { TopNavComponent } from '../../shared/components/top-nav.component';
 import { AvatarComponent } from '../../shared/components/avatar.component';
@@ -86,7 +87,7 @@ import { cover } from '../../core/data/seed';
         }
         @for (p of posts(); track p.id) {
           <lf-post-card [post]="p" [author]="data.authorOf(p.authorId) ?? null" chatState="off"
-                        (vote)="vote(p, $event)" (comment)="open(p)" (share)="sharePost(p)" (more)="open(p)" />
+                        (vote)="vote(p, $event)" (comment)="open(p)" />
         }
       }
     </ion-content>
@@ -284,7 +285,7 @@ export class SpotlightDetailComponent implements OnInit {
     await this.platform.share(`${sp.surname} Spotlight`, `${sp.tagline} - join the ${sp.surname} community on LulaFind`, this.platform.link(`/spotlight/${sp.id}`));
   }
 
-  vote(p: Post, v: 'up' | 'down'): void {
+  vote(p: Post, v: ReactionKind): void {
     void this.data.vote(p.id, v).then(() => this.reloadPosts()).catch(async (e) => {
       await this.toast.create({ message: e?.message ?? 'Could not vote', duration: 2200, position: 'bottom' }).then((t) => t.present());
     });

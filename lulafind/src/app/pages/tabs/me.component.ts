@@ -11,6 +11,7 @@ import { IonLabel } from '@ionic/angular/ion-label';
 import { IonToggle } from '@ionic/angular/ion-toggle';
 import { ToastController } from '@ionic/angular/toast-controller';
 import { AlertController } from '@ionic/angular/alert-controller';
+import { ReactionKind } from '../../core/models/types';
 import { IconComponent } from '../../shared/components/icon.component';
 import { TopNavComponent } from '../../shared/components/top-nav.component';
 import { AvatarComponent } from '../../shared/components/avatar.component';
@@ -129,12 +130,8 @@ import { MediaService } from '../../core/services/media.service';
             <div class="quick">
               <a class="q" routerLink="/connections"><span class="qi qi-blue"><lf-icon name="users" [size]="20" /></span><span>Friends</span>
                 @if (data.followRequests().length) { <em class="lf-badge">{{ data.followRequests().length }}</em> }</a>
-              <a class="q" routerLink="/notifications"><span class="qi qi-blue"><lf-icon name="bell" [size]="20" /></span><span>Alerts</span>
-                @if (data.unreadNotifications() > 0) { <em class="lf-badge">{{ data.unreadNotifications() }}</em> }</a>
               <a class="q" routerLink="/safety"><span class="qi qi-green"><lf-icon name="shield" [size]="20" /></span><span>Safety</span></a>
               <a class="q" routerLink="/tips"><span class="qi qi-yellow"><lf-icon name="info" [size]="20" /></span><span>Tips</span></a>
-              <a class="q" routerLink="/spotlight"><span class="qi qi-teal"><lf-icon name="users" [size]="20" /></span><span>Spotlight</span></a>
-              <a class="q" routerLink="/settings"><span class="qi qi-grey"><lf-icon name="lock" [size]="20" /></span><span>Privacy</span></a>
               @if (isAdmin()) {
                 <a class="q" routerLink="/admin"><span class="qi qi-red"><lf-icon name="shield" [size]="20" /></span><span>Admin</span>
                   @if (mod.openCount() > 0) { <em class="lf-badge">{{ mod.openCount() }}</em> }</a>
@@ -170,7 +167,7 @@ import { MediaService } from '../../core/services/media.service';
             @if (visible().length) {
               @for (p of visible(); track p.id) {
                 <lf-post-card [post]="p" [author]="data.authorOf(p.authorId) ?? null" chatState="off"
-                              (vote)="vote(p, $event)" (comment)="open(p)" (share)="share(p)" (more)="more(p)" />
+                              (vote)="vote(p, $event)" (comment)="open(p)" />
               }
             } @else {
               <lf-empty [icon]="menuTab() === 'saved' ? 'bookmark' : 'book'" [title]="emptyTitle()"
@@ -597,7 +594,7 @@ export class MeComponent {
     await this.platform.share(`${u.displayName} on LulaFind`, `Follow ${u.displayName} on LulaFind`, this.platform.link(`/user/${u.id}`));
   }
 
-  vote(p: Post, v: 'up' | 'down'): void {
+  vote(p: Post, v: ReactionKind): void {
     void this.data.vote(p.id, v);
   }
 

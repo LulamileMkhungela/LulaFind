@@ -104,7 +104,7 @@ describe('Components render', () => {
     const html: string = (f.nativeElement as HTMLElement).innerHTML;
     expect(html).toContain('Follow');
     expect(html).toContain('Idea');
-    expect(html).toContain('No idea');
+    expect(html).not.toContain('No idea');
     expect(html).toContain('Comment');
   });
 

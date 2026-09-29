@@ -8,6 +8,7 @@ import { IonContent } from '@ionic/angular/ion-content';
 import { IonSkeletonText } from '@ionic/angular/ion-skeleton-text';
 import { ToastController } from '@ionic/angular/toast-controller';
 import { AlertController } from '@ionic/angular/alert-controller';
+import { ReactionKind } from '../../core/models/types';
 import { IconComponent } from '../../shared/components/icon.component';
 import { TopNavComponent } from '../../shared/components/top-nav.component';
 import { AvatarComponent } from '../../shared/components/avatar.component';
@@ -141,7 +142,7 @@ import { cover } from '../../core/data/seed';
         }
         @for (p of posts(); track p.id) {
           <lf-post-card [post]="p" [author]="u()!" chatState="off"
-                        (vote)="vote(p, $event)" (comment)="open(p)" (share)="sharePost(p)" (more)="open(p)" />
+                        (vote)="vote(p, $event)" (comment)="open(p)" />
         }
       }
     </ion-content>
@@ -436,7 +437,7 @@ export class ProfileComponent implements OnInit {
     await this.platform.share(`${u.displayName} on LulaFind`, `${u.displayName} - LulaFind`, this.platform.link(`/user/${u.id}`));
   }
 
-  vote(p: Post, v: 'up' | 'down'): void {
+  vote(p: Post, v: ReactionKind): void {
     void this.data.vote(p.id, v);
   }
 
