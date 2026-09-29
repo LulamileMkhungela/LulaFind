@@ -12,8 +12,10 @@ import { AlertController } from '@ionic/angular/alert-controller';
 import { IconComponent } from '../../shared/components/icon.component';
 import { TopNavComponent } from '../../shared/components/top-nav.component';
 import { EmptyComponent } from '../../shared/components/empty.component';
+import { AvatarComponent } from '../../shared/components/avatar.component';
 import { ChatState, PostCardComponent } from '../../shared/components/post-card.component';
-import { StoryRailComponent } from '../../shared/components/story-rail.component';
+import { PeopleSuggestComponent } from '../../shared/components/people-suggest.component';
+import { FeedStoriesComponent } from '../../shared/components/feed-stories.component';
 import { FilterBarComponent } from '../../shared/components/filter-bar.component';
 import { CHECK_IN_COPY } from '../../core/services/safety.service';
 import { UserProfile } from '../../core/models/types';
@@ -23,6 +25,8 @@ import { ChatService } from '../../core/services/chat.service';
 import { PlatformService } from '../../core/services/platform.service';
 import { ModerationService } from '../../core/services/moderation.service';
 import { POST_TYPE_META, Post } from '../../core/models/types';
+import { timeAgo } from '../../core/utils/format';
+import { storyBg } from '../../core/data/seed';
 
 @Component({
   selector: 'lf-home',
@@ -30,7 +34,8 @@ import { POST_TYPE_META, Post } from '../../core/models/types';
   imports: [
     IonContent, IonRefresher, IonRefresherContent,
     IonInfiniteScroll, IonInfiniteScrollContent, IonSkeletonText,
-    TopNavComponent, IconComponent, EmptyComponent, PostCardComponent, StoryRailComponent, FilterBarComponent
+    TopNavComponent, IconComponent, EmptyComponent, AvatarComponent,
+    PostCardComponent, PeopleSuggestComponent, FeedStoriesComponent, FilterBarComponent
   ],
   template: `
     <lf-top-nav />
@@ -40,15 +45,18 @@ import { POST_TYPE_META, Post } from '../../core/models/types';
         <ion-refresher-content pullingText="Pull to refresh"></ion-refresher-content>
       </ion-refresher>
 
-      <!-- Facebook Stories Rail -->
-      <lf-story-rail (addStory)="onAddStory()" />
-
       <!-- Facebook Feed Filter Chips -->
       <lf-filter-bar
         [filter]="data.filter()"
         [missingCount]="missingPip()"
         (filterChange)="data.setFilter($event)"
         (reset)="data.resetFilter()" />
+
+      <!-- First section as you scroll: People you may know (Facebook style) -->
+      <lf-people-suggest
+        [people]="suggestions()"
+        (seeAll)="goPeople()"
+        (removed)="dismissSuggestion($event)" />
 
       @if (data.loading() && !data.feed().length) {
         @for (i of [1, 2, 3]; track i) {
@@ -67,6 +75,7 @@ import { POST_TYPE_META, Post } from '../../core/models/types';
                   actionLabel="Reset filters" (action)="data.resetFilter()" />
       }
 
+      <!-- Posts with a Stories block every few scrolls -->
       @for (p of displayedFeed(); track p.id; let i = $index) {
         <lf-post-card
           [post]="p"
@@ -78,6 +87,9 @@ import { POST_TYPE_META, Post } from '../../core/models/types';
           (chat)="onChat(p)"
           (more)="onMore(p)"
           (savedChange)="onSave(p)" />
+        @if (showStoriesAfter(i)) {
+          <lf-feed-stories (addStory)="onAddStory()" (seeAll)="storiesSheet.set(true)" />
+        }
       }
 
       @if (isGuestLocked()) {
@@ -108,6 +120,45 @@ import { POST_TYPE_META, Post } from '../../core/models/types';
         </ion-infinite-scroll>
       }
     </ion-content>
+
+    <!-- All stories sheet (from “See all”) -->
+    @if (storiesSheet()) {
+      <div class="sheetwrap" (click)="storiesSheet.set(false)">
+        <div class="sheet" role="dialog" aria-label="All stories" (click)="$event.stopPropagation()">
+          <div class="sheet__head">
+            <h3>Stories</h3>
+            <button class="x" type="button" (click)="storiesSheet.set(false)" aria-label="Close">
+              <lf-icon name="x" [size]="20" />
+            </button>
+          </div>
+          <button class="lf-btn lf-btn--primary lf-btn--block" type="button" (click)="onAddStory()">
+            <lf-icon name="plus" [size]="16" /> Create story
+          </button>
+          @if (!allStories().length) {
+            <p class="sheet__empty">No stories yet. Be the first — stories disappear after 24 hours.</p>
+          } @else {
+            <div class="story-grid">
+              @for (s of allStories(); track s.id) {
+                <button class="story-cell" type="button" (click)="goStory(s.id)" [style.background]="storyBg(s.bgHue)">
+                  @if (s.media[0]?.src) {
+                    <img [src]="s.media[0].src" alt="" loading="lazy" />
+                  } @else if (s.text) {
+                    <span class="story-cell__txt">{{ s.text }}</span>
+                  }
+                  <span class="story-cell__who">
+                    <lf-avatar [src]="data.avatarFor(data.authorOf(s.authorId))" [name]="data.authorOf(s.authorId)?.displayName ?? 'Member'" [size]="26" />
+                    <span class="story-cell__meta">
+                      <strong>{{ data.authorOf(s.authorId)?.displayName ?? 'Member' }}</strong>
+                      <small>{{ timeAgo(s.createdAt) }}</small>
+                    </span>
+                  </span>
+                </button>
+              }
+            </div>
+          }
+        </div>
+      </div>
+    }
   `,
   styles: [`
     .skel {
@@ -141,6 +192,62 @@ import { POST_TYPE_META, Post } from '../../core/models/types';
       .composer, .skel, .guest-scroll-lock { max-width: var(--lf-maxw); margin-left: auto; margin-right: auto; border-radius: var(--lf-radius); }
       .composer { margin-top: 12px; }
     }
+
+    .sheetwrap {
+      position: fixed; inset: 0; z-index: 120;
+      background: var(--lf-scrim);
+      display: flex; align-items: flex-end; justify-content: center;
+    }
+    .sheet {
+      width: 100%; max-width: 520px;
+      max-height: 86vh;
+      overflow-y: auto;
+      background: var(--lf-card);
+      border-radius: 18px 18px 0 0;
+      padding: 14px 16px calc(24px + var(--lf-safe-bottom));
+      display: flex; flex-direction: column; gap: 10px;
+    }
+    .sheet__head { display: flex; align-items: center; justify-content: space-between; }
+    .sheet__head h3 { margin: 0; font-size: 18px; font-weight: 700; }
+    .x {
+      width: 36px; height: 36px;
+      border: 0; border-radius: 50%;
+      background: var(--lf-card-2);
+      color: var(--ion-text-color);
+      cursor: pointer;
+      display: grid; place-items: center;
+    }
+    .sheet__empty { color: var(--lf-muted); font-size: 14px; text-align: center; padding: 16px 0; }
+    .story-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .story-cell {
+      position: relative;
+      aspect-ratio: 3 / 4;
+      border: 0;
+      border-radius: 12px;
+      overflow: hidden;
+      cursor: pointer;
+      padding: 0;
+      color: #fff;
+      text-align: left;
+      font-family: inherit;
+    }
+    .story-cell img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+    .story-cell__txt {
+      position: absolute; inset: 0;
+      display: flex; align-items: center; justify-content: center;
+      padding: 12px;
+      font-size: 14px; font-weight: 700; line-height: 1.35;
+      text-align: center;
+    }
+    .story-cell__who {
+      position: absolute; left: 0; right: 0; bottom: 0;
+      display: flex; align-items: center; gap: 7px;
+      padding: 18px 8px 8px;
+      background: linear-gradient(transparent, rgba(0,0,0,.6));
+    }
+    .story-cell__meta { display: flex; flex-direction: column; min-width: 0; }
+    .story-cell__meta strong { font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .story-cell__meta small { font-size: 11px; opacity: .85; }
   `]
 })
 export class HomeComponent {
@@ -153,6 +260,9 @@ export class HomeComponent {
   private sheetCtl = inject(ActionSheetController);
   private alertCtl = inject(AlertController);
   private mod = inject(ModerationService);
+
+  protected readonly timeAgo = timeAgo;
+  protected readonly storyBg = storyBg;
 
   readonly missingPip = computed(() =>
     this.data.feed().filter((p) => p.type === 'missing' && p.status === 'active').length
@@ -168,15 +278,54 @@ export class HomeComponent {
     return feed;
   });
 
+  /** “People you may know” — the first section of the feed. */
+  readonly suggestions = signal<UserProfile[]>([]);
+  /** All-stories sheet from “See all”. */
+  readonly storiesSheet = signal(false);
+  readonly allStories = computed(() => this.data.visibleStories());
+
   private chatGates = signal<Record<string, ChatState>>({});
 
   constructor() {
     void this.chat.load();
+    void this.loadSuggestions();
     effect(() => {
       const n = this.data.feed().length;
       if (n >= 0) void this.recomputeGates();
     });
+    // Following someone refreshes the suggestions so the rail never goes stale.
+    effect(() => {
+      const n = this.data.followingIds().length + this.data.followRequests().length;
+      if (n >= 0) void this.loadSuggestions();
+    });
     this.data.startAutoSync();
+  }
+
+  /** Stories sit inside the feed: after the 2nd post, then every 5 posts. */
+  showStoriesAfter(index: number): boolean {
+    if (this.displayedFeed().length <= 1) return index === 0;
+    return index === 1 || (index + 1) % 5 === 0;
+  }
+
+  async loadSuggestions(): Promise<void> {
+    try {
+      this.suggestions.set(await this.data.suggestedPeople(10));
+    } catch {
+      this.suggestions.set([]);
+    }
+  }
+
+  dismissSuggestion(id: string): void {
+    this.suggestions.update((all) => all.filter((u) => u.id !== id));
+  }
+
+  goPeople(): void {
+    void this.router.navigate(['/search']);
+  }
+
+  goStory(id: string): void {
+    this.storiesSheet.set(false);
+    void this.router.navigate(['/story', id]);
   }
 
   goSignUp(): void {
@@ -207,6 +356,7 @@ export class HomeComponent {
   async onRefresh(e: any): Promise<void> {
     await this.data.refresh();
     await this.chat.load();
+    await this.loadSuggestions();
     await this.recomputeGates();
     e.target.complete();
   }
@@ -314,6 +464,7 @@ export class HomeComponent {
 
   async onAddStory(): Promise<void> {
     if (!(await this.needAuth())) return;
+    this.storiesSheet.set(false);
     await this.router.navigate(['/create-story']);
   }
 

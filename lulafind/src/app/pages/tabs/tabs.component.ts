@@ -3,6 +3,7 @@ import { Router } from '@angular/router';
 import { IonTabs } from '@ionic/angular/ion-tabs';
 import { IonLabel } from '@ionic/angular/ion-label';
 import { IonTabBar, IonTabButton } from '@ionic/angular';
+import { ActionSheetController } from '@ionic/angular/action-sheet-controller';
 import { IconComponent } from '../../shared/components/icon.component';
 import { AvatarComponent } from '../../shared/components/avatar.component';
 import { DataService } from '../../core/services/data.service';
@@ -143,12 +144,37 @@ export class TabsComponent {
   private router = inject(Router);
   protected auth = inject(AuthService);
   private data = inject(DataService);
+  private sheetCtl = inject(ActionSheetController);
 
   readonly active = signal('home');
 
-  create(): void {
-    const target = this.auth.signedIn() ? '/new' : '/auth?next=/new';
-    void this.router.navigateByUrl(target);
+  /**
+   * The + button offers both: a feed post and a 24-hour story.
+   * Guests are sent to sign in first, then straight to the form they picked.
+   */
+  async create(): Promise<void> {
+    const signedIn = this.auth.signedIn();
+    const go = (target: string): void => {
+      if (signedIn) void this.router.navigateByUrl(target);
+      else void this.router.navigate(['/auth'], { queryParams: { next: target } });
+    };
+    const sheet = await this.sheetCtl.create({
+      header: 'Create',
+      buttons: [
+        {
+          text: 'Create post',
+          icon: 'document-text' as const,
+          handler: () => go('/new')
+        },
+        {
+          text: 'Create story',
+          icon: 'camera' as const,
+          handler: () => go('/create-story')
+        },
+        { text: 'Cancel', role: 'cancel' }
+      ]
+    });
+    await sheet.present();
   }
 
   search(): void {

@@ -1502,6 +1502,38 @@ export class DataService {
   }
 
   /**
+   * “People you may know” for the newsfeed.
+   *
+   * Everyone except you, anyone you already follow (or asked to follow), and
+   * suspended accounts. Same province first, then same surname community,
+   * then everyone else — newest accounts last so the rail feels alive.
+   */
+  async suggestedPeople(limit = 10): Promise<UserProfile[]> {
+    const me = this.auth.user();
+    const all = await this.api.users().catch(() => [] as UserProfile[]);
+    const following = new Set(this.followingIds());
+    const requested = new Set(this.followRequests().map((r) => r.followerId));
+    const scored = all
+      .filter((u) => {
+        if (!me && !u) return false;
+        if (me && u.id === me.id) return false;
+        if (u.suspended) return false;
+        if (following.has(u.id) || requested.has(u.id)) return false;
+        return true;
+      })
+      .map((u) => {
+        let score = 0;
+        if (me?.province && u.province === me.province) score += 30;
+        if (me?.surname && u.surname.toLowerCase() === me.surname.toLowerCase()) score += 20;
+        if (me?.town && u.town.toLowerCase() === me.town.toLowerCase()) score += 10;
+        if ((u.contributorCredits ?? 0) > 0) score += 5;
+        return { u, score };
+      })
+      .sort((a, b) => b.score - a.score || b.u.createdAt - a.u.createdAt);
+    return scored.slice(0, limit).map((s) => s.u);
+  }
+
+  /**
    * The check-in status a viewer is allowed to see on an avatar ring.
    * The person always sees their own; everyone else only when the person has
    * not hidden their location. Returns null when there is nothing to show.

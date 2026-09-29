@@ -4,6 +4,7 @@ import { Post, POST_TYPE_META, UserProfile, provinceName } from '../../core/mode
 import { compact, timeAgo, urgency } from '../../core/utils/format';
 import { AvatarComponent } from './avatar.component';
 import { IconComponent } from './icon.component';
+import { ReactionsSheetComponent } from './reactions-sheet.component';
 import { DataService } from '../../core/services/data.service';
 import { AuthService } from '../../core/services/auth.service';
 import { CHECK_IN_COPY } from '../../core/services/safety.service';
@@ -20,7 +21,7 @@ export type ChatState = 'off' | 'locked-vote' | 'locked-follow' | 'open';
 @Component({
   selector: 'lf-post-card',
   standalone: true,
-  imports: [RouterLink, IconComponent, AvatarComponent],
+  imports: [RouterLink, IconComponent, AvatarComponent, ReactionsSheetComponent],
   template: `
     <article class="fb-card lf-fade-in"
              [class.fb-card--critical]="isCritical()"
@@ -117,16 +118,25 @@ export type ChatState = 'off' | 'locked-vote' | 'locked-follow' | 'open';
         </div>
       }
 
-      <!-- Facebook reaction summary: real counts only, hidden when there are none -->
-      @if (post.upvotes > 0 || post.commentCount > 0 || post.shares > 0) {
-        <div class="fb-stats-bar" [routerLink]="'/post/' + post.id">
+      <!-- Facebook reaction summary: who reacted, not just how many. Tap to see faces. -->
+      @if (post.upvotes > 0 || post.downvotes > 0 || post.commentCount > 0 || post.shares > 0) {
+        <div class="fb-stats-bar">
           <div class="fb-stats-likes">
-            @if (post.upvotes > 0) {
-              <span class="fb-like-icon"><lf-icon name="bulb" [size]="11" [weight]="2.6" /></span>
-              <span>{{ compact(post.upvotes) }} {{ post.upvotes === 1 ? 'idea' : 'ideas' }}</span>
+            @if (post.upvotes > 0 || post.downvotes > 0) {
+              <button class="fb-reacted" type="button" (click)="openReactions($event)" aria-label="See who reacted">
+                <span class="fb-stack">
+                  @for (u of reactedPreview(); track u.id) {
+                    <lf-avatar [src]="data.avatarFor(u)" [name]="u.displayName" [size]="20" />
+                  }
+                  @if (!reactedPreview().length) {
+                    <span class="fb-like-icon"><lf-icon name="bulb" [size]="11" [weight]="2.6" /></span>
+                  }
+                </span>
+                <span class="fb-reacted__txt">{{ reactedLabel() }}</span>
+              </button>
             }
           </div>
-          <div class="fb-stats-right">
+          <div class="fb-stats-right" [routerLink]="'/post/' + post.id">
             @if (post.commentCount > 0) { <span>{{ compact(post.commentCount) }} {{ post.commentCount === 1 ? 'comment' : 'comments' }}</span> }
             @if (post.shares > 0) { <span>{{ compact(post.shares) }} {{ post.shares === 1 ? 'share' : 'shares' }}</span> }
           </div>
@@ -162,6 +172,8 @@ export type ChatState = 'off' | 'locked-vote' | 'locked-follow' | 'open';
           {{ chatLabel() }}
         </button>
       }
+
+      <lf-reactions-sheet [post]="post" [open]="showReactions()" (close)="showReactions.set(false)" />
     </article>
   `,
   styles: [`
@@ -267,14 +279,35 @@ export type ChatState = 'off' | 'locked-vote' | 'locked-follow' | 'open';
       color: var(--lf-muted);
       cursor: pointer;
     }
-    .fb-stats-likes { display: flex; align-items: center; gap: 6px; }
+    .fb-stats-likes { display: flex; align-items: center; gap: 6px; min-width: 0; }
     .fb-like-icon {
       width: 18px; height: 18px; border-radius: 50%;
       background: linear-gradient(180deg, #18afff, #0062df); color: #fff;
       display: inline-flex; align-items: center; justify-content: center;
       box-shadow: 0 0 0 2px var(--lf-card);
     }
-    .fb-stats-right { display: flex; align-items: center; gap: 12px; }
+    .fb-reacted {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      border: 0;
+      background: none;
+      color: inherit;
+      font: inherit;
+      cursor: pointer;
+      padding: 2px 4px 2px 0;
+      min-width: 0;
+      text-align: left;
+    }
+    .fb-reacted:hover .fb-reacted__txt { text-decoration: underline; }
+    .fb-stack { display: inline-flex; align-items: center; flex-shrink: 0; }
+    .fb-stack lf-avatar { margin-left: -7px; box-shadow: 0 0 0 2px var(--lf-card); border-radius: 50%; }
+    .fb-stack lf-avatar:first-child { margin-left: 0; }
+    .fb-reacted__txt {
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      font-size: 14px;
+    }
+    .fb-stats-right { display: flex; align-items: center; gap: 12px; cursor: pointer; flex-shrink: 0; }
 
     .fb-actions-row {
       display: flex;
@@ -334,13 +367,18 @@ export class PostCardComponent implements OnInit, OnChanges {
   @Output() savedChange = new EventEmitter<void>();
   @Output() follow = new EventEmitter<Post>();
 
-  private data = inject(DataService);
+  protected data = inject(DataService);
   private auth = inject(AuthService);
 
   saved = signal(false);
   followingAuthor = signal(false);
   followRequested = signal(false);
   expanded = signal(false);
+  /** “Who reacted” sheet. */
+  showReactions = signal(false);
+  /** First few Idea voters, for the face stack. Loaded lazily per card. */
+  reactedPreview = signal<UserProfile[]>([]);
+  private reactedFor = '';
 
   protected readonly compact = compact;
   protected readonly timeAgo = timeAgo;
@@ -377,10 +415,50 @@ export class PostCardComponent implements OnInit, OnChanges {
   async ngOnInit(): Promise<void> {
     this.syncFollow();
     this.saved.set(this.data.savedIds().includes(this.post?.id ?? ''));
+    void this.loadReactedPreview();
   }
 
   ngOnChanges(): void {
     this.syncFollow();
+    void this.loadReactedPreview();
+  }
+
+  /** First names of the people behind the Idea count, Facebook-style. */
+  reactedLabel(): string {
+    if (!this.post) return '';
+    const names = this.reactedPreview().map((u) => u.displayName.split(' ')[0]);
+    const total = this.post.upvotes;
+    if (!total) return this.post.downvotes ? `${compact(this.post.downvotes)} no idea` : '';
+    if (!names.length) return `${compact(total)} ${total === 1 ? 'idea' : 'ideas'}`;
+    if (total === 1) return names[0] ?? '1 idea';
+    if (total === 2 && names.length >= 2) return `${names[0]} and ${names[1]}`;
+    if (names.length >= 2) return `${names[0]}, ${names[1]} and ${compact(total - 2)} other${total - 2 === 1 ? '' : 's'}`;
+    return `${names[0]} and ${compact(total - 1)} other${total - 1 === 1 ? '' : 's'}`;
+  }
+
+  openReactions(e: Event): void {
+    e.preventDefault();
+    e.stopPropagation();
+    this.showReactions.set(true);
+  }
+
+  private async loadReactedPreview(): Promise<void> {
+    const id = this.post?.id ?? '';
+    if (!id || this.reactedFor === id + ':' + this.post.upvotes) return;
+    this.reactedFor = id + ':' + this.post.upvotes;
+    const ids = Object.entries(this.post.voterIds ?? {})
+      .filter(([, v]) => v === 'up').map(([uid]) => uid).slice(0, 3);
+    if (!ids.length) { this.reactedPreview.set([]); return; }
+    const cached = ids.map((uid) => this.data.authorOf(uid)).filter((u): u is UserProfile => !!u);
+    const missing = ids.filter((uid) => !cached.some((u) => u.id === uid));
+    if (!missing.length) { this.reactedPreview.set(cached); return; }
+    try {
+      const fresh = await this.data.people(missing);
+      for (const u of fresh) this.data.touchAuthor(u);
+      this.reactedPreview.set(ids.map((uid) =>
+        cached.find((u) => u.id === uid) ?? fresh.find((u) => u.id === uid)
+      ).filter((u): u is UserProfile => !!u));
+    } catch { this.reactedPreview.set(cached); }
   }
 
   private syncFollow(): void {

@@ -14,6 +14,7 @@ import { ActionSheetController } from '@ionic/angular/action-sheet-controller';
 import { IconComponent } from '../../shared/components/icon.component';
 import { TopNavComponent } from '../../shared/components/top-nav.component';
 import { AvatarComponent } from '../../shared/components/avatar.component';
+import { ReactionsSheetComponent } from '../../shared/components/reactions-sheet.component';
 import { DataService } from '../../core/services/data.service';
 import { AuthService } from '../../core/services/auth.service';
 import { ChatService, ChatGate } from '../../core/services/chat.service';
@@ -29,7 +30,7 @@ import { leadMarkView } from '../../core/utils/mark-check';
 @Component({
   selector: 'lf-post-detail',
   standalone: true,
-  imports: [IonContent, IonTextarea, IonSkeletonText, RouterLink, IconComponent, AvatarComponent, TopNavComponent],
+  imports: [IonContent, IonTextarea, IonSkeletonText, RouterLink, IconComponent, AvatarComponent, TopNavComponent, ReactionsSheetComponent],
   template: `
     <lf-top-nav [title]="p() ? POST_TYPE_META[p()!.type].label : 'Post'" backTo="/home">
       @if (data.canEdit(p())) {
@@ -249,8 +250,12 @@ import { leadMarkView } from '../../core/utils/mark-check';
             }
 
             <div class="counters">
-              <span><lf-icon name="bulb" [size]="13" /> {{ compact(p()!.upvotes) }} have an idea</span>
-              <span>{{ compact(p()!.downvotes) }} no idea</span>
+              <button type="button" class="counter-link" (click)="showReactions.set(true)">
+                <lf-icon name="bulb" [size]="13" /> {{ compact(p()!.upvotes) }} have an idea
+              </button>
+              <button type="button" class="counter-link" (click)="showReactions.set(true)">
+                {{ compact(p()!.downvotes) }} no idea
+              </button>
               <span>{{ compact(p()!.commentCount) }} comments</span>
               <span>{{ compact(p()!.shares) }} shares</span>
               <span>{{ compact(p()!.views) }} views</span>
@@ -617,6 +622,10 @@ import { leadMarkView } from '../../core/utils/mark-check';
         </div>
       </div>
     }
+
+    @if (p(); as post) {
+      <lf-reactions-sheet [post]="post" [open]="showReactions()" (close)="showReactions.set(false)" />
+    }
   `,
   styles: [`
     .title.lf-h1 { font-size: 22px; line-height: 1.25; letter-spacing: -.2px; }
@@ -660,6 +669,12 @@ import { leadMarkView } from '../../core/utils/mark-check';
     .counters { display: flex; gap: 14px; flex-wrap: wrap; padding: 10px 16px; font-size: 12px; color: var(--lf-muted);
       border-top: 1px solid var(--lf-line); }
     .counters span { display: inline-flex; align-items: center; gap: 5px; }
+    .counter-link {
+      display: inline-flex; align-items: center; gap: 5px;
+      border: 0; background: none; padding: 0;
+      color: inherit; font: inherit; cursor: pointer;
+    }
+    .counter-link:hover { text-decoration: underline; }
     .khumbu { border-color: color-mix(in srgb, var(--lf-marigold) 45%, var(--lf-line)); }
     .wanted { margin-top: 12px; padding: 12px; border-radius: 12px; background: var(--lf-card-2);
       display: flex; flex-direction: column; gap: 4px; }
@@ -848,6 +863,8 @@ export class PostDetailComponent implements OnInit {
   following = signal(false);
   followRequested = signal(false);
   saved = signal(false);
+  /** “Who reacted” sheet. */
+  showReactions = signal(false);
   draft = '';
   replyDraft = '';
   replyTo: string | null = null;
