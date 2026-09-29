@@ -553,10 +553,14 @@ export class HomeComponent {
   async onMore(p: Post): Promise<void> {
     const mine = this.data.canEdit(p);
     const saved = this.data.savedIds().includes(p.id);
+    const downvoted = this.data.myVote(p) === 'down';
     const sheet = await this.sheetCtl.create({
       header: p.title.slice(0, 40),
       buttons: [
         { text: saved ? 'Unsave post' : 'Save post', icon: 'bookmark' as const, handler: () => void this.onSave(p) },
+        ...(!mine
+          ? [{ text: downvoted ? 'Remove my No idea' : 'No idea', icon: 'thumbdown' as const, handler: () => void this.onVote(p, 'down') }]
+          : []),
         ...(mine
           ? [
             { text: 'Edit post', icon: 'pencil' as const, handler: () => void this.router.navigate(['/post', p.id, 'edit']) },

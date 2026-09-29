@@ -63,6 +63,8 @@ export interface CreatePostInput {
   askWanted: boolean;
   khumbu: Post['khumbu'];
   danger?: DangerAlert | null;
+  /** Set by `reshare` - the original post this wall post points back to. */
+  reshareOf?: Post['reshareOf'];
 }
 
 /**
@@ -339,7 +341,12 @@ export class DataService {
       ...p,
       voterIds: { ...p.voterIds, [me]: next },
       upvotes: p.upvotes + (next === 'up' ? 1 : 0) - (current === 'up' ? 1 : 0),
-      downvotes: p.downvotes + (next === 'down' ? 1 : 0) - (current === 'down' ? 1 : 0)
+      downvotes: p.downvotes + (next === 'down' ? 1 : 0) - (current === 'down' ? 1 : 0),
+      // A fresh Idea refreshes the feed's "X liked this" line. Un-voting
+      // keeps the last known liker so the line never blinks empty.
+      lastLike: next === 'up'
+        ? { userId: me, displayName: this.auth.user()?.displayName ?? 'Someone', at: Date.now() }
+        : p.lastLike ?? null
     };
     await this.api.savePost(nextPost);
     this.mergeCache([nextPost]);
@@ -385,6 +392,7 @@ export class DataService {
       body: input.body.trim(),
       createdAt: Date.now(),
       upvotes: 0,
+      likedIds: [],
       isLead: input.isLead ?? false,
       sighting: input.sighting,
       markGuess: input.markGuess || undefined
@@ -392,7 +400,18 @@ export class DataService {
     await this.api.saveComment(c);
     const p = await this.loadPost(input.postId);
     if (p) {
-      const next = { ...p, commentCount: (await this.api.commentsFor(p.id)).length, updatedAt: Date.now() };
+      // A top-level comment refreshes the feed's "X commented" preview.
+      // Replies stay inside the thread - the preview always shows a
+      // top-level comment.
+      const topLevel = !c.parentId;
+      const next = {
+        ...p,
+        commentCount: (await this.api.commentsFor(p.id)).length,
+        updatedAt: Date.now(),
+        lastComment: topLevel
+          ? { userId: me, displayName: this.auth.user()?.displayName ?? 'Someone', body: c.body.slice(0, 280), at: c.createdAt }
+          : p.lastComment ?? null
+      };
       await this.api.savePost(next);
       this.mergeCache([next]);
     }
@@ -425,9 +444,21 @@ export class DataService {
     await this.api.saveComment({ ...c, markCheck: result });
   }
 
-  /** Quora-style comment upvote - toggles so a second tap removes it. */
+  /**
+   * LinkedIn-style comment like - toggles so a second tap removes it. The
+   * liker list drives the filled state; older comments without one still
+   * work, they just start unliked for everyone.
+   */
   async voteComment(c: Comment): Promise<Comment> {
-    const next: Comment = { ...c, upvotes: c.upvotes + 1 };
+    const me = this.auth.viewerId;
+    if (!me) throw new Error('Sign in to like a comment');
+    const liked = c.likedIds ?? [];
+    const has = liked.includes(me);
+    const next: Comment = {
+      ...c,
+      likedIds: has ? liked.filter((id) => id !== me) : [...liked, me],
+      upvotes: Math.max(0, c.upvotes + (has ? -1 : 1))
+    };
     await this.api.saveComment(next);
     return next;
   }
@@ -436,7 +467,22 @@ export class DataService {
     await this.api.deleteComment(c.id, c.postId);
     const p = await this.loadPost(c.postId);
     if (p) {
-      const next = { ...p, commentCount: Math.max(0, p.commentCount - 1) };
+      const remaining = await this.api.commentsFor(c.postId);
+      const latestTop = remaining
+        .filter((x) => !x.parentId)
+        .sort((a, b) => b.createdAt - a.createdAt)[0];
+      const next = {
+        ...p,
+        commentCount: remaining.length,
+        lastComment: latestTop
+          ? {
+              userId: latestTop.authorId,
+              displayName: this.authorOf(latestTop.authorId)?.displayName ?? 'Someone',
+              body: latestTop.body.slice(0, 280),
+              at: latestTop.createdAt
+            }
+          : null
+      };
       await this.api.savePost(next);
       this.mergeCache([next]);
     }
@@ -497,6 +543,10 @@ export class DataService {
       views: 0,
       savedBy: 0,
       voterIds: {},
+      reshareOf: input.reshareOf ?? null,
+      repostCount: 0,
+      lastLike: null,
+      lastComment: null,
       escalation: { requested: false, consentGranted: false, consentAt: null, partners: [] },
       consent: [],
       sightingVerified: null,
@@ -619,6 +669,76 @@ export class DataService {
     await this.api.savePost(next);
     this.mergeCache([next]);
     await this.loadFeed();
+  }
+
+  /**
+   * Reshare a post onto the viewer's wall (LinkedIn Repost). The wall post
+   * snapshots the original's content so its poster renders standalone, keeps
+   * the original's audience so resharing never widens who can see it, and
+   * points back at the original with `reshareOf`. Resharing a reshare
+   * flattens to the root - chains never form.
+   *
+   * Private chat stays off on wall posts: leads and chats belong with the
+   * family on the original, one tap away via "View original".
+   */
+  async reshare(postId: string): Promise<Post> {
+    const me = this.auth.user();
+    if (!me) throw new Error('Sign in to repost');
+    if (me.suspended) throw new Error(`Your account is suspended. Contact ${SUPPORT_EMAIL} if you think this is a mistake.`);
+    const original = await this.loadPost(postId);
+    if (!original) throw new Error('That post is not here any more');
+    const root = original.reshareOf ? (await this.loadPost(original.reshareOf.postId)) ?? original : original;
+    const rootAuthor =
+      (await this.profile(root.authorId).catch(() => undefined))?.displayName
+      ?? this.authorOf(root.authorId)?.displayName
+      ?? 'LulaFind member';
+    const post = await this.createPost({
+      type: root.type,
+      title: root.title,
+      body: root.body,
+      media: root.media.map((m) => ({ ...m, id: uid('m') })),
+      province: root.province,
+      town: root.town,
+      lastSeenAt: root.lastSeenAt,
+      lastSeenWhere: root.lastSeenWhere,
+      geo: root.geo,
+      contactLabel: root.contactLabel,
+      contactValue: root.contactValue,
+      contactVisibleTo: root.contactVisibleTo,
+      caseNumber: root.caseNumber,
+      reward: root.reward,
+      subject: root.subject ? { ...root.subject } : null,
+      vehicleDetails: root.vehicleDetails ? { ...root.vehicleDetails } : null,
+      audience: root.audience,
+      spotlightId: root.spotlightId,
+      chatEnabled: false,
+      allowComments: root.allowComments,
+      anonymous: false,
+      askWanted: false,
+      khumbu: root.type === 'khumbulekhaya'
+        ? {
+          daysOut: null, leftHomeAt: null, reasonGuess: '', claimedByUserId: null, claimedAt: null,
+          subjectResponse: 'none', subjectNote: '', wantedAnswers: { yes: 0, no: 0, myVote: null }
+        }
+        : null,
+      danger: root.type === 'danger' && root.danger
+        ? { kind: root.danger.kind, stillIds: [], clearIds: [], clearedAt: null }
+        : null,
+      reshareOf: { postId: root.id, authorId: root.authorId, authorName: rootAuthor }
+    });
+    const next = { ...root, repostCount: (root.repostCount ?? 0) + 1 };
+    await this.api.savePost(next);
+    this.mergeCache([next]);
+    if (root.authorId !== me.id) {
+      await this.notify({
+        userId: root.authorId, kind: 'repost',
+        title: `${me.displayName} reshared your post`,
+        body: `${root.title} · now on ${me.displayName}'s wall.`,
+        route: `/post/${post.id}`, postId: post.id
+      }).catch(() => undefined);
+    }
+    await this.loadFeed();
+    return post;
   }
 
   /* ------------------------- saved ----------------------------- */

@@ -104,8 +104,12 @@ describe('Components render', () => {
     const html: string = (f.nativeElement as HTMLElement).innerHTML;
     expect(html).toContain('Follow');
     expect(html).toContain('Idea');
-    expect(html).toContain('No idea');
+    expect(html).toContain('Repost');
+    expect(html).toContain('Share');
     expect(html).toContain('Comment');
+    // the seeded latest activity shows with its comment preview
+    expect(html).toContain('Lerato Mahlangu');
+    expect(html).toContain('commented on this');
   });
 
   it('renders the LulaFind welcome and login screens', async () => {

@@ -258,6 +258,7 @@ import { leadMarkView } from '../../core/utils/mark-check';
               </button>
               <span>{{ compact(p()!.commentCount) }} comments</span>
               <span>{{ compact(p()!.shares) }} shares</span>
+              <span>{{ compact(p()!.repostCount ?? 0) }} reposts</span>
               <span>{{ compact(p()!.views) }} views</span>
             </div>
 
@@ -278,6 +279,7 @@ import { leadMarkView } from '../../core/utils/mark-check';
               </button>
               }
               <button class="lf-action" (click)="focusComment()"><lf-icon name="comment" [size]="18" /> Comment</button>
+              <button class="lf-action" (click)="repost()"><lf-icon name="refresh" [size]="18" /> Repost</button>
               <button class="lf-action" (click)="share()"><lf-icon name="share" [size]="18" /> Share</button>
               <button class="lf-action lf-action--save" [class.lf-on]="saved()" (click)="save()"><lf-icon name="bookmark" [size]="18" /></button>
             </div>
@@ -493,85 +495,116 @@ import { leadMarkView } from '../../core/utils/mark-check';
             </div>
           }
 
-          <!-- comments -->
-          <div class="lf-card">
+          <!-- comments, LinkedIn-style: sort, pill composer, bubbles, like + reply -->
+          <div class="lf-card" id="post-comments">
             <div class="lf-card__body">
-              <h2 class="lf-h2" style="margin:0 0 4px">Comments ({{ comments().length }})</h2>
+              <div class="c-head">
+                <h2 class="lf-h2" style="margin:0">Comments ({{ comments().length }})</h2>
+                @if (topComments().length > 1) {
+                  <button class="c-sort" type="button" (click)="cycleSort()"
+                          [attr.aria-label]="'Sort comments, currently ' + sortMode()">
+                    <lf-icon name="filter" [size]="14" />
+                    {{ sortMode() === 'relevant' ? 'Most relevant' : 'Most recent' }}
+                  </button>
+                }
+              </div>
               <p class="lf-small lf-muted">Leads, sightings and support. Never post a suspect's home address.</p>
 
               @if (!p()!.allowComments) {
                 <p class="lf-small lf-muted">The poster turned comments off for this post.</p>
               } @else {
-                <div class="composer">
-                  <lf-avatar [src]="myAvatar()" [name]="me() ? 'Me' : 'Guest'" [size]="34" />
-                  <ion-textarea rows="2" autoGrow placeholder="Add a comment or a lead…" [value]="draft"
-                                (ionInput)="draft = $any($event.target).value"></ion-textarea>
-                  <button class="lf-icon-btn send" (click)="postComment(null)" [disabled]="!draft.trim()">
-                    <lf-icon name="send" [size]="18" />
-                  </button>
+                <div class="c-composer">
+                  <lf-avatar [src]="myAvatar()" [name]="me() ? 'Me' : 'Guest'" [size]="40" />
+                  <ion-textarea id="comment-box" rows="1" autoGrow placeholder="Add a comment or a lead…" class="c-box"
+                                [value]="draft()" (ionInput)="draft.set($any($event.target).value)"></ion-textarea>
                 </div>
+                @if (draft().trim()) {
+                  <div class="c-postrow">
+                    <button class="lf-btn lf-btn--primary lf-btn--sm" type="button" (click)="postComment(null)">Post</button>
+                  </div>
+                }
                 <label class="leadcheck">
-                  <input type="checkbox" [checked]="asLead" (change)="asLead = $any($event.target).checked" />
+                  <input type="checkbox" [checked]="asLead()" (change)="asLead.set($any($event.target).checked)" />
                   <span>This is a <strong>lead</strong> (something you actually saw or know)</span>
                 </label>
-                @if (asLead && p()!.subject?.distinguishing) {
-                  <input class="mark" [value]="markGuess" (input)="markGuess = $any($event.target).value" placeholder="A mark you noticed. Only the family sees the words." />
+                @if (asLead() && p()!.subject?.distinguishing) {
+                  <input class="mark" [value]="markGuess()" (input)="markGuess.set($any($event.target).value)" placeholder="A mark you noticed. Only the family sees the words." />
                 }
               }
 
-              @if (!comments().length && p()!.allowComments) {
+              @if (!topComments().length && p()!.allowComments) {
                 <p class="lf-small lf-muted" style="padding:10px 0">No comments yet. Be the first to help.</p>
               }
 
-              @for (c of comments(); track c.id) {
-                <div class="comment">
-                  <lf-avatar [src]="data.avatarFor(data.authorOf(c.authorId))" [name]="data.authorOf(c.authorId)?.displayName ?? ''" [size]="34" />
+              @for (c of topComments(); track c.id) {
+                <div class="c-item">
+                  <lf-avatar [src]="data.avatarFor(data.authorOf(c.authorId))" [name]="data.authorOf(c.authorId)?.displayName ?? ''" [size]="40" />
                   <div class="lf-grow">
-                    <div class="lf-meta">
-                      <a class="lnk strong" [routerLink]="'/user/' + c.authorId">{{ data.authorOf(c.authorId)?.displayName ?? 'Member' }}</a>
-                      · {{ timeAgo(c.createdAt) }}
-                      @if (c.isLead) { <span class="lf-chip lf-chip--success lf-tiny">lead</span> }
-                    </div>
-                    <p class="lf-prose">{{ c.body }}</p>
-                    @if (c.sighting) {
-                      <div class="sighting">
-                        <lf-icon name="pin" [size]="13" /> {{ c.sighting.place }} · {{ provinceName(c.sighting.province) }}
-                        @if (c.sighting.note) { <span>· {{ c.sighting.note }}</span> }
+                    <div class="c-bubble">
+                      <div class="c-meta">
+                        <a class="lnk strong" [routerLink]="'/user/' + c.authorId">{{ data.authorOf(c.authorId)?.displayName ?? 'Member' }}</a>
+                        @if (c.isLead) { <span class="lf-chip lf-chip--success lf-tiny">lead</span> }
                       </div>
-                    }
-                    @if (leadMark(c, isMine()); as mark) {
-                      @if (mark.status) {
-                        <p class="lf-small">{{ mark.status }}</p>
-                        @if (mark.guess) { <p class="lf-small">They said: “{{ mark.guess }}”</p> }
-                        @if (isMine() && c.markGuess && !c.markCheck) {
-                          <div class="lf-row" style="gap:8px">
-                            <button class="lf-btn lf-btn--sm" type="button" (click)="checkMark(c, 'match')">It matches</button>
-                            <button class="lf-btn lf-btn--sm" type="button" (click)="checkMark(c, 'no')">It does not</button>
-                          </div>
+                      <div class="c-sub">{{ commentHeadline(c) }} · {{ timeAgo(c.createdAt) }}</div>
+                      <p class="c-body">{{ c.body }}</p>
+                      @if (c.sighting) {
+                        <div class="sighting">
+                          <lf-icon name="pin" [size]="13" /> {{ c.sighting.place }} · {{ provinceName(c.sighting.province) }}
+                          @if (c.sighting.note) { <span>· {{ c.sighting.note }}</span> }
+                        </div>
+                      }
+                      @if (leadMark(c, isMine()); as mark) {
+                        @if (mark.status) {
+                          <p class="lf-small">{{ mark.status }}</p>
+                          @if (mark.guess) { <p class="lf-small">They said: “{{ mark.guess }}”</p> }
+                          @if (isMine() && c.markGuess && !c.markCheck) {
+                            <div class="lf-row" style="gap:8px">
+                              <button class="lf-btn lf-btn--sm" type="button" (click)="checkMark(c, 'match')">It matches</button>
+                              <button class="lf-btn lf-btn--sm" type="button" (click)="checkMark(c, 'no')">It does not</button>
+                            </div>
+                          }
                         }
                       }
-                    }
-                    <div class="lf-row" style="gap:12px;margin-top:4px">
-                      <button class="mini" (click)="upComment(c)"><lf-icon name="thumbup" [size]="13" /> {{ c.upvotes }}</button>
-                      @if (p()!.allowComments) { <button class="mini" (click)="replyTo = c.id">Reply</button> }
-                      @if (c.authorId === me()) { <button class="mini danger" (click)="removeComment(c)">Delete</button> }
+                    </div>
+                    <div class="c-actions">
+                      <button class="c-like" [class.on]="likedByMe(c)" type="button" (click)="upComment(c)"
+                              [attr.aria-pressed]="likedByMe(c)">
+                        <lf-icon name="thumbup" [size]="13" [filled]="likedByMe(c)" /> Like@if (c.upvotes) { · {{ compact(c.upvotes) }} }
+                      </button>
+                      @if (p()!.allowComments) {
+                        <button class="c-act" type="button" (click)="replyTo.set(replyTo() === c.id ? null : c.id)">Reply</button>
+                      }
+                      @if (c.authorId === me()) { <button class="c-act danger" type="button" (click)="removeComment(c)">Delete</button> }
                     </div>
 
                     @for (r of repliesOf(c.id); track r.id) {
-                      <div class="reply">
-                        <lf-avatar [src]="data.avatarFor(data.authorOf(r.authorId))" [name]="data.authorOf(r.authorId)?.displayName ?? ''" [size]="26" />
-                        <div>
-                          <div class="lf-meta"><strong>{{ data.authorOf(r.authorId)?.displayName }}</strong> · {{ timeAgo(r.createdAt) }}</div>
-                          <p class="lf-prose">{{ r.body }}</p>
+                      <div class="c-reply">
+                        <lf-avatar [src]="data.avatarFor(data.authorOf(r.authorId))" [name]="data.authorOf(r.authorId)?.displayName ?? ''" [size]="32" />
+                        <div class="lf-grow">
+                          <div class="c-bubble small">
+                            <div class="c-meta">
+                              <a class="lnk strong" [routerLink]="'/user/' + r.authorId">{{ data.authorOf(r.authorId)?.displayName ?? 'Member' }}</a>
+                            </div>
+                            <div class="c-sub">{{ timeAgo(r.createdAt) }}</div>
+                            <p class="c-body">{{ r.body }}</p>
+                          </div>
+                          <div class="c-actions">
+                            <button class="c-like" [class.on]="likedByMe(r)" type="button" (click)="upComment(r)"
+                                    [attr.aria-pressed]="likedByMe(r)">
+                              <lf-icon name="thumbup" [size]="13" [filled]="likedByMe(r)" /> Like@if (r.upvotes) { · {{ compact(r.upvotes) }} }
+                            </button>
+                            @if (r.authorId === me()) { <button class="c-act danger" type="button" (click)="removeComment(r)">Delete</button> }
+                          </div>
                         </div>
                       </div>
                     }
 
-                    @if (replyTo === c.id) {
-                      <div class="composer replybox">
-                        <ion-textarea rows="1" autoGrow placeholder="Reply…" [value]="replyDraft"
-                                      (ionInput)="replyDraft = $any($event.target).value"></ion-textarea>
-                        <button class="lf-icon-btn send" (click)="postComment(c.id)"><lf-icon name="send" [size]="16" /></button>
+                    @if (replyTo() === c.id && p()!.allowComments) {
+                      <div class="c-composer reply">
+                        <ion-textarea rows="1" autoGrow placeholder="Reply…" class="c-box"
+                                      [value]="replyDraft()" (ionInput)="replyDraft.set($any($event.target).value)"></ion-textarea>
+                        <button class="lf-btn lf-btn--primary lf-btn--sm" type="button"
+                                [disabled]="!replyDraft().trim()" (click)="postComment(c.id)">Reply</button>
                       </div>
                     }
                   </div>
@@ -698,24 +731,34 @@ import { leadMarkView } from '../../core/utils/mark-check';
     .steps.done1 li:nth-child(1), .steps.done2 li:nth-child(2), .steps.done3 li:nth-child(3) { color: var(--lf-ubuntu); }
     .steps.done1 li:nth-child(1) span, .steps.done2 li:nth-child(2) span, .steps.done3 li:nth-child(3) span {
       background: var(--lf-ubuntu); color: #fff; }
-    .composer { display: flex; align-items: flex-end; gap: 8px; margin-top: 12px; }
-    .composer ion-textarea { flex: 1; --background: var(--lf-card-2); border-radius: 12px; --padding-start: 12px; }
-    .send { background: transparent; color: var(--lf-primary); width: 40px; height: 40px; }
-    .send[disabled] { opacity: .4; }
+    .c-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
+    .c-sort { display: inline-flex; align-items: center; gap: 5px; border: 0; background: none; padding: 6px 4px;
+      color: var(--lf-muted); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+    .c-composer { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
+    .c-composer.reply { margin: 8px 0 2px; }
+    .c-box { flex: 1; --background: var(--lf-card-2); border-radius: 20px; --padding-start: 14px; --padding-end: 14px;
+      --padding-top: 9px; --padding-bottom: 9px; font-size: 14px; }
+    .c-postrow { display: flex; justify-content: flex-end; margin-top: 8px; }
     .leadcheck { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--lf-muted); margin-top: 8px; }
     .leadcheck input { accent-color: var(--lf-ubuntu); width: 17px; height: 17px; }
-    .comment { display: flex; gap: 10px; padding: 14px 0; border-top: 1px solid var(--lf-line); margin-top: 12px; }
-    .comment .lf-prose { margin: 4px 0 0; font-size: 14px; }
-    .mark { width: 100%; margin: 6px 0 0 42px; box-sizing: border-box; padding: 8px 10px; border-radius: var(--lf-radius);
+    .c-item { display: flex; gap: 10px; padding: 14px 0 4px; border-top: 1px solid var(--lf-line); margin-top: 12px; }
+    .c-bubble { background: var(--lf-card-2); border-radius: 4px 12px 12px 12px; padding: 9px 12px 10px; }
+    .c-bubble.small { padding: 7px 10px 8px; }
+    .c-meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    .c-meta .lnk { font-size: 14px; }
+    .c-sub { font-size: 12px; color: var(--lf-muted); margin-top: 1px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .c-body { margin: 5px 0 0; font-size: 14px; line-height: 1.4; white-space: pre-line; }
+    .c-actions { display: flex; align-items: center; gap: 14px; margin-top: 5px; padding-left: 12px; }
+    .c-like, .c-act { background: none; border: 0; padding: 4px 0; font: inherit; font-size: 13px; font-weight: 600;
+      color: var(--lf-muted); display: inline-flex; align-items: center; gap: 5px; cursor: pointer; }
+    .c-like.on { color: var(--lf-primary); }
+    .c-act.danger { color: var(--lf-signal); font-weight: 500; }
+    .c-reply { display: flex; gap: 8px; margin-top: 10px; }
+    .mark { width: 100%; margin: 6px 0 0 48px; box-sizing: border-box; padding: 8px 10px; border-radius: var(--lf-radius);
       border: 0; box-shadow: var(--lf-shadow); background: var(--lf-card); color: inherit; font: inherit; }
     .sighting { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 6px; font-size: 12px;
       padding: 6px 9px; border-radius: 9px; background: color-mix(in srgb, var(--lf-ubuntu) 14%, transparent); }
-    .mini { background: none; border: 0; color: var(--lf-muted); font-size: 12px; font-weight: 700;
-      display: inline-flex; align-items: center; gap: 5px; cursor: pointer; padding: 0; }
-    .mini.danger { color: var(--lf-signal); }
-    .reply { display: flex; gap: 8px; margin-top: 10px; padding-left: 8px; border-left: 2px solid var(--lf-line); }
-    .reply .lf-prose { font-size: 13.5px; }
-    .replybox { margin-top: 8px; }
     .sheetwrap { position: fixed; inset: 0; z-index: 40; background: var(--lf-scrim);
       display: flex; align-items: flex-end; justify-content: center; }
     .sheet { width: 100%; max-width: 520px; max-height: 88vh; overflow-y: auto; background: var(--lf-card);
@@ -865,12 +908,24 @@ export class PostDetailComponent implements OnInit {
   saved = signal(false);
   /** “Who reacted” sheet. */
   showReactions = signal(false);
-  draft = '';
-  replyDraft = '';
-  replyTo: string | null = null;
-  asLead = false;
-  markGuess = '';
+  draft = signal('');
+  replyDraft = signal('');
+  replyTo = signal<string | null>(null);
+  asLead = signal(false);
+  markGuess = signal('');
   khumbuNote = '';
+  sortMode = signal<'relevant' | 'recent'>('relevant');
+  /**
+   * Top-level comments only, in the chosen order. Replies render nested under
+   * their parent - they used to also leak into this list and show twice.
+   * "Relevant" keeps the data layer's order (leads and liked comments
+   * first); "recent" is newest first.
+   */
+  readonly topComments = computed(() => {
+    const tops = this.comments().filter((c) => !c.parentId);
+    if (this.sortMode() === 'recent') return [...tops].sort((a, b) => b.createdAt - a.createdAt);
+    return tops;
+  });
 
   readonly me = computed(() => this.auth.viewerId);
   readonly isMine = computed(() => this.p()?.authorId === this.auth.viewerId);
@@ -893,6 +948,11 @@ export class PostDetailComponent implements OnInit {
       await this.data.registerView(id);
     }
     this.comments.set(await this.data.comments(id));
+    // The feed's Comment button lands here with #comments - scroll the thread
+    // into view once it has rendered.
+    if (this.route.snapshot.fragment === 'comments') {
+      setTimeout(() => this.focusComment(), 400);
+    }
     await this.refreshGate();
     const followState = this.p() ? await this.data.followStatus(this.p()!.authorId) : null;
     this.following.set(followState === 'accepted');
@@ -1074,25 +1134,39 @@ export class PostDetailComponent implements OnInit {
 
   async postComment(parentId: string | null): Promise<void> {
     if (!this.auth.signedIn()) return this.needAuth();
-    const body = parentId ? this.replyDraft.trim() : this.draft.trim();
+    const body = parentId ? this.replyDraft().trim() : this.draft().trim();
     if (!body) return;
     const p = this.p();
     if (!p) return;
-    const mark = this.asLead && !parentId ? this.markGuess.trim() : '';
+    const lead = this.asLead() && !parentId;
+    const mark = lead ? this.markGuess().trim() : '';
     await this.data.addComment({
       postId: p.id,
       body,
       parentId,
-      isLead: this.asLead && !parentId,
+      isLead: lead,
       markGuess: mark || undefined
     });
     this.comments.set(await this.data.comments(p.id));
     this.p.set(this.data.post(p.id) ?? null);
-    this.draft = '';
-    this.replyDraft = '';
-    this.replyTo = null;
-    this.asLead = false;
-    this.markGuess = '';
+    this.draft.set('');
+    this.replyDraft.set('');
+    this.replyTo.set(null);
+    this.asLead.set(false);
+    this.markGuess.set('');
+  }
+
+  cycleSort(): void {
+    this.sortMode.set(this.sortMode() === 'relevant' ? 'recent' : 'relevant');
+  }
+
+  likedByMe(c: Comment): boolean {
+    return (c.likedIds ?? []).includes(this.me() ?? '');
+  }
+
+  commentHeadline(c: Comment): string {
+    const u = this.data.authorOf(c.authorId);
+    return u?.bio?.trim() || u?.town?.trim() || 'LulaFind member';
   }
 
   async checkMark(c: Comment, result: 'match' | 'no'): Promise<void> {
@@ -1121,7 +1195,45 @@ export class PostDetailComponent implements OnInit {
   }
 
   focusComment(): void {
-    document.getElementById('comments')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (typeof document === 'undefined') return;
+    document.getElementById('post-comments')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    // Best effort: drop the cursor in the box once the scroll lands.
+    window.setTimeout(() => {
+      try {
+        (document.getElementById('comment-box') as unknown as { setFocus?: () => void } | null)?.setFocus?.();
+      } catch { /* older webviews - the scroll is enough */ }
+    }, 450);
+  }
+
+  /** Repost this post onto the viewer's own wall. */
+  async repost(): Promise<void> {
+    const p = this.p();
+    if (!p) return;
+    if (!this.auth.signedIn()) return this.needAuth();
+    const sheet = await this.sheet.create({
+      header: 'Repost to your wall?',
+      subHeader: 'Your followers will see this post with your name on it.',
+      buttons: [
+        {
+          text: 'Repost',
+          icon: 'refresh' as const,
+          handler: () => { void this.doRepost(p.id); }
+        },
+        { text: 'Cancel', role: 'cancel' }
+      ]
+    });
+    await sheet.present();
+  }
+
+  private async doRepost(postId: string): Promise<void> {
+    try {
+      const wallPost = await this.data.reshare(postId);
+      this.p.set(this.data.post(postId) ?? this.p());
+      await this.say('Reposted to your wall');
+      await this.router.navigate(['/post', wallPost.id]);
+    } catch (e: any) {
+      await this.say(e?.message ?? 'Could not repost');
+    }
   }
 
   /* ---------------------- khumbu ------------------------ */

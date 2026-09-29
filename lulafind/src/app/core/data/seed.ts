@@ -353,6 +353,8 @@ export const seedPosts = (): Post[] => {
       shares: 187,
       views: 9840,
       savedBy: 63,
+      lastComment: { userId: 'u_lerato', displayName: 'Lerato Mahlangu', body: 'Reminder: there is NO 24-hour waiting period in South Africa. If anyone at a station tells you to wait, escalate to the station commander immediately.', at: now - 1 * DAY },
+      lastLike: { userId: 'u_sipho', displayName: 'Sipho Ndlela', at: now - 2 * DAY },
       escalation: {
         requested: true,
         consentGranted: true,
@@ -437,7 +439,9 @@ export const seedPosts = (): Post[] => {
       commentCount: 3,
       shares: 94,
       views: 5310,
-      savedBy: 41
+      savedBy: 41,
+      lastLike: { userId: 'u_ayanda', displayName: 'Ayanda Khumalo', at: now - 2 * HOUR },
+      lastComment: { userId: 'u_bongani', displayName: 'Bongani Zulu', body: 'To whoever this is about: nobody is going to force you home. Just tell them you are alive.', at: now - 6 * HOUR }
     }),
 
     base({
