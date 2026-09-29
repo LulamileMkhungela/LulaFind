@@ -890,3 +890,42 @@ revoke all on function public.lula_post_interact(text, jsonb) from public;
 revoke all on function public.lula_link_spotlight_post(text, text, boolean) from public;
 grant execute on function public.lula_post_interact(text, jsonb) to anon, authenticated;
 grant execute on function public.lula_link_spotlight_post(text, text, boolean) to anon, authenticated;
+
+/* ---------------------------------------------------------------------------
+ * Patch fields on a post with a jsonb merge, in one statement.
+ *
+ * The client uses this instead of writing back a copy of the post it read
+ * earlier: two writers touching the same case at once (a "did you get help?"
+ * nudge and a search zone being claimed, say) used to mean the slower write
+ * silently threw away the other one. Postgres does the merge, so the record
+ * can only move forward.
+ * ------------------------------------------------------------------------- */
+create or replace function public.lula_patch_post(post_id text, patch jsonb)
+returns void language plpgsql security definer set search_path = pg_catalog as $$
+declare
+  target_author text;
+begin
+  select r.payload->>'authorId' into target_author
+    from public.records r
+   where r.collection = 'posts' and r.id = post_id;
+
+  if target_author is null then
+    raise exception 'no such post';
+  end if;
+
+  -- The author, an admin, or a volunteer claiming a search zone. A volunteer
+  -- may only ever touch the searchParty field; nothing else is theirs to change.
+  if not (
+    public.lula_is_self(target_author)
+    or public.lula_is_admin()
+    or (select coalesce(bool_and(k in ('searchParty', 'updatedAt')), false) from jsonb_object_keys(patch) k)
+  ) then
+    raise exception 'not allowed';
+  end if;
+
+  update public.records
+     set payload = payload || patch,
+         updated_at = ((extract(epoch from now()) * 1000)::bigint)
+   where collection = 'posts' and id = post_id;
+end;
+$$;

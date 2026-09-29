@@ -1,7 +1,7 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { KvStore } from '../data/local-db';
 import { LULA_API } from '../data/api';
-import { REPORT_REASONS, ReportTarget, UserReport, UserProfile } from '../models/types';
+import { Post, REPORT_REASONS, ReportTarget, UserReport, UserProfile } from '../models/types';
 import { uid } from '../utils/format';
 import { AuthService } from './auth.service';
 import { DataService } from './data.service';
@@ -120,7 +120,25 @@ export class ModerationService {
    * checks it is a real case, and only then does it go live and alert the area.
    * That is what keeps the alert worth opening.
    */
-  readonly pendingCases = computed(() => this.data.feed().filter((p) => p.status === 'under_review'));
+  /**
+   * Cases waiting for review, read from the moderation query - not from the
+   * feed, which hides `under_review` posts from everyone but their author.
+   */
+  readonly pending = signal<Post[]>([]);
+  readonly pendingCases = computed(() => this.pending());
+
+  /** Load the review queue. Safe to call as often as the screen opens. */
+  async loadPending(): Promise<void> {
+    if (!this.isAdmin()) {
+      this.pending.set([]);
+      return;
+    }
+    try {
+      this.pending.set(await this.api.postsForReview());
+    } catch {
+      this.pending.set([]);
+    }
+  }
 
   /**
    * Publish a case that was held for review, then send the area alert.
@@ -146,7 +164,9 @@ export class ModerationService {
         route: `/post/${post.id}`,
         postId: post.id
       });
-      return await this.data.alertCase(live);
+      const reached = await this.data.alertCase(live);
+      await this.loadPending();
+      return reached;
     } finally {
       this.busy.set(false);
     }
@@ -169,6 +189,7 @@ export class ModerationService {
       route: `/post/${post.id}`,
       postId: post.id
     });
+    await this.loadPending();
   }
 
   /** Admin removes a post and closes every open report against it. */

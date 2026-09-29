@@ -1,4 +1,4 @@
-import { Component, computed, inject } from '@angular/core';
+import { Component, OnInit, signal, inject } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { IonContent } from '@ionic/angular/ion-content';
 import { IconComponent } from '../../shared/components/icon.component';
@@ -6,7 +6,7 @@ import { TopNavComponent } from '../../shared/components/top-nav.component';
 import { EmptyComponent } from '../../shared/components/empty.component';
 import { AvatarComponent } from '../../shared/components/avatar.component';
 import { DataService } from '../../core/services/data.service';
-import { Post } from '../../core/models/types';
+import { Post, provinceName } from '../../core/models/types';
 import { DAY, HOUR, timeAgo } from '../../core/utils/format';
 
 /**
@@ -40,7 +40,7 @@ import { DAY, HOUR, timeAgo } from '../../core/utils/format';
           <a class="card" [routerLink]="'/post/' + p.id">
             <div class="card__top">
               <span class="tick"><lf-icon name="check" [size]="14" [weight]="3" /></span>
-              <span class="card__type">{{ p.type === 'khumbulekhaya' ? 'KhumbulEkhaya' : 'Missing' }} · found</span>
+              <span class="card__type">{{ typeLabel(p) }} · found</span>
               <span class="card__when">{{ timeAgo(p.updatedAt) }}</span>
             </div>
             <p class="card__title">{{ p.title }}</p>
@@ -83,17 +83,22 @@ import { DAY, HOUR, timeAgo } from '../../core/utils/format';
       color: var(--lf-primary); font-size: 12px; font-weight: 700; }
   `]
 })
-export class FoundComponent {
+export class FoundComponent implements OnInit {
   private data = inject(DataService);
   protected readonly timeAgo = timeAgo;
-  protected readonly provinceName = (code: Post['province']): string => PROVINCE_NAME[code] ?? code;
+  protected readonly provinceName = provinceName;
 
-  /** Closed cases, most recent first. */
-  readonly found = computed(() =>
-    this.data.feed()
-      .filter((p) => p.outcome.found === true)
-      .sort((a, b) => b.updatedAt - a.updatedAt)
-  );
+  /**
+   * Closed cases, most recent first. This is its own query, not a filter over
+   * the feed: the feed leaves found cases out, which is exactly why the first
+   * version of this page showed "no cases closed yet" with a reunion sitting in
+   * the database.
+   */
+  readonly found = signal<Post[]>([]);
+
+  async ngOnInit(): Promise<void> {
+    this.found.set(await this.data.closedCases());
+  }
 
   /** "found after 2 days" - the number that shows a share was worth it. */
   daysToFind(p: Post): string {
@@ -106,13 +111,17 @@ export class FoundComponent {
     return `found after ${days} ${days === 1 ? 'day' : 'days'}`;
   }
 
+  /** What kind of case closed. Not every reunion is a missing person. */
+  typeLabel(p: Post): string {
+    return ({
+      missing: 'Missing person', khumbulekhaya: 'KhumbulEkhaya', pet: 'Pet',
+      vehicle: 'Vehicle', sighting: 'Sighting', story: 'Story'
+    } as Record<string, string>)[p.type] ?? 'Case';
+  }
+
   credits(p: Post): number {
     const id = p.outcome.finderUserId;
     return id ? this.data.authorOf(id)?.contributorCredits ?? 1 : 1;
   }
 }
 
-const PROVINCE_NAME: Record<string, string> = {
-  EC: 'Eastern Cape', FS: 'Free State', GP: 'Gauteng', KZN: 'KwaZulu-Natal',
-  LP: 'Limpopo', MP: 'Mpumalanga', NC: 'Northern Cape', NW: 'North West', WC: 'Western Cape'
-};

@@ -110,7 +110,15 @@ export class DataService {
   readonly followerIds = signal<string[]>([]);
 
   readonly unreadNotifications = computed(() => this.notifications().filter((n) => !n.read).length);
-  readonly myPosts = computed(() => this.feed().filter((p) => p.authorId === this.auth.viewerId));
+  /**
+   * The viewer's own posts, whatever stage they are at.
+   *
+   * This cannot be a filter over the feed: the feed is the public active list, so
+   * a mother's case would vanish from her own profile the day it was marked
+   * found - exactly when she needs to show it to someone.
+   */
+  readonly myAuthored = signal<Post[]>([]);
+  readonly myPosts = computed(() => this.myAuthored());
   readonly activeMissingCount = computed(
     () => this.feed().filter((p) => p.type === 'missing' && p.status === 'active').length
   );
@@ -325,15 +333,18 @@ export class DataService {
       this.followingIds.set([]);
       this.followerIds.set([]);
       this.followRequests.set([]);
+      this.myAuthored.set([]);
       return;
     }
-    const [notes, following, followers, requests] = await Promise.all([
+    const [notes, following, followers, requests, mine] = await Promise.all([
       this.api.notifications(id),
       this.api.followsFor(id, 'following'),
       this.api.followsFor(id, 'followers'),
-      this.api.followRequests(id)
+      this.api.followRequests(id),
+      this.api.postsByAuthor(id).catch(() => [] as Post[])
     ]);
     this.notifications.set(notes);
+    this.myAuthored.set([...mine].sort((a, b) => b.createdAt - a.createdAt));
     this.followingIds.set(following.map((edge) => edge.followingId));
     this.followerIds.set(followers.map((edge) => edge.followerId));
     this.followRequests.set(requests);
@@ -610,6 +621,7 @@ export class DataService {
       await this.api.linkSpotlightPost(post.spotlightId, post.id, true).catch((e) => console.warn(e?.message));
     }
     this.mergeCache([post]);
+    this.myAuthored.update((list) => [post, ...list.filter((x) => x.id !== post.id)]);
     await this.loadFeed();
     return post;
   }
@@ -1402,6 +1414,8 @@ export class DataService {
     };
     await this.api.savePost(next);
     this.mergeCache([next]);
+    // Their own profile shows the case at every stage, found included.
+    this.myAuthored.update((list) => list.map((x) => (x.id === next.id ? next : x)));
     await this.loadFeed();
     return next;
   }
@@ -1427,7 +1441,9 @@ export class DataService {
   async dismissOutcomeNudge(postId: string): Promise<void> {
     const p = await this.loadPost(postId);
     if (!p) return;
-    await this.api.savePost({ ...p, outcomeNudgeAt: Date.now(), updatedAt: Date.now() });
+    // A patch, not a copy of the post: this fires in the background while the
+    // family may be editing the same case.
+    await this.api.patchPost(postId, { outcomeNudgeAt: Date.now(), updatedAt: Date.now() });
     await this.loadFeed();
   }
 
@@ -1598,6 +1614,11 @@ export class DataService {
     }
   }
 
+  /** Cases that closed as found, for the reunions page. */
+  closedCases(): Promise<Post[]> {
+    return this.api.foundCases();
+  }
+
   /**
    * Tick a step on a case's first-hours checklist. Author or admin only.
    * Nothing here is public: the checklist is the family's own working sheet.
@@ -1610,9 +1631,8 @@ export class DataService {
     const plan: CasePlan = { done: { ...(p.plan?.done ?? {}) }, officerName: p.plan?.officerName, officerContact: p.plan?.officerContact, updatedAt: Date.now() };
     plan.done[step] = done;
     if (!done) delete plan.done[step];
-    const next: Post = { ...p, plan, updatedAt: Date.now() };
-    await this.api.savePost(next);
-    this.touch(next);
+    const next = await this.api.patchPost(postId, { plan, updatedAt: Date.now() });
+    if (next) this.touch(next);
     return next;
   }
 
@@ -1629,9 +1649,8 @@ export class DataService {
       updatedAt: Date.now()
     };
     if (plan.officerName && plan.officerContact) plan.done.officer_details = true;
-    const next: Post = { ...p, plan, updatedAt: Date.now() };
-    await this.api.savePost(next);
-    this.touch(next);
+    const next = await this.api.patchPost(postId, { plan, updatedAt: Date.now() });
+    if (next) this.touch(next);
     return next;
   }
 
@@ -1899,7 +1918,11 @@ export class DataService {
     const list = zones.map((name) => ({
       id: uid('z'), name: name.trim(), priority: 'medium' as const, takenBy: null, done: false, note: ''
     })).filter((z) => z.name);
-    await this.api.savePost({ ...p, searchParty: { open: true, meetAt: meetAt.trim(), meetWhen, zones: list } });
+    const next = await this.api.patchPost(postId, {
+      searchParty: { open: true, meetAt: meetAt.trim(), meetWhen, zones: list },
+      updatedAt: Date.now()
+    });
+    if (next) this.touch(next);
     await this.loadFeed();
   }
 
@@ -1909,10 +1932,15 @@ export class DataService {
     if (!p?.searchParty) throw new Error('That case has no open search party');
     const me = this.auth.viewerId;
     if (!me) throw new Error('Sign in to join a search party');
-    const zones = p.searchParty.zones.map((z) =>
+    // Re-read first: a volunteer is claiming one zone while someone else may be
+    // claiming another, and only the searchParty field is written back.
+    const fresh = (await this.api.post(postId)) ?? p;
+    const party = fresh.searchParty ?? p.searchParty;
+    const zones = party.zones.map((z) =>
       z.id === zoneId ? { ...z, takenBy: z.takenBy === me ? null : me } : z
     );
-    await this.api.savePost({ ...p, searchParty: { ...p.searchParty, zones } });
+    const next = await this.api.patchPost(postId, { searchParty: { ...party, zones }, updatedAt: Date.now() });
+    if (next) this.touch(next);
     await this.loadFeed();
   }
 
@@ -1957,10 +1985,14 @@ export class DataService {
   async completeSearchZone(postId: string, zoneId: string, note = ''): Promise<void> {
     const p = this.cache()[postId] ?? (await this.api.post(postId));
     if (!p?.searchParty) throw new Error('That case has no open search party');
-    const zones = p.searchParty.zones.map((z) =>
+    // Same reason as claiming a zone: re-read, then write back only this field.
+    const fresh = (await this.api.post(postId)) ?? p;
+    const party = fresh.searchParty ?? p.searchParty;
+    const zones = party.zones.map((z) =>
       z.id === zoneId ? { ...z, done: !z.done, note: note.trim().slice(0, 200) || z.note } : z
     );
-    await this.api.savePost({ ...p, searchParty: { ...p.searchParty, zones } });
+    const next = await this.api.patchPost(postId, { searchParty: { ...party, zones }, updatedAt: Date.now() });
+    if (next) this.touch(next);
     await this.loadFeed();
   }
 

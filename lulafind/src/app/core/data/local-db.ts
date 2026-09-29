@@ -342,6 +342,24 @@ export class LocalDb {
   /* ------------------------- posts ------------------------- */
   posts(): Post[] { return this.db.posts.map((p) => clone(p)); }
   postsByAuthor(authorId: string): Post[] { return this.db.posts.filter((p) => p.authorId === authorId).map((p) => clone(p)); }
+  /**
+   * Cases that closed as found, newest first. The feed leaves found cases out on
+   * purpose, so the reunions page asks for them directly.
+   */
+  foundCases(): Post[] {
+    return this.db.posts
+      .filter((p) => p.status === 'found' && p.outcome?.found === true)
+      .sort((a, b) => (b.outcome?.foundAt ?? b.updatedAt) - (a.outcome?.foundAt ?? a.updatedAt))
+      .map((p) => clone(p));
+  }
+
+  /** Everything held for review, for the moderation screen. Never the feed. */
+  postsForReview(): Post[] {
+    return this.db.posts
+      .filter((p) => p.status === 'under_review')
+      .sort((a, b) => a.createdAt - b.createdAt)
+      .map((p) => clone(p));
+  }
   post(id: string): Post | undefined {
     const p = this.db.posts.find((x) => x.id === id);
     return p ? clone(p) : undefined;
@@ -372,6 +390,21 @@ export class LocalDb {
     this.persist();
     return true;
   }
+  /**
+   * Apply a field patch to the stored post in one step.
+   *
+   * This store is synchronous and this method never awaits, so the read and the
+   * write cannot be split by another writer - which is the whole point.
+   */
+  patchPost(id: string, patch: Partial<Post>): Post | undefined {
+    const i = this.db.posts.findIndex((p) => p.id === id);
+    if (i < 0) return undefined;
+    const next = { ...this.db.posts[i], ...patch, id } as Post;
+    this.db.posts[i] = next;
+    this.persist();
+    return clone(next);
+  }
+
   deletePost(id: string): void {
     this.db.posts = this.db.posts.filter((p) => p.id !== id);
     this.db.comments = this.db.comments.filter((c) => c.postId !== id);
@@ -386,6 +419,9 @@ export class LocalDb {
     if (f.type !== 'all') list = list.filter((p) => p.type === f.type);
     if (f.province !== 'all') list = list.filter((p) => p.province === f.province);
     if (f.spotlightId) list = list.filter((p) => p.spotlightId === f.spotlightId);
+    // A case held for review is only visible to the person who posted it and to
+    // admins. The feed must never show an unchecked child case to the public.
+    list = list.filter((p) => p.status !== 'under_review' || p.authorId === viewerId || viewer?.isAdmin === true);
     if (f.status === 'active') list = list.filter((p) => p.status === 'active' || p.status === 'under_review');
     if (f.status === 'found') list = list.filter((p) => p.status === 'found');
 

@@ -46,14 +46,14 @@ import { timeAgo } from '../../core/utils/format';
         </div>
 
         <div class="tabs">
-          <button class="tab" [class.on]="tab() === 'reports'" (click)="tab.set('reports')">
+          <button class="tab" [class.on]="tab() === 'reports'" (click)="show('reports')">
             Reports @if (mod.openCount() > 0) { <span class="lf-badge">{{ mod.openCount() }}</span> }
           </button>
-          <button class="tab" [class.on]="tab() === 'people'" (click)="tab.set('people')">People</button>
-          <button class="tab" [class.on]="tab() === 'review'" (click)="tab.set('review')">
+          <button class="tab" [class.on]="tab() === 'people'" (click)="show('people')">People</button>
+          <button class="tab" [class.on]="tab() === 'review'" (click)="show('review')">
             Review @if (mod.pendingCases().length > 0) { <span class="lf-badge">{{ mod.pendingCases().length }}</span> }
           </button>
-          <button class="tab" [class.on]="tab() === 'posts'" (click)="tab.set('posts')">Posts</button>
+          <button class="tab" [class.on]="tab() === 'posts'" (click)="show('posts')">Posts</button>
         </div>
 
         @if (tab() === 'reports') {
@@ -187,12 +187,19 @@ export class AdminComponent implements OnInit {
   protected readonly timeAgo = timeAgo;
 
   tab = signal<'reports' | 'people' | 'review' | 'posts'>('reports');
+
+  /** Opening the review tab re-reads the queue, so it is never stale. */
+  show(tab: 'reports' | 'people' | 'review' | 'posts'): void {
+    this.tab.set(tab);
+    if (tab === 'review') void this.mod.loadPending();
+  }
   query = signal('');
   users = signal<UserProfile[]>([]);
 
   async ngOnInit(): Promise<void> {
     if (!this.mod.isAdmin()) return;
     this.mod.load();
+    await this.mod.loadPending();
     await this.refreshUsers();
     await this.data.refresh();
   }

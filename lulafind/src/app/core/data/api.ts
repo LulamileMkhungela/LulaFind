@@ -27,6 +27,16 @@ export abstract class LulaApi {
   abstract posts(): Promise<Post[]>;
   /** Posts written by one person, for their profile. RLS still applies. */
   abstract postsByAuthor(authorId: string): Promise<Post[]>;
+  /**
+   * Every case waiting for moderation, whatever the viewer filter says.
+   *
+   * This exists because the feed deliberately hides `under_review` posts from
+   * everyone but their author - so building the review queue out of the feed
+   * silently produced an empty queue in production while passing in the mock.
+   */
+  abstract postsForReview(): Promise<Post[]>;
+  /** Cases that closed as found. The feed hides these, so they get their own query. */
+  abstract foundCases(): Promise<Post[]>;
   abstract queryFeed(f: FeedFilter, viewerId: string | null): Promise<Post[]>;
   /**
    * Write a post. Returns true when the record was actually stored.
@@ -37,6 +47,16 @@ export abstract class LulaApi {
    * edited in the meantime is never quietly reverted.
    */
   abstract savePost(p: Post, options?: SavePostOptions): Promise<boolean>;
+  /**
+   * Change some fields of a post without writing back a whole stale copy.
+   *
+   * Bookkeeping writes - the "did you get help?" nudge, a search zone being
+   * claimed, a checklist step - used to save a copy of the post they had read
+   * earlier. If anything else saved the same case in between, the later write
+   * silently wiped it: a search party vanished because a background nudge fired
+   * at the same moment. A field patch has nothing to wipe.
+   */
+  abstract patchPost(id: string, patch: Partial<Post>): Promise<Post | undefined>;
   abstract deletePost(id: string): Promise<void>;
 
   /* comments */
@@ -125,10 +145,13 @@ export class MockApi implements LulaApi {
   async post(id: string) { return this.db.post(id); }
   async posts() { return this.db.posts(); }
   async postsByAuthor(authorId: string) { return this.db.postsByAuthor(authorId); }
+  async postsForReview() { return this.db.postsForReview(); }
+  async foundCases() { return this.db.foundCases(); }
   async queryFeed(f: FeedFilter, viewerId: string | null) {
     return this.db.filtered(f, viewerId, viewerId ? this.db.user(viewerId) : undefined);
   }
   async savePost(p: Post, options?: SavePostOptions) { return this.db.upsertPost(p, options); }
+  async patchPost(id: string, patch: Partial<Post>) { return this.db.patchPost(id, patch); }
   async deletePost(id: string) { this.db.deletePost(id); }
 
   async commentsFor(postId: string) { return this.db.commentsFor(postId); }

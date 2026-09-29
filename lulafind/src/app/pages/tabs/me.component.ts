@@ -396,10 +396,8 @@ export class MeComponent {
   readonly me = computed(() => this.auth.user());
   readonly avatar = computed(() => this.data.avatarFor(this.me()));
   readonly location = computed(() => this.auth.locationLabel(this.me()));
-  readonly myPosts = computed(() => {
-    const id = this.auth.viewerId;
-    return this.data.feed().filter((p) => p.authorId === id);
-  });
+  /** The viewer's own posts at every stage - see DataService.myPosts. */
+  readonly myPosts = computed(() => this.data.myPosts());
   readonly visible = computed(() => this.menuTab() === 'saved' ? this.data.savedPosts() : this.myPosts());
 
   constructor() {

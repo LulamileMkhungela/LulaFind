@@ -23,7 +23,7 @@ import { distanceKm, timeAgo } from '../../core/utils/format';
       </div>
       @if (!items().length) {
         <lf-empty icon="bell" title="No alerts yet"
-                  message="You will get pinged when someone votes, comments, follows, or when a case you posted is escalated." />
+                  message="Case alerts for your area land here, along with comments, follows and chat replies." />
       }
       @if (items().length) {
       <div class="list">

@@ -13,7 +13,7 @@ import { LocationService } from './services/location.service';
 import { ModerationService } from './services/moderation.service';
 import { SafetyService } from './services/safety.service';
 import { defaultPrivacy, emptyFilter, Post } from './models/types';
-import { timeAgo, compact, urgency, parseFullName, contributorLabel, distanceKm } from './utils/format';
+import { timeAgo, compact, urgency, parseFullName, contributorLabel, distanceKm, HOUR } from './utils/format';
 import { searchFocus } from './utils/search-focus';
 import { drawPoster, posterContent, publicPoster, POSTER_TEMPLATES } from './utils/poster';
 import { leadMarkView } from './utils/mark-check';
@@ -1545,9 +1545,10 @@ describe('Case alerts - the message that actually finds someone', () => {
 
     expect(child.status).toBe('under_review');
     expect((await inboxes())['u_lerato']).toBe(0);
-    expect(mod.pendingCases().some((p) => p.id === child.id)).toBe(true);
 
     signInAs('u_mod');
+    await mod.loadPending();
+    expect(mod.pendingCases().some((p) => p.id === child.id)).toBe(true);
     const reached = await mod.approveCase(child.id);
     expect(reached).toBeGreaterThan(0);
     expect((await data.loadPost(child.id))?.status).toBe('active');
@@ -1663,5 +1664,186 @@ describe('The found page feed', () => {
     }
     // the shape the page reads must exist on every post
     for (const p of data.feed()) expect(p.outcome).toBeTruthy();
+  });
+});
+
+describe('A child case is invisible until a moderator publishes it', () => {
+  beforeEach(bed);
+
+  const childCase = (over: Record<string, unknown> = {}) => ({
+    type: 'missing' as const,
+    title: 'Help find a missing child in Soweto',
+    body: 'This is a long enough description of what happened, when and where.',
+    media: [] as any[], province: 'GP' as const, town: 'Soweto',
+    lastSeenAt: Date.now(), lastSeenWhere: 'Orlando West', geo: null,
+    contactLabel: 'Call', contactValue: '0710000000', contactVisibleTo: 'everyone' as const,
+    caseNumber: null, reward: null,
+    subject: { name: 'Test Child', age: 9, gender: 'female' as const, height: '', build: '', skinTone: '', hair: '', eyes: '', clothing: '', distinguishing: '', medical: '', vehicle: '', languages: '', surname: '', relationship: '' },
+    audience: 'public' as const, spotlightId: null, chatEnabled: true, allowComments: true,
+    anonymous: false, askWanted: false, khumbu: null, guardianConsent: true, ...over
+  });
+
+  it('never puts it in another member\u2019s feed, and still finds it for the moderator', async () => {
+    const data = svc<DataService>(DataService);
+    const api = TestBed.inject(LULA_API) as MockApi;
+    await svc<AuthService>(AuthService).signInDemo();
+    const child = await data.createPost(childCase());
+    expect(child.status).toBe('under_review');
+
+    // The moderator's queue is a real query, not a filter over the feed.
+    const queue = await api.postsForReview();
+    expect(queue.map((p) => p.id)).toContain(child.id);
+
+    // u_lerato: another member in the same province. She must not see it.
+    signInAs('u_lerato');
+    const hers = await api.queryFeed(emptyFilter(), 'u_lerato');
+    expect(hers.map((p) => p.id)).not.toContain(child.id);
+
+    // The author still sees their own case while it waits.
+    const mine = await api.queryFeed(emptyFilter(), 'u_demo');
+    expect(mine.map((p) => p.id)).toContain(child.id);
+
+    // The moderator sees it in the feed too, so they can open and read it.
+    signInAs('u_mod');
+    const modFeed = await api.queryFeed(emptyFilter(), 'u_mod');
+    expect(modFeed.map((p) => p.id)).toContain(child.id);
+  });
+
+  it('appears to everyone the moment it is published', async () => {
+    const data = svc<DataService>(DataService);
+    const api = TestBed.inject(LULA_API) as MockApi;
+    const mod = svc<ModerationService>(ModerationService);
+    await svc<AuthService>(AuthService).signInDemo();
+    const child = await data.createPost(childCase());
+
+    signInAs('u_mod');
+    await mod.loadPending();
+    expect(mod.pendingCases().map((p) => p.id)).toContain(child.id);
+
+    await mod.approveCase(child.id);
+    expect(mod.pendingCases().map((p) => p.id)).not.toContain(child.id);
+
+    signInAs('u_lerato');
+    const hers = await api.queryFeed(emptyFilter(), 'u_lerato');
+    expect(hers.map((p) => p.id)).toContain(child.id);
+  });
+
+  it('drops it from the queue when a moderator refuses it', async () => {
+    const data = svc<DataService>(DataService);
+    const mod = svc<ModerationService>(ModerationService);
+    await svc<AuthService>(AuthService).signInDemo();
+    const child = await data.createPost(childCase());
+    signInAs('u_mod');
+    await mod.loadPending();
+    await mod.rejectCase(child.id, 'Could not confirm.');
+    expect(mod.pendingCases().map((p) => p.id)).not.toContain(child.id);
+  });
+});
+
+describe('The queries that do not go through the feed', () => {
+  beforeEach(bed);
+
+  it('keeps found cases out of the feed, which is why /found has its own query', async () => {
+    const api = TestBed.inject(LULA_API) as MockApi;
+    const data = svc<DataService>(DataService);
+    await svc<AuthService>(AuthService).signInDemo();
+    await data.loadFeed();
+
+    // The default feed filter is "active": a case that closed is not in it.
+    const feed = await api.queryFeed(emptyFilter(), 'u_demo');
+    expect(feed.some((p) => p.status === 'found')).toBe(false);
+
+    // But the reunions query finds them, with the outcome attached.
+    const closed = await data.closedCases();
+    expect(closed.length).toBeGreaterThan(0);
+    for (const c of closed) {
+      expect(c.status).toBe('found');
+      expect(c.outcome.found).toBe(true);
+      expect(typeof c.outcome.foundAt).toBe('number');
+    }
+    // newest reunion first
+    const times = closed.map((c) => c.outcome.foundAt ?? 0);
+    expect([...times].sort((a, b) => b - a)).toEqual(times);
+  });
+
+  it('keeps a family member\u2019s own case on their profile after it is found', async () => {
+    const data = svc<DataService>(DataService);
+    await svc<AuthService>(AuthService).signInDemo();
+    const post = await data.createPost({
+      type: 'missing' as const,
+      title: 'Help find Test Person in Soweto',
+      body: 'This is a long enough description of what happened, when and where.',
+      media: [] as any[], province: 'GP' as const, town: 'Soweto',
+      lastSeenAt: Date.now(), lastSeenWhere: 'Orlando West', geo: null,
+      contactLabel: 'Call', contactValue: '0710000000', contactVisibleTo: 'everyone' as const,
+      caseNumber: null, reward: null,
+      subject: { name: 'Test Person', age: 31, gender: 'female' as const, height: '', build: '', skinTone: '', hair: '', eyes: '', clothing: '', distinguishing: '', medical: '', vehicle: '', languages: '', surname: '', relationship: '' },
+      audience: 'public' as const, spotlightId: null, chatEnabled: true, allowComments: true,
+      anonymous: false, askWanted: false, khumbu: null
+    });
+
+    // On their profile while it is active...
+    expect(data.myPosts().map((p) => p.id)).toContain(post.id);
+
+    // ...and still there after it closes, which is when it matters most.
+    await data.markFound(post.id, { whereabouts: 'Home', finderUserId: null });
+    await data.loadUserScoped();
+    expect(data.myPosts().map((p) => p.id)).toContain(post.id);
+  });
+
+  it('never answers the review queue from the feed', async () => {
+    const api = TestBed.inject(LULA_API) as MockApi;
+    await svc<AuthService>(AuthService).signInDemo();
+    // Nothing is pending in the seed, and the queue says so rather than guessing.
+    expect(await api.postsForReview()).toEqual([]);
+  });
+});
+
+describe('Concurrent writes to the same case', () => {
+  beforeEach(bed);
+
+  it('patches fields without wiping what another writer just saved', async () => {
+    const api = TestBed.inject(LULA_API) as MockApi;
+    const data = svc<DataService>(DataService);
+    await svc<AuthService>(AuthService).signInDemo();
+    await data.loadFeed();
+    const post = data.feed().find((p) => p.authorId === 'u_demo')!;
+
+    // One writer opens a ground search...
+    await data.openSearchParty(post.id, 'Orlando East police station', Date.now() + HOUR, ['Orlando West']);
+
+    // ...and a background bookkeeping write touches the same case.
+    await data.setOutcomeNudged(post.id);
+
+    // The search party must still be there: the old full-copy save wiped it.
+    const after = (await data.loadPost(post.id))!;
+    expect(after.searchParty?.open).toBe(true);
+    expect(after.searchParty?.zones.length).toBe(1);
+    expect(after.outcomeNudgeAt).toBeGreaterThan(0);
+
+    // A patch only changes the fields it names.
+    await api.patchPost(post.id, { caseNumber: 'OB 445/09/2026' });
+    const patched = (await data.loadPost(post.id))!;
+    expect(patched.caseNumber).toBe('OB 445/09/2026');
+    expect(patched.searchParty?.open).toBe(true);
+    expect(patched.title).toBe(after.title);
+  });
+
+  it('still lets a volunteer claim one zone while another is claimed', async () => {
+    const data = svc<DataService>(DataService);
+    const auth = svc<AuthService>(AuthService);
+    await auth.signInDemo();
+    await data.loadFeed();
+    const post = data.feed().find((p) => p.authorId === 'u_demo')!;
+    await data.openSearchParty(post.id, 'Orlando East police station', Date.now() + HOUR, ['Orlando West', 'Mofolo North']);
+
+    const zones = (await data.loadPost(post.id))!.searchParty!.zones;
+    await data.claimSearchZone(post.id, zones[0].id);
+    signInAs('u_lerato');
+    await data.claimSearchZone(post.id, zones[1].id);
+
+    const after = (await data.loadPost(post.id))!;
+    expect(after.searchParty!.zones.find((z) => z.id === zones[0].id)!.takenBy).toBe('u_demo');
+    expect(after.searchParty!.zones.find((z) => z.id === zones[1].id)!.takenBy).toBe('u_lerato');
   });
 });

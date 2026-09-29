@@ -484,6 +484,55 @@ export class SupabaseApi implements LulaApi {
     }
   }
 
+  /**
+   * Cases held for review. Queried directly, because queryFeed hides them from
+   * everyone except the author and would hand the moderation screen an empty list.
+   */
+  async postsForReview(): Promise<Post[]> {
+    const { data, error } = await this.client
+      .from('records')
+      .select('payload')
+      .eq('collection', 'posts')
+      // status lives inside the payload jsonb - the records table has no status column
+      .filter('payload->>status', 'eq', 'under_review')
+      .order('updated_at', { ascending: true })
+      .limit(200);
+    if (error) throw new Error(error.message);
+    const posts = await Promise.all((data ?? []).map((row) => this.signRecordMedia('posts', row.payload as Post)));
+    return posts.filter((p) => p.status === 'under_review');
+  }
+
+  /**
+   * Cases that closed as found, for the reunions page. Read directly from the
+   * records, because the feed hides found cases by design.
+   */
+  async foundCases(): Promise<Post[]> {
+    const { data, error } = await this.client
+      .from('records')
+      .select('payload')
+      .eq('collection', 'posts')
+      .filter('payload->>status', 'eq', 'found')
+      .order('updated_at', { ascending: false })
+      .limit(200);
+    if (error) throw new Error(error.message);
+    const posts = await Promise.all((data ?? []).map((row) => this.signRecordMedia('posts', row.payload as Post)));
+    return posts.filter((p) => p.status === 'found');
+  }
+
+  /**
+   * Patch fields on a post with a jsonb merge inside the database, so a second
+   * writer cannot clobber the first with a copy it read earlier. Needs
+   * `lula_patch_post` from supabase/schema.sql.
+   */
+  async patchPost(id: string, patch: Partial<Post>): Promise<Post | undefined> {
+    const { error } = await this.client.rpc('lula_patch_post', {
+      post_id: id,
+      patch: { ...patch, id } as unknown as Record<string, unknown>
+    });
+    if (error) throw new Error(error.message);
+    return this.post(id);
+  }
+
   async queryFeed(f: FeedFilter, viewerId: string | null): Promise<Post[]> {
     try {
       // RLS is the source of truth for private audiences. Fetch the visible

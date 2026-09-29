@@ -128,6 +128,34 @@ export class FirebaseApi implements LulaApi {
       .filter((p) => p.authorId === authorId)
       .sort((a, b) => b.createdAt - a.createdAt);
   }
+  /** Cases held for review, straight from the collection - not the feed. */
+  async postsForReview() {
+    const all = await this.getList<Post>(this.q.query(this.col('posts'), this.q.where('status', '==', 'under_review')));
+    return all.sort((a, b) => a.createdAt - b.createdAt);
+  }
+
+  /** Cases that closed as found, straight from the collection. */
+  async foundCases() {
+    const all = await this.getList<Post>(this.q.query(this.col('posts'), this.q.where('status', '==', 'found')));
+    return all.sort((a, b) => (b.outcome?.foundAt ?? b.updatedAt) - (a.outcome?.foundAt ?? a.updatedAt));
+  }
+
+  /**
+   * Patch fields on a post inside a Firestore transaction, so two writers
+   * cannot overwrite each other with stale copies.
+   */
+  async patchPost(id: string, patch: Partial<Post>) {
+    const ref = this.doc(`posts/${id}`);
+    const next = await this.q.runTransaction(this.fs.getFirestore(this.app), async (tx: any) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists()) return undefined;
+      const merged = { ...(snap.data() as Post), ...patch, id };
+      tx.set(ref, merged, { merge: true });
+      return merged;
+    });
+    return next as Post | undefined;
+  }
+
   async queryFeed(f: FeedFilter, _viewerId: string | null) {
     // Firestore cannot express every filter combination server-side, so we pull
     // the newest slice and refine in memory. Swap in composite indexes when the

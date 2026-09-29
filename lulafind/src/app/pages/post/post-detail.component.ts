@@ -12,6 +12,7 @@ import { AvatarComponent } from '../../shared/components/avatar.component';
 import { ReactionsSheetComponent } from '../../shared/components/reactions-sheet.component';
 import { ReactionButtonComponent } from '../../shared/components/reaction-button.component';
 import { ReactionIconComponent } from '../../shared/components/reaction-icon.component';
+import { CasePlanComponent } from '../../shared/components/case-plan.component';
 import { DataService } from '../../core/services/data.service';
 import { AuthService } from '../../core/services/auth.service';
 import { ChatService, ChatGate } from '../../core/services/chat.service';
@@ -19,7 +20,7 @@ import { ModerationService } from '../../core/services/moderation.service';
 import { PostActionsService } from '../../core/services/post-actions.service';
 import { KvStore } from '../../core/data/local-db';
 import {
-  CASE_STEPS, CaseStepId, CaseStepSpec, Comment, Post, REACTIONS, ReactionKind, UserProfile, isReaction, provinceName
+  Comment, Post, REACTIONS, ReactionKind, UserProfile, isReaction, provinceName
 } from '../../core/models/types';
 import { compact, dayMonth, headingIsNew as headingIsNewFn, timeAgo } from '../../core/utils/format';
 import { leadMarkView } from '../../core/utils/mark-check';
@@ -44,7 +45,8 @@ import { leadMarkView } from '../../core/utils/mark-check';
   standalone: true,
   imports: [
     IonContent, IonTextarea, IonSkeletonText, RouterLink, IconComponent, AvatarComponent,
-    TopNavComponent, ReactionButtonComponent, ReactionIconComponent, ReactionsSheetComponent
+    TopNavComponent, ReactionButtonComponent, ReactionIconComponent, CasePlanComponent,
+    ReactionsSheetComponent
   ],
   template: `
     <lf-top-nav title="Post" backTo="/home" />
@@ -185,37 +187,7 @@ import { leadMarkView } from '../../core/utils/mark-check';
         }
 
         <!-- the family's own working sheet: the SAPS first-hours steps -->
-        @if (p()!.plan || (isMine() && isCase())) {
-          <section class="plan" aria-label="First hours checklist">
-            <button class="plan__head" type="button" (click)="planOpen.set(!planOpen())">
-              <lf-icon name="check" [size]="16" [weight]="2.6" />
-              <span class="plan__title">First hours</span>
-              <span class="plan__count">{{ planDone() }} of {{ steps.length }}</span>
-              <lf-icon [name]="planOpen() ? 'chevronUp' : 'chevronDown'" [size]="16" />
-            </button>
-            @if (planOpen()) {
-              @for (step of steps; track step.id) {
-                <button class="plan__row" type="button" [class.done]="stepDone(step.id)" (click)="toggleStep(step)" [disabled]="!isMine()">
-                  <span class="plan__box">@if (stepDone(step.id)) { <lf-icon name="check" [size]="13" [weight]="3" /> }</span>
-                  <span class="plan__text">
-                    <strong>{{ step.label }}</strong>
-                    <small>{{ step.hint }}</small>
-                  </span>
-                </button>
-              }
-              @if (isMine()) {
-                <div class="plan__officer">
-                  <input placeholder="Investigating officer" [value]="officerName()" (input)="officerName.set($any($event.target).value)" aria-label="Investigating officer name" />
-                  <input placeholder="Their number" [value]="officerContact()" (input)="officerContact.set($any($event.target).value)" aria-label="Investigating officer number" />
-                  <button class="pill pill--go" type="button" (click)="saveOfficer()">Save</button>
-                </div>
-                <p class="plan__note">Officer details stay on this case and are never shown to the public.</p>
-              } @else if (isAdmin()) {
-                <p class="plan__note">The family\u2019s checklist. Only they can tick it.</p>
-              }
-            }
-          </section>
-        }
+        <lf-case-plan [post]="p()!" [editable]="isMine()" [admin]="isAdmin()" (updated)="p.set($event)" />
 
         <!-- the two questions this page asks -->
         @if (isMine() && (p()!.status === 'active' || p()!.status === 'under_review') && !p()!.repostOf) {
@@ -524,23 +496,6 @@ import { leadMarkView } from '../../core/utils/mark-check';
     .nowait { display: flex; gap: 8px; align-items: flex-start; margin: 4px 0 10px; padding: 10px 12px; border-radius: 8px;
       background: color-mix(in srgb, var(--lf-signal) 10%, transparent); color: inherit; text-decoration: none; font-size: 13.5px; line-height: 1.35; }
     .nowait strong { font-weight: 700; }
-    .plan { margin: 4px 0 10px; border: 1px solid var(--lf-line); border-radius: 10px; overflow: hidden; background: var(--lf-card); }
-    .plan__head { display: flex; align-items: center; gap: 8px; width: 100%; padding: 11px 12px; border: 0; background: transparent;
-      color: inherit; font-family: inherit; font-size: 14.5px; font-weight: 600; cursor: pointer; text-align: left; }
-    .plan__title { flex: 1; }
-    .plan__count { font-size: 12.5px; color: var(--lf-muted); }
-    .plan__row { display: flex; gap: 10px; align-items: flex-start; width: 100%; padding: 9px 12px; border: 0; border-top: 1px solid var(--lf-line);
-      background: transparent; color: inherit; font-family: inherit; text-align: left; cursor: pointer; }
-    .plan__row.done .plan__text strong { text-decoration: line-through; color: var(--lf-muted); }
-    .plan__box { width: 19px; height: 19px; margin-top: 1px; flex-shrink: 0; border: 1.5px solid var(--lf-line); border-radius: 5px;
-      display: grid; place-items: center; color: #fff; }
-    .plan__row.done .plan__box { background: var(--lf-ubuntu); border-color: var(--lf-ubuntu); }
-    .plan__text strong { display: block; font-size: 14px; font-weight: 600; }
-    .plan__text small { display: block; margin-top: 1px; font-size: 12.5px; color: var(--lf-muted); line-height: 1.35; }
-    .plan__officer { display: flex; gap: 6px; padding: 10px 12px 4px; border-top: 1px solid var(--lf-line); }
-    .plan__officer input { flex: 1; min-width: 0; padding: 8px 10px; border: 1px solid var(--lf-line); border-radius: 8px;
-      background: var(--lf-card2); color: inherit; font-family: inherit; font-size: 13.5px; }
-    .plan__note { margin: 0; padding: 4px 12px 11px; font-size: 12px; color: var(--lf-muted); }
     .leads { display: flex; align-items: center; gap: 8px; width: 100%; margin: 2px 0 8px; padding: 10px 12px;
       border: 1px solid color-mix(in srgb, var(--lf-signal) 40%, var(--lf-line)); border-radius: 8px;
       background: color-mix(in srgb, var(--lf-signal) 8%, transparent); color: inherit; cursor: pointer;
@@ -655,43 +610,9 @@ export class PostDetailComponent implements OnInit {
   });
   readonly notMe = computed(() => this.dismissed().includes(this.p()?.id ?? ''));
 
-  /* ---------------- first hours checklist ---------------- */
-  protected readonly steps = CASE_STEPS;
-  readonly planOpen = signal(false);
-  readonly officerName = signal('');
-  readonly officerContact = signal('');
-  readonly planDone = computed(() => CASE_STEPS.filter((s) => this.stepDone(s.id)).length);
-
   isCase(): boolean {
     const t = this.p()?.type;
     return t === 'missing' || t === 'khumbulekhaya';
-  }
-
-  stepDone(id: CaseStepId): boolean {
-    const p = this.p();
-    if (!p) return false;
-    const plan = p.plan ?? null;
-    if (plan?.done?.[id]) return true;
-    // Steps the case itself proves: a case number on the post, a clear photo.
-    if (id === 'case_number') return !!p.caseNumber;
-    if (id === 'recent_photo') return p.media.some((m) => m.kind === 'image');
-    return false;
-  }
-
-  async toggleStep(step: CaseStepSpec): Promise<void> {
-    const p = this.p();
-    if (!p || !this.isMine()) return;
-    const next = await this.data.tickStep(p.id, step.id, !this.stepDone(step.id));
-    if (next) this.p.set(next);
-    await this.say(this.stepDone(step.id) ? 'Step done' : 'Step reopened');
-  }
-
-  async saveOfficer(): Promise<void> {
-    const p = this.p();
-    if (!p) return;
-    const next = await this.data.saveOfficer(p.id, this.officerName(), this.officerContact());
-    if (next) this.p.set(next);
-    await this.say('Officer saved on this case');
   }
 
   /**
@@ -712,7 +633,6 @@ export class PostDetailComponent implements OnInit {
     const cached = this.data.post(id);
     if (cached) this.p.set(cached);
     const fresh = await this.data.loadPost(id);
-    this.syncOfficerFields(fresh ?? null);
     if (fresh) {
       this.p.set(fresh);
       await this.data.registerView(id);
@@ -737,18 +657,10 @@ export class PostDetailComponent implements OnInit {
     this.gate.set(await this.chat.gate(p, p.khumbu?.claimedByUserId === this.auth.viewerId));
   }
 
-  /** Put what is already saved on the case into the officer fields. */
-  private syncOfficerFields(p: Post | null): void {
-    this.officerName.set(p?.plan?.officerName ?? '');
-    this.officerContact.set(p?.plan?.officerContact ?? '');
-  }
-
   private async reload(): Promise<void> {
     const id = this.p()?.id;
     if (!id) return;
-    const fresh = (await this.data.loadPost(id)) ?? null;
-    this.p.set(fresh);
-    this.syncOfficerFields(fresh);
+    this.p.set((await this.data.loadPost(id)) ?? null);
   }
 
   /* ---------------------- header + actions ---------------------- */
