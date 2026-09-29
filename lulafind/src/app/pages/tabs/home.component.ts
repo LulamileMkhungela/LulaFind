@@ -14,7 +14,7 @@ import { TopNavComponent } from '../../shared/components/top-nav.component';
 import { EmptyComponent } from '../../shared/components/empty.component';
 import { AvatarComponent } from '../../shared/components/avatar.component';
 import { ChatState, PostCardComponent } from '../../shared/components/post-card.component';
-import { PeopleSuggestComponent } from '../../shared/components/people-suggest.component';
+import { DiscoverRailComponent } from '../../shared/components/discover-rail.component';
 import { FeedStoriesComponent } from '../../shared/components/feed-stories.component';
 import { FilterBarComponent } from '../../shared/components/filter-bar.component';
 import { CHECK_IN_COPY } from '../../core/services/safety.service';
@@ -35,7 +35,7 @@ import { storyBg } from '../../core/data/seed';
     IonContent, IonRefresher, IonRefresherContent,
     IonInfiniteScroll, IonInfiniteScrollContent, IonSkeletonText,
     TopNavComponent, IconComponent, EmptyComponent, AvatarComponent,
-    PostCardComponent, PeopleSuggestComponent, FeedStoriesComponent, FilterBarComponent
+    PostCardComponent, DiscoverRailComponent, FeedStoriesComponent, FilterBarComponent
   ],
   template: `
     <lf-top-nav />
@@ -52,10 +52,11 @@ import { storyBg } from '../../core/data/seed';
         (filterChange)="data.setFilter($event)"
         (reset)="data.resetFilter()" />
 
-      <!-- First section as you scroll: People you may know (Facebook style) -->
-      <lf-people-suggest
+      <!-- First section as you scroll: stories + people you may know, one rail (Facebook style) -->
+      <lf-discover-rail
         [people]="suggestions()"
-        (seeAll)="goPeople()"
+        (addStory)="onAddStory()"
+        (seeAll)="openSeeAll('stories')"
         (removed)="dismissSuggestion($event)" />
 
       @if (data.loading() && !data.feed().length) {
@@ -88,7 +89,7 @@ import { storyBg } from '../../core/data/seed';
           (more)="onMore(p)"
           (savedChange)="onSave(p)" />
         @if (showStoriesAfter(i)) {
-          <lf-feed-stories (addStory)="onAddStory()" (seeAll)="storiesSheet.set(true)" />
+          <lf-feed-stories (addStory)="onAddStory()" (seeAll)="openSeeAll('stories')" />
         }
       }
 
@@ -121,40 +122,81 @@ import { storyBg } from '../../core/data/seed';
       }
     </ion-content>
 
-    <!-- All stories sheet (from “See all”) -->
+    <!-- See-all sheet: Stories and People tabs (from either “See all”) -->
     @if (storiesSheet()) {
       <div class="sheetwrap" (click)="storiesSheet.set(false)">
-        <div class="sheet" role="dialog" aria-label="All stories" (click)="$event.stopPropagation()">
+        <div class="sheet" role="dialog" aria-label="All stories and people" (click)="$event.stopPropagation()">
           <div class="sheet__head">
-            <h3>Stories</h3>
+            <h3>Stories &amp; People</h3>
             <button class="x" type="button" (click)="storiesSheet.set(false)" aria-label="Close">
               <lf-icon name="x" [size]="20" />
             </button>
           </div>
-          <button class="lf-btn lf-btn--primary lf-btn--block" type="button" (click)="onAddStory()">
-            <lf-icon name="plus" [size]="16" /> Create story
-          </button>
-          @if (!allStories().length) {
-            <p class="sheet__empty">No stories yet. Be the first — stories disappear after 24 hours.</p>
-          } @else {
-            <div class="story-grid">
-              @for (s of allStories(); track s.id) {
-                <button class="story-cell" type="button" (click)="goStory(s.id)" [style.background]="storyBg(s.bgHue)">
-                  @if (s.media[0]?.src) {
-                    <img [src]="s.media[0].src" alt="" loading="lazy" />
-                  } @else if (s.text) {
-                    <span class="story-cell__txt">{{ s.text }}</span>
-                  }
-                  <span class="story-cell__who">
-                    <lf-avatar [src]="data.avatarFor(data.authorOf(s.authorId))" [name]="data.authorOf(s.authorId)?.displayName ?? 'Member'" [size]="26" />
-                    <span class="story-cell__meta">
-                      <strong>{{ data.authorOf(s.authorId)?.displayName ?? 'Member' }}</strong>
-                      <small>{{ timeAgo(s.createdAt) }}</small>
+          <div class="sheet__tabs" role="tablist">
+            <button role="tab" type="button" [class.on]="seeAllTab() === 'stories'" (click)="seeAllTab.set('stories')">
+              Stories
+            </button>
+            <button role="tab" type="button" [class.on]="seeAllTab() === 'people'" (click)="seeAllTab.set('people')">
+              People
+            </button>
+          </div>
+          @if (seeAllTab() === 'stories') {
+            <button class="lf-btn lf-btn--primary lf-btn--block" type="button" (click)="onAddStory()">
+              <lf-icon name="plus" [size]="16" /> Create story
+            </button>
+            @if (!allStories().length) {
+              <p class="sheet__empty">No stories yet. Be the first — stories disappear after 24 hours.</p>
+            } @else {
+              <div class="story-grid">
+                @for (s of allStories(); track s.id) {
+                  <button class="story-cell" type="button" (click)="goStory(s.id)" [style.background]="storyBg(s.bgHue)">
+                    @if (s.media[0]?.src) {
+                      <img [src]="s.media[0].src" alt="" loading="lazy" />
+                    } @else if (s.text) {
+                      <span class="story-cell__txt">{{ s.text }}</span>
+                    }
+                    <span class="story-cell__who">
+                      <lf-avatar [src]="data.avatarFor(data.authorOf(s.authorId))" [name]="data.authorOf(s.authorId)?.displayName ?? 'Member'" [size]="26" />
+                      <span class="story-cell__meta">
+                        <strong>{{ data.authorOf(s.authorId)?.displayName ?? 'Member' }}</strong>
+                        <small>{{ timeAgo(s.createdAt) }}</small>
+                      </span>
                     </span>
-                  </span>
-                </button>
-              }
-            </div>
+                  </button>
+                }
+              </div>
+            }
+          } @else {
+            @if (!suggestions().length) {
+              <p class="sheet__empty">No suggestions right now. New people will appear here as they join.</p>
+              <button class="lf-btn lf-btn--block" type="button" (click)="goPeople()">
+                <lf-icon name="search" [size]="16" /> Search everyone
+              </button>
+            } @else {
+              <div class="people-list">
+                @for (u of suggestions(); track u.id) {
+                  <div class="person-row">
+                    <button class="person-row__who" type="button" (click)="goPerson(u.id)">
+                      <lf-avatar [src]="data.avatarFor(u)" [name]="u.displayName" [size]="46" />
+                      <span class="person-row__meta">
+                        <strong>{{ u.displayName }}</strong>
+                        <small>&#64;{{ u.handle }}@if (u.town) { · {{ u.town }} }</small>
+                      </span>
+                    </button>
+                    @if (sheetStateOf(u.id) === 'following') {
+                      <span class="person-row__add done">Following</span>
+                    } @else if (sheetStateOf(u.id) === 'requested') {
+                      <span class="person-row__add done">Requested</span>
+                    } @else {
+                      <button class="person-row__add" type="button"
+                              [disabled]="sheetBusy() === u.id" (click)="addFromSheet(u)">
+                        {{ sheetBusy() === u.id ? 'Adding…' : 'Add friend' }}
+                      </button>
+                    }
+                  </div>
+                }
+              </div>
+            }
           }
         </div>
       </div>
@@ -248,6 +290,62 @@ import { storyBg } from '../../core/data/seed';
     .story-cell__meta { display: flex; flex-direction: column; min-width: 0; }
     .story-cell__meta strong { font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .story-cell__meta small { font-size: 11px; opacity: .85; }
+    .sheet__tabs { display: flex; gap: 8px; }
+    .sheet__tabs button {
+      flex: 1;
+      height: 36px;
+      border: 0;
+      border-radius: 999px;
+      background: var(--lf-card-2);
+      color: var(--ion-text-color);
+      font-family: inherit;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .sheet__tabs button.on { background: var(--lf-primary-soft); color: var(--lf-primary-soft-text); }
+    .people-list { display: flex; flex-direction: column; }
+    .person-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 0;
+      border-top: 1px solid var(--lf-line-soft);
+    }
+    .person-row__who {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      border: 0;
+      background: none;
+      color: inherit;
+      font-family: inherit;
+      text-align: left;
+      cursor: pointer;
+      padding: 0;
+    }
+    .person-row__meta { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+    .person-row__meta strong { font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .person-row__meta small { font-size: 12.5px; color: var(--lf-muted); }
+    .person-row__add {
+      flex-shrink: 0;
+      height: 34px;
+      padding: 0 14px;
+      border: 0;
+      border-radius: 6px;
+      background: var(--lf-primary-soft);
+      color: var(--lf-primary-soft-text);
+      font-family: inherit;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+    }
+    .person-row__add:disabled { opacity: .65; }
+    span.person-row__add.done { background: var(--lf-card-2); color: var(--lf-muted); }
   `]
 })
 export class HomeComponent {
@@ -278,11 +376,15 @@ export class HomeComponent {
     return feed;
   });
 
-  /** “People you may know” — the first section of the feed. */
+  /** “People you may know” — shown in the first rail and the See-all sheet. */
   readonly suggestions = signal<UserProfile[]>([]);
-  /** All-stories sheet from “See all”. */
+  /** See-all sheet from either “See all”, with Stories and People tabs. */
   readonly storiesSheet = signal(false);
+  readonly seeAllTab = signal<'stories' | 'people'>('stories');
   readonly allStories = computed(() => this.data.visibleStories());
+  /** Add-friend state for rows inside the See-all sheet. */
+  readonly sheetBusy = signal<string | null>(null);
+  private sheetStates = signal<Record<string, 'following' | 'requested'>>({});
 
   private chatGates = signal<Record<string, ChatState>>({});
 
@@ -309,7 +411,7 @@ export class HomeComponent {
 
   async loadSuggestions(): Promise<void> {
     try {
-      this.suggestions.set(await this.data.suggestedPeople(10));
+      this.suggestions.set(await this.data.suggestedPeople(20));
     } catch {
       this.suggestions.set([]);
     }
@@ -319,8 +421,44 @@ export class HomeComponent {
     this.suggestions.update((all) => all.filter((u) => u.id !== id));
   }
 
+  openSeeAll(tab: 'stories' | 'people'): void {
+    this.seeAllTab.set(tab);
+    this.storiesSheet.set(true);
+  }
+
+  sheetStateOf(id: string): 'following' | 'requested' | null {
+    return this.sheetStates()[id] ?? null;
+  }
+
+  async addFromSheet(u: UserProfile): Promise<void> {
+    if (!this.auth.signedIn()) {
+      this.storiesSheet.set(false);
+      await this.router.navigate(['/auth'], { queryParams: { next: '/home' } });
+      return;
+    }
+    this.sheetBusy.set(u.id);
+    try {
+      const following = await this.data.toggleFollow(u.id);
+      const status = await this.data.followStatus(u.id);
+      this.sheetStates.update((s) => ({
+        ...s,
+        [u.id]: following || status === 'accepted' ? 'following' : 'requested'
+      }));
+    } catch {
+      /* the profile page has the full follow control with feedback */
+    } finally {
+      this.sheetBusy.set(null);
+    }
+  }
+
   goPeople(): void {
+    this.storiesSheet.set(false);
     void this.router.navigate(['/search']);
+  }
+
+  goPerson(id: string): void {
+    this.storiesSheet.set(false);
+    void this.router.navigate(['/user', id]);
   }
 
   goStory(id: string): void {
