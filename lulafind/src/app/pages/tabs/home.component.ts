@@ -46,7 +46,17 @@ import { feedWithRails } from '../../core/utils/feed';
         (filterChange)="data.setFilter($event)"
         (reset)="data.resetFilter()" />
 
-      @if (data.loading() && !data.feed().length) {
+      <!-- The network never answered: say so and offer a retry, never spin for ever. -->
+      @if (data.connectionLost() && !data.feed().length && !data.loading()) {
+        <div class="offline" role="alert">
+          <lf-icon name="wifiOff" [size]="22" />
+          <strong>LulaFind can't reach the network</strong>
+          <p>Check your connection and try again. Nothing you posted has been lost.</p>
+          <button class="lf-btn lf-btn--primary" type="button" (click)="data.retryFeed()">Try again</button>
+        </div>
+      }
+
+      @if (data.loading() && !data.feed().length && !data.connectionLost()) {
         @for (i of [1, 2, 3]; track i) {
           <div class="skel">
             <div class="skel__head"><ion-skeleton-text class="skel__av"></ion-skeleton-text><div class="lf-grow"><ion-skeleton-text style="width:40%;height:12px"></ion-skeleton-text><ion-skeleton-text style="width:24%;height:10px"></ion-skeleton-text></div></div>
@@ -57,7 +67,7 @@ import { feedWithRails } from '../../core/utils/feed';
         }
       }
 
-      @if (!data.loading() && !data.feed().length) {
+      @if (!data.loading() && !data.feed().length && !data.connectionLost()) {
         <!-- Nothing in the feed: the story card goes on its own, at the top. -->
         <lf-story-rail (addStory)="onAddStory()" />
         <lf-empty icon="search" title="No cases here yet"
@@ -113,6 +123,10 @@ import { feedWithRails } from '../../core/utils/feed';
     </ion-content>
   `,
   styles: [`
+    .offline { display: flex; flex-direction: column; align-items: center; gap: 6px; margin: 28px 16px;
+      padding: 22px 18px; border: 1px solid var(--lf-line); border-radius: 14px; background: var(--lf-card); text-align: center; }
+    .offline strong { font-size: 16px; }
+    .offline p { margin: 0 0 8px; font-size: 13.5px; color: var(--lf-muted); line-height: 1.4; }
     .skel {
       background: var(--lf-card);
       margin: 0 0 8px;

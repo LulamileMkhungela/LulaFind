@@ -28,3 +28,6 @@ Thumbs.db
 uploads/*adminsdk*.json
 *firebase-adminsdk*.json
 service-account*.json
+
+# Screenshots from the browser drive are evidence, not build output - keep them.
+!docs/e2e/*.png

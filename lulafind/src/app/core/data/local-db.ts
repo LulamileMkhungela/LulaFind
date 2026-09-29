@@ -122,9 +122,17 @@ export class LocalDb {
    */
   private readonly seedDemo: boolean;
 
-  constructor(reset = false) {
-    this.seedDemo = reset;
-    if (reset) this.store.clearAll();
+  /**
+   * `demo` = use the built-in sample dataset instead of an empty live database.
+   *
+   * The sample data is seeded once and then behaves like any other database:
+   * what a person does in demo mode (onboarding, a post, a comment) survives a
+   * reload, which is what makes the app reviewable end to end. Settings has an
+   * explicit "reset app data" for starting over; wiping on every page load - as
+   * this used to do - made the whole app look like it had forgotten the session.
+   */
+  constructor(demo = false) {
+    this.seedDemo = demo;
     if (this.seedDemo) {
       const stored = this.store.get<DbSnapshot | null>('snapshot', null);
       const storedVersion = this.store.get<number>(VERSION_KEY, 0);

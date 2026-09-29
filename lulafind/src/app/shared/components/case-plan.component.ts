@@ -1,4 +1,4 @@
-import { Component, EventEmitter, Input, Output, computed, inject, signal } from '@angular/core';
+import { Component, EventEmitter, Input, Output, computed, inject, input, signal } from '@angular/core';
 import { ToastController } from '@ionic/angular/toast-controller';
 import { IconComponent } from './icon.component';
 import { DataService } from '../../core/services/data.service';
@@ -21,7 +21,7 @@ import { CASE_STEPS, CaseStepId, CaseStepSpec, Post } from '../../core/models/ty
   standalone: true,
   imports: [IconComponent],
   template: `
-    @if (post.plan || editable) {
+    @if (post().plan || editable) {
       <section class="plan" aria-label="First hours checklist">
         <button class="plan__head" type="button" (click)="open.set(!open())">
           <lf-icon name="check" [size]="16" [weight]="2.6" />
@@ -87,10 +87,16 @@ export class CasePlanComponent {
   private data = inject(DataService);
   private toaster = inject(ToastController);
 
-  @Input({ required: true }) post!: Post;
+  /**
+   * The case, as a signal - the counter below is a computed and must re-run when
+   * the case changes. (As a plain @Input it froze at its first value: the steps
+   * ticked, the row turned green, and the count stayed where it started.)
+   */
+  readonly post = input.required<Post>();
   /** The poster (or an admin acting on the case) may tick steps. */
   @Input() editable = false;
   @Input() admin = false;
+  /** Emitted after a write so the page can show the saved case. */
   @Output() updated = new EventEmitter<Post>();
 
   protected readonly steps = CASE_STEPS;
@@ -105,37 +111,49 @@ export class CasePlanComponent {
 
   /** Steps the post itself already proves. They tick themselves. */
   isDerived(id: CaseStepId): boolean {
-    if (id === 'case_number') return !!this.post.caseNumber;
-    if (id === 'recent_photo') return this.post.media.some((m) => m.kind === 'image');
+    if (id === 'case_number') return !!this.post().caseNumber;
+    if (id === 'recent_photo') return this.post().media.some((m) => m.kind === 'image');
     return false;
   }
 
   isDone(id: CaseStepId): boolean {
     if (this.isDerived(id)) return true;
-    return this.post.plan?.done?.[id] === true;
+    return this.post().plan?.done?.[id] === true;
   }
 
   async toggle(step: CaseStepSpec): Promise<void> {
     if (!this.editable || this.isDerived(step.id)) return;
-    const next = await this.data.tickStep(this.post.id, step.id, !this.isDone(step.id));
-    if (next) {
-      this.post = next;
-      this.updated.emit(next);
+    const wanted = !this.isDone(step.id);
+    try {
+      const next = await this.data.tickStep(this.post().id, step.id, wanted);
+      if (next) this.updated.emit(next);
+      await this.say(wanted ? 'Step done' : 'Step reopened');
+    } catch (err) {
+      // A tick that silently does nothing is worse than an honest error: the
+      // family would think the case was updated when it was not.
+      await this.fail('Could not save that step. Check your connection.', err);
     }
   }
 
   async saveOfficer(): Promise<void> {
-    const next = await this.data.saveOfficer(this.post.id, this.officerName(), this.officerContact());
-    if (next) {
-      this.post = next;
-      this.updated.emit(next);
+    try {
+      const next = await this.data.saveOfficer(this.post().id, this.officerName(), this.officerContact());
+      if (next) this.updated.emit(next);
+      await this.say('Officer saved on this case');
+    } catch (err) {
+      await this.fail('Could not save the officer. Check your connection.', err);
     }
-    await this.say('Officer saved on this case');
+  }
+
+  private async fail(message: string, err: unknown): Promise<void> {
+    console.warn(message, err);
+    const t = await this.toaster.create({ message, duration: 3000, position: 'bottom', color: 'danger' });
+    await t.present();
   }
 
   private syncOfficerFields(): void {
-    this.officerName.set(this.post.plan?.officerName ?? '');
-    this.officerContact.set(this.post.plan?.officerContact ?? '');
+    this.officerName.set(this.post().plan?.officerName ?? '');
+    this.officerContact.set(this.post().plan?.officerContact ?? '');
   }
 
   private async say(message: string): Promise<void> {

@@ -41,8 +41,8 @@ import { ReactionIconComponent } from './reaction-icon.component';
     <button type="button" class="btn" [class.on]="!!current()" [style.--tone]="tone()"
             [attr.aria-pressed]="!!current()" [attr.aria-haspopup]="'menu'"
             [attr.aria-label]="ariaLabel()"
-            (pointerdown)="down($event)" (pointerup)="up($event)" (pointercancel)="cancel()"
-            (pointerleave)="leave($event)" (pointermove)="move($event)" (contextmenu)="$event.preventDefault()"
+            (pointerdown)="down($event)" (pointercancel)="cancel()"
+            (pointerleave)="leave($event)" (contextmenu)="$event.preventDefault()"
             (keydown.enter)="tap($event)" (keydown.space)="tap($event)" (click)="$event.preventDefault()">
       @if (current(); as c) {
         <lf-reaction-icon [kind]="c" [size]="22" />
@@ -122,26 +122,57 @@ export class ReactionButtonComponent {
     }, 380);
   }
 
-  up(ev: PointerEvent): void {
+  /**
+   * The release is watched on the host, not on the button.
+   *
+   * Holding the button opens the tray, and choosing means sliding onto a
+   * reaction and letting go - the finger (or the mouse, which has no implicit
+   * capture) comes up over the *option*, not over the button. Listening on the
+   * button missed that release entirely: nothing was chosen and the tray stayed
+   * open with its scrim swallowing the next tap on the page.
+   */
+  @HostListener('pointerup', ['$event'])
+  onUp(ev: PointerEvent): void {
     this.clearTimer();
+    const key = this.optionAt(ev.clientX, ev.clientY);
     if (this.held) {
-      // Finger lifted after a long press: pick whatever it is over.
-      const el = document.elementFromPoint(ev.clientX, ev.clientY)?.closest?.('.opt') as HTMLElement | null;
-      const key = el?.dataset['key'] as ReactionKind | undefined;
-      if (key) this.choose(key);
       this.held = false;
+      this.pointerId = null;
+      if (key) { this.choose(key); return; }
+      // Let go away from the choices: nothing chosen, and nothing left open.
+      this.open.set(false);
       return;
     }
-    this.tap();
+    // A quick lift that started and ended on the button is a plain tap.
+    const onButton = !!(ev.target as HTMLElement | null)?.closest?.('.btn');
+    if (onButton) this.tap();
+  }
+
+  /** Which reaction, if any, sits under this point. */
+  private optionAt(x: number, y: number): ReactionKind | undefined {
+    // Not every webview has elementFromPoint, and a throw here used to abort the
+    // release and leave the tray stuck open with its scrim over the page.
+    if (typeof document.elementFromPoint !== 'function') return undefined;
+    const el = document.elementFromPoint(x, y)?.closest?.('.opt') as HTMLElement | null;
+    return el?.dataset['key'] as ReactionKind | undefined;
+  }
+
+  /** Kept for the keyboard path (Enter/Space on the button). */
+  up(ev: PointerEvent): void {
+    this.onUp(ev);
   }
 
   cancel(): void { this.clearTimer(); }
 
-  /** While the tray is open and a finger is down, highlight the reaction under it. */
+  /**
+   * While the tray is open and a finger is down, highlight the reaction under
+   * it. Watched on the host too, so sliding from the button onto an option
+   * highlights it instead of going dark the moment the finger leaves the button.
+   */
+  @HostListener('pointermove', ['$event'])
   move(ev: PointerEvent): void {
     if (!this.held || !this.open()) return;
-    const el = document.elementFromPoint(ev.clientX, ev.clientY)?.closest?.('.opt') as HTMLElement | null;
-    this.hot.set((el?.dataset['key'] as ReactionKind | undefined) ?? null);
+    this.hot.set(this.optionAt(ev.clientX, ev.clientY) ?? null);
   }
 
   /** A mouse hovering over the button opens the tray after a moment. */

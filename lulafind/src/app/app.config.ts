@@ -8,12 +8,21 @@ import { LocalDb } from './core/data/local-db';
 import { FirebaseApi } from './core/data/firebase-api';
 import { SupabaseApi } from './core/data/supabase-api';
 import { liveSupabaseEnabled } from './core/data/supabase-client';
+import { demoRequested } from './core/data/demo';
 import { routes } from './app.routes';
 import { SettingsService } from './core/services/settings.service';
 import { LocationService } from './core/services/location.service';
 import { DataService } from './core/services/data.service';
 
 function apiFactory(): LulaApi {
+  // A development build can be driven against the built-in sample dataset with
+  // ?demo=1, so the app can be shown and reviewed without a backend. Production
+  // builds never take this branch (see core/data/demo.ts).
+  if (demoRequested()) {
+    const api = new MockApi(new LocalDb(true));
+    void api.init();
+    return api;
+  }
   if (liveSupabaseEnabled()) {
     const api = new SupabaseApi();
     void api.init();

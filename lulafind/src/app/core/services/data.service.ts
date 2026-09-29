@@ -8,6 +8,7 @@ import {
 } from '../models/types';
 import { avatar, cover, hueOf, scene } from '../data/seed';
 import { HOUR, DAY, compact, uid } from '../utils/format';
+import { withTimeout } from '../utils/net';
 import { AuthService } from './auth.service';
 import { SettingsService } from './settings.service';
 import { SUPPORT_EMAIL } from '../config';
@@ -96,6 +97,12 @@ export class DataService {
   /** Found cases matching the current type and province. Shown on the newsfeed, not only behind the Found filter. */
   readonly broughtHome = signal<Post[]>([]);
   readonly loading = signal(false);
+  /**
+   * The last read never came back. Set when a load times out or the network
+   * refuses the request, so a screen can say so and offer a retry instead of
+   * showing its loading state for ever.
+   */
+  readonly connectionLost = signal(false);
   readonly spotlights = signal<Spotlight[]>([]);
   readonly stories = signal<Story[]>([]);
   readonly tips = signal<Tip[]>([]);
@@ -206,7 +213,8 @@ export class DataService {
   async loadFeed(f: FeedFilter = this.filter(), viewerId: string | null = this.auth.viewerId): Promise<Post[]> {
     this.loading.set(true);
     try {
-      const list = uniqueById((await this.api.queryFeed(f, viewerId)).filter((p) => !RETIRED_POST_TYPES.includes(p.type)));
+      const list = uniqueById((await this.readFeed(f, viewerId)).filter((p) => !RETIRED_POST_TYPES.includes(p.type)));
+      this.connectionLost.set(false);
       const hidden = this.hiddenIds();
       const visible = hidden.length ? list.filter((p) => !hidden.includes(p.id)) : list;
       this.feed.set(visible);
@@ -214,16 +222,33 @@ export class DataService {
       if (f.status === 'found') {
         this.broughtHome.set(visible);
       } else {
-        const found = uniqueById((await this.api.queryFeed({ ...f, status: 'found' }, viewerId)).filter((p) => !RETIRED_POST_TYPES.includes(p.type)));
+        const found = uniqueById((await this.readFeed({ ...f, status: 'found' }, viewerId)).filter((p) => !RETIRED_POST_TYPES.includes(p.type)));
         const shown = (hidden.length ? found.filter((p) => !hidden.includes(p.id)) : found)
           .sort((a, b) => (b.outcome?.foundAt ?? b.updatedAt) - (a.outcome?.foundAt ?? a.updatedAt));
         this.broughtHome.set(shown);
         this.mergeCache(found);
       }
       return visible;
+    } catch (err) {
+      // A stalled cellphone connection used to leave the feed loading for ever.
+      // Now the screen is told, and the person can try again.
+      this.connectionLost.set(true);
+      console.warn('Feed load failed:', err instanceof Error ? err.message : err);
+      return this.feed();
     } finally {
       this.loading.set(false);
     }
+  }
+
+  /** One feed read, with a deadline so a dead connection cannot hang the screen. */
+  private readFeed(f: FeedFilter, viewerId: string | null): Promise<Post[]> {
+    return withTimeout(this.api.queryFeed(f, viewerId), 12_000, 'The feed');
+  }
+
+  /** Try the feed again after a failed load. Used by the "Try again" button. */
+  async retryFeed(): Promise<void> {
+    this.connectionLost.set(false);
+    await this.loadFeed();
   }
 
   setFilter(patch: Partial<FeedFilter>): void {

@@ -58,7 +58,7 @@ export const LULA_TOPICS: Topic[] = [
   {
     id: '72',
     question: 'What should I do in the first 72 hours?',
-    match: ['72', 'first hours', 'first 24', 'first 48', 'what should i do', 'checklist', 'where do i start', 'waiting period', '24 hour'],
+    match: ['72', 'first hour', 'first 24', 'first 48', 'first day', 'what should i do', 'what do i do', 'do first', 'checklist', 'where do i start', 'waiting period', 'wait 24', 'wait 48'],
     answer: {
       text: 'The first 72 hours matter most. 1) Open a SAPS case and get the number. 2) Choose one family spokesperson. 3) Gather a recent, clear photo. 4) Write down exactly what they wore, shoes and jewellery included. 5) Post on LulaFind and share the poster where they usually go: the taxi rank, clinic, church or school.',
       links: [{ label: 'Read the safety tips', route: '/tips' }]
@@ -177,15 +177,30 @@ export const LULA_FALLBACK: LulaAnswer = {
   links: [{ label: 'Open the FAQs', route: '/faqs' }, { label: 'Help lines', route: '/help' }]
 };
 
+/**
+ * Does the question contain this keyword, as a whole word, allowing a plural?
+ *
+ * Plain `includes()` missed the most obvious way to ask the most important
+ * question in the app: "what do I do in the first hour" did not match the
+ * topic keyword "first hours", so someone in the worst week of their life was
+ * told to try the FAQs. Matching on word boundaries with an optional trailing
+ * s fixes the singular/plural gap without letting "car" match "care".
+ */
+function hits(q: string, key: string): boolean {
+  const k = key.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  if (!k) return false;
+  return new RegExp(`(^| )${k}s?( |$)`, 'i').test(q);
+}
+
 /** Picks the topic with the most matching keywords; ties go to the earlier (more urgent) topic. */
 export function askLula(question: string): LulaAnswer {
-  const q = ` ${question.toLowerCase().replace(/[^a-z0-9\s']/g, ' ')} `;
+  const q = ` ${question.toLowerCase().replace(/[^a-z0-9\s']/g, ' ').replace(/\s+/g, ' ')} `;
   let best: Topic | null = null;
   let bestScore = 0;
   for (const topic of LULA_TOPICS) {
     let score = 0;
     for (const key of topic.match) {
-      if (q.includes(key.length <= 3 ? ` ${key} ` : key)) score += key.length > 6 ? 2 : 1;
+      if (hits(q, key)) score += key.trim().length > 6 ? 2 : 1;
     }
     if (score > bestScore) { best = topic; bestScore = score; }
   }

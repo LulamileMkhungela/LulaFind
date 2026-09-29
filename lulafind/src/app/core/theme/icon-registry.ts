@@ -32,6 +32,8 @@ const PATHS: Record<string, string> = {
   arrowLeft: 'M19 12H5M12 19l-7-7 7-7',
   shield: 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z',
   alert: 'M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0zM12 9v4M12 17h.01',
+  /** No connection: the wifi arc with a slash through it. */
+  wifiOff: 'M1 1l22 22M16.7 12.5A6 6 0 0 0 8 8.5M5 12.5a10.9 10.9 0 0 1 4-2.3M2 8.8a15.9 15.9 0 0 1 4.2-2.6M8.5 16.4a6 6 0 0 1 5.3-1.1M12 20h.01',
   info: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM12 16v-4M12 8h.01',
   lock: 'M5 11h14v10H5zM8 11V7a4 4 0 0 1 8 0v4',
   unlock: 'M5 11h14v10H5zM8 11V7a4 4 0 0 1 7.5-2',

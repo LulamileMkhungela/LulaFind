@@ -173,14 +173,43 @@ function fitOneLine(c: Ctx, text: string, maxW: number, size: number, weight: nu
   return s;
 }
 
-function facts(c: Ctx, items: { label: string; value: string }[], x: number, y: number, w: number, label: string, value: string, gap = 30, maxItems = 4): number {
-  for (const f of items.slice(0, maxItems)) {
+/**
+ * The labelled facts (WHEN, WHERE, the case number...).
+ *
+ * `limitY` is the bottom edge this block may not cross - the contact bar sits
+ * just below it on several designs, and a fact drawn under that bar is text a
+ * reader cannot read (the date on the Thato poster was half-hidden behind it).
+ * A row that would only fit on one line is drawn on one line; a row with no
+ * room at all is left out, because a poster that states two facts clearly beats
+ * one that states three with the last one cut in half.
+ */
+function facts(c: Ctx, items: { label: string; value: string }[], x: number, y: number, w: number,
+               label: string, value: string, gap = 30, maxItems = 4, limitY = POSTER_H - 96): number {
+  const LINE = 34 * 1.25;
+  // The case number is never the fact that gets dropped: it is the one line on
+  // the poster that tells a reader the police are already involved, and the app
+  // asks families for it for exactly that reason.
+  const rows = items.length <= maxItems
+    ? items.slice(0, maxItems)
+    : (() => {
+        const keep = items.slice(0, maxItems - 1);
+        const caseNo = items.slice(maxItems - 1).find((f) => /case/i.test(f.label));
+        return caseNo ? [...keep, caseNo] : items.slice(0, maxItems);
+      })();
+  const advance = (lines: number): number => 40 + LINE * lines + gap - 8;
+  // Every fact on one line each, or every fact with room for two. Keeping all
+  // the labels matters more than the second line of one value: a family is
+  // looking for the date as well as the place.
+  const fits = (lines: number): boolean => y + rows.reduce(() => 0, 0) + rows.length * advance(lines) <= limitY;
+  const lines = fits(2) ? 2 : 1;
+  for (const f of rows) {
+    if (y + 40 + LINE * lines > limitY) break;
     c.fillStyle = label; c.font = `700 22px ${SANS}`;
     if ('letterSpacing' in c) (c as unknown as { letterSpacing: string }).letterSpacing = '3px';
     c.fillText(f.label, x, y);
     if ('letterSpacing' in c) (c as unknown as { letterSpacing: string }).letterSpacing = '0px';
     c.fillStyle = value;
-    y = para(c, f.value, x, y + 40, w, 34, 1.25, 2, 600) + gap - 8;
+    y = para(c, f.value, x, y + 40, w, 34, 1.25, lines, 600) + gap - 8;
   }
   return y;
 }
@@ -241,7 +270,7 @@ function signal(c: Ctx, p: PosterContent, img: HTMLImageElement | null): void {
   fitOneLine(c, p.name, 900, 92, 800, SANS, 48);
   c.fillText(p.name, px + 8, py + ph + 95);
   if (p.ageLine) { c.fillStyle = '#ff9d3d'; c.font = `600 34px ${SANS}`; c.fillText(p.ageLine, px + 8, py + ph + 142); }
-  facts(c, p.facts, px + 8, py + ph + 205, 930, 'rgba(255,255,255,.5)', '#fff', 14, 3);
+  facts(c, p.facts, px + 8, py + ph + 205, 930, 'rgba(255,255,255,.5)', '#fff', 14, 3, POSTER_H - 172);
 
   c.fillStyle = '#ff3d3d'; rr(c, 64, POSTER_H - 150, 952, 64, 32); c.fill();
   c.fillStyle = '#fff'; c.font = `800 28px ${SANS}`; c.textAlign = 'center';
@@ -278,7 +307,7 @@ function aurora(c: Ctx, p: PosterContent, img: HTMLImageElement | null): void {
   fitOneLine(c, p.name, 860, 88, 800, SANS, 44); c.fillText(p.name, cx, py + 100);
   if (p.ageLine) { c.font = `500 32px ${SANS}`; c.fillStyle = 'rgba(255,255,255,.85)'; c.fillText(p.ageLine, cx, py + 150); }
   c.textAlign = 'left';
-  facts(c, p.facts, 120, py + 215, 840, 'rgba(255,255,255,.65)', '#fff', 16, 3);
+  facts(c, p.facts, 120, py + 215, 840, 'rgba(255,255,255,.65)', '#fff', 16, 3, 1214);
   c.fillStyle = '#fff'; rr(c, 64, 1215, 952, 68, 34); c.fill();
   c.fillStyle = '#2b1478'; c.font = `800 28px ${SANS}`; c.textAlign = 'center'; c.fillText(p.contact, cx, 1259, 900);
   c.textAlign = 'left';
@@ -325,7 +354,7 @@ function beacon(c: Ctx, p: PosterContent, img: HTMLImageElement | null): void {
   c.fillStyle = '#111'; fitOneLine(c, p.name, 420, 66, 900, SANS, 34);
   const nm = wrap(c, p.name, 420); let y = py + 60; for (const l of nm.slice(0, 2)) { c.fillText(l, 590, y); y += 74; }
   if (p.ageLine) { c.font = `700 32px ${SANS}`; c.fillText(p.ageLine, 590, y - 8); y += 50; }
-  facts(c, p.facts, 590, y + 20, 410, '#7a6500', '#111', 24, 3);
+  facts(c, p.facts, 590, y + 20, 410, '#7a6500', '#111', 24, 3, 1050);
   c.fillStyle = '#111'; rr(c, 64, 990, 952, 150, 24); c.fill();
   c.fillStyle = '#ffd400'; c.font = `800 26px ${SANS}`; spaced(c, true); c.fillText('CALL OR MESSAGE', 100, 1046); spaced(c, false);
   c.fillStyle = '#fff'; fitOneLine(c, p.contact, 880, 48, 800, SANS, 26); c.fillText(p.contact, 100, 1104);
@@ -354,7 +383,7 @@ function ubuntu(c: Ctx, p: PosterContent, img: HTMLImageElement | null): void {
   fitOneLine(c, p.name, 900, 88, 800, SANS, 44); c.fillText(p.name, cx, 985);
   if (p.ageLine) { c.fillStyle = '#f4b400'; c.font = `700 34px ${SANS}`; c.fillText(p.ageLine, cx, 1035); }
   c.textAlign = 'left';
-  facts(c, p.facts.slice(0, 2), 110, 1095, 860, '#f4b400', '#fff', 8, 2);
+  facts(c, p.facts, 110, 1062, 860, '#f4b400', '#fff', 6, 2, 1236);
   c.fillStyle = '#f4b400'; rr(c, 64, 1240, 952, 60, 30); c.fill();
   c.fillStyle = '#0c2f2a'; c.font = `800 26px ${SANS}`; c.textAlign = 'center'; c.fillText(p.contact, cx, 1279, 900); c.textAlign = 'left';
   footer(c, p, 'rgba(255,255,255,.6)', POSTER_H - 20);
@@ -372,7 +401,7 @@ function noir(c: Ctx, p: PosterContent, img: HTMLImageElement | null): void {
   fitOneLine(c, p.name, 930, 130, 800, SERIF, 60); c.fillText(p.name, 72, 790);
   if (p.ageLine) { c.fillStyle = 'rgba(255,255,255,.75)'; c.font = `italic 500 38px ${SERIF}`; c.fillText(p.ageLine, 72, 846); }
   c.fillStyle = 'rgba(255,255,255,.4)'; c.fillRect(72, 878, 936, 2);
-  facts(c, p.facts.slice(0, 3), 72, 925, 900, 'rgba(255,255,255,.5)', '#fff', 12, 3);
+  facts(c, p.facts, 72, 925, 900, 'rgba(255,255,255,.5)', '#fff', 12, 3, POSTER_H - 130);
   c.fillStyle = '#fff'; c.font = `800 30px ${SANS}`; c.fillText(p.contact, 72, POSTER_H - 96, 936);
   footer(c, p, 'rgba(255,255,255,.55)', POSTER_H - 46);
 }
@@ -490,7 +519,7 @@ function pulse(c: Ctx, p: PosterContent, img: HTMLImageElement | null): void {
   c.fillText(p.name, cx, cy + r + 120);
   if (p.ageLine) { c.fillStyle = '#ff8ad4'; c.font = `600 34px ${SANS}`; c.fillText(p.ageLine, cx, cy + r + 166); }
   c.textAlign = 'left';
-  facts(c, p.facts, 110, cy + r + 220, 860, 'rgba(0,229,255,.75)', '#ffffff', 10, 3);
+  facts(c, p.facts, 110, cy + r + 220, 860, 'rgba(0,229,255,.75)', '#ffffff', 10, 3, POSTER_H - 200);
 
   c.fillStyle = '#00e5ff'; rr(c, 64, POSTER_H - 150, 952, 4, 2); c.fill();
   c.fillStyle = '#ffffff'; c.font = `800 28px ${SANS}`;

@@ -19,7 +19,21 @@ import { drawPoster, posterContent, publicPoster, POSTER_TEMPLATES } from './uti
 import { leadMarkView } from './utils/mark-check';
 import { GBV_CHANNEL_NOTE, HELP_LINES } from './data/sa-help';
 import { avatar } from './data/seed';
+import { askLula } from './data/ask-lula';
 import { feedWithRails } from './utils/feed';
+
+
+/** Pretend the point under the finger is a reaction option with this key. */
+function jestSpyOnElementFromPoint(key: string | null): void {
+  const doc = document as unknown as { elementFromPoint?: (x: number, y: number) => Element | null };
+  doc.elementFromPoint = () => {
+    if (!key) return null;
+    const el = document.createElement('button');
+    el.className = 'opt';
+    el.dataset['key'] = key;
+    return el;
+  };
+}
 
 /**
  * End-to-end tests for the rules that make LulaFind LulaFind:
@@ -1451,6 +1465,56 @@ describe('poster drawing', () => {
     }
   });
 
+  /**
+   * Nothing may be drawn behind the contact bar.
+   *
+   * The Thato poster rendered "WHEN · 24 September 2026" half-hidden under the
+   * yellow call bar - the label was visible, the date was not, and the date is
+   * the thing a reader needs to know whether the sighting is worth reporting.
+   * This records where every string actually lands on the canvas.
+   */
+  it('keeps every fact clear of the contact line', () => {
+    const content = posterContent(post, 'https://lulafind.app/post/p_poster', null);
+    expect(content.facts.length).toBeGreaterThan(1);
+
+    for (const t of POSTER_TEMPLATES) {
+      const drawn: { text: string; y: number }[] = [];
+      const noop = (): void => undefined;
+      const gradient = { addColorStop: noop };
+      const ctx: Record<string, unknown> = {
+        save: noop, restore: noop, beginPath: noop, closePath: noop, moveTo: noop, lineTo: noop,
+        arc: noop, arcTo: noop, ellipse: noop, rect: noop, fill: noop, stroke: noop, clip: noop,
+        fillRect: noop, strokeRect: noop, clearRect: noop, strokeText: noop,
+        drawImage: noop, translate: noop, scale: noop, rotate: noop, setTransform: noop,
+        fillText: (text: string, _x: number, y: number) => drawn.push({ text: String(text), y }),
+        measureText: (v: string) => ({ width: String(v ?? '').length * 17 }),
+        createLinearGradient: () => gradient,
+        createRadialGradient: () => gradient,
+        createPattern: () => null
+      };
+      drawPoster({ width: 0, height: 0, getContext: () => ctx } as unknown as HTMLCanvasElement, t.id, content, null);
+
+      const contact = drawn.find((d) => d.text === content.contact);
+      expect(contact, `${t.id}: the contact line is missing`).toBeTruthy();
+
+      // Every fact must be on the poster (a missing "WHEN" hides the date), and
+      // nothing at all may be drawn behind the contact bar.
+      const all = drawn.map((d) => d.text).join(' | ');
+      // Each design trims to the facts it has room for, but two things always
+      // hold: the first fact is on the poster, and the police case number is
+      // never the one that gets dropped (it is why families are asked for it).
+      const first = content.facts[0];
+      expect(all, `${t.id}: the "${first.label}" label was never drawn`).toContain(first.label);
+      expect(all, `${t.id}: "${first.label}" has no value drawn`).toContain(first.value.split(' ')[0]);
+      const caseFact = content.facts.find((f) => /case/i.test(f.label));
+      if (caseFact) {
+        expect(all, `${t.id}: the police case number was dropped from the poster`).toContain(caseFact.label);
+      }
+      const hidden = drawn.filter((d) => d.text !== content.contact && d.y > contact!.y - 24 && d.y < contact!.y + 30);
+      expect(hidden.map((h) => h.text), `${t.id}: text is hidden behind the contact bar`).toEqual([]);
+    }
+  });
+
   it('draws a template with a photo as well as without one', () => {
     const content = posterContent(post, 'https://lulafind.app/post/p_poster', null);
     const photo = { width: 800, height: 1000 } as unknown as HTMLImageElement;
@@ -1847,3 +1911,63 @@ describe('Concurrent writes to the same case', () => {
     expect(after.searchParty!.zones.find((z) => z.id === zones[1].id)!.takenBy).toBe('u_lerato');
   });
 });
+
+/**
+ * What driving the real app in a real browser found.
+ *
+ * Each of these was a defect a person would hit; none of them showed up in a
+ * service-level test, which is why the browser drive exists.
+ */
+describe('Bugs the browser found', () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  it('answers the most natural phrasing of the first-hours question', () => {
+    // "what do I do in the first hour" used to fall through to "I don't have a
+    // good answer" because the keyword was stored as "first hours".
+    for (const q of [
+      'what do I do in the first hour',
+      'what do I do in the first 72 hours',
+      'first hour',
+      'What should I do first?',
+      'there is no 24 hour waiting period right?'
+    ]) {
+      const a = askLula(q);
+      expect(a.text, `"${q}" should get the first-hours answer`).toMatch(/first 72 hours/i);
+    }
+    // and it still says so honestly when it genuinely does not know
+    expect(askLula('what is the weather in Durban tomorrow').text).toMatch(/rather say so than guess/i);
+  });
+
+  it('lets go of the reaction tray wherever the finger is lifted', async () => {
+    // The control must mark itself released even when the pointer comes up over
+    // an option rather than the button - otherwise the tray and its full-screen
+    // scrim stay on the page and swallow the next tap anywhere.
+    const { ReactionButtonComponent } = await import('../shared/components/reaction-button.component');
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({ imports: [ReactionButtonComponent] });
+    const f = TestBed.createComponent(ReactionButtonComponent);
+    f.detectChanges();
+    const c = f.componentInstance;
+    const at = (x: number, y: number) => ({ pointerType: 'touch', button: 0, pointerId: 1, clientX: x, clientY: y }) as PointerEvent;
+
+    c.down(at(5, 5));
+    await new Promise((r) => setTimeout(r, 450));
+    expect(c.open(), 'holding the button should open the tray').toBe(true);
+
+    c.onUp({ ...at(5, 5), target: null } as unknown as PointerEvent);
+    expect(c.open(), 'the tray must not stay open after a release').toBe(false);
+
+    // and a release over a choice picks it
+    const picked: string[] = [];
+    c.react.subscribe((k) => picked.push(k));
+    c.down(at(5, 5));
+    await new Promise((r) => setTimeout(r, 450));
+    jestSpyOnElementFromPoint('like');
+    c.onUp({ ...at(5, 5), target: null } as unknown as PointerEvent);
+    expect(picked, 'releasing over Like should choose Like').toEqual(['like']);
+    expect(c.open()).toBe(false);
+  });
+});
+
