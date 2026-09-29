@@ -76,6 +76,14 @@ export const REACTIONS: { key: ReactionKind; label: string; color: string }[] = 
   { key: 'up', label: 'Have an idea', color: '#f2b01e' }
 ];
 
+/**
+ * The default reaction, exactly like LinkedIn's default "Like".
+ * A quick tap on the reaction button gives this one, and only this one opens
+ * private chat with the poster. Holding the button opens the tray with the rest.
+ */
+export const DEFAULT_REACTION: ReactionKind = 'up';
+export const DEFAULT_REACTION_LABEL = 'Have an idea';
+
 /** Anything except the retired `down` is a reaction that counts. */
 export const isReaction = (v: VoteValue | string | undefined): v is ReactionKind =>
   v === 'up' || v === 'like' || v === 'support' || v === 'sad';

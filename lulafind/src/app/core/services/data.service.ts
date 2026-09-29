@@ -918,7 +918,7 @@ export class DataService {
           await this.api.pushNotification({
             id: uid('n'), userId: me, kind: 'vote',
             title: n === 1 ? `Someone has an idea about ${who}` : `${n} people have an idea about ${who}`,
-            body: `New Idea on ${where}. Open it to read the leads.`,
+            body: `Someone has an idea on ${where}. Open it to read the leads.`,
             at: Date.now(), read: false, route: `/post/${p.id}`, postId: p.id
           });
           sent++;

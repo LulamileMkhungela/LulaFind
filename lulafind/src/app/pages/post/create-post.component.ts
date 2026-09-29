@@ -254,6 +254,7 @@ interface MissingField { key: string; label: string; }
           </section>
         }
 
+        @if (notice()) { <p class="notice-message"><lf-icon name="info" [size]="15" /> {{ notice() }}</p> }
         @if (error()) { <p class="error-message" role="alert"><lf-icon name="alert" [size]="15" /> {{ error() }}</p> }
         <p class="footnote">Share only information you are allowed to post. In an emergency, call 10111.</p>
       </main>
@@ -333,6 +334,7 @@ interface MissingField { key: string; label: string; }
     .switch-row small { color: var(--fb-muted); font-size: 12px; line-height: 1.35; }
     .privacy-switches { margin-top: 4px; }
     .error-message { display: flex; align-items: center; gap: 6px; padding: 9px 10px; margin: 12px 0 0; border-radius: 6px; background: color-mix(in srgb, var(--lf-signal) 12%, transparent); color: var(--lf-signal); font-size: 14px; }
+    .notice-message { display: flex; align-items: center; gap: 6px; padding: 9px 10px; margin: 12px 0 0; border-radius: 6px; background: var(--lf-primary-soft); color: var(--lf-primary-soft-text); font-size: 14px; }
     .field-error { margin: 1px 0 0; color: var(--lf-signal); font-size: 13px; font-weight: 600; }
     .field.invalid input, .field.invalid select, .field.invalid textarea,
     .body-input.field-error { border-color: var(--lf-signal); box-shadow: 0 0 0 2px color-mix(in srgb, var(--lf-signal) 18%, transparent); }
@@ -361,6 +363,8 @@ export class CreatePostComponent implements OnInit {
   editing = signal(false);
   busy = signal(false);
   error = signal('');
+  /** Not an error: a plain fact, e.g. this build has no camera module. */
+  notice = signal('');
   postId: string | null = null;
 
   /**
@@ -524,6 +528,7 @@ export class CreatePostComponent implements OnInit {
     const f = this.f();
     if (f.media.length >= 4 || this.hasVideo()) return;
     const item = await this.media.pickImage({ quality: 76 });
+    if (this.media.notice()) this.notice.set(this.media.notice()!);
     if (!item) {
       if (this.media.lastError()) this.error.set(this.media.lastError()!);
       return;
@@ -535,6 +540,7 @@ export class CreatePostComponent implements OnInit {
   async addVideo(): Promise<void> {
     if (this.f().media.length) return;
     const item = await this.media.pickVideo();
+    if (this.media.notice()) this.notice.set(this.media.notice()!);
     if (!item) {
       if (this.media.lastError()) this.error.set(this.media.lastError()!);
       return;

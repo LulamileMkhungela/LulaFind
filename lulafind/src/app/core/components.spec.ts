@@ -103,7 +103,8 @@ describe('Components render', () => {
     await f.whenStable();
     const html: string = (f.nativeElement as HTMLElement).innerHTML;
     expect(html).toContain('Follow');
-    expect(html).toContain('Idea');
+    // LinkedIn's default reaction reads as its own name, never a yes/no vote.
+    expect(html).toContain('Have an idea');
     expect(html).not.toContain('No idea');
     expect(html).toContain('Repost');
     expect(html).toContain('Send');
@@ -111,6 +112,28 @@ describe('Components render', () => {
     expect(html).toContain('Lerato Mahlangu');
     expect(html).toContain('commented on this');
     expect(html).toContain('Comment');
+  });
+
+  it('renders a reshared post the way LinkedIn does: reposter line, then the original in a frame', async () => {
+    const data = TestBed.inject(DataService);
+    await data.loadFeed();
+    const original = (await data.loadPost('p_thato'))!;
+    const f = TestBed.createComponent(PostCardComponent);
+    f.componentInstance.post = {
+      ...original,
+      id: 'p_repost_mine',
+      authorId: original.authorId,
+      body: 'Please keep sharing this.',
+      repostOf: original.id,
+      media: []
+    };
+    f.componentInstance.author = (await data.profile(original.authorId))!;
+    f.detectChanges();
+    await f.whenStable();
+    const html: string = (f.nativeElement as HTMLElement).innerHTML;
+    expect(html).toContain('reposted this');
+    expect(html).toContain('fb-embed');
+    expect(html).toContain('Repost');
   });
 
   it('renders the LulaFind welcome and login screens', async () => {

@@ -21,6 +21,7 @@ import { AuthService } from '../../core/services/auth.service';
 import { ChatService } from '../../core/services/chat.service';
 import { PlatformService } from '../../core/services/platform.service';
 import { POST_TYPE_META, Post, ReactionKind } from '../../core/models/types';
+import { feedWithRails } from '../../core/utils/feed';
 
 @Component({
   selector: 'lf-home',
@@ -62,7 +63,7 @@ import { POST_TYPE_META, Post, ReactionKind } from '../../core/models/types';
                   actionLabel="Reset filters" (action)="data.resetFilter()" />
       }
 
-      <!-- Stories and People appear only between posts: after every 8th post, never at the top. -->
+      <!-- Stories and People appear after every 8th post, and nowhere else. -->
       @for (item of feedItems(); track item.key) {
         @if (item.post; as p) {
           <lf-post-card
@@ -166,24 +167,11 @@ export class HomeComponent {
   });
 
   /**
-   * The feed with a carousel slotted in after every 8th post, alternating
-   * Stories then People. A feed shorter than 8 posts has no gap to put one in,
-   * so Stories goes at the very end - otherwise nobody could ever open one.
+   * Stories after the 8th post, People after the 16th, Stories after the 24th
+   * and so on - and nowhere else. `feedWithRails` is a plain function so the
+   * rule can be tested without rendering a page.
    */
-  readonly feedItems = computed(() => {
-    const posts = this.displayedFeed();
-    const out: { key: string; kind: 'post' | 'stories' | 'people'; post?: Post }[] = [];
-    posts.forEach((p, i) => {
-      out.push({ key: p.id, kind: 'post', post: p });
-      const n = i + 1;
-      if (n % 8 === 0) {
-        const slot = n / 8;
-        out.push({ key: `slot-${slot}`, kind: slot % 2 === 1 ? 'stories' : 'people' });
-      }
-    });
-    if (posts.length > 0 && posts.length < 8 && this.auth.signedIn()) out.push({ key: 'slot-end', kind: 'stories' });
-    return out;
-  });
+  readonly feedItems = computed(() => feedWithRails(this.displayedFeed()));
 
   private chatGates = signal<Record<string, ChatState>>({});
 

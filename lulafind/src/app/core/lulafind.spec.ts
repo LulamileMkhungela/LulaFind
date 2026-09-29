@@ -15,10 +15,11 @@ import { SafetyService } from './services/safety.service';
 import { defaultPrivacy, emptyFilter, Post } from './models/types';
 import { timeAgo, compact, urgency, parseFullName, contributorLabel } from './utils/format';
 import { searchFocus } from './utils/search-focus';
-import { publicPoster } from './utils/poster';
+import { publicPoster, POSTER_TEMPLATES } from './utils/poster';
 import { leadMarkView } from './utils/mark-check';
 import { GBV_CHANNEL_NOTE, HELP_LINES } from './data/sa-help';
 import { avatar } from './data/seed';
+import { feedWithRails } from './utils/feed';
 
 /**
  * End-to-end tests for the rules that make LulaFind LulaFind:
@@ -1342,5 +1343,45 @@ describe('Saved posts, watch alerts and followers', () => {
     expect(follower).toBeTruthy();
     await data.removeFollower(follower);
     expect(data.followerIds()).not.toContain(follower);
+  });
+});
+
+describe('the feed interleaving rule', () => {
+  const post = (n: number) => ({ id: `p${n}`, title: `Post ${n}` }) as unknown as Post;
+
+  it('puts nothing above the first post and nothing after the last one', () => {
+    const rows = feedWithRails([post(1), post(2), post(3)]);
+    expect(rows.map((r) => r.kind)).toEqual(['post', 'post', 'post']);
+  });
+
+  it('adds Stories only after the 8th post', () => {
+    const rows = feedWithRails(Array.from({ length: 9 }, (_, i) => post(i + 1)));
+    expect(rows.map((r) => r.kind)).toEqual([
+      'post', 'post', 'post', 'post', 'post', 'post', 'post', 'post', 'stories', 'post'
+    ]);
+  });
+
+  it('alternates Stories and People on every 8th post, and never both at once', () => {
+    const rows = feedWithRails(Array.from({ length: 25 }, (_, i) => post(i + 1)));
+    const rails = rows.filter((r) => r.kind !== 'post').map((r) => r.kind);
+    expect(rails).toEqual(['stories', 'people', 'stories']);
+    // each rail sits immediately behind the 8th, 16th and 24th post
+    rows.forEach((r, i) => {
+      if (r.kind === 'post') return;
+      expect(rows[i - 1].kind).toBe('post');
+      expect(i % 9).toBe(8);
+    });
+  });
+});
+
+describe('poster templates', () => {
+  it('offers a modern set, each with its own colours', () => {
+    expect(POSTER_TEMPLATES.length).toBeGreaterThanOrEqual(8);
+    expect(POSTER_TEMPLATES.map((t) => t.id)).toContain('halo');
+    expect(POSTER_TEMPLATES.map((t) => t.id)).toContain('pulse');
+    for (const t of POSTER_TEMPLATES) {
+      expect(t.swatch.length).toBe(3);
+      expect(t.name.length).toBeGreaterThan(0);
+    }
   });
 });

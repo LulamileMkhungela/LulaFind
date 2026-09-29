@@ -1,53 +1,92 @@
 import { Injectable, inject, signal } from '@angular/core';
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
+import { Capacitor } from '@capacitor/core';
 import { MediaItem } from '../models/types';
 import { uid } from '../utils/format';
 import { PlatformService } from './platform.service';
 
 /**
  * Photo / video capture.
- * Native: @capacitor/camera (gallery + camera). Web: <input type=file> so the
- * browser preview behaves the same. Falls back to a generated placeholder so a
- * reviewer without a camera can still complete the flow.
+ *
+ * Native: @capacitor/camera, but only when that plugin is actually present in
+ * the build (`Capacitor.isPluginAvailable('Camera')`). An APK that was shipped
+ * before `npx cap sync` registered the plugin answers every call with
+ * "Camera plugin is not implemented on android" - that is a build problem, not
+ * something the person holding the phone can fix, so we do not throw it at
+ * them. We open the phone's own photo picker instead and explain once, in
+ * `notice`, that the camera module is missing from this build.
+ *
+ * Web: <input type=file>, which is the browser's own picker/camera sheet.
  */
 @Injectable({ providedIn: 'root' })
 export class MediaService {
   private platform = inject(PlatformService);
   readonly busy = signal(false);
-  /** Last non-cancel error from pickImage / pickVideo, or null. */
+  /** Last real error from pickImage / pickVideo, or null. */
   readonly lastError = signal<string | null>(null);
+  /**
+   * Something the person should know that is not their fault and not an error,
+   * e.g. "this build has no camera module, we opened your photos instead".
+   */
+  readonly notice = signal<string | null>(null);
+
+  /** True when the native camera module is really in this build. */
+  get cameraAvailable(): boolean {
+    if (!this.platform.isNative) return true; // the browser's own file input
+    try {
+      return Capacitor.isPluginAvailable('Camera');
+    } catch {
+      return false;
+    }
+  }
 
   async pickImage(opts: { source?: 'camera' | 'gallery'; quality?: number } = {}): Promise<MediaItem | null> {
     this.busy.set(true);
     this.lastError.set(null);
+    this.notice.set(null);
+    const fromCamera = opts.source === 'camera';
     try {
-      if (this.platform.isNative) {
+      if (this.platform.isNative && this.cameraAvailable) {
+        // Ask for the camera first: on Android 6+ the plugin needs the grant,
+        // and a denial has to read as a denial, not as "not implemented".
+        if (fromCamera) {
+          const perm = await Camera.checkPermissions().catch(() => null);
+          if (perm && perm.camera !== 'granted') {
+            const asked = await Camera.requestPermissions({ permissions: ['camera'] }).catch(() => null);
+            if (asked && asked.camera !== 'granted') {
+              this.lastError.set('Camera access is off for LulaFind. Turn it on in your phone settings, or add a photo from your gallery.');
+              return await this.pickViaInput('image/*', false);
+            }
+          }
+        }
         try {
           const photo = await Camera.getPhoto({
             quality: opts.quality ?? 78,
             allowEditing: false,
             resultType: CameraResultType.DataUrl,
-            source: opts.source === 'camera' ? CameraSource.Camera : CameraSource.Prompt,
+            source: fromCamera ? CameraSource.Camera : CameraSource.Prompt,
             correctOrientation: true,
             width: 1400
           });
           if (!photo.dataUrl) return null;
           return { id: uid('m'), kind: 'image', src: photo.dataUrl };
-        } catch (e: any) {
+        } catch (e: unknown) {
           if (!MediaService.pluginMissing(e)) throw e;
-          // The APK was built before the Camera plugin was synced in. The
-          // system photo picker still works, so the person can carry on.
-          return await this.pickViaInput('image/*', opts.source === 'camera');
+          this.notice.set('This build has no camera module. Choose a photo from your gallery instead.');
+          return await this.pickViaInput('image/*', false);
         }
       }
-      return await this.pickViaInput();
-    } catch (e: any) {
-      const msg = String(e?.message ?? '').toLowerCase();
+      if (fromCamera && this.platform.isNative && !this.cameraAvailable) {
+        this.notice.set('This build has no camera module. Choose a photo from your gallery instead.');
+      }
+      return await this.pickViaInput('image/*', false);
+    } catch (e: unknown) {
+      const msg = String((e as Error)?.message ?? '').toLowerCase();
       if (msg.includes('cancel') || msg.includes('no image picked') || msg.includes('user denied')) {
         if (msg.includes('denied')) this.lastError.set('Camera or photo access was turned off. Allow it in your phone settings, then try again.');
         return null;
       }
-      this.lastError.set(e?.message ?? 'Could not pick image');
+      this.lastError.set((e as Error)?.message ?? 'Could not pick image');
       return null;
     } finally {
       this.busy.set(false);
@@ -57,12 +96,12 @@ export class MediaService {
   async pickVideo(): Promise<MediaItem | null> {
     this.busy.set(true);
     this.lastError.set(null);
+    this.notice.set(null);
     try {
-      const item = await this.pickViaInput('video/*');
-      return item;
-    } catch (e: any) {
-      if (!String(e?.message ?? '').toLowerCase().includes('cancel')) {
-        this.lastError.set(e?.message ?? 'Could not pick video');
+      return await this.pickViaInput('video/*');
+    } catch (e: unknown) {
+      if (!String((e as Error)?.message ?? '').toLowerCase().includes('cancel')) {
+        this.lastError.set((e as Error)?.message ?? 'Could not pick video');
       }
       return null;
     } finally {
@@ -71,9 +110,10 @@ export class MediaService {
   }
 
   /** "Camera plugin is not implemented on android" and its cousins. */
-  private static pluginMissing(e: any): boolean {
-    const msg = String(e?.message ?? e ?? '').toLowerCase();
-    return e?.code === 'UNIMPLEMENTED' || msg.includes('not implemented') || msg.includes('unimplemented') || msg.includes('not available');
+  private static pluginMissing(e: unknown): boolean {
+    const err = e as { code?: string; message?: string } | null;
+    const msg = String(err?.message ?? e ?? '').toLowerCase();
+    return err?.code === 'UNIMPLEMENTED' || msg.includes('not implemented') || msg.includes('unimplemented') || msg.includes('not available');
   }
 
   private pickViaInput(accept = 'image/*', capture = false): Promise<MediaItem | null> {

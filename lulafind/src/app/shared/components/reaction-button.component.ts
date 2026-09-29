@@ -1,15 +1,18 @@
 import { ChangeDetectionStrategy, Component, ElementRef, HostListener, computed, inject, input, output, signal } from '@angular/core';
-import { REACTIONS, ReactionKind, VoteValue, isReaction } from '../../core/models/types';
+import { DEFAULT_REACTION, DEFAULT_REACTION_LABEL, REACTIONS, ReactionKind, VoteValue, isReaction } from '../../core/models/types';
 import { IconComponent } from './icon.component';
 import { ReactionIconComponent } from './reaction-icon.component';
 
 /**
- * The reaction control, behaving like LinkedIn's Like button:
+ * The reaction control, behaving exactly like LinkedIn's action button:
  *
- *  - Tap: gives the default reaction, "Have an idea". Tap again to take back
- *    whatever you gave.
- *  - Hold (or hover with a mouse): a tray opens with Like, Support, Sad and
- *    Have an idea. Lift your finger on one, or tap one, to choose it.
+ *  - The main icon is always "Have an idea" (the bulb) until you react.
+ *  - Quick tap: gives "Have an idea". Tap again to take it back.
+ *  - Hold (or hover with a mouse): the tray opens with Like, Support, Sad and
+ *    Have an idea, the way LinkedIn opens its reaction flyout. Slide onto one
+ *    and lift your finger, or tap one, to pick it.
+ *  - The button then reads the reaction you chose ("Like", "Support", "Sad",
+ *    "Have an idea") in that reaction's colour.
  *
  * It only reports the choice through `react`; the page decides what to save.
  */
@@ -90,15 +93,16 @@ export class ReactionButtonComponent {
 
   readonly current = computed<ReactionKind | null>(() => (isReaction(this.value()) ? (this.value() as ReactionKind) : null));
   readonly mine = this.current;
+  /** Nothing chosen reads "Have an idea" - the default reaction is the action's own name. */
   readonly label = computed(() => {
     const c = this.current();
-    if (!c) return 'Idea';
-    return c === 'up' ? 'Idea' : REACTIONS.find((r) => r.key === c)!.label;
+    if (!c) return DEFAULT_REACTION_LABEL;
+    return REACTIONS.find((r) => r.key === c)!.label;
   });
   readonly tone = computed(() => REACTIONS.find((r) => r.key === this.current())?.color ?? 'var(--lf-muted)');
   readonly ariaLabel = computed(() => this.current()
     ? `Your reaction: ${REACTIONS.find((r) => r.key === this.current())!.label}. Tap to remove, hold to change.`
-    : 'Have an idea. Hold for more reactions.');
+    : `${DEFAULT_REACTION_LABEL}. Hold for Like, Support and Sad.`);
 
   private timer: ReturnType<typeof setTimeout> | null = null;
   private held = false;
@@ -164,7 +168,7 @@ export class ReactionButtonComponent {
     ev?.preventDefault();
     this.open.set(false);
     const c = this.current();
-    this.react.emit(c ?? 'up');
+    this.react.emit(c ?? DEFAULT_REACTION);
   }
 
   choose(key: ReactionKind, ev?: Event): void {

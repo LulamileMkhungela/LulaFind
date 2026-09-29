@@ -1,3 +1,58 @@
+# Session state — 2026-09-29 (round 2)
+
+## What this round changed, in the order the review asked for it
+
+1. **Reactions are LinkedIn's, with "Have an idea" as the default.**
+   `DEFAULT_REACTION_LABEL` ("Have an idea") lives in `core/models/types.ts`.
+   The button reads that until you react, then reads the reaction you chose
+   (Like / Support / Sad / Have an idea) in that reaction's colour. Quick tap =
+   default reaction; hold (420ms mouse hover) opens the tray of four; release
+   over one to pick it. Only `up` opens private chat - `ChatService.gate`
+   checks `voterIds[me] === 'up'`, so Like/Support/Sad never unlock a chat.
+2. **Feed rails moved to where they were asked to be.** `feedWithRails()`
+   (`core/utils/feed.ts`) is now a tested pure function: Stories after the 8th
+   post, People after the 16th, Stories after the 24th. Nothing above the first
+   post, nothing after the last one. No "fallback" rail at the end of a short
+   feed any more.
+3. **Reshares look like LinkedIn's.** A repost card opens with
+   "You reposted this" / "<Name> reposted this" and the repost glyph above the
+   header, then the reposter's own words, then the original inside a bordered
+   frame with its own avatar, name, headline, time and globe. Same line and same
+   frame on the post page.
+4. **The post page is now a post.** The case-facts accordion, the contact card
+   and the row of pills (poster, help, escalate, location) are gone from it.
+   What is left: the post, the stats line, the LinkedIn action bar
+   (react / Comment / Repost / Send), one compact private-chat line when the
+   poster enabled it, then "This is me / Not me" or "Mark as found /
+   Still searching", then the comments. The poster page moved to the author's
+   "..." menu so it is still reachable.
+5. **Comments are LinkedIn's.** One composer in the flow (the duplicate footer
+   composer is gone), "Most relevant / Most recent", then bordered comment cards
+   with the author's name + bio, comment text, and a Like / Reply / count / time
+   row inside the card. Replies indent under "View N replies". Editing a comment
+   shows "Edited" and deleting says "Comment deleted".
+6. **Stories stop disappearing.** The viewer keeps its own copy of the story, so
+   a background rail refresh cannot pull it out from under the reader. Reading
+   time is longer (6s + ~0.5s a word, floor 9s, ceiling 45s). The moment someone
+   engages - types a reply, opens the viewer list, holds to read - auto-advance
+   switches off for that visit; a plain tap still moves on. On the last story the
+   bar stops instead of closing the viewer. The reply box stays "typing" while it
+   has text in it, so dismissing the keyboard no longer resumes the timer.
+7. **Camera on Android is handled instead of thrown.** `PlatformService.hasPlugin()`
+   wraps `Capacitor.isPluginAvailable`, `MediaService` never calls a plugin that
+   is not in the build, asks for the camera permission before using it, and falls
+   back to the phone's photo picker with a plain notice ("This build has no camera
+   module..."). `PermissionsService` is a real wrapper now: it checks and requests
+   Camera / Geolocation / PushNotifications and reports "Not in this build"
+   instead of a raw UNIMPLEMENTED error. To get the camera itself, rebuild the
+   APK after `npx cap sync` - the Gradle settings already include the plugin.
+8. **Posters.** Two new templates, `halo` (mesh-gradient glass card) and `pulse`
+   (neon grid, ringed portrait) join the existing six, so there are eight modern
+   designs. Tested in `lulafind.spec.ts`.
+
+Everything above is covered by `npx ng test --watch=false`: 128/128 pass, and
+`ng build --configuration production` is clean.
+
 # Session state — 2026-09-28
 
 ## Where things stand

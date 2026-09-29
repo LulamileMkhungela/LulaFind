@@ -32,6 +32,14 @@ export type ChatState = 'off' | 'locked-vote' | 'locked-follow' | 'open';
       @if (activity(); as act) {
         <a class="fb-activity" [routerLink]="['/user', act.userId]"><strong>{{ act.name }}</strong> {{ act.verb }}</a>
       }
+      @if (post.repostOf) {
+        <!-- LinkedIn puts the reposter's line above everything else on a reshare. -->
+        <div class="fb-reposted">
+          <lf-icon name="repost" [size]="14" [weight]="2.4" />
+          <span><strong>{{ reposterLine() }}</strong></span>
+        </div>
+      }
+
       <header class="fb-card-header" [routerLink]="authorRoute()">
         <lf-avatar [src]="authorAvatar()" [name]="authorName()" [size]="48"
                    [status]="authorStatus()" />
@@ -76,10 +84,11 @@ export type ChatState = 'off' | 'locked-vote' | 'locked-follow' | 'open';
         @if (original(); as o) {
           <a class="fb-embed" [routerLink]="'/post/' + o.id">
             <div class="fb-embed__head">
-              <lf-avatar [src]="originalAvatar()" [name]="originalName()" [size]="32" />
+              <lf-avatar [src]="originalAvatar()" [name]="originalName()" [size]="40" />
               <div>
                 <strong>{{ originalName() }}</strong>
-                <span>{{ timeAgo(o.createdAt) }} · {{ provinceName(o.province) }}</span>
+                <span>{{ originalHeadline(o) }}</span>
+                <span class="fb-embed__when">{{ timeAgo(o.createdAt) }}@if (o.editedAt) { · Edited } · <lf-icon name="globe" [size]="11" /></span>
               </div>
             </div>
             <h3 class="fb-post-title">{{ o.title }}</h3>
@@ -311,6 +320,16 @@ export type ChatState = 'off' | 'locked-vote' | 'locked-follow' | 'open';
     .fb-stack lf-reaction-icon + lf-reaction-icon { margin-left: -5px; }
     .fb-edited { font-style: normal; }
     .fb-card-body--thoughts { padding-bottom: 8px; }
+    /* LinkedIn's line above a reshared post. */
+    .fb-reposted {
+      display: flex; align-items: center; gap: 7px;
+      padding: 12px 16px 0;
+      color: var(--lf-muted);
+      font-size: 13.5px;
+      line-height: 1.2;
+    }
+    .fb-reposted strong { font-weight: 600; color: var(--ion-text-color); }
+
     .fb-embed { display: block; margin: 4px 16px 12px; padding: 12px; border: 1px solid var(--lf-line); border-radius: 8px;
       color: inherit; text-decoration: none; background: transparent; }
     .fb-embed:hover { background: var(--lf-hover); }
@@ -318,6 +337,7 @@ export type ChatState = 'off' | 'locked-vote' | 'locked-follow' | 'open';
     .fb-embed__head div { display: flex; flex-direction: column; min-width: 0; }
     .fb-embed__head strong { font-size: 14px; font-weight: 600; }
     .fb-embed__head span { font-size: 12px; color: var(--lf-muted); }
+    .fb-embed__head .fb-embed__when { display: inline-flex; align-items: center; gap: 4px; }
     .fb-embed__text { margin: 0; font-size: 14px; line-height: 1.35; color: var(--ion-text-color);
       display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; white-space: pre-line; }
     .fb-embed__img { display: block; width: calc(100% + 24px); margin: 10px -12px -12px; max-height: 260px; object-fit: cover; border-radius: 0 0 8px 8px; }
@@ -442,6 +462,16 @@ export class PostCardComponent implements OnInit, OnChanges {
     this.post?.anonymous && !this.isMine() ? ['/post/' + this.post.id] : ['/user/' + (this.author?.id ?? '')]
   );
   readonly longBody = computed(() => (this.post?.body?.trim().length ?? 0) > 190);
+
+  /** "You reposted this" / "Thabo Nkosi reposted this" - LinkedIn's reshare line. */
+  reposterLine(): string {
+    return this.isMine() ? 'You reposted this' : `${this.authorName()} reposted this`;
+  }
+
+  /** The original author's sub-line inside the embed box. */
+  originalHeadline(o: Post): string {
+    return `${provinceName(o.province)} · ${POST_TYPE_META[o.type]?.label ?? 'Post'}`;
+  }
 
   readonly visibleMedia = computed(() => this.post?.media.slice(0, 4) ?? []);
   readonly extraMedia = computed(() => Math.max(0, (this.post?.media.length ?? 0) - 4));

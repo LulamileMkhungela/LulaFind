@@ -17,7 +17,7 @@ import { timeAgo } from '../../core/utils/format';
  * Saved - Facebook's "Saved items" for LulaFind.
  *
  * Every post you tap Save on lands here, newest first, and follows your
- * account to any phone. You are told when a saved post gets a new Idea or is
+ * account to any phone. You are told when a saved post gets a new reaction or is
  * marked found (see DataService.checkWatched).
  */
 @Component({
@@ -37,7 +37,7 @@ import { timeAgo } from '../../core/utils/format';
       </div>
 
       <p class="hint lf-small lf-muted">
-        <lf-icon name="bell" [size]="14" /> We let you know when a saved post gets a new Idea or the person is found.
+        <lf-icon name="bell" [size]="14" /> We let you know when a saved post gets a new reaction or the person is found.
       </p>
 
       @if (loading() && !data.savedPosts().length) {
@@ -58,7 +58,7 @@ import { timeAgo } from '../../core/utils/format';
                   <span class="lf-tiny lf-muted">{{ meta(p).label }} · {{ provinceName(p.province) }} · {{ ago(p.createdAt) }}</span>
                   <span class="stats lf-tiny">
                     @if (p.status === 'found') { <em class="found"><lf-icon name="check" [size]="12" /> Found</em> }
-                    <span class="lf-muted">{{ p.upvotes }} Idea · {{ p.commentCount }} comments</span>
+                    <span class="lf-muted">{{ p.upvotes }} reactions · {{ p.commentCount }} comments</span>
                   </span>
                 </div>
               </a>

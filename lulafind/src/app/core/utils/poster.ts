@@ -55,7 +55,7 @@ export function publicPoster(post: Post): { lines: string[]; withheld: string | 
 export const POSTER_W = 1080;
 export const POSTER_H = 1350;
 
-export type PosterTemplateId = 'signal' | 'aurora' | 'editorial' | 'beacon' | 'ubuntu' | 'noir';
+export type PosterTemplateId = 'signal' | 'aurora' | 'editorial' | 'beacon' | 'ubuntu' | 'noir' | 'halo' | 'pulse';
 
 export interface PosterTemplate { id: PosterTemplateId; name: string; tagline: string; swatch: [string, string, string]; }
 
@@ -65,7 +65,9 @@ export const POSTER_TEMPLATES: PosterTemplate[] = [
   { id: 'editorial', name: 'Editorial', tagline: 'Clean, magazine style', swatch: ['#f6f2ea', '#141414', '#d6402a'] },
   { id: 'beacon', name: 'Beacon', tagline: 'High-visibility yellow', swatch: ['#ffd400', '#111111', '#ffffff'] },
   { id: 'ubuntu', name: 'Ubuntu', tagline: 'Proudly South African', swatch: ['#0c2f2a', '#f4b400', '#e0392d'] },
-  { id: 'noir', name: 'Noir', tagline: 'Full-bleed photo, cinematic', swatch: ['#000000', '#ffffff', '#c7c7c7'] }
+  { id: 'noir', name: 'Noir', tagline: 'Full-bleed photo, cinematic', swatch: ['#000000', '#ffffff', '#c7c7c7'] },
+  { id: 'halo', name: 'Halo', tagline: 'AI-gradient glass card', swatch: ['#0a0a1f', '#7c5cff', '#22d3ee'] },
+  { id: 'pulse', name: 'Pulse', tagline: 'Neon grid, glowing type', swatch: ['#05060a', '#00e5ff', '#ff2d9b'] }
 ];
 
 export interface PosterContent {
@@ -375,8 +377,128 @@ function noir(c: Ctx, p: PosterContent, img: HTMLImageElement | null): void {
   footer(c, p, 'rgba(255,255,255,.55)', POSTER_H - 46);
 }
 
+/* ---- 7. Halo: mesh-gradient background, frosted glass card, gradient type ---- */
+function halo(c: Ctx, p: PosterContent, img: HTMLImageElement | null): void {
+  const bg = c.createLinearGradient(0, 0, POSTER_W, POSTER_H);
+  bg.addColorStop(0, '#0a0a1f'); bg.addColorStop(0.48, '#171049'); bg.addColorStop(1, '#04121f');
+  c.fillStyle = bg; c.fillRect(0, 0, POSTER_W, POSTER_H);
+
+  const glows: [number, number, number, string][] = [
+    [120, 140, 640, 'rgba(124,92,255,.55)'],
+    [960, 300, 560, 'rgba(34,211,238,.40)'],
+    [520, 1200, 720, 'rgba(255,84,180,.30)']
+  ];
+  for (const [x, y, r, col] of glows) {
+    const g = c.createRadialGradient(x, y, 0, x, y, r);
+    g.addColorStop(0, col); g.addColorStop(1, 'rgba(0,0,0,0)');
+    c.fillStyle = g; c.fillRect(0, 0, POSTER_W, POSTER_H);
+  }
+  grain(c, 0.045);
+
+  // the frosted card everything sits in
+  const cx = 60, cy = 96, cw = 960, ch = 1160;
+  c.save();
+  rr(c, cx, cy, cw, ch, 60);
+  c.fillStyle = 'rgba(255,255,255,.075)'; c.fill();
+  c.strokeStyle = 'rgba(255,255,255,.30)'; c.lineWidth = 2; c.stroke();
+  c.restore();
+
+  // kicker chip
+  c.textAlign = 'left';
+  c.font = `800 30px ${SANS}`; spaced(c, true);
+  const kw = c.measureText(p.kicker).width + 64;
+  rr(c, cx + 40, cy + 40, kw, 62, 31);
+  c.fillStyle = 'rgba(255,255,255,.14)'; c.fill();
+  c.fillStyle = '#ffffff'; c.fillText(p.kicker, cx + 72, cy + 83);
+  spaced(c, false);
+
+  // photo in a squircle with a soft outer ring
+  const px = cx + 40, py = cy + 130, pw = cw - 80, ph = 560;
+  c.save();
+  rr(c, px - 8, py - 8, pw + 16, ph + 16, 46);
+  c.strokeStyle = 'rgba(255,255,255,.22)'; c.lineWidth = 3; c.stroke();
+  rr(c, px, py, pw, ph, 40); c.clip();
+  if (img) cover(c, img, px, py, pw, ph);
+  else noPhoto(c, px, py, pw, ph, 40, 'rgba(124,92,255,.55)', 'rgba(34,211,238,.35)', '#ffffff');
+  c.restore();
+
+  // name in a gradient, then the numbers
+  const nameGrad = c.createLinearGradient(px, 0, px + pw, 0);
+  nameGrad.addColorStop(0, '#ffffff'); nameGrad.addColorStop(1, '#a5b4fc');
+  c.fillStyle = nameGrad;
+  fitOneLine(c, p.name, pw, 96, 800, SANS, 48);
+  c.fillText(p.name, px, py + ph + 110);
+  if (p.ageLine) { c.fillStyle = '#8ee7f7'; c.font = `600 34px ${SANS}`; c.fillText(p.ageLine, px, py + ph + 158); }
+  facts(c, p.facts, px, py + ph + 220, pw, 'rgba(255,255,255,.55)', '#ffffff', 14, 3);
+
+  // contact in a glass pill
+  const by = POSTER_H - 168;
+  rr(c, px, by, pw, 76, 38);
+  const pill = c.createLinearGradient(px, 0, px + pw, 0);
+  pill.addColorStop(0, 'rgba(124,92,255,.95)'); pill.addColorStop(1, 'rgba(34,211,238,.92)');
+  c.fillStyle = pill; c.fill();
+  c.fillStyle = '#0a0a1f'; c.font = `800 28px ${SANS}`; c.textAlign = 'center';
+  c.fillText(p.contact, POSTER_W / 2, by + 49, pw - 60);
+  c.textAlign = 'left';
+  footer(c, p, 'rgba(255,255,255,.62)', POSTER_H - 54);
+}
+
+/* ---- 8. Pulse: neon grid, glowing ribbon, ringed portrait ---- */
+function pulse(c: Ctx, p: PosterContent, img: HTMLImageElement | null): void {
+  c.fillStyle = '#05060a'; c.fillRect(0, 0, POSTER_W, POSTER_H);
+
+  // faint tech grid
+  c.save(); c.globalAlpha = 0.16; c.strokeStyle = '#00e5ff'; c.lineWidth = 1;
+  for (let x = 0; x <= POSTER_W; x += 60) { c.beginPath(); c.moveTo(x, 0); c.lineTo(x, POSTER_H); c.stroke(); }
+  for (let y = 0; y <= POSTER_H; y += 60) { c.beginPath(); c.moveTo(0, y); c.lineTo(POSTER_W, y); c.stroke(); }
+  c.restore();
+
+  // neon ribbon behind the portrait
+  const ribbon = c.createLinearGradient(0, 220, POSTER_W, 760);
+  ribbon.addColorStop(0, 'rgba(0,229,255,.85)'); ribbon.addColorStop(0.5, 'rgba(124,92,255,.8)'); ribbon.addColorStop(1, 'rgba(255,45,155,.85)');
+  c.save(); c.globalAlpha = 0.9;
+  c.beginPath(); c.moveTo(0, 420); c.lineTo(POSTER_W, 190); c.lineTo(POSTER_W, 300); c.lineTo(0, 540); c.closePath();
+  c.fillStyle = ribbon; c.fill();
+  c.restore();
+
+  // portrait in a glowing ring
+  const cx = POSTER_W / 2, cy = 430, r = 235;
+  const ring = c.createLinearGradient(cx - r, cy - r, cx + r, cy + r);
+  ring.addColorStop(0, '#00e5ff'); ring.addColorStop(1, '#ff2d9b');
+  c.beginPath(); c.arc(cx, cy, r + 20, 0, Math.PI * 2); c.fillStyle = ring; c.fill();
+  c.beginPath(); c.arc(cx, cy, r + 6, 0, Math.PI * 2); c.fillStyle = '#05060a'; c.fill();
+  c.save(); c.beginPath(); c.arc(cx, cy, r, 0, Math.PI * 2); c.clip();
+  if (img) cover(c, img, cx - r, cy - r, r * 2, r * 2);
+  else {
+    c.fillStyle = '#0d1a2b'; c.fillRect(cx - r, cy - r, r * 2, r * 2);
+    c.fillStyle = 'rgba(0,229,255,.35)'; c.beginPath(); c.arc(cx, cy - 40, 84, 0, Math.PI * 2); c.fill();
+    c.beginPath(); c.ellipse(cx, cy + 210, 150, 130, 0, Math.PI, 0); c.fill();
+  }
+  c.restore();
+
+  // scanlines for that screen-printed look
+  c.save(); c.globalAlpha = 0.06; c.fillStyle = '#fff';
+  for (let y = 0; y < POSTER_H; y += 4) c.fillRect(0, y, POSTER_W, 1);
+  c.restore();
+
+  c.textAlign = 'center';
+  c.fillStyle = '#00e5ff'; spaced(c, true); c.font = `700 32px ${SANS}`;
+  c.fillText(p.kicker, cx, 150); spaced(c, false);
+  c.fillStyle = '#ffffff';
+  fitOneLine(c, p.name, 900, 96, 800, SANS, 48);
+  c.fillText(p.name, cx, cy + r + 130);
+  if (p.ageLine) { c.fillStyle = '#ff8ad4'; c.font = `600 34px ${SANS}`; c.fillText(p.ageLine, cx, cy + r + 178); }
+  c.textAlign = 'left';
+  facts(c, p.facts, 110, cy + r + 240, 860, 'rgba(0,229,255,.75)', '#ffffff', 10, 3);
+
+  c.fillStyle = '#00e5ff'; rr(c, 64, POSTER_H - 150, 952, 4, 2); c.fill();
+  c.fillStyle = '#ffffff'; c.font = `800 28px ${SANS}`;
+  c.fillText(p.contact, 64, POSTER_H - 96, 952);
+  footer(c, p, 'rgba(255,255,255,.55)', POSTER_H - 46);
+}
+
 const DRAW: Record<PosterTemplateId, (c: Ctx, p: PosterContent, i: HTMLImageElement | null) => void> = {
-  signal, aurora, editorial, beacon, ubuntu, noir
+  signal, aurora, editorial, beacon, ubuntu, noir, halo, pulse
 };
 
 export function drawPoster(canvas: HTMLCanvasElement, id: PosterTemplateId, content: PosterContent, img: HTMLImageElement | null): void {

@@ -107,6 +107,7 @@ const AUDIENCES: { key: Audience; icon: string; label: string }[] = [
             <button type="button" class="add-photo" (click)="addPhoto()" [disabled]="media().length >= 3 || busy()"><lf-icon name="plus" [size]="16" /> Add photo</button>
           </div>
 
+          @if (notice()) { <p class="notice"><lf-icon name="info" [size]="15" /> {{ notice() }}</p> }
           @if (error()) { <p class="error" role="alert"><lf-icon name="alert" [size]="15" /> {{ error() }}</p> }
           <p class="privacy-caption">Story replies are private and only visible to you.</p>
           <button class="share-bottom" type="button" (click)="publish()" [disabled]="busy() || !canPublish()">
@@ -177,6 +178,7 @@ const AUDIENCES: { key: Audience; icon: string; label: string }[] = [
     .privacy-caption { margin: 0; color: var(--fb-muted); font-size: 10.5px; line-height: 1.35; }
     .share-bottom { display: flex; justify-content: center; align-items: center; gap: 7px; min-height: 39px; border: 0; border-radius: 7px; background: var(--fb-blue); color: #fff; font-size: 12.5px; font-weight: 700; }
     .error { display: flex; gap: 6px; align-items: flex-start; margin: 0; padding: 9px; border-radius: 7px; background: color-mix(in srgb, #e0392d 18%, transparent); color: #ff8a80; font-size: 11.5px; }
+    .notice { display: flex; gap: 6px; align-items: flex-start; margin: 0; padding: 9px; border-radius: 7px; background: var(--lf-primary-soft); color: var(--lf-primary-soft-text); font-size: 11.5px; line-height: 1.4; }
     @media (max-width: 700px) {
       .layout { grid-template-columns: 1fr; gap: 12px; padding: 10px 12px 20px; }
       .preview { height: min(54vh, 540px); min-height: 320px; border-radius: 10px; }
@@ -196,6 +198,8 @@ export class CreateStoryComponent {
   readonly hue = signal(STORY_BLACK);
   busy = signal(false);
   error = signal('');
+  /** Not an error: e.g. this build has no camera module, your photos were opened. */
+  notice = signal('');
   readonly media = signal<MediaItem[]>([]);
   readonly previewIndex = signal(0);
   readonly audience = signal<Audience>('public');
@@ -240,6 +244,7 @@ export class CreateStoryComponent {
     if (this.media().length >= 3) return;
     this.error.set('');
     const item = await this.mediaSvc.pickImage({ quality: 72 });
+    if (this.mediaSvc.notice()) this.notice.set(this.mediaSvc.notice()!);
     if (!item) {
       if (this.mediaSvc.lastError()) this.error.set(this.mediaSvc.lastError()!);
       return;
