@@ -1361,6 +1361,20 @@ describe('the feed interleaving rule', () => {
     ]);
   });
 
+  it('gives a short feed one story rail, after its last post', () => {
+    const rows = feedWithRails([post(1), post(2), post(3)], 8, { shortRail: true });
+    expect(rows.map((r) => r.kind)).toEqual(['post', 'post', 'post', 'stories']);
+    // and never a second rail once the 8th post is reached
+    const full = feedWithRails(Array.from({ length: 9 }, (_, i) => post(i + 1)), 8, { shortRail: true });
+    expect(full.filter((r) => r.kind === 'stories').length).toBe(1);
+    expect(full.filter((r) => r.kind === 'people').length).toBe(0);
+  });
+
+  it('adds rail after every 8th post, not just the first', () => {
+    const rows = feedWithRails(Array.from({ length: 17 }, (_, i) => post(i + 1)));
+    expect(rows.map((r) => r.kind).filter((k) => k !== 'post')).toEqual(['stories', 'people']);
+  });
+
   it('alternates Stories and People on every 8th post, and never both at once', () => {
     const rows = feedWithRails(Array.from({ length: 25 }, (_, i) => post(i + 1)));
     const rails = rows.filter((r) => r.kind !== 'post').map((r) => r.kind);

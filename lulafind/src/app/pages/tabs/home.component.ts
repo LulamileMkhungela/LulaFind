@@ -58,6 +58,8 @@ import { feedWithRails } from '../../core/utils/feed';
       }
 
       @if (!data.loading() && !data.feed().length) {
+        <!-- Nothing in the feed: the story card goes on its own, at the top. -->
+        <lf-story-rail (addStory)="onAddStory()" />
         <lf-empty icon="search" title="No cases here yet"
                   message="Posts people create will show in this feed."
                   actionLabel="Reset filters" (action)="data.resetFilter()" />
@@ -168,10 +170,11 @@ export class HomeComponent {
 
   /**
    * Stories after the 8th post, People after the 16th, Stories after the 24th
-   * and so on - and nowhere else. `feedWithRails` is a plain function so the
-   * rule can be tested without rendering a page.
+   * and so on. A feed too short to reach an 8th post still gets one story rail,
+   * after its last post, so the story card is never unreachable.
+   * `feedWithRails` is a plain function so the rule can be tested on its own.
    */
-  readonly feedItems = computed(() => feedWithRails(this.displayedFeed()));
+  readonly feedItems = computed(() => feedWithRails(this.displayedFeed(), 8, { shortRail: true }));
 
   private chatGates = signal<Record<string, ChatState>>({});
 

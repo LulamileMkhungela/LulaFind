@@ -15,10 +15,19 @@ import { PostActionsService } from '../../core/services/post-actions.service';
 export type ChatState = 'off' | 'locked-vote' | 'locked-follow' | 'open';
 
 /**
- * Facebook-style feed card:
- * Author row with Facebook Follow link, post text, media,
- * Facebook engagement stats bar (Likes/Comments/Shares),
- * and Facebook action bar (Like / Comment / Share).
+ * The LinkedIn feed card, adapted to LulaFind's rules:
+ *
+ *   optional "X reposted this" line
+ *   avatar · name + Follow · headline · time · province · globe · "…"
+ *   three lines of text with a muted "…see more"
+ *   media, or the original post in a frame when this is a reshare
+ *   stats: reaction icons + count .......... comments / reposts
+ *   action bar: react (hold for the tray) · Comment · Repost · Send
+ *
+ * Two things are deliberately not LinkedIn's: the category chip above the text
+ * (this app is about missing people, and the chip is how a case is labelled)
+ * and the private-chat row under the action bar (chat only opens for "Have an
+ * idea" plus a mutual follow).
  */
 @Component({
   selector: 'lf-post-card',
@@ -54,6 +63,7 @@ export type ChatState = 'off' | 'locked-vote' | 'locked-follow' | 'open';
               </button>
             }
           </div>
+          @if (authorHeadline()) { <span class="fb-headline">{{ authorHeadline() }}</span> }
           <div class="fb-sub-meta">
             <span>{{ timeAgo(post.createdAt) }}</span>
             @if (post.editedAt) {
@@ -75,9 +85,9 @@ export type ChatState = 'off' | 'locked-vote' | 'locked-follow' | 'open';
         <!-- A repost: the reposter's own words, then the original inside a frame. -->
         @if (post.body.trim()) {
           <div class="fb-card-body fb-card-body--thoughts" [routerLink]="'/post/' + post.id">
-            <p class="fb-post-text" [class.lf-clamp-4]="!expanded()">{{ post.body }}</p>
+            <p class="fb-post-text" [class.fb-clamp]="!expanded()">{{ post.body }}</p>
             @if (longBody()) {
-              <button class="fb-readmore" (click)="toggleExpand($event)">{{ expanded() ? 'See less' : '...see more' }}</button>
+              <button class="fb-readmore" (click)="toggleExpand($event)">{{ expanded() ? 'See less' : '\u2026see more' }}</button>
             }
           </div>
         }
@@ -87,7 +97,7 @@ export type ChatState = 'off' | 'locked-vote' | 'locked-follow' | 'open';
               <lf-avatar [src]="originalAvatar()" [name]="originalName()" [size]="40" />
               <div>
                 <strong>{{ originalName() }}</strong>
-                <span>{{ originalHeadline(o) }}</span>
+                @if (originalHeadline(o)) { <span>{{ originalHeadline(o) }}</span> }
                 <span class="fb-embed__when">{{ timeAgo(o.createdAt) }}@if (o.editedAt) { · Edited } · <lf-icon name="globe" [size]="11" /></span>
               </div>
             </div>
@@ -131,10 +141,10 @@ export type ChatState = 'off' | 'locked-vote' | 'locked-follow' | 'open';
             <span>Last seen: {{ post.lastSeenWhere }}</span>
           </div>
         }
-        <p class="fb-post-text" [class.lf-clamp-4]="!expanded()">{{ post.body }}</p>
+        <p class="fb-post-text" [class.fb-clamp]="!expanded()">{{ post.body }}</p>
         @if (longBody()) {
           <button class="fb-readmore" (click)="toggleExpand($event)">
-            {{ expanded() ? 'See less' : '...see more' }}
+            {{ expanded() ? 'See less' : '\u2026see more' }}
           </button>
         }
       </div>
@@ -224,20 +234,30 @@ export type ChatState = 'off' | 'locked-vote' | 'locked-follow' | 'open';
 
     .fb-activity {
       display: block; padding: 8px 16px 0; font-size: 12px; line-height: 1.3;
-      color: var(--lf-text-muted, #a8a8a8); text-decoration: none;
+      color: var(--lf-muted); text-decoration: none;
     }
     .fb-activity strong { font-weight: 600; color: inherit; }
     .fb-card-header {
       display: flex;
-      align-items: center;
+      align-items: flex-start;
       gap: 8px;
       padding: 12px 8px 0 16px;
       cursor: pointer;
     }
     .fb-author-meta { flex: 1; min-width: 0; }
     .fb-author-row { display: flex; align-items: center; gap: 4px; min-width: 0; }
-    .fb-author-name { font-weight: 600; font-size: 15px; color: var(--ion-text-color);
+    .fb-author-name { font-weight: 600; font-size: 14px; color: var(--ion-text-color);
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    /* LinkedIn's second header line: who the person is, one line, muted. */
+    .fb-headline {
+      display: block; font-size: 12px; color: var(--lf-muted); line-height: 1.3;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    /* LinkedIn clamps feed text to three lines and offers a muted "…see more". */
+    .fb-clamp {
+      display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
+      overflow: hidden; white-space: normal;
+    }
     .fb-dot { color: var(--lf-muted); font-size: 13px; }
     .fb-follow-link {
       background: none;
@@ -287,8 +307,8 @@ export type ChatState = 'off' | 'locked-vote' | 'locked-follow' | 'open';
     .fb-fact-row { display: flex; align-items: center; gap: 6px; font-size: 14px; color: var(--lf-muted); margin-bottom: 3px; }
     .fb-fact-row strong { color: var(--ion-text-color); font-weight: 600; }
     .fb-muted { color: var(--lf-muted); }
-    .fb-post-text { font-size: 15px; color: var(--ion-text-color); line-height: 1.34; margin: 6px 0 0; white-space: pre-line; }
-    .fb-readmore { background: none; border: 0; color: var(--lf-muted); font-family: inherit; font-weight: 600; font-size: 15px; cursor: pointer; padding: 0; margin-top: 2px; }
+    .fb-post-text { font-size: 14.5px; color: var(--ion-text-color); line-height: 1.4; margin: 6px 0 0; white-space: pre-line; }
+    .fb-readmore { background: none; border: 0; color: var(--lf-muted); font-family: inherit; font-weight: 400; font-size: 14.5px; cursor: pointer; padding: 0; margin-top: 2px; }
     .fb-readmore:hover { text-decoration: underline; }
 
     .fb-media { width: 100%; overflow: hidden; background: var(--lf-card-2); cursor: pointer; }
@@ -310,8 +330,8 @@ export type ChatState = 'off' | 'locked-vote' | 'locked-follow' | 'open';
       justify-content: space-between;
       gap: 10px;
       margin: 0 16px;
-      padding: 10px 0;
-      font-size: 15px;
+      padding: 8px 0;
+      font-size: 13px;
       color: var(--lf-muted);
       cursor: pointer;
     }
@@ -463,14 +483,19 @@ export class PostCardComponent implements OnInit, OnChanges {
   );
   readonly longBody = computed(() => (this.post?.body?.trim().length ?? 0) > 190);
 
+  /** LinkedIn's second header line: the poster's own line about themselves. */
+  readonly authorHeadline = computed(() =>
+    this.post?.anonymous && !this.isMine() ? '' : (this.author?.bio ?? '').trim());
+
   /** "You reposted this" / "Thabo Nkosi reposted this" - LinkedIn's reshare line. */
   reposterLine(): string {
     return this.isMine() ? 'You reposted this' : `${this.authorName()} reposted this`;
   }
 
-  /** The original author's sub-line inside the embed box. */
+  /** The original author's sub-line inside the embed box: their headline, as LinkedIn shows. */
   originalHeadline(o: Post): string {
-    return `${provinceName(o.province)} · ${POST_TYPE_META[o.type]?.label ?? 'Post'}`;
+    const bio = (this.data.authorOf(o.authorId)?.bio ?? '').trim();
+    return bio || provinceName(o.province);
   }
 
   readonly visibleMedia = computed(() => this.post?.media.slice(0, 4) ?? []);

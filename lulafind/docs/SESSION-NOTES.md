@@ -1,3 +1,39 @@
+# Session state — 2026-09-29 (round 3)
+
+## Post card, checked against LinkedIn line by line
+
+Fixed on `lf-post-card` (the differences were real, not cosmetic):
+
+- **The poster's headline** now sits under their name, which is LinkedIn's
+  second header line and was missing here (`authorHeadline()`).
+- **Text clamps to three lines**, not four, with a muted "…see more" that reads
+  like LinkedIn's link rather than a bold button.
+- **The header aligns to the top** of the avatar block instead of centring it.
+- **The embedded original** in a reshare shows the original author's headline
+  (falling back to the province) instead of "province · category".
+- Stats line sized like LinkedIn's (13px), body text 14.5px/1.4.
+
+What is still deliberately not LinkedIn: the category chip above the text (this
+is a missing-person app; the chip is the label) and the private-chat row under
+the action bar (chat opens only for "Have an idea" plus a mutual follow). The
+react button says "Have an idea" rather than "Like" by your instruction.
+
+## The story card is reachable from any feed now
+
+`feedWithRails(posts, 8, { shortRail: true })`: a feed that never reaches its
+8th post gets **one story rail after its last post** (previously a short feed had
+no rail at all). A feed with nothing in it renders the story rail **above the
+empty state**, so the story card is always somewhere on Home. Rails still never
+appear above the first post, and a feed that does reach an 8th post uses the
+normal slots (Stories 8, People 16, Stories 24) with no extra rail.
+
+## Tests
+
+134 pass (`npx ng test --watch=false`), including new render tests that mount
+the **post page** (asserting the case-details accordion and the poster link are
+gone from it) and **Home** (asserting the story rail and its "Create story" card
+are in the DOM), plus the pure `feedWithRails` cases for the short-feed rail.
+
 # Session state — 2026-09-29 (round 2)
 
 ## What this round changed, in the order the review asked for it
