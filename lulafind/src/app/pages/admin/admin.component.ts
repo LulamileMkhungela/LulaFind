@@ -16,7 +16,7 @@ import { AvatarComponent } from '../../shared/components/avatar.component';
 import { ModerationService } from '../../core/services/moderation.service';
 import { DataService } from '../../core/services/data.service';
 import { AuthService } from '../../core/services/auth.service';
-import { UserReport, UserProfile } from '../../core/models/types';
+import { Post, UserReport, UserProfile } from '../../core/models/types';
 import { timeAgo } from '../../core/utils/format';
 
 /**
@@ -131,10 +131,7 @@ import { timeAgo } from '../../core/utils/format';
                   <span class="lf-meta">{{ timeAgo(p.createdAt) }}</span>
                 </div>
                 <h3 class="lf-h2" style="margin:8px 0 2px">{{ p.title }}</h3>
-                <p class="lf-small lf-muted">
-                  {{ p.subject?.name }}@if (p.subject?.age !== null && p.subject?.age !== undefined) { , {{ p.subject?.age }}}
-                  · {{ p.town }} · by {{ nameOf(p.authorId) }}
-                </p>
+                <p class="lf-small lf-muted">{{ subjectLine(p) }}</p>
                 <p class="lf-small">{{ p.body }}</p>
                 <div class="acts">
                   <button class="lf-btn lf-btn--sm lf-btn--success" (click)="approve(p.id)" [disabled]="mod.busy()">Publish and alert</button>
@@ -223,6 +220,14 @@ export class AdminComponent implements OnInit {
     if (!q) return list.slice(0, 40);
     return list.filter((p) => p.title.toLowerCase().includes(q) || p.body.toLowerCase().includes(q));
   });
+
+  /** "Thandi Mokoena, 34 · Soweto · by the family" - the one line an admin needs. */
+  subjectLine(p: Post): string {
+    const name = p.subject?.name?.trim() || 'Unnamed case';
+    const age = p.subject?.age;
+    const who = `${name}${typeof age === 'number' ? `, ${age}` : ''}`;
+    return `${who} · ${p.town} · by ${this.nameOf(p.authorId)}`;
+  }
 
   nameOf(id: string): string {
     if (id === this.auth.viewerId) return 'you';

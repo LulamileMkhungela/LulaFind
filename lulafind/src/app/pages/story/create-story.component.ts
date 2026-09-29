@@ -1,8 +1,6 @@
 import { Component, ElementRef, ViewChild, computed, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
-import { IonContent } from '@ionic/angular/ion-content';
 import { IconComponent } from '../../shared/components/icon.component';
-import { AvatarComponent } from '../../shared/components/avatar.component';
 import { DataService } from '../../core/services/data.service';
 import { AuthService } from '../../core/services/auth.service';
 import { MediaService } from '../../core/services/media.service';
@@ -26,7 +24,7 @@ import { STORY_BLACK, storyBg } from '../../core/data/seed';
 @Component({
   selector: 'lf-create-story',
   standalone: true,
-  imports: [IonContent, IconComponent, AvatarComponent],
+  imports: [IconComponent],
   template: `
     <div class="stage" [style.background]="bg()">
       @if (currentMedia(); as m) {
