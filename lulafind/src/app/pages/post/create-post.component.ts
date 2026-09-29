@@ -30,6 +30,7 @@ const blankSubject = () => ({
 interface ComposerForm {
   title: string; body: string; media: MediaItem[]; province: ProvinceCode | null; town: string;
   lastSeenAt: string; lastSeenWhere: string; caseNumber: string; audience: Audience;
+  /* required when the missing person is under 18 */ guardianConsent: boolean;
   spotlightId: string | null; chatEnabled: boolean; allowComments: boolean; anonymous: boolean;
   askWanted: boolean; contactLabel: string; contactValue: string;
   contactVisibleTo: 'everyone' | 'verified' | 'owner';
@@ -256,6 +257,12 @@ interface MissingField { key: string; label: string; }
 
         @if (notice()) { <p class="notice-message"><lf-icon name="info" [size]="15" /> {{ notice() }}</p> }
         @if (error()) { <p class="error-message" role="alert"><lf-icon name="alert" [size]="15" /> {{ error() }}</p> }
+        @if (childCase()) {
+          <label class="consent">
+            <input type="checkbox" [checked]="f().guardianConsent" (change)="patch({ guardianConsent: $any($event.target).checked })" />
+            <span>I am this child\u2019s parent or guardian, or I have their permission to post this. A case about a child is checked by a moderator before it goes out.</span>
+          </label>
+        }
         <p class="footnote">Share only information you are allowed to post. In an emergency, call 10111.</p>
       </main>
     </ion-content>
@@ -343,6 +350,9 @@ interface MissingField { key: string; label: string; }
     .missing ul { margin: 7px 0 0; padding-left: 20px; }
     .missing li { font-size: 14px; line-height: 1.45; color: var(--fb-muted); }
     .fb-create-header { background: var(--lf-card); }
+    .consent { display: flex; gap: 10px; align-items: flex-start; margin: 14px 0 0; padding: 11px 12px; border-radius: 8px;
+      background: var(--lf-card); border: 1px solid var(--fb-line); font-size: 13.5px; line-height: 1.4; }
+    .consent input { margin-top: 2px; width: 17px; height: 17px; flex-shrink: 0; }
     .footnote { margin: 14px 0 0; color: var(--fb-muted); font-size: 12px; line-height: 1.4; }
     @media (max-width: 370px) { .composer { padding-inline: 10px; } .category-grid { gap: 5px; } .category { padding-inline: 7px; font-size: 13px; } .location-grid, .fields-two { grid-template-columns: 1fr; } }
   `]
@@ -377,7 +387,8 @@ export class CreatePostComponent implements OnInit {
   readonly f = signal<ComposerForm>({
     title: '', body: '', media: [], province: null, town: '', lastSeenAt: '', lastSeenWhere: '',
     caseNumber: '', audience: 'public', spotlightId: null, chatEnabled: true, allowComments: true,
-    anonymous: false, askWanted: false, contactLabel: 'Family contact', contactValue: '', contactVisibleTo: 'verified'
+    anonymous: false, askWanted: false, contactLabel: 'Family contact', contactValue: '', contactVisibleTo: 'verified',
+    guardianConsent: false
   });
   readonly s = signal(blankSubject());
   readonly khumbuReason = signal('');
@@ -524,6 +535,14 @@ export class CreatePostComponent implements OnInit {
 
   hasVideo(): boolean { return this.f().media.some((item) => item.kind === 'video'); }
 
+  /** A case about someone under 18: the poster must confirm they may publish it. */
+  childCase(): boolean {
+    const t = this.type();
+    if (t !== 'missing' && t !== 'khumbulekhaya') return false;
+    const age = Number(this.s().age);
+    return this.s().age !== '' && Number.isFinite(age) && age >= 0 && age < 18;
+  }
+
   async addPhoto(): Promise<void> {
     const f = this.f();
     if (f.media.length >= 4 || this.hasVideo()) return;
@@ -606,6 +625,7 @@ export class CreatePostComponent implements OnInit {
           lastSeenAt: timestamp, lastSeenWhere: (f.lastSeenWhere || f.town).trim(), geo: null,
           contactLabel: f.contactLabel || 'Family contact', contactValue: f.contactValue,
           contactVisibleTo: f.contactVisibleTo, caseNumber: f.caseNumber || null, reward: null,
+          guardianConsent: f.guardianConsent,
           subject, vehicleDetails: null, audience: f.audience, spotlightId: f.spotlightId,
           chatEnabled: f.chatEnabled, allowComments: f.allowComments, anonymous: f.anonymous,
           askWanted: f.askWanted, khumbu,

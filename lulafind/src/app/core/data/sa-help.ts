@@ -171,6 +171,18 @@ export const HELP_LINES: HelpLine[] = [
     onCase: true
   },
   {
+    id: 'saps-bureau',
+    group: 'missing',
+    name: 'Bureau for Missing Persons',
+    number: '021 918 3512',
+    detail: 'If a station refuses to take your report, escalate here. Also 3449 or 3452, or missing@saps.gov.za.',
+    href: 'tel:0219183512',
+    actionLabel: 'Call',
+    reach: 'Official',
+    onCase: true,
+    personOnly: true
+  },
+  {
     id: 'grit-play',
     group: 'apps',
     name: 'GRIT app',
@@ -267,6 +279,15 @@ export interface CaseContact {
 }
 
 /** Services a poster can call from a case. Never pre-ticked — a tick means they called. */
+/**
+ * The line a family needs the moment a station turns them away. SAPS policy is
+ * clear - there is no waiting period - so the refusal is the exception, and the
+ * Bureau for Missing Persons is where it gets escalated.
+ */
+export const NO_WAIT_NOTE =
+  'There is no waiting period to report a missing person. If a station tells you to wait, ask for the senior officer, ' +
+  'then escalate to the Bureau for Missing Persons on 021 918 3512.';
+
 export const CASE_CONTACTS: CaseContact[] = HELP_LINES.filter((line) => line.onCase).map((line) => ({
   id: line.id,
   name: line.name,

@@ -3,7 +3,7 @@ import { Subscription } from 'rxjs';
 import { toObservable } from '@angular/core/rxjs-interop';
 import { LULA_API, LulaApi } from '../data/api';
 import {
-  AlertPrefs, Audience, Comment, DangerAlert, GeoPoint, FeedFilter, FollowEdge, Notification, Post, PostType, Spotlight, Story, StoryReply, StoryView, Tip, UserProfile,
+  AlertPrefs, Audience, CasePlan, CaseStepId, Comment, DangerAlert, GeoPoint, FeedFilter, FollowEdge, Notification, Post, PostType, Spotlight, Story, StoryReply, StoryView, Tip, UserProfile,
   VoteValue, ReactionKind, REACTIONS, RETIRED_POST_TYPES, isReaction, VehicleDetails, dangerLabel, emptyFilter, provinceName
 } from '../models/types';
 import { avatar, cover, hueOf, scene } from '../data/seed';
@@ -37,6 +37,7 @@ export interface UpdatePostInput {
   askWanted?: boolean;
   khumbu?: Post['khumbu'];
   danger?: Post['danger'];
+  plan?: CasePlan | null;
 }
 
 export interface CreatePostInput {
@@ -64,6 +65,12 @@ export interface CreatePostInput {
   askWanted: boolean;
   khumbu: Post['khumbu'];
   danger?: DangerAlert | null;
+  /**
+   * Required for a case about someone under 18: the poster confirms they are the
+   * guardian, or have the guardian's permission, to publish it. Same rule the
+   * community platforms apply, and the reason the child review queue exists.
+   */
+  guardianConsent?: boolean;
 }
 
 /**
@@ -517,6 +524,9 @@ export class DataService {
     if (input.type === 'danger' && !input.lastSeenWhere.trim()) throw new Error('Say the place where you saw this');
     if (input.type === 'danger' && !input.danger?.kind) throw new Error('Choose what kind of danger you saw');
     if (input.type === 'khumbulekhaya' && !input.khumbu) throw new Error('Add the basic details about when they left home');
+    if (isChildSubject(input) && !input.guardianConsent) {
+      throw new Error('A case about a child can only be posted by their guardian, or with the guardian\u2019s permission');
+    }
     if (input.audience === 'surname' && !input.spotlightId) throw new Error('Choose which Spotlight community should see this');
     this.requireMembership(input.spotlightId);
     if (input.media.length > 1 && input.media.some((m) => m.kind === 'video')) {
@@ -545,6 +555,9 @@ export class DataService {
       contactVisibleTo: input.contactVisibleTo,
       caseNumber: input.caseNumber?.trim() || null,
       reward: input.reward?.trim() || null,
+      plan: isCasePost({ type: input.type } as Post)
+        ? { done: input.caseNumber?.trim() ? { case_number: true } : {}, updatedAt: now }
+        : null,
       createdAt: now,
       updatedAt: now,
       subject: input.type === 'vehicle' ? null : input.subject,
@@ -563,7 +576,9 @@ export class DataService {
       lastLike: null,
       lastComment: null,
       escalation: { requested: false, consentGranted: false, consentAt: null, partners: [] },
-      consent: [],
+      consent: input.guardianConsent
+        ? [{ kind: 'guardian' as const, label: 'Guardian permission to publish a child case', granted: true, at: now, expiresAt: null }]
+        : [],
       sightingVerified: null,
       searchParty: null,
       locationCheck: {
@@ -1584,6 +1599,43 @@ export class DataService {
   }
 
   /**
+   * Tick a step on a case's first-hours checklist. Author or admin only.
+   * Nothing here is public: the checklist is the family's own working sheet.
+   */
+  async tickStep(postId: string, step: CaseStepId, done: boolean): Promise<Post | undefined> {
+    const me = this.auth.user();
+    const p = await this.loadPost(postId);
+    if (!me || !p) throw new Error('That post is not here any more');
+    if (p.authorId !== me.id && me.isAdmin !== true) throw new Error('Only the person who posted this can change the plan');
+    const plan: CasePlan = { done: { ...(p.plan?.done ?? {}) }, officerName: p.plan?.officerName, officerContact: p.plan?.officerContact, updatedAt: Date.now() };
+    plan.done[step] = done;
+    if (!done) delete plan.done[step];
+    const next: Post = { ...p, plan, updatedAt: Date.now() };
+    await this.api.savePost(next);
+    this.touch(next);
+    return next;
+  }
+
+  /** Save the investigating officer once, for the family's own eyes. */
+  async saveOfficer(postId: string, officerName: string, officerContact: string): Promise<Post | undefined> {
+    const me = this.auth.user();
+    const p = await this.loadPost(postId);
+    if (!me || !p) throw new Error('That post is not here any more');
+    if (p.authorId !== me.id && me.isAdmin !== true) throw new Error('Only the person who posted this can add that');
+    const plan: CasePlan = {
+      done: { ...(p.plan?.done ?? {}) },
+      officerName: officerName.trim(),
+      officerContact: officerContact.trim(),
+      updatedAt: Date.now()
+    };
+    if (plan.officerName && plan.officerContact) plan.done.officer_details = true;
+    const next: Post = { ...p, plan, updatedAt: Date.now() };
+    await this.api.savePost(next);
+    this.touch(next);
+    return next;
+  }
+
+  /**
    * Keep the signed-in member's alert preferences on their profile, so a case
    * posted from any phone can be matched to them.
    */
@@ -1966,5 +2018,12 @@ function isCasePost(p: Post): boolean {
 /** A child case: the one kind that must never be silenced. */
 function isChildCase(p: Post): boolean {
   const age = p.subject?.age;
+  return typeof age === 'number' && age < 18;
+}
+
+/** Does this post describe someone under 18? */
+function isChildSubject(input: CreatePostInput): boolean {
+  if (input.type !== 'missing' && input.type !== 'khumbulekhaya') return false;
+  const age = input.subject?.age;
   return typeof age === 'number' && age < 18;
 }

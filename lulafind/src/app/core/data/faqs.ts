@@ -171,6 +171,27 @@ const housekeeping: Faq[] = [
     links: [{ label: 'Read the safety tips', route: '/tips' }]
   },
   {
+    id: 'checklist',
+    category: 'Reporting & helping',
+    q: 'What are the steps after someone goes missing?',
+    a: 'Open a case at any station and ask for the SAPS 55(A) form, write the case number down, save the investigating officer\u2019s details, add a recent photo, choose one family spokesperson, and put the poster where the person usually goes. A case on LulaFind tracks these steps for you.',
+    links: [{ label: 'Report a missing person', route: '/create/missing' }]
+  },
+  {
+    id: 'guardian',
+    category: 'Safety & privacy',
+    q: 'Can I post a case about a child?',
+    a: 'Yes, if you are the child\u2019s parent or guardian, or you have their permission - a case about a child is checked by a moderator before it goes out. If a child is in danger right now, call 10111 first.',
+    links: [{ label: 'A child is missing', route: '/create/missing' }]
+  },
+  {
+    id: 'station-refuses',
+    category: 'Reporting & helping',
+    q: 'The police station says I must wait 24 hours. Is that true?',
+    a: 'No. There is no waiting period for a missing person in South Africa. Ask for the senior officer, and if you are still turned away, escalate to the Bureau for Missing Persons on 021 918 3512 or missing@saps.gov.za.',
+    links: [{ label: 'See the numbers', route: '/help' }]
+  },
+  {
     id: 'help-out',
     category: 'Reporting & helping',
     q: 'I am not family or police. What can I actually do?',

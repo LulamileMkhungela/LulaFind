@@ -136,6 +136,7 @@ import { MediaService } from '../../core/services/media.service';
                 <a class="q" routerLink="/admin"><span class="qi qi-red"><lf-icon name="shield" [size]="20" /></span><span>Admin</span>
                   @if (mod.openCount() > 0) { <em class="lf-badge">{{ mod.openCount() }}</em> }</a>
               }
+              <a class="q" routerLink="/found"><span class="qi qi-green"><lf-icon name="check" [size]="20" /></span><span>People found</span></a>
               <a class="q" routerLink="/faqs"><span class="qi qi-blue"><lf-icon name="info" [size]="20" /></span><span>FAQs</span></a>
               <a class="q" routerLink="/help"><span class="qi qi-red"><lf-icon name="phone" [size]="20" /></span><span>Get help</span></a>
               <button class="q" type="button" (click)="signOut()"><span class="qi qi-grey"><lf-icon name="logout" [size]="20" /></span><span>Sign out</span></button>
@@ -308,6 +309,7 @@ import { MediaService } from '../../core/services/media.service';
     .qi-blue { background: var(--lf-primary-soft); color: var(--lf-primary-soft-text); }
     .qi-green { background: color-mix(in srgb, var(--lf-ubuntu) 16%, transparent); color: var(--lf-ubuntu); }
     .qi-yellow { background: color-mix(in srgb, var(--lf-marigold) 20%, transparent); color: #c98f00; }
+    .qi-green { background: color-mix(in srgb, var(--lf-ubuntu) 16%, transparent); color: var(--lf-ubuntu); }
     .qi-red { background: color-mix(in srgb, var(--lf-signal) 14%, transparent); color: var(--lf-signal); }
     .qi-grey { background: var(--lf-card-2); color: var(--ion-text-color); }
     .qi-purple { background: color-mix(in srgb, #a33bc2 16%, transparent); color: #a33bc2; }

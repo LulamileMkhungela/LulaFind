@@ -46,6 +46,7 @@ export const routes: Routes = [
   { path: 'tips', loadComponent: () => import('./pages/tips/tips.component').then((m) => m.TipsComponent) },
   { path: 'help', loadComponent: () => import('./pages/help/help.component').then((m) => m.HelpComponent) },
   { path: 'faqs', loadComponent: () => import('./pages/help/faqs.component').then((m) => m.FaqsComponent) },
+  { path: 'found', loadComponent: () => import('./pages/found/found.component').then((m) => m.FoundComponent) },
   {
     path: 'create/:type',
     canActivate: [authGuard],

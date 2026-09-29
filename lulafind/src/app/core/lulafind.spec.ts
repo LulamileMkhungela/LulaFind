@@ -1522,7 +1522,8 @@ describe('Case alerts - the message that actually finds someone', () => {
     // publishes it - and then the children-only member gets it.
     const child = await data.createPost(casePost({
       title: 'Help find a missing child in Soweto',
-      subject: { ...casePost().subject, name: 'Test Child', age: 9 }
+      subject: { ...casePost().subject, name: 'Test Child', age: 9 },
+      guardianConsent: true
     }));
     expect(child.status).toBe('under_review');
     signInAs('u_mod');
@@ -1538,7 +1539,8 @@ describe('Case alerts - the message that actually finds someone', () => {
     await svc<AuthService>(AuthService).signInDemo();
     const child = await data.createPost(casePost({
       title: 'Help find a missing child in Soweto',
-      subject: { ...casePost().subject, name: 'Test Child', age: 9 }
+      subject: { ...casePost().subject, name: 'Test Child', age: 9 },
+      guardianConsent: true
     }));
 
     expect(child.status).toBe('under_review');
@@ -1558,7 +1560,8 @@ describe('Case alerts - the message that actually finds someone', () => {
     await svc<AuthService>(AuthService).signInDemo();
     const child = await data.createPost(casePost({
       title: 'Help find a missing child in Soweto',
-      subject: { ...casePost().subject, name: 'Test Child', age: 9 }
+      subject: { ...casePost().subject, name: 'Test Child', age: 9 },
+      guardianConsent: true
     }));
     signInAs('u_mod');
     await mod.rejectCase(child.id, 'Could not confirm this case.');
@@ -1585,5 +1588,80 @@ describe('How far a case alert is', () => {
     expect(data.devicePoint()?.lat).toBe(-26.2);
     localStorage.setItem('lulafind.lastLocation', 'not json');
     expect(data.devicePoint()).toBeNull();
+  });
+});
+
+describe('First-hours checklist', () => {
+  beforeEach(bed);
+
+  const caseInput = (over: Record<string, unknown> = {}) => ({
+    type: 'missing' as const,
+    title: 'Help find Test Person in Soweto',
+    body: 'This is a long enough description of what happened, when and where.',
+    media: [] as any[], province: 'GP' as const, town: 'Soweto',
+    lastSeenAt: Date.now(), lastSeenWhere: 'Orlando West', geo: null,
+    contactLabel: 'Call', contactValue: '0710000000', contactVisibleTo: 'everyone' as const,
+    caseNumber: null, reward: null,
+    subject: { name: 'Test Person', age: 31, gender: 'female' as const, height: '', build: '', skinTone: '', hair: '', eyes: '', clothing: '', distinguishing: '', medical: '', vehicle: '', languages: '', surname: '', relationship: '' },
+    audience: 'public' as const, spotlightId: null, chatEnabled: true, allowComments: true,
+    anonymous: false, askWanted: false, khumbu: null, ...over
+  });
+
+  it('lets the poster tick steps and only they can', async () => {
+    const data = svc<DataService>(DataService);
+    await svc<AuthService>(AuthService).signInDemo();
+    const post = await data.createPost(caseInput());
+    expect(post.plan).not.toBeNull();
+
+    const ticked = await data.tickStep(post.id, 'saps_case', true);
+    expect(ticked?.plan?.done.saps_case).toBe(true);
+
+    signInAs('u_lerato');
+    await expect(data.tickStep(post.id, 'spokesperson', true)).rejects.toThrow(/Only the person/i);
+  });
+
+  it('marks the case-number step from the post itself', async () => {
+    const data = svc<DataService>(DataService);
+    await svc<AuthService>(AuthService).signInDemo();
+    const post = await data.createPost(caseInput({ caseNumber: 'OB 123/09/2026' }));
+    expect(post.plan?.done.case_number).toBe(true);
+  });
+
+  it('keeps the investigating officer on the case, not the public screen', async () => {
+    const data = svc<DataService>(DataService);
+    await svc<AuthService>(AuthService).signInDemo();
+    const post = await data.createPost(caseInput());
+    const saved = await data.saveOfficer(post.id, 'Sgt Dlamini', '082 000 0000');
+    expect(saved?.plan?.officerName).toBe('Sgt Dlamini');
+    expect(saved?.plan?.done.officer_details).toBe(true);
+    // the officer is not part of the poster or any share text
+    expect(publicPoster(saved!).shareText.toLowerCase()).not.toContain('dlamini');
+  });
+
+  it('refuses a child case without guardian permission, and records it with one', async () => {
+    const data = svc<DataService>(DataService);
+    await svc<AuthService>(AuthService).signInDemo();
+    const child = caseInput({
+      title: 'Help find a missing child in Soweto',
+      subject: { ...caseInput().subject, name: 'Test Child', age: 9 }
+    });
+    await expect(data.createPost(child)).rejects.toThrow(/guardian/i);
+    const ok = await data.createPost({ ...child, guardianConsent: true });
+    expect(ok.consent.some((c) => c.kind === 'guardian' && c.granted)).toBe(true);
+  });
+});
+
+describe('The found page feed', () => {
+  beforeEach(bed);
+
+  it('shows closed cases with how long it took', () => {
+    const data = svc<DataService>(DataService);
+    const foundCase = data.feed().find((p) => p.outcome?.found);
+    if (foundCase) {
+      const at = foundCase.outcome!.foundAt ?? 0;
+      expect(at).toBeGreaterThan(0);
+    }
+    // the shape the page reads must exist on every post
+    for (const p of data.feed()) expect(p.outcome).toBeTruthy();
   });
 });

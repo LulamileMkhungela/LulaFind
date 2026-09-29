@@ -297,7 +297,7 @@ export interface EscalationRecord {
 }
 
 export interface ConsentRecord {
-  kind: 'escalation' | 'location' | 'media' | 'data';
+  kind: 'escalation' | 'location' | 'media' | 'data' | 'guardian';
   label: string;
   granted: boolean;
   at: number;
@@ -327,6 +327,49 @@ export interface VehicleDetails {
   bodyType: string;
 }
 
+/**
+ * The steps a family works through in the first hours, taken from the SAPS
+ * process itself (SAPS 55(A) form, case number, investigating officer) and from
+ * what the search NGOs ask for. The app tracks them so a parent does not have to
+ * remember them on the worst day of their life.
+ */
+export type CaseStepId =
+  | 'saps_case'
+  | 'case_number'
+  | 'officer_details'
+  | 'recent_photo'
+  | 'spokesperson'
+  | 'poster_out'
+  | 'nGOs';
+
+export interface CaseStepSpec {
+  id: CaseStepId;
+  label: string;
+  hint: string;
+  /** A step nobody but the family should see. */
+  private?: boolean;
+  /** Shown as the next thing to do when a case is found. */
+  whenFound?: boolean;
+}
+
+export const CASE_STEPS: CaseStepSpec[] = [
+  { id: 'saps_case', label: 'Open a case at any police station', hint: 'There is no waiting period. Ask for the SAPS 55(A) form.' },
+  { id: 'case_number', label: 'Write down the case number', hint: 'Add it to this post so people can see the police are involved.' },
+  { id: 'officer_details', label: 'Save the investigating officer\u2019s details', hint: 'Name and number, on this case only - never on the public screen.', private: true },
+  { id: 'recent_photo', label: 'Add a recent, clear photo', hint: 'The one thing everyone searching actually needs.' },
+  { id: 'spokesperson', label: 'Choose one family spokesperson', hint: 'One voice stops ten versions of the story.' },
+  { id: 'poster_out', label: 'Put the poster where they usually go', hint: 'Taxi rank, clinic, church, school, corner shop.' },
+  { id: 'nGOs', label: 'Tell the search NGOs', hint: 'Pink Ladies and Missing Children SA ask for the case number first.' }
+];
+
+export interface CasePlan {
+  done: Partial<Record<CaseStepId, boolean>>;
+  /** Kept on this case only; shown to the author and admins. */
+  officerName?: string;
+  officerContact?: string;
+  updatedAt: number;
+}
+
 export interface Post {
   id: string;
   type: PostType;
@@ -351,6 +394,8 @@ export interface Post {
   contactValue: string;
   contactVisibleTo: 'everyone' | 'verified' | 'owner';
   caseNumber: string | null;
+  /** The first-hours checklist, on case posts. Null on everything else. */
+  plan?: CasePlan | null;
   reward: string | null;
   createdAt: number;
   updatedAt: number;
