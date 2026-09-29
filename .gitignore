@@ -1,3 +1,28 @@
+# Dependencies & build output (regenerated locally - never commit)
+node_modules/
+lulafind/node_modules/
+lulafind/www/
+lulafind/.angular/
+dist/
+*.log
+npm-install.log
+
+# Native build output (the android/ and ios/ shells ARE committed; their
+# compiled artefacts are not)
+lulafind/android/.gradle/
+lulafind/android/build/
+lulafind/android/app/build/
+lulafind/android/*.iml
+lulafind/ios/DerivedData/
+lulafind/ios/Pods/
+lulafind/ios/*.xcworkspace/xcuserdata/
+lulafind/ios/*.xcodeproj/xcuserdata/
+
+# OS & editor noise
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
 
 # Service-account keys are secrets - never commit them
 uploads/*adminsdk*.json

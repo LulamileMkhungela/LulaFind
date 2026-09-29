@@ -15,7 +15,6 @@ import { EmptyComponent } from '../../shared/components/empty.component';
 import { AvatarComponent } from '../../shared/components/avatar.component';
 import { ChatState, PostCardComponent } from '../../shared/components/post-card.component';
 import { DiscoverRailComponent } from '../../shared/components/discover-rail.component';
-import { FeedStoriesComponent } from '../../shared/components/feed-stories.component';
 import { FilterBarComponent } from '../../shared/components/filter-bar.component';
 import { CHECK_IN_COPY } from '../../core/services/safety.service';
 import { UserProfile } from '../../core/models/types';
@@ -35,7 +34,7 @@ import { storyBg } from '../../core/data/seed';
     IonContent, IonRefresher, IonRefresherContent,
     IonInfiniteScroll, IonInfiniteScrollContent, IonSkeletonText,
     TopNavComponent, IconComponent, EmptyComponent, AvatarComponent,
-    PostCardComponent, DiscoverRailComponent, FeedStoriesComponent, FilterBarComponent
+    PostCardComponent, DiscoverRailComponent, FilterBarComponent
   ],
   template: `
     <lf-top-nav />
@@ -45,19 +44,19 @@ import { storyBg } from '../../core/data/seed';
         <ion-refresher-content pullingText="Pull to refresh"></ion-refresher-content>
       </ion-refresher>
 
+      <!-- Stories first: the first card in the feed, like every social app -->
+      <lf-discover-rail
+        [people]="suggestions()"
+        (addStory)="onAddStory()"
+        (seeAll)="openSeeAll('stories')"
+        (removed)="dismissSuggestion($event)" />
+
       <!-- Facebook Feed Filter Chips -->
       <lf-filter-bar
         [filter]="data.filter()"
         [missingCount]="missingPip()"
         (filterChange)="data.setFilter($event)"
         (reset)="data.resetFilter()" />
-
-      <!-- First section as you scroll: stories + people you may know, one rail (Facebook style) -->
-      <lf-discover-rail
-        [people]="suggestions()"
-        (addStory)="onAddStory()"
-        (seeAll)="openSeeAll('stories')"
-        (removed)="dismissSuggestion($event)" />
 
       @if (data.loading() && !data.feed().length) {
         @for (i of [1, 2, 3]; track i) {
@@ -76,8 +75,8 @@ import { storyBg } from '../../core/data/seed';
                   actionLabel="Reset filters" (action)="data.resetFilter()" />
       }
 
-      <!-- Posts with a Stories block every few scrolls -->
-      @for (p of displayedFeed(); track p.id; let i = $index) {
+      <!-- Posts, newest first. Stories live only in the top rail. -->
+      @for (p of displayedFeed(); track p.id) {
         <lf-post-card
           [post]="p"
           [author]="data.authorOf(p.authorId) ?? null"
@@ -88,9 +87,6 @@ import { storyBg } from '../../core/data/seed';
           (chat)="onChat(p)"
           (more)="onMore(p)"
           (savedChange)="onSave(p)" />
-        @if (showStoriesAfter(i)) {
-          <lf-feed-stories (addStory)="onAddStory()" (seeAll)="openSeeAll('stories')" />
-        }
       }
 
       @if (isGuestLocked()) {
@@ -401,12 +397,6 @@ export class HomeComponent {
       if (n >= 0) void this.loadSuggestions();
     });
     this.data.startAutoSync();
-  }
-
-  /** Stories sit inside the feed: after the 2nd post, then every 5 posts. */
-  showStoriesAfter(index: number): boolean {
-    if (this.displayedFeed().length <= 1) return index === 0;
-    return index === 1 || (index + 1) % 5 === 0;
   }
 
   async loadSuggestions(): Promise<void> {
