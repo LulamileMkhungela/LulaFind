@@ -68,6 +68,19 @@ const fromLula: Faq[] = LULA_TOPICS
 
 const housekeeping: Faq[] = [
   {
+    id: 'gbv-channels',
+    category: 'Safety & privacy',
+    q: 'Which gender-based violence line actually works?',
+    a: 'The GBV Command Centre voice line, 0800 428 428, is the one confirmed live. The Command Centre also lists *120*7867#, SMS \u201chelp\u201d to 31531 and Skype \u201cHelpme GBV\u201d; in December 2024 the department said only the voice line was back, so treat a code that does not connect as expected and call the number instead.',
+    links: [{ label: 'All emergency numbers', route: '/help' }]
+  },
+  {
+    id: 'false-post',
+    category: 'Safety & privacy',
+    q: 'What happens if someone posts something false about me?',
+    a: 'Posting false information about a missing person, opening a fake case, or publishing someone\u2019s private details without permission is a criminal offence in South Africa \u2014 defamation, crimen injuria and defeating the ends of justice \u2014 and can lead to arrest. Report the post from the \u201c...\u201d menu; a moderator sees the account, the post and the times, and LulaFind hands those records to SAPS on a lawful request.',
+  },
+  {
     id: 'create',
     category: 'Start here',
     q: 'How do I post something?',

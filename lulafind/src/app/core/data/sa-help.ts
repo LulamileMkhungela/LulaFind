@@ -245,9 +245,13 @@ export const HELP_LINES: HelpLine[] = [
   }
 ];
 
-/** Shown under the GBV voice line. Not a call button — those codes are not confirmed live. */
+/**
+ * Shown under the GBV voice line. Not a call button — those codes are not
+ * confirmed live, so the screen says which one to trust and the FAQ carries the
+ * rest of the channels (the screen itself stays one sentence).
+ */
 export const GBV_CHANNEL_NOTE =
-  'The Command Centre website also lists *120*7867# and SMS “help” to 31531, plus Skype “Helpme GBV”. In December 2024 the department said only the voice line was back. If a code does not connect, call 0800 428 428.';
+  'Only the voice line, 0800 428 428, is confirmed live. If a code does not connect, call it.';
 
 /** Live SAPS Crime Stop list, opened 25 September 2026. Not a LulaFind list. */
 export const SAPS_MISSING_LIST = 'https://www.saps.gov.za/crimestop/missing/list.php';

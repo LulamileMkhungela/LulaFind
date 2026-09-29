@@ -30,19 +30,23 @@ import { SUPPORT_EMAIL, SUPPORT_NAME } from '../../core/config';
 
         <h2 class="lf-h2">In one paragraph</h2>
         <p>
-          LulaFind helps South Africans find missing people and supports families of people who left home and did
-          not come back. It is a community tool. It does not replace the South African Police Service. In an
-          emergency call <strong>10111</strong>.
+          LulaFind helps South Africans find missing people, and supports families of people who left home and did
+          not come back.
+        </p>
+        <p>
+          It is a community tool. It does not replace the South African Police Service. In an emergency call
+          <strong>10111</strong>.
         </p>
 
         <h2 class="lf-h2">The rules</h2>
         <ul>
           <li><strong>You must be 18 or older.</strong></li>
           <li>
-            <strong>Everything you post must be true.</strong> Sharing false information about a missing person,
-            opening a fake case, or posting someone's private details without permission is a criminal offence in
-            South Africa - defamation, crimen injuria and defeating the ends of justice. It can lead to arrest.
-            LulaFind hands account records to SAPS on a lawful request.
+            <strong>Everything you post must be true.</strong> A false case, or someone's private details posted
+            without permission, is a criminal offence in South Africa and can lead to arrest.
+          </li>
+          <li>
+            <strong>We hand records to SAPS on a lawful request</strong> - the account, the posts, and the times.
           </li>
           <li>
             <strong>Children.</strong> You may only post about a person under 18 if you are their parent, guardian
@@ -81,11 +85,12 @@ import { SUPPORT_EMAIL, SUPPORT_NAME } from '../../core/config';
         </ul>
 
         <h2 class="lf-h2">Reporting and moderation</h2>
-        <p>
-          Anyone can report a post, a comment or a person. A LulaFind admin reviews every report and can remove the
-          post, suspend the account, or dismiss the report as unfounded. If you are a moderator you will see the
-          queue at <strong>Me → Admin</strong>.
-        </p>
+        <ul>
+          <li>Anyone can report a post, a comment or a person.</li>
+          <li>An admin reviews every report, and can remove the post or suspend the account.</li>
+          <li>A report can also be dismissed as unfounded - the person who was reported is told.</li>
+          <li>Moderators work the queue at <strong>Me → Admin</strong>.</li>
+        </ul>
 
         <h2 class="lf-h2">Support</h2>
         <p>
