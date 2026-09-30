@@ -87,17 +87,17 @@ export const scene = (label: string, seedStr: string, tone: 'street' | 'home' | 
 export const posterPlaceholder = (title: string): string => scene(title, title, 'night');
 
 /**
- * A story background. `STORY_BLACK` (-1) is plain black and is the default;
- * any other number is a colour hue, drawn as a vivid radial (Facebook
- * text-story style) whose outer stop stays a deep tone of the hue rather than
- * near-black, so white text stays readable.
+ * A CSS background for Stories. `STORY_BLACK` (-1) is plain black and the
+ * default; other numbers are normalized hue values. Return an actual CSS color
+ * or gradient (not a bare data URI), so `[style.background]` paints it reliably.
  */
 export const STORY_BLACK = -1;
-export const storyBg = (hue: number): string =>
-  hue < 0 ? enc(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 500"><rect width="300" height="500" fill="#000"/></svg>`) : enc(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 500">
-  <defs><radialGradient id="r" cx=".3" cy=".2" r="1">
-    <stop offset="0" stop-color="hsl(${hue} 80% 58%)"/><stop offset="1" stop-color="hsl(${(hue + 60) % 360} 72% 34%)"/>
-  </radialGradient></defs><rect width="300" height="500" fill="url(#r)"/></svg>`);
+export const storyBg = (hue: number): string => {
+  if (hue < 0) return '#000000';
+  const safeHue = ((Math.round(hue) % 360) + 360) % 360;
+  const otherHue = (safeHue + 60) % 360;
+  return `radial-gradient(circle at 30% 20%, hsl(${safeHue} 80% 58%) 0%, hsl(${otherHue} 72% 34%) 100%)`;
+};
 
 /* ------------------------------------------------------------------ *
  * Seed data

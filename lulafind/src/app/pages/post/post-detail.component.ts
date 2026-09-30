@@ -12,16 +12,16 @@ import { AvatarComponent } from '../../shared/components/avatar.component';
 import { ReactionsSheetComponent } from '../../shared/components/reactions-sheet.component';
 import { ReactionButtonComponent } from '../../shared/components/reaction-button.component';
 import { ReactionIconComponent } from '../../shared/components/reaction-icon.component';
-import { CasePlanComponent } from '../../shared/components/case-plan.component';
 import { DataService } from '../../core/services/data.service';
 import { AuthService } from '../../core/services/auth.service';
 import { ChatService, ChatGate } from '../../core/services/chat.service';
 import { ModerationService } from '../../core/services/moderation.service';
 import { PostActionsService } from '../../core/services/post-actions.service';
 import { LookoutService } from '../../core/services/lookout.service';
+import { MediaService } from '../../core/services/media.service';
 import { KvStore } from '../../core/data/local-db';
 import {
-  Comment, Post, REACTIONS, ReactionKind, UserProfile, isReaction, provinceName
+  Comment, MediaItem, Post, REACTIONS, ReactionKind, UserProfile, isReaction, provinceName
 } from '../../core/models/types';
 import { compact, dayMonth, headingIsNew as headingIsNewFn, timeAgo } from '../../core/utils/format';
 import { leadMarkView } from '../../core/utils/mark-check';
@@ -33,8 +33,8 @@ import { leadMarkView } from '../../core/utils/mark-check';
  *   2. React, comment, repost, send - the LinkedIn action bar.
  *   3. The two questions this app asks: "Mark as found / Still searching" for
  *      the family, "This is me / Not me" for the person in the post.
- *   4. The comments, laid out the way LinkedIn lays them out: a comment box,
- *      "Most relevant", then bordered comment cards with Like / Reply rows.
+ *   4. The comments, laid out as a conversation: a composer, a LinkedIn sort
+ *      control, named message bubbles and replies visibly nested under them.
  *
  * Everything else that used to be stacked here (case facts, contact details,
  * poster, escalation and location links) has been taken off this page so it
@@ -46,8 +46,7 @@ import { leadMarkView } from '../../core/utils/mark-check';
   standalone: true,
   imports: [
     IonContent, IonTextarea, IonSkeletonText, RouterLink, IconComponent, AvatarComponent,
-    TopNavComponent, ReactionButtonComponent, ReactionIconComponent, CasePlanComponent,
-    ReactionsSheetComponent
+    TopNavComponent, ReactionButtonComponent, ReactionIconComponent, ReactionsSheetComponent
   ],
   template: `
     <lf-top-nav title="Post" backTo="/home" />
@@ -190,22 +189,18 @@ import { leadMarkView } from '../../core/utils/mark-check';
           </p>
         }
 
-        <!-- the line a family needs the moment a station turns them away -->
-        @if (isCase() && !p()!.outcome.found) {
-          <a class="nowait" href="tel:0219183512">
-            <lf-icon name="phone" [size]="15" />
-            <span><strong>No waiting period.</strong> If a station says wait, escalate to the Bureau for Missing Persons on 021 918 3512.</span>
-          </a>
+        @if (isCase() && (p()!.status === 'active' || p()!.status === 'under_review') && latestStillSearching(); as update) {
+          <p class="still-status" role="status">
+            <lf-icon name="search" [size]="16" />
+            <span><strong>Still searching.</strong> Confirmed {{ timeAgo(update.at) }}. This case remains open.</span>
+          </p>
         }
-
-        <!-- the family's own working sheet: the SAPS first-hours steps -->
-        <lf-case-plan [post]="p()!" [editable]="isMine()" [admin]="isAdmin()" (updated)="p.set($event)" />
 
         <!-- the two questions this page asks -->
         @if (isMine() && !p()!.appPosted && (p()!.status === 'active' || p()!.status === 'under_review') && !p()!.repostOf) {
           <section class="ask" aria-label="Case status">
             <button class="big big--go" type="button" (click)="markFound()"><lf-icon name="check" [size]="18" /> Mark as found</button>
-            <button class="big" type="button" (click)="stillSearching()"><lf-icon name="search" [size]="18" /> Still searching</button>
+            <button class="big" type="button" [disabled]="searchingBusy()" (click)="stillSearching()"><lf-icon name="search" [size]="18" /> {{ searchingBusy() ? 'Saving update…' : 'Still searching' }}</button>
           </section>
         } @else if (appPostedCase()) {
           <!--
@@ -244,7 +239,7 @@ import { leadMarkView } from '../../core/utils/mark-check';
           }
         }
 
-        <!-- comments, LinkedIn style: box, "Most relevant", bordered cards -->
+        <!-- Post conversation: composer, relevance sort, messages and nested replies. -->
         <section class="comments" id="comments">
           @if (!p()!.allowComments) {
             <p class="note">The poster turned comments off for this post.</p>
@@ -267,12 +262,37 @@ import { leadMarkView } from '../../core/utils/mark-check';
               }
               <div class="cbox">
                 <lf-avatar [src]="myAvatar()" [name]="myName()" [size]="40" />
-                <div class="field">
-                  <textarea #box rows="1" [placeholder]="replyTo() ? 'Add a reply…' : 'Add a comment…'" [value]="draft()"
-                            (input)="onType($event)" (keydown.enter)="onEnter($event)" aria-label="Write a comment"></textarea>
-                  @if (draft().trim()) {
-                    <button type="button" class="post" [disabled]="posting()" (click)="submitComment()">{{ replyTo() ? 'Reply' : 'Post' }}</button>
+                <div class="compose">
+                  <div class="field">
+                    <textarea #box rows="1" [placeholder]="replyTo() ? 'Add a reply…' : 'Add a comment…'" [value]="draft()"
+                              (input)="onType($event)" (keydown.enter)="onEnter($event)" aria-label="Write a comment"></textarea>
+                    @if (draft().trim() || commentMedia().length) {
+                      <button type="button" class="post" [disabled]="posting()" (click)="submitComment()">{{ replyTo() ? 'Reply' : 'Post' }}</button>
+                    }
+                  </div>
+                  @if (commentMedia().length) {
+                    <div class="attach-preview">
+                      @for (item of commentMedia(); track item.id) {
+                        <div class="attach-preview__item">
+                          @if (item.kind === 'image') {
+                            <img [src]="item.src" alt="Comment attachment preview" />
+                          } @else {
+                            <video [src]="item.src" controls playsinline aria-label="Comment video preview"></video>
+                          }
+                          <button type="button" (click)="removeCommentMedia(item.id)" [disabled]="posting()" [attr.aria-label]="'Remove ' + item.kind + ' attachment'"><lf-icon name="x" [size]="15" /></button>
+                        </div>
+                      }
+                    </div>
                   }
+                  <div class="attach-actions">
+                    <button type="button" (click)="addCommentPhoto()" [disabled]="posting() || media.busy() || commentMedia().length >= 4 || hasCommentVideo()">
+                      <lf-icon name="image" [size]="17" /> Photo
+                    </button>
+                    <button type="button" (click)="addCommentVideo()" [disabled]="posting() || media.busy() || commentMedia().length > 0">
+                      <lf-icon name="video" [size]="17" /> Video
+                    </button>
+                    <span>Attachments stay with this {{ replyTo() ? 'reply' : 'comment' }}</span>
+                  </div>
                 </div>
               </div>
             }
@@ -302,9 +322,21 @@ import { leadMarkView } from '../../core/utils/mark-check';
                       <div class="ccard__top">
                         <a [routerLink]="'/user/' + c.authorId" class="ccard__name">{{ nameOf(c.authorId) }}</a>
                         @if (c.authorId === p()!.authorId) { <span class="tag">Author</span> }
+                        <time class="ccard__time">{{ timeAgo(c.createdAt) }}@if (c.editedAt) { · Edited }</time>
                       </div>
                       @if (headlineOf(c.authorId)) { <span class="ccard__headline">{{ headlineOf(c.authorId) }}</span> }
-                      <p class="ccard__text">{{ c.body }}</p>
+                      @if (c.body) { <p class="ccard__text">{{ c.body }}</p> }
+                      @if (c.media?.length) {
+                        <div class="comment-media">
+                          @for (item of c.media; track item.id) {
+                            @if (item.kind === 'image') {
+                              <img [src]="item.src" alt="Photo attached to comment" loading="lazy" />
+                            } @else {
+                              <video [src]="item.src" controls playsinline preload="metadata" aria-label="Video attached to comment"></video>
+                            }
+                          }
+                        </div>
+                      }
                       @if (c.isLead) { <span class="lead">Lead</span> }
                       @if (c.sighting) {
                         <div class="sighting"><lf-icon name="pin" [size]="13" /> {{ c.sighting.place }} · {{ provinceName(c.sighting.province) }}@if (c.sighting.note) { · {{ c.sighting.note }} }</div>
@@ -338,16 +370,15 @@ import { leadMarkView } from '../../core/utils/mark-check';
                         </button>
                         <button type="button" (click)="startReply(c, c)"><lf-icon name="comment" [size]="15" /> Reply</button>
                         @if (c.upvotes > 0) { <span class="clikes"><lf-reaction-icon kind="like" [size]="15" /> {{ c.upvotes }}</span> }
-                        <span class="ctime">{{ timeAgo(c.createdAt) }}@if (c.editedAt) { · Edited }</span>
                         <button type="button" class="dots" (click)="commentMenu(c)" aria-label="Comment options"><lf-icon name="more" [size]="16" /></button>
                       </div>
                     </div>
                   }
 
                   @if (repliesOf(c.id).length) {
-                    @if (!expanded().has(c.id)) {
+                    @if (!expanded().has(c.id) && repliesOf(c.id).length > 2) {
                       <button type="button" class="viewrep" (click)="expand(c.id)">
-                        <lf-icon name="repost" [size]="14" /> {{ repliesOf(c.id).length }} {{ repliesOf(c.id).length === 1 ? 'reply' : 'replies' }}
+                        <lf-icon name="repost" [size]="14" /> View all {{ repliesOf(c.id).length }} replies
                       </button>
                     } @else {
                       <div class="replies">
@@ -368,22 +399,36 @@ import { leadMarkView } from '../../core/utils/mark-check';
                                   <div class="ccard__top">
                                     <a [routerLink]="'/user/' + r.authorId" class="ccard__name">{{ nameOf(r.authorId) }}</a>
                                     @if (r.authorId === p()!.authorId) { <span class="tag">Author</span> }
+                                    <time class="ccard__time">{{ timeAgo(r.createdAt) }}@if (r.editedAt) { · Edited }</time>
                                   </div>
                                   @if (headlineOf(r.authorId)) { <span class="ccard__headline">{{ headlineOf(r.authorId) }}</span> }
-                                  <p class="ccard__text">{{ r.body }}</p>
+                                  @if (r.body) { <p class="ccard__text">{{ r.body }}</p> }
+                                  @if (r.media?.length) {
+                                    <div class="comment-media">
+                                      @for (item of r.media; track item.id) {
+                                        @if (item.kind === 'image') {
+                                          <img [src]="item.src" alt="Photo attached to reply" loading="lazy" />
+                                        } @else {
+                                          <video [src]="item.src" controls playsinline preload="metadata" aria-label="Video attached to reply"></video>
+                                        }
+                                      }
+                                    </div>
+                                  }
                                   <div class="ccard__acts">
                                     <button type="button" [class.on]="liked(r)" (click)="likeComment(r)">
                                       <lf-icon name="thumbup" [size]="15" [filled]="liked(r)" /> {{ liked(r) ? 'Liked' : 'Like' }}
                                     </button>
                                     <button type="button" (click)="startReply(c, r)"><lf-icon name="comment" [size]="15" /> Reply</button>
                                     @if (r.upvotes > 0) { <span class="clikes"><lf-reaction-icon kind="like" [size]="15" /> {{ r.upvotes }}</span> }
-                                    <span class="ctime">{{ timeAgo(r.createdAt) }}@if (r.editedAt) { · Edited }</span>
                                     <button type="button" class="dots" (click)="commentMenu(r)" aria-label="Reply options"><lf-icon name="more" [size]="16" /></button>
                                   </div>
                                 </div>
                               }
                             </div>
                           </div>
+                        }
+                        @if (repliesOf(c.id).length > 2) {
+                          <button type="button" class="viewrep" (click)="collapse(c.id)">Hide replies</button>
                         }
                       </div>
                     }
@@ -493,12 +538,24 @@ import { leadMarkView } from '../../core/utils/mark-check';
     .big--go { background: var(--lf-primary-fill); border-color: var(--lf-primary-fill); color: #fff; }
     .note { margin: 8px var(--edge); padding: 10px 12px; border-radius: 8px; background: var(--lf-card); color: var(--ion-text-color); font-size: 14px; line-height: 1.45; }
 
-    /* comments - LinkedIn's comment card: avatar, bordered box, Like/Reply row inside */
+    /* Conversation thread - sender row, message bubble and compact Like/Reply actions. */
     .comments { background: var(--lf-card); box-shadow: var(--lf-shadow); padding: 12px var(--edge) 18px; }
     .cbox { display: flex; align-items: flex-start; gap: 8px; }
-    .field { flex: 1; min-width: 0; display: flex; align-items: flex-end; gap: 6px; padding: 6px 6px 6px 14px; border: 1px solid var(--lf-line); border-radius: 20px; background: var(--lf-card); }
+    .compose { flex: 1; min-width: 0; }
+    .field { width: 100%; min-width: 0; box-sizing: border-box; display: flex; align-items: flex-end; gap: 6px; padding: 6px 6px 6px 14px; border: 1px solid var(--lf-line); border-radius: 20px; background: var(--lf-card); }
     .field textarea { flex: 1; min-width: 0; max-height: 120px; padding: 6px 0; border: 0; outline: 0; resize: none; background: transparent; color: var(--ion-text-color); font: inherit; font-size: 15px; line-height: 1.35; }
     .field .post { height: 30px; padding: 0 14px; margin-bottom: 1px; border: 0; border-radius: 15px; background: var(--lf-primary-fill); color: #fff; font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; }
+    .field .post:disabled { opacity: .6; }
+    .attach-actions { display: flex; align-items: center; gap: 4px; min-height: 34px; padding: 3px 0; }
+    .attach-actions button { display: inline-flex; align-items: center; gap: 5px; min-height: 32px; padding: 0 8px; border: 0; border-radius: 6px; background: transparent; color: var(--lf-muted); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+    .attach-actions button:hover:not(:disabled) { background: var(--lf-hover); }
+    .attach-actions button:disabled { opacity: .4; cursor: default; }
+    .attach-actions span { margin-left: auto; color: var(--lf-muted); font-size: 11px; text-align: right; }
+    .attach-preview { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 2px; }
+    .attach-preview__item { position: relative; width: min(150px, 44vw); height: 112px; overflow: hidden; border-radius: 8px; background: #000; }
+    .attach-preview__item img, .attach-preview__item video { display: block; width: 100%; height: 100%; object-fit: cover; }
+    .attach-preview__item > button { position: absolute; top: 5px; right: 5px; display: grid; place-items: center; width: 28px; height: 28px; border: 0; border-radius: 50%; background: #000b; color: #fff; cursor: pointer; }
+    .attach-preview__item > button:disabled { opacity: .55; cursor: wait; }
     .signin { width: 100%; height: 42px; border: 0; border-radius: 21px; background: var(--lf-primary-fill); color: #fff; font: inherit; font-weight: 700; cursor: pointer; }
     .replying { display: flex; align-items: center; justify-content: space-between; margin: 0 0 6px 48px; font-size: 13px; color: var(--lf-muted); }
     .replying button { border: 0; background: transparent; color: inherit; cursor: pointer; }
@@ -507,24 +564,26 @@ import { leadMarkView } from '../../core/utils/mark-check';
     .sort { display: flex; justify-content: flex-end; margin: 12px 0 2px; }
     .sort button { display: inline-flex; align-items: center; gap: 5px; border: 0; background: transparent; color: var(--lf-muted); font: inherit; font-size: 13px; cursor: pointer; }
     .empty { margin: 12px 0 0; color: var(--lf-muted); font-size: 14px; }
-    .cmsg { display: flex; align-items: flex-start; gap: 8px; margin-top: 12px; }
+    .cmsg { display: flex; align-items: flex-start; gap: 8px; margin-top: 14px; }
     .cmsg__body { flex: 1; min-width: 0; }
-    .cmsg--reply { margin-top: 10px; }
-    .replies { margin-top: 4px; padding-left: 8px; border-left: 1px solid var(--lf-line-soft); }
-    .ccard { border: 1px solid var(--lf-line); border-radius: 10px; background: var(--lf-card); padding: 10px 12px 6px; }
-    .ccard__top { display: flex; align-items: center; gap: 6px; }
-    .ccard__name { font-size: 14px; font-weight: 600; color: var(--ion-text-color); text-decoration: none; }
+    .cmsg--reply { margin-top: 9px; }
+    .replies { margin: 7px 0 0 15px; padding-left: 15px; border-left: 2px solid var(--lf-line-soft); }
+    .ccard { border: 0; border-radius: 12px 12px 12px 4px; background: var(--lf-bg); padding: 9px 12px 6px; }
+    .ccard__top { display: flex; align-items: center; gap: 6px; min-width: 0; }
+    .ccard__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; font-weight: 700; color: var(--ion-text-color); text-decoration: none; }
+    .ccard__time { margin-left: auto; flex: none; color: var(--lf-muted); font-size: 11px; }
     .ccard__headline { display: block; margin-top: 1px; font-size: 12px; color: var(--lf-muted); }
     .tag { padding: 1px 6px; border-radius: 10px; background: var(--lf-primary-soft); color: var(--lf-primary-soft-text); font-size: 11px; font-weight: 700; }
     .ccard__text { margin: 5px 0 6px; font-size: 14.5px; line-height: 1.42; white-space: pre-line; word-break: break-word; }
+    .comment-media { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr)); gap: 6px; margin: 8px 0; }
+    .comment-media img, .comment-media video { display: block; width: 100%; max-height: 360px; border-radius: 8px; background: #000; object-fit: contain; }
     .lead { display: inline-block; margin-bottom: 6px; padding: 1px 8px; border-radius: 10px; background: color-mix(in srgb, var(--lf-ubuntu) 18%, transparent); color: var(--lf-ubuntu); font-size: 11.5px; font-weight: 700; }
     .sighting { display: flex; align-items: center; gap: 5px; margin-bottom: 6px; font-size: 13px; color: var(--lf-muted); }
     .checked { display: flex; align-items: center; gap: 5px; margin: 0 0 6px; font-size: 13px; font-weight: 600; color: var(--lf-ubuntu); }
-    .closed { display: flex; gap: 8px; align-items: flex-start; margin: 4px 0 10px; padding: 10px 12px; border-radius: 8px;
+    .closed, .still-status { display: flex; gap: 8px; align-items: flex-start; margin: 4px 0 10px; padding: 10px 12px; border-radius: 8px;
       background: color-mix(in srgb, var(--lf-ubuntu) 12%, transparent); color: inherit; font-size: 13.5px; line-height: 1.35; }
-    .nowait { display: flex; gap: 8px; align-items: flex-start; margin: 4px 0 10px; padding: 10px 12px; border-radius: 8px;
-      background: color-mix(in srgb, var(--lf-signal) 10%, transparent); color: inherit; text-decoration: none; font-size: 13.5px; line-height: 1.35; }
-    .nowait strong { font-weight: 700; }
+    .still-status strong { color: var(--lf-ubuntu); font-weight: 700; }
+    .big:disabled { opacity: .65; cursor: wait; }
     .leads { display: flex; align-items: center; gap: 8px; width: 100%; margin: 2px 0 8px; padding: 10px 12px;
       border: 1px solid color-mix(in srgb, var(--lf-signal) 40%, var(--lf-line)); border-radius: 8px;
       background: color-mix(in srgb, var(--lf-signal) 8%, transparent); color: inherit; cursor: pointer;
@@ -574,6 +633,7 @@ export class PostDetailComponent implements OnInit {
   private alert = inject(AlertController);
   private sheets = inject(ActionSheetController);
   private mod = inject(ModerationService);
+  protected media = inject(MediaService);
   protected isAdmin = (): boolean => this.mod.isAdmin();
   private actions = inject(PostActionsService);
   private prefs = new KvStore('lulafind.post-detail');
@@ -599,6 +659,7 @@ export class PostDetailComponent implements OnInit {
   editDraft = signal('');
   replyTo = signal<{ rootId: string; name: string } | null>(null);
   draft = signal('');
+  readonly commentMedia = signal<MediaItem[]>([]);
   asLead = signal(false);
   markGuess = signal('');
   posting = signal(false);
@@ -615,6 +676,10 @@ export class PostDetailComponent implements OnInit {
   readonly authorLink = computed(() => (this.p()?.anonymous && !this.isMine() ? ['/post', this.p()!.id] : ['/user', this.p()?.authorId ?? '']));
   readonly myAvatar = computed(() => this.data.avatarFor(this.auth.user()));
   readonly myName = computed(() => this.auth.user()?.displayName ?? 'Me');
+  readonly latestStillSearching = computed(() => (this.p()?.events ?? [])
+    .filter((event) => event.kind === 'still_searching')
+    .sort((a, b) => b.at - a.at)[0] ?? null);
+  readonly searchingBusy = signal(false);
   readonly myVote = computed(() => (this.p() ? this.data.myVote(this.p()!) : null));
   readonly originalName = computed(() => {
     const o = this.original();
@@ -709,11 +774,15 @@ export class PostDetailComponent implements OnInit {
     if (!this.auth.signedIn()) return this.needAuth();
     const p = this.p();
     if (!p) return;
+    const saving = this.data.vote(p.id, kind);
+    // DataService updates its feed/cache signals synchronously before the write;
+    // mirror that immediately so the detail button changes without a round trip.
+    this.p.set(this.data.post(p.id) ?? p);
     try {
-      await this.data.vote(p.id, kind);
+      await saving;
       this.p.set(this.data.post(p.id) ?? null);
-      await this.refreshGate();
     } catch (e: unknown) {
+      this.p.set(this.data.post(p.id) ?? p);
       await this.say(e instanceof Error ? e.message : 'Could not save your reaction');
     }
   }
@@ -779,6 +848,9 @@ export class PostDetailComponent implements OnInit {
     await this.say('Check removed');
   }
   expand(id: string): void { this.expanded.update((s) => new Set(s).add(id)); }
+  collapse(id: string): void {
+    this.expanded.update((current) => { const next = new Set(current); next.delete(id); return next; });
+  }
 
   focusComment(): void {
     if (!this.auth.signedIn()) return this.needAuth();
@@ -794,6 +866,37 @@ export class PostDetailComponent implements OnInit {
     setTimeout(() => this.box?.nativeElement.focus(), 30);
   }
   cancelReply(): void { this.replyTo.set(null); }
+
+  hasCommentVideo(): boolean { return this.commentMedia().some((item) => item.kind === 'video'); }
+
+  async addCommentPhoto(): Promise<void> {
+    if (this.posting() || this.media.busy() || this.commentMedia().length >= 4 || this.hasCommentVideo()) return;
+    const item = await this.media.pickImage({ quality: 76 });
+    const notice = this.media.notice();
+    if (notice) await this.say(notice);
+    if (!item) {
+      const message = this.media.lastError();
+      if (message) await this.say(message);
+      return;
+    }
+    const src = await this.media.compress(item.src, 1200);
+    this.commentMedia.update((items) => [...items, { ...item, src }]);
+  }
+
+  async addCommentVideo(): Promise<void> {
+    if (this.posting() || this.media.busy() || this.commentMedia().length) return;
+    const item = await this.media.pickVideo();
+    if (!item) {
+      const message = this.media.lastError();
+      if (message) await this.say(message);
+      return;
+    }
+    this.commentMedia.set([item]);
+  }
+
+  removeCommentMedia(id: string): void {
+    if (!this.posting()) this.commentMedia.update((items) => items.filter((item) => item.id !== id));
+  }
 
   onType(ev: Event): void {
     const el = ev.target as HTMLTextAreaElement;
@@ -813,20 +916,22 @@ export class PostDetailComponent implements OnInit {
   async submitComment(): Promise<void> {
     if (!this.auth.signedIn()) return this.needAuth();
     const body = this.draft().trim();
+    const media = this.commentMedia();
     const p = this.p();
-    if (!body || !p || this.posting()) return;
+    if ((!body && !media.length) || !p || this.posting()) return;
     const reply = this.replyTo();
-    const lead = this.asLead() && !reply;
+    const lead = this.asLead() && !reply && !!body;
     this.posting.set(true);
     try {
       await this.data.addComment({
-        postId: p.id, body, parentId: reply?.rootId ?? null, isLead: lead,
+        postId: p.id, body, parentId: reply?.rootId ?? null, isLead: lead, media,
         markGuess: lead && this.markGuess().trim() ? this.markGuess().trim() : undefined
       });
       this.comments.set(await this.data.comments(p.id));
       this.p.set(this.data.post(p.id) ?? null);
       if (reply) this.expand(reply.rootId);
       this.draft.set('');
+      this.commentMedia.set([]);
       const el = this.box?.nativeElement;
       if (el) { el.value = ''; el.style.height = 'auto'; }
       this.replyTo.set(null);
@@ -1025,7 +1130,7 @@ export class PostDetailComponent implements OnInit {
     await this.say(response === 'not_going_home' ? 'Your family has been told you are safe.' : 'Your family has been notified.');
     if (response === 'contact_me' && p.authorId) {
       const thread = await this.chat.ensureThread(p, p.authorId, 'vote');
-      if (thread) await this.router.navigate(['/chat', thread.id]);
+      if (thread) await this.router.navigate(['/chats/thread', thread.id]);
     }
   }
 
@@ -1107,10 +1212,17 @@ export class PostDetailComponent implements OnInit {
 
   async stillSearching(): Promise<void> {
     const p = this.p();
-    if (!p) return;
-    await this.data.dismissOutcomeNudge(p.id);
-    this.p.set(this.data.post(p.id) ?? null);
-    await this.say('Marked as still searching. The post stays open.');
+    if (!p || this.searchingBusy()) return;
+    this.searchingBusy.set(true);
+    try {
+      const updated = await this.data.confirmStillSearching(p.id);
+      this.p.set(updated);
+      await this.say('Update posted: Still searching. The case remains open.');
+    } catch (e: unknown) {
+      await this.say(e instanceof Error ? e.message : 'Could not save your case update');
+    } finally {
+      this.searchingBusy.set(false);
+    }
   }
 
   /* ---------------------------- chat ---------------------------- */
@@ -1129,7 +1241,7 @@ export class PostDetailComponent implements OnInit {
     const g = await this.chat.gate(p, p.khumbu?.claimedByUserId === this.auth.viewerId);
     if (g.allowed) {
       const thread = await this.chat.ensureThread(p, p.authorId, 'vote');
-      if (thread) await this.router.navigate(['/chat', thread.id]);
+      if (thread) await this.router.navigate(['/chats/thread', thread.id]);
       return;
     }
     if (g.step === 'follow') {

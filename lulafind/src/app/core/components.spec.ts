@@ -3,11 +3,13 @@ import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import { describe, expect, it, beforeEach } from 'vitest';
 import { provideRouter } from '@angular/router';
 import { provideIonicAngular } from '@ionic/angular';
+import { ToastController } from '@ionic/angular/toast-controller';
 
 import { LocalDb } from './data/local-db';
 import { LULA_API, MockApi } from './data/api';
 import { AuthService } from './services/auth.service';
 import { DataService } from './services/data.service';
+import { ChatService } from './services/chat.service';
 import { emptyFilter } from './models/types';
 import { FilterBarComponent } from '../shared/components/filter-bar.component';
 import { PostCardComponent } from '../shared/components/post-card.component';
@@ -16,10 +18,14 @@ import { SpotlightComponent } from '../pages/tabs/spotlight.component';
 import { MeComponent } from '../pages/tabs/me.component';
 import { CreatePostComponent } from '../pages/post/create-post.component';
 import { CreateStoryComponent } from '../pages/story/create-story.component';
+import { StoryViewerComponent } from '../pages/story/story-viewer.component';
+import { SettingsService } from './services/settings.service';
 import { ProfileComponent } from '../pages/user/profile.component';
 import { TermsComponent } from '../pages/terms/terms.component';
 import { PostDetailComponent } from '../pages/post/post-detail.component';
+import { ChatRoomComponent } from '../pages/chat/chat-room.component';
 import { HomeComponent } from '../pages/tabs/home.component';
+import { TabsComponent } from '../pages/tabs/tabs.component';
 import { AdminComponent } from '../pages/admin/admin.component';
 import { SpotlightDetailComponent } from '../pages/spotlight/spotlight-detail.component';
 import { SUPPORT_EMAIL } from './config';
@@ -80,6 +86,16 @@ function bed(): void {
 describe('Components render', () => {
   beforeEach(bed);
 
+  it('uses the bottom-right navigation action to create a photo post', async () => {
+    const f = TestBed.createComponent(TabsComponent);
+    f.detectChanges();
+    await f.whenStable();
+    const html = (f.nativeElement as HTMLElement).innerHTML;
+    expect(html).toContain('Create a post with a photo');
+    expect(html).toContain('Photo');
+    expect(html).not.toContain('menu-pip');
+  });
+
   it('renders the feed filter bar with a province dropdown', async () => {
     const f = TestBed.createComponent(FilterBarComponent);
     f.componentInstance.filter = emptyFilter();
@@ -97,6 +113,7 @@ describe('Components render', () => {
     const data = TestBed.inject(DataService);
     await data.loadFeed();
     const post = { ...(await data.loadPost('p_thato'))! };
+    post.body = 'A useful community update with the route, time, and enough context for neighbours to read, share, and decide whether they can help today.';
     post.media = [1, 2, 3, 4, 5, 6].map((n) => ({ id: 'm' + n, kind: 'image' as const, src: 'data:image/svg+xml,' }));
     const f = TestBed.createComponent(PostCardComponent);
     f.componentInstance.post = post;
@@ -110,11 +127,11 @@ describe('Components render', () => {
     expect(html).toContain('Have an idea');
     expect(html).not.toContain('No idea');
     // LinkedIn's card anatomy: the poster's headline under their name, the
-    // three-line clamp with a muted "…see more", a stats line and the four
+    // three-line clamp with a muted "Read more", a stats line and the four
     // action buttons.
     expect(html).toContain('Community organiser');
     expect(html).toContain('fb-clamp');
-    expect(html).toContain('see more');
+    expect(html).toContain('Read more');
     expect(html).toContain('fb-stats-bar');
     expect(html).toContain('Comment');
     expect(html).toContain('Repost');
@@ -123,6 +140,24 @@ describe('Components render', () => {
     expect(html).toContain('Lerato Mahlangu');
     expect(html).toContain('commented on this');
     expect(html).toContain('Comment');
+  });
+
+  it('shows a selected generated poster in the feed card', async () => {
+    const data = TestBed.inject(DataService);
+    await data.loadFeed();
+    const post = { ...(await data.loadPost('p_thato'))! };
+    post.poster = {
+      templateId: 'signal', createdAt: Date.now(),
+      media: { id: 'poster-image', kind: 'image', src: 'https://example.test/poster.png' }
+    };
+    const f = TestBed.createComponent(PostCardComponent);
+    f.componentInstance.post = post;
+    f.componentInstance.author = (await data.profile(post.authorId))!;
+    f.detectChanges();
+    await f.whenStable();
+    const html: string = (f.nativeElement as HTMLElement).innerHTML;
+    expect(html).toContain('fb-media--poster');
+    expect(html).toContain('https://example.test/poster.png');
   });
 
   it('renders a reshared post the way LinkedIn does: reposter line, then the original in a frame', async () => {
@@ -179,21 +214,22 @@ describe('Components render', () => {
     expect(html).toContain('Comment');
     expect(html).toContain('Repost');
     expect(html).toContain('Send');
+    expect(html).toContain('Most relevant');
+    expect(html).toContain('ccard__time');
+    expect(html).toContain('Reply');
     // the things that were taken off this page must stay off it
     expect(html).not.toContain('Case details');
     expect(html).not.toContain('Make a poster');
   });
 
-  it('renders the home feed with the story rail reachable', async () => {
+  it('does not insert a story rail before the feed reaches post eight', async () => {
     const data = TestBed.inject(DataService);
     await data.loadFeed();
     const f = TestBed.createComponent(HomeComponent);
     await settle(f);
     const html: string = (f.nativeElement as HTMLElement).innerHTML;
-    // A feed that never reaches its 8th post still carries one story rail, and
-    // the "Create story" card is in it.
-    expect(html).toContain('lf-story-rail');
-    expect(html).toContain('Create story');
+    expect(html).not.toContain('lf-story-rail');
+    expect(html).not.toContain('Create story');
     expect(html).toContain('lf-post-card');
   });
 
@@ -293,12 +329,118 @@ describe('Components render', () => {
     expect(html).toContain('Missing person');
     expect(f.componentInstance.mySpotlights().map((s: any) => s.surname)).toEqual(['Mokoena']);
 
-    f.componentInstance.type.set('missing');
+    f.componentInstance.setType('missing');
     f.detectChanges();
-    const composerHtml: string = (f.nativeElement as HTMLElement).innerHTML;
-    expect(composerHtml).toContain('Short heading');
-    expect(composerHtml).toContain('Type a short heading');
-    expect(composerHtml).toContain('class="heading-input"');
+    const composer = f.nativeElement as HTMLElement;
+    const composerHtml = composer.innerHTML;
+    const contentInputs = composer.querySelectorAll('textarea');
+    expect(composerHtml).toContain('Fill in the prompts');
+    expect(composerHtml).toContain('Generate');
+    expect(composerHtml).not.toContain('Short heading');
+    expect(composerHtml).not.toContain('Story');
+    expect(contentInputs).toHaveLength(1);
+    expect((contentInputs[0] as HTMLTextAreaElement).value).toContain('Full name:');
+    expect((contentInputs[0] as HTMLTextAreaElement).value).toContain('What happened:');
+
+    f.componentInstance.patch({ body: 'Full name:\nAma Ndlovu\nAge:\n14\nGender:\nFemale\nLocation (town/suburb, province):\nSoweto, Gauteng\nWhen last seen:\n2026-09-30T10:20\nWhat happened:\nAma was last seen walking home from school after her afternoon class.\nClothing / identifying details:\nBlue school uniform' });
+    expect(f.componentInstance.templateValues()).toMatchObject({
+      name: 'Ama Ndlovu', age: 14, gender: 'female', town: 'Soweto', province: 'GP', clothing: 'Blue school uniform'
+    });
+    expect(f.componentInstance.childCase()).toBe(true);
+
+    await f.componentInstance.openGenerator();
+    f.detectChanges();
+    await f.whenStable();
+    const previewHtml = (f.nativeElement as HTMLElement).innerHTML;
+    expect(previewHtml).toContain('Choose a design');
+    expect(previewHtml).toContain('<canvas');
+    expect(previewHtml).toContain('No photo attached');
+    expect(previewHtml).toContain('Editorial');
+    await f.componentInstance.chooseTemplate('editorial');
+    f.componentInstance.useGeneratedDesign();
+    f.detectChanges();
+    expect(f.componentInstance.posterTemplate()).toBe('editorial');
+  });
+
+  it('previews a generated poster with or without its attached photo', async () => {
+    await TestBed.inject(AuthService).signInDemo();
+    await TestBed.inject(DataService).loadStatic();
+    const OriginalImage = globalThis.Image;
+    class ReadyImage {
+      width = 400;
+      height = 600;
+      crossOrigin = '';
+      onload: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      set src(_value: string) { this.onload?.(); }
+    }
+    globalThis.Image = ReadyImage as unknown as typeof Image;
+    try {
+      const f = TestBed.createComponent(CreatePostComponent);
+      f.detectChanges();
+      await f.whenStable();
+      f.componentInstance.setType('missing');
+      const photo = { id: 'poster-preview-photo', kind: 'image' as const, src: 'data:image/png;base64,AA==' };
+      f.componentInstance.f.update((form) => ({ ...form, media: [photo] }));
+      await f.componentInstance.openGenerator();
+      f.detectChanges();
+      let html = (f.nativeElement as HTMLElement).innerHTML;
+      expect(html).toContain('With photo');
+      expect(html).toContain('Text only');
+      expect(html).toContain('Preview includes your first attached photo.');
+
+      await f.componentInstance.setPreviewPhoto(false);
+      f.detectChanges();
+      html = (f.nativeElement as HTMLElement).innerHTML;
+      expect(html).toContain('Preview without the photo; the published design includes your attached photo.');
+    } finally {
+      globalThis.Image = OriginalImage;
+    }
+  });
+
+  it('attaches a photo selected from the bottom navigation to the composer', async () => {
+    await TestBed.inject(AuthService).signInDemo();
+    await TestBed.inject(DataService).loadStatic();
+    const photo = { id: 'nav-photo', kind: 'image' as const, src: 'data:image/png;base64,AA==' };
+    window.history.replaceState({ ...window.history.state, photoAttachment: photo, mediaNotice: 'Picker fallback used.' }, document.title, window.location.href);
+
+    const f = TestBed.createComponent(CreatePostComponent);
+    f.detectChanges();
+    await f.whenStable();
+
+    expect(f.componentInstance.f().media).toContainEqual(photo);
+    expect(f.componentInstance.notice()).toBe('Picker fallback used.');
+    expect(window.history.state.photoAttachment).toBeUndefined();
+  });
+
+  it('publishes the filled prompt as plain text when Generate was not chosen', async () => {
+    TestBed.overrideProvider(ToastController, { useValue: { create: async () => ({ present: async () => undefined }) } });
+    const auth = TestBed.inject(AuthService);
+    const data = TestBed.inject(DataService);
+    await auth.signInDemo();
+    await data.loadStatic();
+    const f = TestBed.createComponent(CreatePostComponent);
+    f.detectChanges();
+    await f.whenStable();
+    f.componentInstance.setType('missing');
+    f.componentInstance.patch({
+      body: 'Full name:\nAma Ndlovu\nAge:\n14\nGender:\nFemale\nLocation (town/suburb, province):\nSoweto, Gauteng\nWhen last seen:\n2026-09-30T10:20\nWhat happened:\nAma was last seen leaving school shortly after lessons ended. She did not arrive at home, and her family checked the usual route, shops and taxi stop. Please contact the family if you personally see her.\nClothing / identifying details:\nBlue school uniform',
+      guardianConsent: true
+    });
+    await f.componentInstance.submit();
+    const post = data.myAuthored().find((item) => item.subject?.name === 'Ama Ndlovu');
+    expect(post).toBeTruthy();
+    expect(post).toMatchObject({ type: 'missing', status: 'under_review', town: 'Soweto', province: 'GP' });
+    expect(post?.subject).toMatchObject({ name: 'Ama Ndlovu', age: 14, gender: 'female', clothing: 'Blue school uniform' });
+    expect(post?.body).toContain('Ama was last seen leaving school');
+    expect(post?.body).not.toContain('Full name:');
+    expect(post?.poster).toBeUndefined();
+
+    const card = TestBed.createComponent(PostCardComponent);
+    card.componentInstance.post = post!;
+    card.componentInstance.author = data.authorOf(post!.authorId) ?? null;
+    card.detectChanges();
+    expect((card.nativeElement as HTMLElement).innerHTML).toContain('Read more');
   });
 
   it('organizes the Menu into shortcuts, posts, and saved sections', async () => {
@@ -355,6 +497,85 @@ describe('Components render', () => {
     expect(withPrivacy).toContain('My Spotlight');
     expect(withPrivacy).toContain('My followers');
     expect(withPrivacy).toContain('People who follow you can view');
+  });
+
+  it('keeps stories manual even for saved autoplay settings, and a hold will not skip one', async () => {
+    const data = TestBed.inject(DataService);
+    await data.loadStatic();
+    TestBed.inject(SettingsService).update({ autoplayMedia: true });
+    const f = TestBed.createComponent(StoryViewerComponent);
+    const intervalSpy = vi.spyOn(globalThis, 'setInterval');
+    f.detectChanges();
+    await f.whenStable();
+    f.componentInstance.id.set('s1');
+    f.detectChanges();
+    await f.whenStable();
+    expect((f.nativeElement as HTMLElement).innerHTML).toContain('Tap to continue');
+    expect(intervalSpy).not.toHaveBeenCalled();
+    intervalSpy.mockRestore();
+
+    vi.useFakeTimers();
+    try {
+      f.componentInstance.pressStart();
+      vi.advanceTimersByTime(500);
+      f.componentInstance.pressEnd();
+      f.componentInstance.advance();
+      expect(f.componentInstance.id()).toBe('s1');
+      f.componentInstance.advance();
+      expect(f.componentInstance.id()).not.toBe('s1');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('renders private messages as a dated, grouped conversation thread', async () => {
+    await TestBed.inject(AuthService).signInDemo();
+    const chat = TestBed.inject(ChatService);
+    const me = TestBed.inject(AuthService).viewerId!;
+    const today = Date.now();
+    const yesterdayDate = new Date(today);
+    yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+    chat.messages.set([
+      { id: 'm1', threadId: 'thread-test', fromUserId: 'u_friend', body: 'I saw the notice and wanted to check in.', at: yesterdayDate.getTime(), read: true, kind: 'text' },
+      { id: 'm2', threadId: 'thread-test', fromUserId: 'u_friend', body: 'Are you still looking near the station?', at: yesterdayDate.getTime() + 30_000, read: true, kind: 'text' },
+      { id: 'm3', threadId: 'thread-test', fromUserId: me, body: 'Yes, thank you for reaching out.', at: today, read: false, kind: 'text' }
+    ]);
+    const f = TestBed.createComponent(ChatRoomComponent);
+    f.detectChanges();
+    await f.whenStable();
+    const html = (f.nativeElement as HTMLElement).innerHTML;
+    expect(html).toContain('Conversation');
+    expect(html).toContain('Yesterday');
+    expect(html).toContain('Today');
+    expect(f.componentInstance.showMessageHeader(1)).toBe(false);
+    expect(f.componentInstance.showMessageHeader(2)).toBe(true);
+    expect(f.componentInstance.dayBoundary(1)).toBeNull();
+  });
+
+  it('updates the private-chat inbox timestamp and peer unread count on send', async () => {
+    await TestBed.inject(AuthService).signInDemo();
+    const auth = TestBed.inject(AuthService);
+    const api = TestBed.inject(LULA_API);
+    const chat = TestBed.inject(ChatService);
+    const me = auth.viewerId!;
+    const thread = {
+      id: 'thread-inbox-update',
+      participantIds: [me, 'u_friend'],
+      postId: null,
+      createdAt: 1,
+      lastMessageAt: 1,
+      unread: { [me]: 0, u_friend: 0 },
+      unlockedVia: 'follow' as const
+    };
+    await api.saveThread(thread);
+    await chat.openThread(thread.id);
+    await chat.send('I am still looking. Thank you for checking in.');
+
+    const updated = await api.thread(thread.id);
+    expect(updated?.lastMessageAt).toBeGreaterThan(1);
+    expect(updated?.unread.u_friend).toBe(1);
+    expect(updated?.unread[me]).toBe(0);
+    expect(chat.messages().at(-1)?.body).toContain('still looking');
   });
 
   it('renders a profile and hides what the owner hid', async () => {

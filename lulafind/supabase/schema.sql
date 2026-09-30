@@ -271,8 +271,8 @@ returns boolean language sql stable security definer set search_path = pg_catalo
     );
 $$;
 
--- Signed image URLs are issued only if this caller can read the story/post that
--- references the object. The storage bucket itself must remain private.
+-- Signed image URLs are issued only if this caller can read the story, post, or
+-- comment (through its parent post) that references the object. Keep the bucket private.
 create or replace function public.lula_media_visible(file_path text, person text)
 returns boolean language sql stable security definer set search_path = pg_catalog as $$
   select public.lula_is_self(person)
@@ -280,9 +280,11 @@ returns boolean language sql stable security definer set search_path = pg_catalo
       select 1
       from public.records r
       cross join lateral jsonb_array_elements(
-        case when jsonb_typeof(r.payload->'media') = 'array' then r.payload->'media' else '[]'::jsonb end
+        (case when jsonb_typeof(r.payload->'media') = 'array' then r.payload->'media' else '[]'::jsonb end)
+        || (case when jsonb_typeof(r.payload #> '{poster,media}') = 'object'
+             then jsonb_build_array(r.payload #> '{poster,media}') else '[]'::jsonb end)
       ) as item(value)
-      where r.collection in ('posts', 'stories')
+      where r.collection in ('posts', 'stories', 'comments')
         and (
           item.value->>'src' = ('storage://photos/' || file_path)
           or split_part(regexp_replace(
@@ -294,6 +296,7 @@ returns boolean language sql stable security definer set search_path = pg_catalo
         and (
           (r.collection = 'posts' and public.lula_post_visible(r.id, person))
           or (r.collection = 'stories' and public.lula_story_visible(r.id, person))
+          or (r.collection = 'comments' and public.lula_post_visible(r.payload->>'postId', person))
         )
     );
 $$;
@@ -479,7 +482,12 @@ with check (
         and payload->>'id' = (select public.lula_uid())
         and coalesce(payload->>'isAdmin', 'false') = 'false'
         and coalesce(payload->>'suspended', 'false') = 'false')
-      or (collection = 'posts' and payload->>'authorId' = (select public.lula_uid()))
+      or (collection = 'posts'
+        and payload->>'authorId' = (select public.lula_uid())
+        and (payload->>'spotlightId' is null
+          or public.lula_spotlight_member((select public.lula_uid()), payload->>'spotlightId'))
+        and (coalesce(payload->>'audience', 'public') <> 'surname'
+          or payload->>'spotlightId' is not null))
       or (collection = 'comments'
         and payload->>'authorId' = (select public.lula_uid())
         and public.lula_post_visible(payload->>'postId', (select public.lula_uid())))
@@ -539,7 +547,13 @@ with check (
   or (
     (collection in ('posts', 'comments', 'stories')
       and owner_id = (select public.lula_uid())
-      and payload->>'authorId' = (select public.lula_uid()))
+      and payload->>'authorId' = (select public.lula_uid())
+      and (collection <> 'posts'
+        or (payload->>'spotlightId' is null
+          or public.lula_spotlight_member((select public.lula_uid()), payload->>'spotlightId')))
+      and (collection <> 'posts'
+        or coalesce(payload->>'audience', 'public') <> 'surname'
+        or payload->>'spotlightId' is not null))
     or (collection = 'users'
       and id = (select public.lula_uid())
       and payload->>'id' = (select public.lula_uid())
@@ -694,7 +708,7 @@ declare
   k text;
   allowed text[] := array[
     'voterIds', 'upvotes', 'commentCount', 'views', 'shares', 'lookingIds',
-    'searchParty', 'danger', 'khumbu', 'flags', 'events', 'updatedAt', 'status', 'outcome'
+    'searchParty', 'danger', 'khumbu', 'flags', 'events', 'lastComment', 'updatedAt', 'status', 'outcome'
   ];
   my_old text;
   my_new text;
@@ -702,6 +716,7 @@ declare
   claimed_new text;
   is_claimed boolean;
   merged jsonb;
+  last_comment jsonb;
   n_old int;
 begin
   if me is null then
@@ -748,6 +763,42 @@ begin
   -- 3. Counters: comments are counted, views and shares go up by one at most.
   merged := jsonb_set(merged, '{commentCount}', to_jsonb((
     select count(*) from public.records c where c.collection = 'comments' and c.payload->>'postId' = post_id)), true);
+
+  -- Feed previews may name a saved top-level comment, never invented text.
+  -- On deletion, the preview may be cleared only when no top-level comment remains.
+  if (cur->'lastComment') is distinct from (next->'lastComment') then
+    if next->'lastComment' is null or next->'lastComment' = 'null'::jsonb then
+      if exists (
+        select 1 from public.records c
+        where c.collection = 'comments' and c.payload->>'postId' = post_id
+          and c.payload->>'parentId' is null
+      ) then
+        raise exception 'The latest comment preview cannot be cleared while comments remain';
+      end if;
+      merged := jsonb_set(merged, '{lastComment}', 'null'::jsonb, true);
+    else
+      select jsonb_build_object(
+        'userId', c.payload->>'authorId',
+        'displayName', coalesce((
+          select u.payload->>'displayName' from public.records u
+          where u.collection = 'users' and u.id = c.payload->>'authorId'
+        ), 'Someone'),
+        'body', left(c.payload->>'body', 280),
+        'at', c.payload->'createdAt'
+      ) into last_comment
+      from public.records c
+      where c.collection = 'comments'
+        and c.payload->>'postId' = post_id
+        and c.payload->>'parentId' is null
+        and c.payload->>'createdAt' = next->'lastComment'->>'at'
+        and left(c.payload->>'body', 280) = next->'lastComment'->>'body'
+      limit 1;
+      if last_comment is null then
+        raise exception 'The latest comment preview must match a saved comment';
+      end if;
+      merged := jsonb_set(merged, '{lastComment}', last_comment, true);
+    end if;
+  end if;
   if coalesce((next->>'views')::int, 0) = coalesce((cur->>'views')::int, 0) + 1 then
     merged := jsonb_set(merged, '{views}', next->'views', true);
   end if;

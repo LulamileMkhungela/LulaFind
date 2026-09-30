@@ -40,11 +40,12 @@ export class MediaService {
     }
   }
 
-  async pickImage(opts: { source?: 'camera' | 'gallery'; quality?: number } = {}): Promise<MediaItem | null> {
+  async pickImage(opts: { source?: 'camera' | 'gallery' | 'prompt'; quality?: number } = {}): Promise<MediaItem | null> {
     this.busy.set(true);
     this.lastError.set(null);
     this.notice.set(null);
-    const fromCamera = opts.source === 'camera';
+    const source = opts.source ?? 'prompt';
+    const fromCamera = source === 'camera';
     try {
       if (this.platform.isNative && this.cameraAvailable) {
         // Ask for the camera first: on Android 6+ the plugin needs the grant,
@@ -54,7 +55,7 @@ export class MediaService {
           if (perm && perm.camera !== 'granted') {
             const asked = await Camera.requestPermissions({ permissions: ['camera'] }).catch(() => null);
             if (asked && asked.camera !== 'granted') {
-              this.lastError.set('Camera access is off for LulaFind. Turn it on in your phone settings, or add a photo from your gallery.');
+              this.notice.set('Camera access is off. Your phone’s photo chooser will open instead.');
               return await this.pickViaInput('image/*', false);
             }
           }
@@ -64,20 +65,22 @@ export class MediaService {
             quality: opts.quality ?? 78,
             allowEditing: false,
             resultType: CameraResultType.DataUrl,
-            source: fromCamera ? CameraSource.Camera : CameraSource.Prompt,
+            source: source === 'camera' ? CameraSource.Camera : source === 'gallery' ? CameraSource.Photos : CameraSource.Prompt,
             correctOrientation: true,
             width: 1400
           });
           if (!photo.dataUrl) return null;
           return { id: uid('m'), kind: 'image', src: photo.dataUrl };
         } catch (e: unknown) {
-          if (!MediaService.pluginMissing(e)) throw e;
-          this.notice.set('This build has no camera module. Choose a photo from your gallery instead.');
+          if (MediaService.cancelled(e)) return null;
+          this.notice.set(MediaService.pluginMissing(e)
+            ? 'This build has no camera module. Your phone’s own photo chooser will open instead.'
+            : 'The camera did not open. Your phone’s photo chooser will open instead.');
           return await this.pickViaInput('image/*', false);
         }
       }
       if (fromCamera && this.platform.isNative && !this.cameraAvailable) {
-        this.notice.set('This build has no camera module. Choose a photo from your gallery instead.');
+        this.notice.set('This build has no camera module. Your phone’s own photo chooser will open instead.');
       }
       return await this.pickViaInput('image/*', false);
     } catch (e: unknown) {
@@ -109,6 +112,11 @@ export class MediaService {
     }
   }
 
+  private static cancelled(e: unknown): boolean {
+    const msg = String((e as Error)?.message ?? e ?? '').toLowerCase();
+    return msg.includes('cancel') || msg.includes('no image picked') || msg.includes('user cancelled');
+  }
+
   /** "Camera plugin is not implemented on android" and its cousins. */
   private static pluginMissing(e: unknown): boolean {
     const err = e as { code?: string; message?: string } | null;
@@ -123,29 +131,42 @@ export class MediaService {
       input.accept = accept;
       if (capture) input.setAttribute('capture', 'environment');
       input.style.display = 'none';
-      document.body.appendChild(input);
-      input.addEventListener('change', () => {
+      let settled = false;
+      const finish = (item: MediaItem | null): void => {
+        if (settled) return;
+        settled = true;
+        input.removeEventListener('change', onChange);
+        input.removeEventListener('cancel', onCancel);
+        window.removeEventListener('focus', onFocus);
+        input.remove();
+        resolve(item);
+      };
+      const onCancel = (): void => finish(null);
+      const onFocus = (): void => {
+        // Some Android WebViews return from the system chooser without firing
+        // either `cancel` or `change`. Resolve that path instead of leaving the
+        // photo button permanently busy.
+        window.setTimeout(() => { if (!input.files?.length) finish(null); }, 700);
+      };
+      const onChange = (): void => {
         const file = input.files?.[0];
-        if (!file) {
-          document.body.removeChild(input);
-          return resolve(null);
-        }
+        if (!file) { finish(null); return; }
         const reader = new FileReader();
-        reader.onload = () => {
-          document.body.removeChild(input);
-          resolve({
-            id: uid('m'),
-            kind: file.type.startsWith('video') ? 'video' : 'image',
-            src: String(reader.result)
-          });
-        };
-        reader.onerror = () => {
-          document.body.removeChild(input);
-          resolve(null);
-        };
+        reader.onload = () => finish({
+          id: uid('m'),
+          kind: file.type.startsWith('video') ? 'video' : 'image',
+          src: String(reader.result)
+        });
+        reader.onerror = () => finish(null);
         reader.readAsDataURL(file);
-      }, { once: true });
-      input.click();
+      };
+      input.addEventListener('change', onChange, { once: true });
+      // Browsers that support it fire `cancel` when the chooser is dismissed.
+      // Without this, the busy flag stayed on forever after a cancelled pick.
+      input.addEventListener('cancel', onCancel, { once: true });
+      window.addEventListener('focus', onFocus, { once: true });
+      document.body.appendChild(input);
+      try { input.click(); } catch { finish(null); }
     });
   }
 

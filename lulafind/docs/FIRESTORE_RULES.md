@@ -19,6 +19,16 @@ service cloud.firestore {
     function isAuthor(postId) {
       return signedIn() && get(/databases/$(database)/documents/posts/$(postId)).data.authorId == request.auth.uid;
     }
+    function isSpotlightMember(spotlightId) {
+      return signedIn()
+        && spotlightId is string
+        && exists(/databases/$(database)/documents/spotlights/$(spotlightId))
+        && request.auth.uid in get(/databases/$(database)/documents/spotlights/$(spotlightId)).data.memberIds;
+    }
+    function canPostToSpotlight(data) {
+      return (data.get('audience', 'public') != 'surname' || data.get('spotlightId', null) is string)
+        && (data.get('spotlightId', null) == null || isSpotlightMember(data.get('spotlightId', null)));
+    }
 
     /* ---------------- users ---------------- */
     match /users/{uid} {
@@ -36,12 +46,13 @@ service cloud.firestore {
       allow create: if signedIn()
         && request.resource.data.authorId == request.auth.uid
         && request.resource.data.upvotes == 0
-        && request.resource.data.downvotes == 0;
+        && request.resource.data.downvotes == 0
+        && canPostToSpotlight(request.resource.data);
 
       // Anyone signed in may vote, comment-count and share-count may move.
       // Only the author may change consent, escalation, outcome or audience.
       allow update: if signedIn() && (
-        isAuthor(postId) ||
+        (isAuthor(postId) && canPostToSpotlight(request.resource.data)) ||
         (
           request.resource.data.authorId == resource.data.authorId
           && request.resource.data.escalation == resource.data.escalation
@@ -49,7 +60,9 @@ service cloud.firestore {
           && request.resource.data.locationCheck == resource.data.locationCheck
           && request.resource.data.outcome == resource.data.outcome
           && request.resource.data.audience == resource.data.audience
+          && request.resource.data.spotlightId == resource.data.spotlightId
           && request.resource.data.anonymous == resource.data.anonymous
+          && canPostToSpotlight(request.resource.data)
         )
       );
 

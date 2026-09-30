@@ -4,23 +4,23 @@ import { IonTabs } from '@ionic/angular/ion-tabs';
 import { IonLabel } from '@ionic/angular/ion-label';
 import { IonTabBar } from '@ionic/angular/ion-tab-bar';
 import { IonTabButton } from '@ionic/angular/ion-tab-button';
+import { ToastController } from '@ionic/angular/toast-controller';
 import { IconComponent } from '../../shared/components/icon.component';
-import { AvatarComponent } from '../../shared/components/avatar.component';
-import { DataService } from '../../core/services/data.service';
 import { AuthService } from '../../core/services/auth.service';
 import { ChatService } from '../../core/services/chat.service';
+import { MediaService } from '../../core/services/media.service';
 
 /**
- * Bottom navigation: Home, Spotlight, Create, Chats, Menu.
+ * Bottom navigation: Home, Spotlight, Create, Chats, Photo.
  *
- * Chats is a real tab, so it shows as selected while you are in it. Search
- * lives in the top navigation's search bar and Notifications is the bell at
- * its right end (`lf-top-nav`), like LinkedIn.
+ * The photo action opens the camera/photo chooser and carries the selection
+ * into the post composer. Menu/profile remains available from the top photo.
+ * Search and Notifications live in the top navigation, like LinkedIn.
  */
 @Component({
   selector: 'lf-tabs',
   standalone: true,
-  imports: [IonTabs, IonTabBar, IonTabButton, IonLabel, IconComponent, AvatarComponent],
+  imports: [IonTabs, IonTabBar, IonTabButton, IonLabel, IconComponent],
   template: `
     <ion-tabs (ionTabsDidChange)="active.set($event.tab)">
       <ion-tab-bar slot="bottom">
@@ -47,19 +47,11 @@ import { ChatService } from '../../core/services/chat.service';
           <ion-label>Chats</ion-label>
         </ion-tab-button>
 
-        <ion-tab-button tab="me">
-          <div class="wrap">
-            @if (auth.signedIn()) {
-              <span class="me" [class.on]="active() === 'me'">
-                <lf-avatar [src]="auth.userAvatar()" [name]="auth.user()?.displayName ?? ''" [size]="24" />
-              </span>
-              <span class="menu-pip"><lf-icon name="menu" [size]="9" [weight]="3" /></span>
-            } @else {
-              <lf-icon name="menu" [size]="24" [weight]="active() === 'me' ? 2.6 : 2" />
-            }
-          </div>
-          <ion-label>Menu</ion-label>
-        </ion-tab-button>
+        <button class="bar-btn photo" type="button" (click)="addPhoto()" [disabled]="photoBusy()"
+                [attr.aria-busy]="photoBusy()" aria-label="Create a post with a photo">
+          <span class="wrap"><lf-icon name="image" [size]="24" [weight]="photoBusy() ? 2.6 : 2" /></span>
+          <ion-label>{{ photoBusy() ? 'Opening…' : 'Photo' }}</ion-label>
+        </button>
       </ion-tab-bar>
     </ion-tabs>
   `,
@@ -123,7 +115,8 @@ import { ChatService } from '../../core/services/chat.service';
       box-shadow: 0 1px 3px rgba(0, 0, 0, .28);
     }
     .bar-btn:active .create-disc { transform: scale(.94); }
-    .bar-btn.create ion-label { color: var(--lf-muted); font-weight: 600; }
+    .bar-btn.create ion-label, .bar-btn.photo ion-label { color: var(--lf-muted); font-weight: 600; }
+    .bar-btn.photo:disabled { opacity: .65; cursor: wait; }
 
     .wrap { position: relative; display: inline-flex; }
     .tab-dot {
@@ -131,31 +124,17 @@ import { ChatService } from '../../core/services/chat.service';
       border-radius: 9px; background: var(--lf-badge); color: #fff; font-size: 10.5px; font-weight: 700;
       line-height: 17px; text-align: center; box-shadow: 0 0 0 2px var(--lf-tabbar); box-sizing: border-box;
     }
-    .me { display: inline-flex; border-radius: 50%; }
-    .me.on { box-shadow: 0 0 0 2px var(--lf-tabbar), 0 0 0 4px var(--lf-primary); }
-    .menu-pip {
-      position: absolute;
-      right: -4px;
-      bottom: -3px;
-      width: 14px;
-      height: 14px;
-      border-radius: 50%;
-      background: var(--lf-card-2);
-      color: var(--ion-text-color);
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      box-shadow: 0 0 0 2px var(--lf-tabbar);
-    }
   `]
 })
 export class TabsComponent {
   private router = inject(Router);
   protected auth = inject(AuthService);
-  private data = inject(DataService);
   private chat = inject(ChatService);
+  private media = inject(MediaService);
+  private toast = inject(ToastController);
 
   readonly unread = computed(() => this.chat.unreadTotal());
+  readonly photoBusy = signal(false);
   readonly active = signal(TabsComponent.tabOf(typeof location !== 'undefined' ? location.pathname : '/home'));
 
   constructor() {
@@ -167,11 +146,36 @@ export class TabsComponent {
 
   private static tabOf(url: string): string {
     const first = url.split(/[?#]/)[0].split('/').filter(Boolean)[0] ?? 'home';
+    if (first === 'chat' || first === 'ask-lula') return 'chats';
     return ['home', 'spotlight', 'chats', 'me'].includes(first) ? first : 'home';
   }
 
   create(): void {
     const target = this.auth.signedIn() ? '/new' : '/auth?next=/new';
     void this.router.navigateByUrl(target);
+  }
+
+  async addPhoto(): Promise<void> {
+    if (this.photoBusy()) return;
+    if (!this.auth.signedIn()) {
+      await this.router.navigateByUrl('/auth?next=/new');
+      return;
+    }
+
+    this.photoBusy.set(true);
+    try {
+      const picked = await this.media.pickImage({ quality: 76 });
+      if (!picked) {
+        const message = this.media.lastError() || this.media.notice();
+        if (message) await this.toast.create({ message, duration: 2600, position: 'bottom' }).then((x) => x.present());
+        return;
+      }
+      const src = await this.media.compress(picked.src, 1200);
+      await this.router.navigateByUrl('/new', {
+        state: { photoAttachment: { ...picked, src }, mediaNotice: this.media.notice() }
+      });
+    } finally {
+      this.photoBusy.set(false);
+    }
   }
 }

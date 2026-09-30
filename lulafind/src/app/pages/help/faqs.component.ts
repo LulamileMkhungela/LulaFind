@@ -4,7 +4,6 @@ import { IonContent } from '@ionic/angular/ion-content';
 import { IconComponent } from '../../shared/components/icon.component';
 import { TopNavComponent } from '../../shared/components/top-nav.component';
 import { FAQ_CATEGORIES, FAQS, FaqCategory, searchFaqs } from '../../core/data/faqs';
-import { AuthService } from '../../core/services/auth.service';
 
 /**
  * FAQs - the answers, one line per row, and nothing else on the page.
@@ -39,7 +38,7 @@ import { AuthService } from '../../core/services/auth.service';
       </div>
 
       @if (!rows().length) {
-        <p class="empty">No question matches that. <a routerLink="/ask-lula">Ask Lula instead</a>.</p>
+        <p class="empty">No question matches that. <a routerLink="/chats">Open Chats to ask Lula</a>.</p>
       }
 
       <div class="list">
@@ -66,8 +65,8 @@ import { AuthService } from '../../core/services/auth.service';
       </div>
 
       <div class="foot">
-        <button class="lf-btn lf-btn--primary lf-btn--block" type="button" (click)="askLula()">
-          <lf-icon name="chat" [size]="16" /> Still stuck? Ask Lula
+        <button class="lf-btn lf-btn--primary lf-btn--block" type="button" (click)="openChats()">
+          <lf-icon name="chat" [size]="16" /> Still stuck? Ask Lula in Chats
         </button>
         <a class="lf-btn lf-btn--block" routerLink="/help"><lf-icon name="phone" [size]="16" /> Phone numbers</a>
       </div>
@@ -107,7 +106,6 @@ import { AuthService } from '../../core/services/auth.service';
   `]
 })
 export class FaqsComponent {
-  private auth = inject(AuthService);
   private router = inject(Router);
 
   protected readonly categories = FAQ_CATEGORIES;
@@ -127,7 +125,7 @@ export class FaqsComponent {
     this.open.set(this.open() === id ? null : id);
   }
 
-  askLula(): void {
-    void this.router.navigateByUrl(this.auth.signedIn() ? '/ask-lula' : '/auth?next=/ask-lula');
+  openChats(): void {
+    void this.router.navigateByUrl('/chats');
   }
 }

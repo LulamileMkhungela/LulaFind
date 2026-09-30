@@ -3,8 +3,6 @@ import { Router, RouterLink } from '@angular/router';
 import { IonContent } from '@ionic/angular/ion-content';
 import { IonRefresher } from '@ionic/angular/ion-refresher';
 import { IonRefresherContent } from '@ionic/angular/ion-refresher-content';
-import { IonInfiniteScroll } from '@ionic/angular/ion-infinite-scroll';
-import { IonInfiniteScrollContent } from '@ionic/angular/ion-infinite-scroll-content';
 import { IonSkeletonText } from '@ionic/angular/ion-skeleton-text';
 import { ToastController } from '@ionic/angular/toast-controller';
 import { IconComponent } from '../../shared/components/icon.component';
@@ -27,8 +25,7 @@ import { timeAgo } from '../../core/utils/format';
   selector: 'lf-home',
   standalone: true,
   imports: [
-    IonContent, IonRefresher, IonRefresherContent,
-    IonInfiniteScroll, IonInfiniteScrollContent, IonSkeletonText,
+    IonContent, IonRefresher, IonRefresherContent, IonSkeletonText,
     TopNavComponent, IconComponent, EmptyComponent, PostCardComponent, StoryRailComponent, PeopleRailComponent, FilterBarComponent,
     RouterLink
   ],
@@ -81,8 +78,6 @@ import { timeAgo } from '../../core/utils/format';
       }
 
       @if (!data.loading() && !data.feed().length && !data.connectionLost()) {
-        <!-- Nothing in the feed: the story card goes on its own, at the top. -->
-        <lf-story-rail (addStory)="onAddStory()" />
         <lf-empty icon="search" title="No cases here yet"
                   message="Posts people create will show in this feed."
                   actionLabel="Reset filters" (action)="data.resetFilter()" />
@@ -126,12 +121,6 @@ import { timeAgo } from '../../core/utils/format';
             </div>
           </div>
         </div>
-      }
-
-      @if (auth.signedIn()) {
-        <ion-infinite-scroll threshold="180px" (ionInfinite)="onInfinite($event)">
-          <ion-infinite-scroll-content loadingSpinner="circles" loadingText="Loading more"></ion-infinite-scroll-content>
-        </ion-infinite-scroll>
       }
     </ion-content>
   `,
@@ -221,13 +210,8 @@ export class HomeComponent {
     return feed;
   });
 
-  /**
-   * Stories after the 8th post, People after the 16th, Stories after the 24th
-   * and so on. A feed too short to reach an 8th post still gets one story rail,
-   * after its last post, so the story card is never unreachable.
-   * `feedWithRails` is a plain function so the rule can be tested on its own.
-   */
-  readonly feedItems = computed(() => feedWithRails(this.displayedFeed(), 8, { shortRail: true }));
+  /** Stories after post 8, People after post 16, then alternate every eight. */
+  readonly feedItems = computed(() => feedWithRails(this.displayedFeed(), 8));
 
   private chatGates = signal<Record<string, ChatState>>({});
 
@@ -272,10 +256,6 @@ export class HomeComponent {
     e.target.complete();
   }
 
-  onInfinite(e: any): void {
-    setTimeout(() => e.target.complete(), 450);
-  }
-
   private async needAuth(): Promise<boolean> {
     if (this.auth.signedIn()) return true;
     const t = await this.toast.create({
@@ -292,8 +272,7 @@ export class HomeComponent {
     if (!(await this.needAuth())) return;
     try {
       await this.data.vote(p.id, v);
-      await this.platform.haptic('light');
-      await this.recomputeGates();
+      void this.platform.haptic('light');
     } catch (e: any) {
       await this.show(e?.message ?? 'Could not record your vote');
     }
@@ -315,7 +294,7 @@ export class HomeComponent {
     const g = await this.chat.gate(p, p.khumbu?.claimedByUserId === this.auth.viewerId);
     if (g.allowed) {
       const thread = await this.chat.ensureThread(p, p.authorId, 'vote');
-      if (thread) await this.router.navigate(['/chat', thread.id]);
+      if (thread) await this.router.navigate(['/chats/thread', thread.id]);
       return;
     }
     // Chat is mutual-follow only. Following is the honest next step, so the

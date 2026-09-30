@@ -12,13 +12,13 @@ import { EscalationService } from './services/escalation.service';
 import { LocationService } from './services/location.service';
 import { ModerationService } from './services/moderation.service';
 import { SafetyService } from './services/safety.service';
-import { defaultPrivacy, emptyFilter, Post } from './models/types';
+import { defaultPrivacy, emptyFilter, MediaItem, Post } from './models/types';
 import { timeAgo, compact, urgency, parseFullName, contributorLabel, distanceKm, HOUR } from './utils/format';
 import { searchFocus } from './utils/search-focus';
 import { drawPoster, posterContent, publicPoster, POSTER_TEMPLATES } from './utils/poster';
 import { leadMarkView } from './utils/mark-check';
 import { GBV_CHANNEL_NOTE, HELP_LINES } from './data/sa-help';
-import { avatar } from './data/seed';
+import { avatar, STORY_BLACK, storyBg } from './data/seed';
 import { askLula } from './data/ask-lula';
 import { feedWithRails } from './utils/feed';
 
@@ -207,6 +207,27 @@ describe('DataService voting and comments', () => {
 
     const notes = db.notifications('u_sipho');
     expect(notes.some((n) => n.postId === 'p_lindiwe' && n.title.includes('New lead'))).toBe(true);
+  });
+
+  it('keeps photo/video media on comments and replies, not as new feed posts', async () => {
+    const data = svc<DataService>(DataService);
+    await svc<AuthService>(AuthService).signInDemo();
+    await data.loadFeed();
+    const feedBefore = data.feed().map((p) => p.id);
+    const photo: MediaItem = { id: 'comment-photo', kind: 'image', src: 'data:image/jpeg;base64,photo' };
+    const video: MediaItem = { id: 'reply-video', kind: 'video', src: 'data:video/mp4;base64,video' };
+
+    const top = await data.addComment({ postId: 'p_lindiwe', body: 'This is my attached photo.', media: [photo] });
+    const reply = await data.addComment({ postId: 'p_lindiwe', body: 'And this is a reply video.', parentId: top.id, media: [video] });
+
+    expect(top.media).toEqual([photo]);
+    expect(reply.parentId).toBe(top.id);
+    expect(reply.media).toEqual([video]);
+    const stored = await data.comments('p_lindiwe');
+    expect(stored.find((c) => c.id === top.id)?.media?.[0]).toEqual(photo);
+    expect(stored.find((c) => c.id === reply.id)?.media?.[0]).toEqual(video);
+    expect(data.feed().map((p) => p.id)).toEqual(feedBefore);
+    expect(db.posts().filter((p) => p.id.startsWith('c_'))).toHaveLength(0);
   });
 });
 
@@ -506,10 +527,17 @@ describe('EscalationService - a note is not a dispatch', () => {
     const flyer = publicPoster(db.post('p_thato')!);
     expect(flyer.shareText).not.toMatch(/scar/i);
     expect(flyer.shareText).not.toContain('R5 000');
-    expect(flyer.shareText).toContain('10111');
+    expect(flyer.shareText).not.toMatch(/10111|emergency|not a police poster/i);
     expect(flyer.shareText).toContain('ORL/441/09/2026');
     expect(flyer.withheld).toMatch(/scar/i);
-    expect(publicPoster(db.post('p_found_car')!).shareText).toMatch(/not a police poster/i);
+    const vehicle = db.post('p_found_car')!;
+    expect(publicPoster(vehicle).shareText).toBe('');
+    expect(JSON.stringify(posterContent(vehicle, 'https://lulafind.app/post/p_found_car', null)))
+      .not.toMatch(/Hilux|Bloemfontein|SAPS/i);
+    const danger = { ...vehicle, type: 'danger' as const, title: 'Emergency nearby', body: 'Call 10111 now.' };
+    expect(publicPoster(danger).shareText).toBe('');
+    expect(JSON.stringify(posterContent(danger, 'https://lulafind.app/post/emergency', null)))
+      .not.toMatch(/Emergency|10111|danger/i);
   });
 
   it('nudges the poster about the outcome once a case has traction', async () => {
@@ -901,6 +929,22 @@ describe('Posting rules', () => {
     askWanted: false, khumbu: null
   };
 
+  it('allows only Spotlight members to create or edit community posts', async () => {
+    const data = svc<DataService>(DataService);
+    await svc<AuthService>(AuthService).signInDemo();
+    await data.loadStatic();
+    const communityPost = { ...base, audience: 'surname' as const, spotlightId: 'sp_ndlela' };
+    await expect(data.createPost(communityPost)).rejects.toThrow(/join .* community/i);
+
+    await data.joinSpotlight('sp_ndlela');
+    const post = await data.createPost(communityPost);
+    expect(post.audience).toBe('surname');
+    expect(post.spotlightId).toBe('sp_ndlela');
+
+    await data.leaveSpotlight('sp_ndlela');
+    await expect(data.updatePost(post.id, { title: 'A member left this community' })).rejects.toThrow(/join .* community/i);
+  });
+
   it('refuses a post with no province or no town', async () => {
     const data = svc<DataService>(DataService);
     await svc<AuthService>(AuthService).signInDemo();
@@ -929,6 +973,21 @@ describe('Posting rules', () => {
     expect(edited?.town).toBe('Alexandra');
     expect(edited?.upvotes).toBe(post.upvotes);
     expect(data.canEdit(edited)).toBe(true);
+  });
+
+  it('persists the selected poster separately and returns it on the feed post', async () => {
+    const data = svc<DataService>(DataService);
+    await svc<AuthService>(AuthService).signInDemo();
+    const post = await data.createPost(base);
+    const poster = {
+      templateId: 'noir', createdAt: Date.now(),
+      media: { id: 'poster-image', kind: 'image' as const, src: 'data:image/png;base64,aGVsbG8=' }
+    };
+    const saved = await data.updatePost(post.id, { poster });
+    expect(saved?.poster?.templateId).toBe('noir');
+    expect(saved?.poster?.media.src).toBe(poster.media.src);
+    const feedPost = (await data.loadFeed()).find((item) => item.id === post.id);
+    expect(feedPost?.poster?.media.src).toBe(poster.media.src);
   });
 
   it('stops anyone else editing the post', async () => {
@@ -1389,13 +1448,14 @@ describe('the feed interleaving rule', () => {
     ]);
   });
 
-  it('gives a short feed one story rail, after its last post', () => {
-    const rows = feedWithRails([post(1), post(2), post(3)], 8, { shortRail: true });
-    expect(rows.map((r) => r.kind)).toEqual(['post', 'post', 'post', 'stories']);
-    // and never a second rail once the 8th post is reached
-    const full = feedWithRails(Array.from({ length: 9 }, (_, i) => post(i + 1)), 8, { shortRail: true });
+  it('does not insert a rail into a short feed', () => {
+    const rows = feedWithRails([post(1), post(2), post(3)]);
+    expect(rows.map((r) => r.kind)).toEqual(['post', 'post', 'post']);
+    // A ninth post adds only the rail after post eight.
+    const full = feedWithRails(Array.from({ length: 9 }, (_, i) => post(i + 1)));
     expect(full.filter((r) => r.kind === 'stories').length).toBe(1);
     expect(full.filter((r) => r.kind === 'people').length).toBe(0);
+    expect(full[8].kind).toBe('stories');
   });
 
   it('adds rail after every 8th post, not just the first', () => {
@@ -1413,6 +1473,14 @@ describe('the feed interleaving rule', () => {
       expect(rows[i - 1].kind).toBe('post');
       expect(i % 9).toBe(8);
     });
+  });
+});
+
+describe('story backgrounds', () => {
+  it('uses black by default and CSS gradients for selectable colours', () => {
+    expect(storyBg(STORY_BLACK)).toBe('#000000');
+    expect(storyBg(220)).toMatch(/^radial-gradient/);
+    expect(storyBg(220)).not.toContain('data:image');
   });
 });
 
@@ -1500,6 +1568,8 @@ describe('poster drawing', () => {
       // Every fact must be on the poster (a missing "WHEN" hides the date), and
       // nothing at all may be drawn behind the contact bar.
       const all = drawn.map((d) => d.text).join(' | ');
+      expect(all, `${t.id}: the poster should include its post URL`).toContain(`Read more: ${content.link}`);
+      expect(all).not.toMatch(/10111|emergency services|not a police poster/i);
       // Each design trims to the facts it has room for, but two things always
       // hold: the first fact is on the poster, and the police case number is
       // never the one that gets dropped (it is why families are asked for it).
@@ -1729,6 +1799,24 @@ describe('The found page feed', () => {
     // the shape the page reads must exist on every post
     for (const p of data.feed()) expect(p.outcome).toBeTruthy();
   });
+
+  it('saves Still searching as a visible case-history event without closing the case', async () => {
+    const data = svc<DataService>(DataService);
+    signInAs('u_sipho');
+    await data.loadFeed();
+    const updated = await data.confirmStillSearching('p_lindiwe');
+
+    expect(updated.status).toBe('active');
+    expect(updated.outcome.found).toBe(false);
+    expect(updated.events.at(-1)).toMatchObject({
+      kind: 'still_searching', byUserId: 'u_sipho',
+      note: expect.stringMatching(/case remains open/i)
+    });
+    expect(updated.outcomeNudgeAt).toBeGreaterThan(0);
+
+    signInAs('u_demo');
+    await expect(data.confirmStillSearching('p_lindiwe')).rejects.toThrow(/Only the person who posted/i);
+  });
 });
 
 describe('A child case is invisible until a moderator publishes it', () => {
@@ -1940,33 +2028,38 @@ describe('Bugs the browser found', () => {
     expect(askLula('what is the weather in Durban tomorrow').text).toMatch(/rather say so than guess/i);
   });
 
-  it('lets go of the reaction tray wherever the finger is lifted', async () => {
-    // The control must mark itself released even when the pointer comes up over
-    // an option rather than the button - otherwise the tray and its full-screen
-    // scrim stay on the page and swallow the next tap anywhere.
+  it('keeps the reaction tray open when a hold is released on the button, and supports sliding to a choice', async () => {
     const { ReactionButtonComponent } = await import('../shared/components/reaction-button.component');
     TestBed.resetTestingModule();
     TestBed.configureTestingModule({ imports: [ReactionButtonComponent] });
     const f = TestBed.createComponent(ReactionButtonComponent);
     f.detectChanges();
     const c = f.componentInstance;
-    const at = (x: number, y: number) => ({ pointerType: 'touch', button: 0, pointerId: 1, clientX: x, clientY: y }) as PointerEvent;
+    const button = f.nativeElement.querySelector('.btn') as HTMLElement;
+    const rect = button.getBoundingClientRect();
+    const x = rect.left + (rect.width / 2);
+    const y = rect.top + (rect.height / 2);
+    const at = (px: number, py: number) => ({ pointerType: 'touch', button: 0, pointerId: 1, clientX: px, clientY: py }) as PointerEvent;
 
-    c.down(at(5, 5));
+    jestSpyOnElementFromPoint(null);
+    c.down(at(x, y));
     await new Promise((r) => setTimeout(r, 450));
     expect(c.open(), 'holding the button should open the tray').toBe(true);
 
-    c.onUp({ ...at(5, 5), target: null } as unknown as PointerEvent);
-    expect(c.open(), 'the tray must not stay open after a release').toBe(false);
+    c.onUp({ ...at(x, y), target: button } as unknown as PointerEvent);
+    expect(c.open(), 'a hold released over the main button should leave choices open').toBe(true);
 
-    // and a release over a choice picks it
     const picked: string[] = [];
     c.react.subscribe((k) => picked.push(k));
-    c.down(at(5, 5));
+    c.choose('like'); // this is the tap on Like after the hold
+    expect(picked).toEqual(['like']);
+    expect(c.open()).toBe(false);
+
+    c.down(at(x, y));
     await new Promise((r) => setTimeout(r, 450));
-    jestSpyOnElementFromPoint('like');
-    c.onUp({ ...at(5, 5), target: null } as unknown as PointerEvent);
-    expect(picked, 'releasing over Like should choose Like').toEqual(['like']);
+    jestSpyOnElementFromPoint('support');
+    c.onUp({ ...at(x + 120, y + 30), target: button } as unknown as PointerEvent);
+    expect(picked, 'sliding and releasing on Support chooses it').toEqual(['like', 'support']);
     expect(c.open()).toBe(false);
   });
 });

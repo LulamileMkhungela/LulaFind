@@ -2,7 +2,6 @@ import { Component, OnDestroy, OnInit, computed, effect, inject, signal } from '
 import { ActivatedRoute, Router } from '@angular/router';
 import { IconComponent } from '../../shared/components/icon.component';
 import { AvatarComponent } from '../../shared/components/avatar.component';
-import { SettingsService } from '../../core/services/settings.service';
 import { DataService } from '../../core/services/data.service';
 import { AuthService } from '../../core/services/auth.service';
 import { Story } from '../../core/models/types';
@@ -49,7 +48,7 @@ const HOLD_MS = 420;
           @if (story()!.text) { <div class="story-text" [class.over-photo]="!!currentMedia()">{{ story()!.text }}</div> }
           <button class="tap-zone tap-zone--left" type="button" aria-label="Previous photo" (click)="$event.stopPropagation(); previous()"></button>
           <button class="tap-zone tap-zone--right" type="button" aria-label="Next photo" (click)="$event.stopPropagation(); advance()"></button>
-          @if (paused()) { <span class="paused"><lf-icon name="clock" [size]="12" /> {{ pausedLabel() }}</span> }
+          <span class="paused"><lf-icon [name]="paused() ? 'clock' : 'chevronRight'" [size]="12" /> {{ paused() ? pausedLabel() : 'Tap to continue' }}</span>
           @if (segmentCount() > 1) { <span class="image-count">{{ mediaIndex() + 1 }} / {{ segmentCount() }}</span> }
         </main>
 
@@ -168,7 +167,6 @@ const HOLD_MS = 420;
 export class StoryViewerComponent implements OnInit, OnDestroy {
   protected data = inject(DataService);
   private auth = inject(AuthService);
-  private settings = inject(SettingsService);
   private route = inject(ActivatedRoute);
   private router = inject(Router);
 
@@ -196,8 +194,8 @@ export class StoryViewerComponent implements OnInit, OnDestroy {
   private held = signal<Story | null>(null);
   private hidden = signal(typeof document !== 'undefined' && document.hidden);
   private onVisibility = () => this.hidden.set(document.hidden);
-  private timer: ReturnType<typeof setInterval> | null = null;
   private pressTimer: ReturnType<typeof setTimeout> | null = null;
+  private suppressTapAdvance = false;
 
   readonly me = computed(() => this.auth.viewerId);
   /**
@@ -237,41 +235,29 @@ export class StoryViewerComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
-    if (this.timer) clearInterval(this.timer);
     this.clearPress();
     document.removeEventListener('visibilitychange', this.onVisibility);
   }
 
-  /**
-   * A press only counts as a hold after a moment, so a plain tap still moves to
-   * the next story and does not switch auto-advance off for the whole session.
-   */
+  /** A short tap advances; a hold engages reading mode and must not advance. */
   pressStart(): void {
     this.clearPress();
+    this.suppressTapAdvance = false;
     this.pressTimer = setTimeout(() => {
       this.holding.set(true);
+      this.suppressTapAdvance = true;
       this.engage();
     }, HOLD_MS);
   }
 
   pressEnd(): void {
+    if (this.holding()) this.suppressTapAdvance = true;
     this.clearPress();
     this.holding.set(false);
   }
 
   private clearPress(): void {
     if (this.pressTimer) { clearTimeout(this.pressTimer); this.pressTimer = null; }
-  }
-
-  /**
-   * Time on screen: long enough to actually read the caption. Roughly half a
-   * second a word on top of six seconds, never under nine seconds.
-   */
-  private duration(): number {
-    const s = this.story();
-    const words = (s?.text ?? '').trim().split(/\s+/).filter(Boolean).length;
-    const photos = Math.max(0, (s?.media.length ?? 0) - 1);
-    return Math.min(45_000, Math.max(9_000, 6_000 + words * 520 + photos * 1_500));
   }
 
   /** "Paused" or "Not moving on" - whatever is actually true. */
@@ -285,51 +271,16 @@ export class StoryViewerComponent implements OnInit, OnDestroy {
   segmentCount(): number { return Math.max(1, this.story()?.media.length ?? 0); }
 
   segmentProgress(index: number): number {
+    // No timed autoplay: completed and current segments stay visibly filled
+    // until the person chooses another one.
     if (index < this.mediaIndex()) return 100;
     return index === this.mediaIndex() ? this.pct() : 0;
   }
 
   private start(): void {
-    if (this.timer) clearInterval(this.timer);
-    this.pct.set(0);
-    /* Nobody asked for photos to move on their own. The switch in Settings says
-       whether this app may do that, and Data saver turns it off too: a story
-       that waits for a tap downloads nothing in advance. */
-    const s = this.settings.settings();
-    if (!s.autoplayMedia || s.dataSaving) { this.pct.set(0); return; }
-    let elapsed = 0;
-    const total = this.duration();
-    this.timer = setInterval(() => {
-      if (this.paused()) return;
-      elapsed += 100;
-      this.pct.set(Math.min(100, (elapsed / total) * 100));
-      if (elapsed >= total) this.autoAdvance();
-    }, 100);
-  }
-
-  /**
-   * The timer ran out. Move to the next photo or story, but never close the
-   * viewer on someone: on the last story the bar simply stops at the end and
-   * waits for a tap. If the person has engaged with the story at all, nothing
-   * happens - they leave when they choose to.
-   */
-  private autoAdvance(): void {
-    if (this.engaged()) { this.pct.set(100); return; }
-    const story = this.story();
-    if (!story) return;
-    if (this.mediaIndex() + 1 < story.media.length) {
-      this.mediaIndex.set(this.mediaIndex() + 1);
-      this.start();
-      return;
-    }
-    const next = this.rail()[this.currentIndex() + 1];
-    if (next) {
-      this.goTo(next);
-      return;
-    }
-    // Last story: hold here instead of jumping the person back home.
+    // Stories are always manual, including when an older saved preference opted
+    // into autoplay. The active bar marks the selected item; taps move it.
     this.pct.set(100);
-    if (this.timer) { clearInterval(this.timer); this.timer = null; }
   }
 
   private goTo(story: Story): void {
@@ -362,6 +313,7 @@ export class StoryViewerComponent implements OnInit, OnDestroy {
 
   /** A deliberate tap on the story: move to the next photo, story, or close. */
   advance(): void {
+    if (this.suppressTapAdvance) { this.suppressTapAdvance = false; return; }
     const story = this.story();
     if (!story) { this.close(); return; }
     if (this.mediaIndex() + 1 < story.media.length) {

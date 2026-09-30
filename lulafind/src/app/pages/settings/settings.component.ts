@@ -66,10 +66,7 @@ import { SUPPORT_EMAIL, SUPPORT_NAME } from '../../core/config';
           <ion-label>Reduce motion</ion-label>
           <ion-toggle [checked]="s().reduceMotion" (ionChange)="set({ reduceMotion: $any($event.detail).checked })"></ion-toggle>
         </ion-item>
-        <ion-item>
-          <ion-label>Autoplay stories</ion-label>
-          <ion-toggle [checked]="s().autoplayMedia" (ionChange)="set({ autoplayMedia: $any($event.detail).checked })"></ion-toggle>
-        </ion-item>
+        <p class="lf-small lf-muted story-manual">Stories wait for your tap, so you can read or reply without being rushed.</p>
         <ion-item>
           <ion-label>Data saver (less background loading)</ion-label>
           <ion-toggle [checked]="s().dataSaving" (ionChange)="set({ dataSaving: $any($event.detail).checked })"></ion-toggle>

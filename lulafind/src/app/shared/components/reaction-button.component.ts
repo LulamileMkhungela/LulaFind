@@ -153,13 +153,21 @@ export class ReactionButtonComponent {
       this.held = false;
       this.pointerId = null;
       if (key) { this.choose(key); return; }
-      // Let go away from the choices: nothing chosen, and nothing left open.
+      // Releasing on the main action leaves the tray open for a second tap.
+      // Releasing elsewhere dismisses it without stealing the next page tap.
+      if (this.isButtonAt(ev.clientX, ev.clientY)) return;
       this.open.set(false);
       return;
     }
     // A quick lift that started and ended on the button is a plain tap.
-    const onButton = !!(ev.target as HTMLElement | null)?.closest?.('.btn');
-    if (onButton) this.tap();
+    if (this.isButtonAt(ev.clientX, ev.clientY)) this.tap();
+  }
+
+  private isButtonAt(x: number, y: number): boolean {
+    const button = this.host.nativeElement.querySelector('.btn');
+    if (!button) return false;
+    const r = button.getBoundingClientRect();
+    return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
   }
 
   /** Which reaction, if any, sits under this point. */

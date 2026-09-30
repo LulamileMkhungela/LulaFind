@@ -39,34 +39,22 @@ Notifications1NotificationsA child is missing nearbyThandi Mokoena · Soweto, Ga
 Notifications
 ```
 
-### 7. The case page, checklist closed
+### 7. The focused case page with the status actions
 
 ```text
-Post5Thandi MokoenaCommunity organiser. If you see something, say something. Ubuntu. now  · Gauteng · Help find Thandi Mokoena in SowetoShe was last seen walking to the taxi rank after work on Tuesday evening.Have an ideaCommentRepostSendNo waiting period. If a station says wait, escalate to the Bureau for Missing Persons on 021 918 3512.First hours0 of 7 Mark as found Still searchingNo comments yet. Start the conversation.LulaFind is a community tool. It does not replace SAPS. In an emergency call 10111.
+Post5Thandi MokoenaCommunity organiser. If you see something, say something. Ubuntu. now  · Gauteng · Help find Thandi Mokoena in SowetoShe was last seen walking to the taxi rank after work on Tuesday evening.Have an ideaCommentRepostSend Mark as found Still searching Photo  Video Attachments stay with this commentNo comments yet. Start the conversation.LulaFind is a community tool. It does not replace SAPS. In an emergency call 10111.
 ```
 
-### 8. The checklist opened
+### 8. After the poster confirms they are still searching
 
 ```text
-Post5Thandi MokoenaCommunity organiser. If you see something, say something. Ubuntu. now  · Gauteng · Help find Thandi Mokoena in SowetoShe was last seen walking to the taxi rank after work on Tuesday evening.Have an ideaCommentRepostSendNo waiting period. If a station says wait, escalate to the Bureau for Missing Persons on 021 918 3512.First hours0 of 7Open a case at any police stationThere is no waiting period. Ask for the SAPS 55(A) form.Write down the case numberAdd it to this post so people can see the police are involved.Save the investigating officer’s detailsName and number, on this case only - never on the public screen.Add a recent, clear photoThe one thing everyone searching actually needs.Choose one family spokespersonOne voice stops ten versions of the story.Put the poster where they usually goTaxi rank, clinic, church, school, corner shop.Tell the search NGOsPink Ladies and Missing Children SA ask for the case number first.SaveOfficer details stay on this case and are never shown to the public. Mark as found Still searchingNo comments yet. Start the conversation.LulaFind is a community tool. It does not replace SAPS. In an emergency call 10111.
-```
-
-### 9. After tapping "Open a case at any police station"
-
-```text
-Post5Thandi MokoenaCommunity organiser. If you see something, say something. Ubuntu. now  · Gauteng · Help find Thandi Mokoena in SowetoShe was last seen walking to the taxi rank after work on Tuesday evening.Have an ideaCommentRepostSendNo waiting period. If a station says wait, escalate to the Bureau for Missing Persons on 021 918 3512.First hours1 of 7Open a case at any police stationThere is no waiting period. Ask for the SAPS 55(A) form.Write down the case numberAdd it to this post so people can see the police are involved.Save the investigating officer’s detailsName and number, on this case only - never on the public screen.Add a recent, clear photoThe one thing everyone searching actually needs.Choose one family spokespersonOne voice stops ten versions of the story.Put the poster where they usually goTaxi rank, clinic, church, school, corner shop.Tell the search NGOsPink Ladies and Missing Children SA ask for the case number first.SaveOfficer details stay on this case and are never shown to the public. Mark as found Still searchingNo comments yet. Start the conversation.LulaFind is a community tool. It does not replace SAPS. In an emergency call 10111.
-```
-
-### 10. After a full reload, the same case page
-
-```text
-Post5Thandi MokoenaCommunity organiser. If you see something, say something. Ubuntu. now  · Gauteng · Help find Thandi Mokoena in SowetoShe was last seen walking to the taxi rank after work on Tuesday evening.Have an ideaCommentRepostSendNo waiting period. If a station says wait, escalate to the Bureau for Missing Persons on 021 918 3512.First hours1 of 7Open a case at any police stationThere is no waiting period. Ask for the SAPS 55(A) form.Write down the case numberAdd it to this post so people can see the police are involved.Save the investigating officer’s detailsName and number, on this case only - never on the public screen.Add a recent, clear photoThe one thing everyone searching actually needs.Choose one family spokespersonOne voice stops ten versions of the story.Put the poster where they usually goTaxi rank, clinic, church, school, corner shop.Tell the search NGOsPink Ladies and Missing Children SA ask for the case number first.SaveOfficer details stay on this case and are never shown to the public. Mark as found Still searchingNo comments yet. Start the conversation.LulaFind is a community tool. It does not replace SAPS. In an emergency call 10111.
+Post5Thandi MokoenaCommunity organiser. If you see something, say something. Ubuntu. now  · Gauteng · Help find Thandi Mokoena in SowetoShe was last seen walking to the taxi rank after work on Tuesday evening.Have an ideaCommentRepostSendStill searching. Confirmed now. This case remains open. Mark as found Still searching Photo  Video Attachments stay with this commentNo comments yet. Start the conversation.LulaFind is a community tool. It does not replace SAPS. In an emergency call 10111.
 ```
 
 ### 11. A closed case, as the family sees it
 
 ```text
-Post5Thandi MokoenaCommunity organiser. If you see something, say something. Ubuntu. now  · Gauteng · Found · Home in Soweto  · 30 Sept 2026 Help find Thandi Mokoena in SowetoShe was last seen walking to the taxi rank after work on Tuesday evening.Have an ideaCommentRepostSendFound. The family confirmed it. To take the case off the police circulation list, complete a SAPS 92 with the investigating officer.First hours0 of 7No comments yet. Start the conversation.LulaFind is a community tool. It does not replace SAPS. In an emergency call 10111.
+Post5Thandi MokoenaCommunity organiser. If you see something, say something. Ubuntu. now  · Gauteng · Found · Home in Soweto  · 30 Sept 2026 Help find Thandi Mokoena in SowetoShe was last seen walking to the taxi rank after work on Tuesday evening.Have an ideaCommentRepostSendFound. The family confirmed it. To take the case off the police circulation list, complete a SAPS 92 with the investigating officer. Photo  Video Attachments stay with this commentNo comments yet. Start the conversation.LulaFind is a community tool. It does not replace SAPS. In an emergency call 10111.
 ```
 
 ### 12a. Closed cases the *feed* holds - the reason the page cannot be built from the feed
