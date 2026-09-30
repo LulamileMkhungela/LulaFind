@@ -3,15 +3,19 @@
  * fallback so deep links work, and correct long-cache headers for hashed
  * files. Used to measure what a real phone actually downloads.
  *
- *   npx ng build && node tools/serve-www.mjs [port]
+ *   npx ng build && node tools/serve-www.mjs [port] [dir]
+ *
+ * `dir` defaults to lulafind/www; pass it to serve a build made elsewhere.
  */
 import { createServer } from 'node:http';
-import { readFileSync, existsSync, statSync } from 'node:fs';
+import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs';
 import { gzipSync, brotliCompressSync } from 'node:zlib';
 import { extname, join, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const ROOT = fileURLToPath(new URL('../lulafind/www/', import.meta.url));
+const ROOT = process.argv[3]
+  ? fileURLToPath(new URL(`file://${process.argv[3]}/`))
+  : fileURLToPath(new URL('../lulafind/www/', import.meta.url));
 const PORT = Number(process.argv[2] ?? 4300);
 
 const TYPES = {
@@ -31,6 +35,28 @@ const TYPES = {
 const COMPRESSIBLE = new Set(['.html', '.js', '.mjs', '.css', '.json', '.svg', '.txt']);
 
 const cache = new Map();
+
+/* Compress every text asset once, at start-up, the way a real host does at build
+   time. Without this the first request for each file pays the brotli cost, which
+   shows up as a fake slow first load in the measurements. */
+function warm() {
+  const started = Date.now();
+  let files = 0;
+  const walk = (dir) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const p = join(dir, entry.name);
+      if (entry.isDirectory()) { walk(p); continue; }
+      if (!COMPRESSIBLE.has(extname(p))) continue;
+      const body = readFileSync(p);
+      const stat = statSync(p);
+      cache.set(`${p}|${stat.mtimeMs}|${stat.size}|gz`, gzipSync(body));
+      cache.set(`${p}|${stat.mtimeMs}|${stat.size}|br`, brotliCompressSync(body));
+      files++;
+    }
+  };
+  walk(ROOT);
+  console.log(`pre-compressed ${files} files in ${Date.now() - started} ms`);
+}
 
 createServer((req, res) => {
   const url = new URL(req.url, 'http://localhost');
@@ -67,4 +93,7 @@ createServer((req, res) => {
   } catch {
     res.writeHead(404).end('not found');
   }
-}).listen(PORT, '0.0.0.0', () => console.log(`production build on http://0.0.0.0:${PORT} (gzip/br, SPA fallback)`));
+}).listen(PORT, '0.0.0.0', () => {
+  warm();
+  console.log(`serving ${ROOT} on http://0.0.0.0:${PORT} (gzip/br, SPA fallback)`);
+});

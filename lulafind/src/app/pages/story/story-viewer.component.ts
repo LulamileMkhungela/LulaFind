@@ -2,6 +2,7 @@ import { Component, OnDestroy, OnInit, computed, effect, inject, signal } from '
 import { ActivatedRoute, Router } from '@angular/router';
 import { IconComponent } from '../../shared/components/icon.component';
 import { AvatarComponent } from '../../shared/components/avatar.component';
+import { SettingsService } from '../../core/services/settings.service';
 import { DataService } from '../../core/services/data.service';
 import { AuthService } from '../../core/services/auth.service';
 import { Story } from '../../core/models/types';
@@ -167,6 +168,7 @@ const HOLD_MS = 420;
 export class StoryViewerComponent implements OnInit, OnDestroy {
   protected data = inject(DataService);
   private auth = inject(AuthService);
+  private settings = inject(SettingsService);
   private route = inject(ActivatedRoute);
   private router = inject(Router);
 
@@ -290,6 +292,11 @@ export class StoryViewerComponent implements OnInit, OnDestroy {
   private start(): void {
     if (this.timer) clearInterval(this.timer);
     this.pct.set(0);
+    /* Nobody asked for photos to move on their own. The switch in Settings says
+       whether this app may do that, and Data saver turns it off too: a story
+       that waits for a tap downloads nothing in advance. */
+    const s = this.settings.settings();
+    if (!s.autoplayMedia || s.dataSaving) { this.pct.set(0); return; }
     let elapsed = 0;
     const total = this.duration();
     this.timer = setInterval(() => {

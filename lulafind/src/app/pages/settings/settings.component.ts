@@ -66,11 +66,11 @@ import { SUPPORT_EMAIL, SUPPORT_NAME } from '../../core/config';
           <ion-toggle [checked]="s().reduceMotion" (ionChange)="set({ reduceMotion: $any($event.detail).checked })"></ion-toggle>
         </ion-item>
         <ion-item>
-          <ion-label>Autoplay media in the feed</ion-label>
+          <ion-label>Autoplay stories</ion-label>
           <ion-toggle [checked]="s().autoplayMedia" (ionChange)="set({ autoplayMedia: $any($event.detail).checked })"></ion-toggle>
         </ion-item>
         <ion-item>
-          <ion-label>Data saver (smaller images)</ion-label>
+          <ion-label>Data saver (less background loading)</ion-label>
           <ion-toggle [checked]="s().dataSaving" (ionChange)="set({ dataSaving: $any($event.detail).checked })"></ion-toggle>
         </ion-item>
       </section>

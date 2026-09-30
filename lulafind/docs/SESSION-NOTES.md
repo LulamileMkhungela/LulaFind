@@ -315,3 +315,22 @@ preview cannot be used interactively here - the hosted project is unreachable. `
 switches: served by `tools/serve-www.mjs` on 4300 (brotli/gzip, SPA fallback, one-year cache on
 hashed files), it renders the home feed with FCP 60-200 ms and 0 console errors. The production
 numbers in `docs/QUALITY.md` come from the real production build before that.
+
+**Data saver was a switch that changed nothing.** Settings → Appearance had "Data saver (smaller
+images)" and "Autoplay media in the feed", both stored and rendered, and no code read either one.
+While measuring the first load I found why the app pulls ~98 script files: `PrefetchService` walks
+the route table after start-up and imports every screen on purpose, so taps are instant - which is
+~550 kB of JavaScript nobody asked for on a phone in Soweto. Now:
+
+- Data saver (renamed "less background loading") stops the walk, and so does the phone's own
+  `navigator.connection.saveData`, a 2G link, or being offline. Cold load: **387 kB / 61 requests
+  instead of 596 kB / 105**. A screen then costs its chunk when opened - 19 ms and 24 kB for
+  Spotlight on localhost, one round-trip on a real network;
+- Autoplay (renamed "Autoplay stories") decides whether a story advances on its own;
+- `core/prefetch.spec.ts` pins the rule (5 tests, suite now 182).
+
+**Corrected load numbers.** The earlier table in docs/QUALITY.md (456 kB, FCP 128-160 ms) was wrong:
+warm cache, and a window that ended before the last chunks arrived. `tools/measure-load.mjs` uses a
+fresh context per run: cold load is **596 kB / 105 requests / FCP 224-288 ms**, reload 0 kB. The
+production config also had optimization off (2.3 MB of readable JS) - now minified and served
+compressed by `tools/serve-www.mjs`.

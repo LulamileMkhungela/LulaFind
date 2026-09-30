@@ -48,24 +48,40 @@ Words above the fold, worst screen at each width:
 The rule applied is the phone one (≤ 220 words up front on a screen ≤ 414 px); a desktop fits more
 by design. It is a floor and a ceiling lower than a typical news page's standfirst.
 
-### 4. Loads instantly — yes on a real host; the dev server is not the app
+### 4. Loads instantly — yes, and here is exactly what a phone downloads
 
-Two numbers, both honest:
+Measured on the production build served by `tools/serve-www.mjs` (compressed,
+hashed files cached for a year), each run a fresh cache and a fresh context:
 
-| What | Measured |
+| | Measured |
 | --- | --- |
-| Production build, first load, localhost | **FCP 128–160 ms**, 456 kB of minified, compressed scripts + styles across 73 requests, TTFB 3 ms |
-| Production build, reload in the same tab | **FCP ~136 ms**, 0 kB transferred (hashed files cached forever, `index.html` never) |
-| Dev server (`ng serve`, unminified, hot reload) | FCP ~120–260 ms, 246 module requests — only meaningful as a development number |
+| First load (`/` or `/home`) | **FCP 224–288 ms**, TTFB 2–3 ms, 105 requests, **596 kB** (js 587, css 8) |
+| The screen's own bundle before it paints | 315 kB transfer (the build's "initial total") |
+| The rest of the app | ~280 kB, fetched **after** the first paint (see below) |
+| Every tap after that | 11–24 ms (the code is already in memory) |
 
-What changed to get there:
+**Correction.** An earlier version of this page said 456 kB and FCP 128–160 ms.
+That was measured with a browser cache that was not actually cold and a 900 ms
+window that cut off before the last chunks arrived. The numbers above are from
+`tools/measure-load.mjs`, which uses a new context per run and waits for the page
+to settle. The app did not change; the measurement did.
 
-- the production config had **no minification at all**: `optimization` was off, so the browser
-  downloaded 2.3 MB of readable JavaScript (566 kB `main` alone). It is now `true`;
-- the served assets are **compressed** (brotli, gzip fallback) with a one-year cache on hashed
-  files and `no-cache` on `index.html` — see `tools/serve-www.mjs`, which is also the production
-  preview on port 4300;
-- initial-route budget tightened from 2.5 MB warning to 1.4 MB.
+**Why ~100 requests?** `core/services/prefetch.service.ts` walks the route table
+after start-up and imports every screen's chunk, four at a time, yielding to the
+browser in between. That is why tab switches are instant — the code is already
+there. It is also ~550 kB of JavaScript the person did not explicitly ask for, so
+it is now a choice:
+
+| Data saver | Scripts | JavaScript | Page chunks fetched at boot |
+| --- | --- | --- | --- |
+| off (default) | 98 | 554 kB | 32 (every screen) |
+| **on** | **61** | **387 kB** | **3** (only the ones actually opened) |
+
+The switch is honoured in Settings → Appearance, and the same rule applies
+without touching the app when the phone itself asks for less data
+(`navigator.connection.saveData`), on 2G, or offline. With it on, a screen costs
+one chunk when it is opened: measured 19 ms and 24 kB for Spotlight on this
+machine, and one network round-trip on a real one.
 
 ### 5. Interacts instantly — yes
 
@@ -90,6 +106,13 @@ What changed to get there:
 - `Tips` opened on 226–264 words of emergency numbers and tips at 768 px and up; the reading rule
   now applies to phones, and the screen keeps its own title.
 
+**Two switches that did nothing**
+- "Data saver (smaller images)" and "Autoplay media in the feed" were stored and
+  shown, and no code read them: not one byte or frame changed. Data saver now
+  stops the background download of every screen (measured above) and autoplay now
+  decides whether a story advances on its own — renamed to say what they do:
+  "Data saver (less background loading)" and "Autoplay stories".
+
 **Tap targets** (WCAG 2.5.8 asks 24 px; a thumb wants 44 px)
 - `Share this tip` was a 111 x 13 px button → 40 px tall;
 - the follower / following counts on the profile menu were 82 x 15 → 40 px tall;
@@ -113,7 +136,7 @@ What changed to get there:
 
 - **No network throttling.** Everything runs against localhost, so the millisecond numbers are the
   app's own cost, not a 3G download time. The byte counts are the number that matters on mobile
-  data: 456 kB on a cold first load.
+  data: **596 kB on a cold first load, 387 kB with Data saver on**.
 - **One web engine.** Chromium 153 only; Safari and the Android WebView (which is what the APK
   uses) are not measured here.
 - **No screen reader pass.** Contrast, target size and label text are checked; announcement order
