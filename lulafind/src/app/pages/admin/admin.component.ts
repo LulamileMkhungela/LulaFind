@@ -16,7 +16,7 @@ import { AvatarComponent } from '../../shared/components/avatar.component';
 import { ModerationService } from '../../core/services/moderation.service';
 import { DataService } from '../../core/services/data.service';
 import { AuthService } from '../../core/services/auth.service';
-import { UserReport, UserProfile } from '../../core/models/types';
+import { Post, UserReport, UserProfile } from '../../core/models/types';
 import { timeAgo } from '../../core/utils/format';
 
 /**
@@ -46,11 +46,14 @@ import { timeAgo } from '../../core/utils/format';
         </div>
 
         <div class="tabs">
-          <button class="tab" [class.on]="tab() === 'reports'" (click)="tab.set('reports')">
+          <button class="tab" [class.on]="tab() === 'reports'" (click)="show('reports')">
             Reports @if (mod.openCount() > 0) { <span class="lf-badge">{{ mod.openCount() }}</span> }
           </button>
-          <button class="tab" [class.on]="tab() === 'people'" (click)="tab.set('people')">People</button>
-          <button class="tab" [class.on]="tab() === 'posts'" (click)="tab.set('posts')">Posts</button>
+          <button class="tab" [class.on]="tab() === 'people'" (click)="show('people')">People</button>
+          <button class="tab" [class.on]="tab() === 'review'" (click)="show('review')">
+            Review @if (mod.pendingCases().length > 0) { <span class="lf-badge">{{ mod.pendingCases().length }}</span> }
+          </button>
+          <button class="tab" [class.on]="tab() === 'posts'" (click)="show('posts')">Posts</button>
         </div>
 
         @if (tab() === 'reports') {
@@ -113,6 +116,33 @@ import { timeAgo } from '../../core/utils/format';
           }
         }
 
+        @if (tab() === 'review') {
+          <p class="lf-small lf-muted" style="padding:0 var(--lf-gap) 4px">
+            A child case waits here until you confirm it. Nobody is alerted until you publish it.
+          </p>
+          @if (!mod.pendingCases().length) {
+            <lf-empty icon="check" title="Nothing waiting" message="Every child case has been checked." />
+          }
+          @for (p of mod.pendingCases(); track p.id) {
+            <div class="lf-card">
+              <div class="lf-card__body">
+                <div class="lf-row-between">
+                  <span class="lf-chip lf-chip--danger">{{ p.type }}</span>
+                  <span class="lf-meta">{{ timeAgo(p.createdAt) }}</span>
+                </div>
+                <h3 class="lf-h2" style="margin:8px 0 2px">{{ p.title }}</h3>
+                <p class="lf-small lf-muted">{{ subjectLine(p) }}</p>
+                <p class="lf-small">{{ p.body }}</p>
+                <div class="acts">
+                  <button class="lf-btn lf-btn--sm lf-btn--success" (click)="approve(p.id)" [disabled]="mod.busy()">Publish and alert</button>
+                  <button class="lf-btn lf-btn--sm lf-btn--ghost" [routerLink]="'/post/' + p.id">Open</button>
+                  <button class="lf-btn lf-btn--sm lf-btn--danger" (click)="reject(p.id, p.title)">Reject</button>
+                </div>
+              </div>
+            </div>
+          }
+        }
+
         @if (tab() === 'posts') {
           <ion-searchbar placeholder="Search posts" [debounce]="200"
                          (ionInput)="query.set($any($event.detail).value ?? '')"></ion-searchbar>
@@ -156,13 +186,20 @@ export class AdminComponent implements OnInit {
 
   protected readonly timeAgo = timeAgo;
 
-  tab = signal<'reports' | 'people' | 'posts'>('reports');
+  tab = signal<'reports' | 'people' | 'review' | 'posts'>('reports');
+
+  /** Opening the review tab re-reads the queue, so it is never stale. */
+  show(tab: 'reports' | 'people' | 'review' | 'posts'): void {
+    this.tab.set(tab);
+    if (tab === 'review') void this.mod.loadPending();
+  }
   query = signal('');
   users = signal<UserProfile[]>([]);
 
   async ngOnInit(): Promise<void> {
     if (!this.mod.isAdmin()) return;
     this.mod.load();
+    await this.mod.loadPending();
     await this.refreshUsers();
     await this.data.refresh();
   }
@@ -190,6 +227,14 @@ export class AdminComponent implements OnInit {
     if (!q) return list.slice(0, 40);
     return list.filter((p) => p.title.toLowerCase().includes(q) || p.body.toLowerCase().includes(q));
   });
+
+  /** "Thandi Mokoena, 34 · Soweto · by the family" - the one line an admin needs. */
+  subjectLine(p: Post): string {
+    const name = p.subject?.name?.trim() || 'Unnamed case';
+    const age = p.subject?.age;
+    const who = `${name}${typeof age === 'number' ? `, ${age}` : ''}`;
+    return `${who} · ${p.town} · by ${this.nameOf(p.authorId)}`;
+  }
 
   nameOf(id: string): string {
     if (id === this.auth.viewerId) return 'you';
@@ -233,6 +278,20 @@ export class AdminComponent implements OnInit {
     await this.mod.removePost(r.targetId, note);
     await this.data.refresh();
     await this.say('Post removed');
+  }
+
+  async approve(id: string): Promise<void> {
+    const reached = await this.mod.approveCase(id);
+    await this.data.refresh();
+    await this.say(reached ? `Live - ${reached} alert(s) sent` : 'Live - nobody in range to alert');
+  }
+
+  async reject(id: string, title: string): Promise<void> {
+    const note = await this.note('Keep this case off the feed?', title);
+    if (!note) return;
+    await this.mod.rejectCase(id, note);
+    await this.data.refresh();
+    await this.say('Case not published');
   }
 
   async removePostById(id: string, title: string): Promise<void> {

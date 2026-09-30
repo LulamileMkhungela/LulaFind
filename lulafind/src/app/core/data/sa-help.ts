@@ -171,6 +171,18 @@ export const HELP_LINES: HelpLine[] = [
     onCase: true
   },
   {
+    id: 'saps-bureau',
+    group: 'missing',
+    name: 'Bureau for Missing Persons',
+    number: '021 918 3512',
+    detail: 'If a station refuses to take your report, escalate here. Also 3449 or 3452, or missing@saps.gov.za.',
+    href: 'tel:0219183512',
+    actionLabel: 'Call',
+    reach: 'Official',
+    onCase: true,
+    personOnly: true
+  },
+  {
     id: 'grit-play',
     group: 'apps',
     name: 'GRIT app',
@@ -233,9 +245,13 @@ export const HELP_LINES: HelpLine[] = [
   }
 ];
 
-/** Shown under the GBV voice line. Not a call button — those codes are not confirmed live. */
+/**
+ * Shown under the GBV voice line. Not a call button — those codes are not
+ * confirmed live, so the screen says which one to trust and the FAQ carries the
+ * rest of the channels (the screen itself stays one sentence).
+ */
 export const GBV_CHANNEL_NOTE =
-  'The Command Centre website also lists *120*7867# and SMS “help” to 31531, plus Skype “Helpme GBV”. In December 2024 the department said only the voice line was back. If a code does not connect, call 0800 428 428.';
+  'Only the voice line, 0800 428 428, is confirmed live. If a code does not connect, call it.';
 
 /** Live SAPS Crime Stop list, opened 25 September 2026. Not a LulaFind list. */
 export const SAPS_MISSING_LIST = 'https://www.saps.gov.za/crimestop/missing/list.php';
@@ -267,6 +283,15 @@ export interface CaseContact {
 }
 
 /** Services a poster can call from a case. Never pre-ticked — a tick means they called. */
+/**
+ * The line a family needs the moment a station turns them away. SAPS policy is
+ * clear - there is no waiting period - so the refusal is the exception, and the
+ * Bureau for Missing Persons is where it gets escalated.
+ */
+export const NO_WAIT_NOTE =
+  'There is no waiting period to report a missing person. If a station tells you to wait, ask for the senior officer, ' +
+  'then escalate to the Bureau for Missing Persons on 021 918 3512.';
+
 export const CASE_CONTACTS: CaseContact[] = HELP_LINES.filter((line) => line.onCase).map((line) => ({
   id: line.id,
   name: line.name,

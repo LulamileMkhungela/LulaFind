@@ -1,5 +1,5 @@
 import { Routes } from '@angular/router';
-import { authGuard, adminGuard } from './core/guards/auth.guard';
+import { authGuard } from './core/guards/auth.guard';
 
 export const routes: Routes = [
   {
@@ -45,6 +45,8 @@ export const routes: Routes = [
   { path: 'search', loadComponent: () => import('./pages/search/search.component').then((m) => m.SearchComponent) },
   { path: 'tips', loadComponent: () => import('./pages/tips/tips.component').then((m) => m.TipsComponent) },
   { path: 'help', loadComponent: () => import('./pages/help/help.component').then((m) => m.HelpComponent) },
+  { path: 'faqs', loadComponent: () => import('./pages/help/faqs.component').then((m) => m.FaqsComponent) },
+  { path: 'found', loadComponent: () => import('./pages/found/found.component').then((m) => m.FoundComponent) },
   {
     path: 'create/:type',
     canActivate: [authGuard],
@@ -62,6 +64,11 @@ export const routes: Routes = [
   },
   { path: 'safety', loadComponent: () => import('./pages/safety/safety-center.component').then((m) => m.SafetyCenterComponent) },
   {
+    path: 'lookout/:id',
+    canActivate: [authGuard],
+    loadComponent: () => import('./pages/safety/lookout.component').then((m) => m.LookoutComponent)
+  },
+  {
     path: 'escalate/:postId',
     canActivate: [authGuard],
     loadComponent: () => import('./pages/safety/escalate.component').then((m) => m.EscalateComponent)
@@ -73,8 +80,11 @@ export const routes: Routes = [
   },
   { path: 'settings', loadComponent: () => import('./pages/settings/settings.component').then((m) => m.SettingsComponent) },
   {
+    /* Sign-in is required; admins alone get the tools. A signed-in member who
+       is not an admin lands on the screen and reads why, instead of being
+       bounced home with no explanation - the component loads nothing for them. */
     path: 'admin',
-    canActivate: [adminGuard],
+    canActivate: [authGuard],
     loadComponent: () => import('./pages/admin/admin.component').then((m) => m.AdminComponent)
   },
   { path: 'terms', loadComponent: () => import('./pages/terms/terms.component').then((m) => m.TermsComponent) },

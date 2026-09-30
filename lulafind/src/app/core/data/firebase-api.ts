@@ -1,8 +1,10 @@
 import { Observable, Subject } from 'rxjs';
 import {
-  ChatMessage, ChatThread, Comment, FeedFilter, FollowEdge, MediaItem, Notification, Post, Spotlight, Story, StoryReply, StoryView, Tip, UserProfile
+  ChatMessage, ChatThread, Comment, Lookout, FeedFilter, FollowEdge, MediaItem, Notification, Post, Spotlight, Story, StoryReply, StoryView, Tip, UserProfile
 } from '../models/types';
 import { LulaApi, SavePostOptions } from './api';
+import { answerBlocker, hasAnswered, withAnswer } from '../utils/lookout';
+import { lookoutCasePost } from '../utils/lookout-case';
 
 /*
  * Cloud Firestore + Firebase Auth implementation.
@@ -128,6 +130,34 @@ export class FirebaseApi implements LulaApi {
       .filter((p) => p.authorId === authorId)
       .sort((a, b) => b.createdAt - a.createdAt);
   }
+  /** Cases held for review, straight from the collection - not the feed. */
+  async postsForReview() {
+    const all = await this.getList<Post>(this.q.query(this.col('posts'), this.q.where('status', '==', 'under_review')));
+    return all.sort((a, b) => a.createdAt - b.createdAt);
+  }
+
+  /** Cases that closed as found, straight from the collection. */
+  async foundCases() {
+    const all = await this.getList<Post>(this.q.query(this.col('posts'), this.q.where('status', '==', 'found')));
+    return all.sort((a, b) => (b.outcome?.foundAt ?? b.updatedAt) - (a.outcome?.foundAt ?? a.updatedAt));
+  }
+
+  /**
+   * Patch fields on a post inside a Firestore transaction, so two writers
+   * cannot overwrite each other with stale copies.
+   */
+  async patchPost(id: string, patch: Partial<Post>) {
+    const ref = this.doc(`posts/${id}`);
+    const next = await this.q.runTransaction(this.fs.getFirestore(this.app), async (tx: any) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists()) return undefined;
+      const merged = { ...(snap.data() as Post), ...patch, id };
+      tx.set(ref, merged, { merge: true });
+      return merged;
+    });
+    return next as Post | undefined;
+  }
+
   async queryFeed(f: FeedFilter, _viewerId: string | null) {
     // Firestore cannot express every filter combination server-side, so we pull
     // the newest slice and refine in memory. Swap in composite indexes when the
@@ -160,6 +190,64 @@ export class FirebaseApi implements LulaApi {
     return true;
   }
   async deletePost(id: string) { await this.remove(`posts/${id}`); }
+
+  /* be on the lookout */
+
+  async lookouts() {
+    return this.getList<Lookout>(this.q.query(this.col('lookouts'), this.q.orderBy('startedAt', 'desc'), this.q.limit(200)));
+  }
+  async saveLookout(l: Lookout) { await this.set(`lookouts/${l.id}`, l as unknown as Record<string, unknown>); }
+  async patchLookout(id: string, patch: Partial<Lookout>) {
+    const ref = this.doc(`lookouts/${id}`);
+    const next = await this.q.runTransaction(this.fs.getFirestore(this.app), async (tx: any) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists()) return undefined;
+      const merged = { ...(snap.data() as Lookout), ...patch, id };
+      tx.set(ref, merged, { merge: true });
+      return merged;
+    });
+    return next as Lookout | undefined;
+  }
+
+  /**
+   * A follower answers "are they okay?". The decision runs inside a
+   * transaction so the last answer cannot be lost to a stale read, and the
+   * case LulaFind publishes is written in the same transaction as the answer
+   * that caused it.
+   */
+  async answerLookout(id: string, byUserId: string, ok: boolean) {
+    const ref = this.doc(`lookouts/${id}`);
+    const next = await this.q.runTransaction(this.fs.getFirestore(this.app), async (tx: any) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists()) return undefined;
+      const current = snap.data() as Lookout;
+      if (hasAnswered(current, byUserId)) return current;
+      const blocked = answerBlocker(current, byUserId);
+      if (blocked) throw new Error(blocked);
+      let merged = withAnswer(current, byUserId, ok);
+
+      if (merged.status === 'escalated' && !merged.escalatedPostId) {
+        const ownerSnap = await tx.get(this.doc(`users/${merged.userId}`));
+        const owner = ownerSnap.exists() ? (ownerSnap.data() as UserProfile) : undefined;
+        if (owner?.privacy?.allowSafetyAlertPosts === true) {
+          const post = lookoutCasePost(merged, owner, []);
+          tx.set(this.doc(`posts/${post.id}`), post as unknown as Record<string, unknown>);
+          merged = { ...merged, escalatedPostId: post.id };
+        }
+      }
+      tx.set(ref, merged, { merge: true });
+      return merged;
+    });
+    return next as Lookout | undefined;
+  }
+
+  /** "I'm here": delete the case the app published for this lookout. */
+  async deleteLookoutCase(lookoutId: string) {
+    const mine = await this.posts();
+    for (const post of mine.filter((p) => p.lookoutId === lookoutId)) {
+      await this.remove(`posts/${post.id}`);
+    }
+  }
 
   /* comments */
   async commentsFor(postId: string) {

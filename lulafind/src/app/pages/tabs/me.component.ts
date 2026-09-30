@@ -136,6 +136,8 @@ import { MediaService } from '../../core/services/media.service';
                 <a class="q" routerLink="/admin"><span class="qi qi-red"><lf-icon name="shield" [size]="20" /></span><span>Admin</span>
                   @if (mod.openCount() > 0) { <em class="lf-badge">{{ mod.openCount() }}</em> }</a>
               }
+              <a class="q" routerLink="/found"><span class="qi qi-green"><lf-icon name="check" [size]="20" /></span><span>People found</span></a>
+              <a class="q" routerLink="/faqs"><span class="qi qi-blue"><lf-icon name="info" [size]="20" /></span><span>FAQs</span></a>
               <a class="q" routerLink="/help"><span class="qi qi-red"><lf-icon name="phone" [size]="20" /></span><span>Get help</span></a>
               <button class="q" type="button" (click)="signOut()"><span class="qi qi-grey"><lf-icon name="logout" [size]="20" /></span><span>Sign out</span></button>
             </div>
@@ -192,7 +194,7 @@ import { MediaService } from '../../core/services/media.service';
             </div>
             <lf-icon name="lock" [size]="15" />
           </div>
-          <p class="lf-small lf-muted">Your name was set from the full name you entered when you created the account. It cannot be edited. You can still follow, chat, comment, and add a photo.</p>
+          <p class="lf-small lf-muted">Your name is set from signup and cannot be changed. Everything else here is yours to edit.</p>
           <button class="lf-btn lf-btn--ghost lf-btn--block" type="button" (click)="addPhoto()">
             <lf-icon name="camera" [size]="15" /> {{ me()!.avatarUrl ? 'Change profile photo' : 'Add profile photo' }}
           </button>
@@ -211,7 +213,7 @@ import { MediaService } from '../../core/services/media.service';
           <ion-item>
             <ion-label>
               <strong>Let LulaFind match me to cases</strong><br />
-              <span class="lf-muted lf-small">If your name matches a KhumbulEkhaya post, we may ask if it is you. You can turn this off at any time.</span>
+              <span class="lf-muted lf-small">We ask you first if your name matches a case.</span>
             </ion-label>
             <ion-toggle [checked]="form.findableProfile" (ionChange)="form.findableProfile = $any($event.detail).checked"></ion-toggle>
           </ion-item>
@@ -290,8 +292,8 @@ import { MediaService } from '../../core/services/media.service';
     .clear { border: 0; background: transparent; color: var(--lf-link); font-weight: 600; font-size: 13px; cursor: pointer; }
     .status.safe, .status[data-status="safe"] { background: color-mix(in srgb, var(--lf-ubuntu) 16%, transparent); }
     .stats { display: flex; gap: 16px; flex-wrap: wrap; }
-    .stats div, .stats button { display: flex; align-items: baseline; gap: 4px;
-      border: 0; background: transparent; color: inherit; padding: 0; cursor: pointer; font-family: inherit; }
+    .stats div, .stats button { display: flex; align-items: center; gap: 4px; min-height: 40px;
+      border: 0; background: transparent; color: inherit; padding: 0 6px; margin: -10px -6px; cursor: pointer; font-family: inherit; }
     .stats strong { font-size: 15px; font-weight: 700; }
     .stats span { font-size: 15px; color: var(--lf-muted); }
     .menu-tabs { margin-top: 8px; }
@@ -307,7 +309,8 @@ import { MediaService } from '../../core/services/media.service';
     .qi-blue { background: var(--lf-primary-soft); color: var(--lf-primary-soft-text); }
     .qi-green { background: color-mix(in srgb, var(--lf-ubuntu) 16%, transparent); color: var(--lf-ubuntu); }
     .qi-yellow { background: color-mix(in srgb, var(--lf-marigold) 20%, transparent); color: #c98f00; }
-    .qi-red { background: color-mix(in srgb, var(--lf-signal) 14%, transparent); color: var(--lf-signal); }
+    .qi-green { background: color-mix(in srgb, var(--lf-ubuntu) 16%, transparent); color: var(--lf-ubuntu); }
+    .qi-red { background: color-mix(in srgb, var(--lf-signal) 14%, transparent); color: var(--lf-signal-text); }
     .qi-grey { background: var(--lf-card-2); color: var(--ion-text-color); }
     .qi-purple { background: color-mix(in srgb, #a33bc2 16%, transparent); color: #a33bc2; }
     .qi-teal { background: color-mix(in srgb, #1bb5a3 16%, transparent); color: #12998a; }
@@ -327,12 +330,12 @@ import { MediaService } from '../../core/services/media.service';
     .req { display: flex; align-items: center; gap: 9px; padding: 9px 0; border-top: 1px solid var(--lf-line); }
     .req strong { display: block; font-size: 14px; }
     .req span { display: block; }
-    .field-err { color: var(--lf-signal); font-size: 12px; font-weight: 600; margin: -2px 0 6px 4px; }
+    .field-err { color: var(--lf-signal-text); font-size: 12px; font-weight: 600; margin: -2px 0 6px 4px; }
     .ident-lock { display: flex; align-items: center; gap: 10px; padding: 10px 12px; margin: 4px 0 8px;
       border-radius: 8px; border: 1px dashed var(--lf-line); background: var(--lf-card-2); }
     .ident-lock .k { display: block; font-size: 11px; color: var(--lf-muted); font-weight: 700; }
     .ident-lock lf-icon { margin-left: auto; color: var(--lf-muted); }
-    .err { display: flex; align-items: center; gap: 8px; color: var(--lf-signal); font-size: 13px; margin: 6px 0 0; }
+    .err { display: flex; align-items: center; gap: 8px; color: var(--lf-signal-text); font-size: 13px; margin: 6px 0 0; }
     ion-item.bad { --border-color: var(--lf-signal); box-shadow: inset 0 0 0 1.5px var(--lf-signal); }
     .sheet { padding: 20px var(--lf-gap) 34px; }
     .row { display: flex; gap: 10px; margin-top: 18px; }
@@ -393,10 +396,8 @@ export class MeComponent {
   readonly me = computed(() => this.auth.user());
   readonly avatar = computed(() => this.data.avatarFor(this.me()));
   readonly location = computed(() => this.auth.locationLabel(this.me()));
-  readonly myPosts = computed(() => {
-    const id = this.auth.viewerId;
-    return this.data.feed().filter((p) => p.authorId === id);
-  });
+  /** The viewer's own posts at every stage - see DataService.myPosts. */
+  readonly myPosts = computed(() => this.data.myPosts());
   readonly visible = computed(() => this.menuTab() === 'saved' ? this.data.savedPosts() : this.myPosts());
 
   constructor() {
@@ -529,6 +530,9 @@ export class MeComponent {
         findableProfile: this.form.findableProfile,
         safetyBeacon: this.form.safetyBeacon,
         privacy: {
+          /* keep every choice this form does not show - the safety-post
+             settings live in the Safety centre and must survive an edit here. */
+          ...defaultPrivacy(), ...(this.me()?.privacy ?? {}),
           showLocation, showStats, showSpotlights, allowMessages,
           autoShareLocation: false, notifyFollowersOnExpiry, requireFollowApproval
         }

@@ -123,7 +123,7 @@ import { AuthService } from '../../core/services/auth.service';
       width: 36px;
       height: 36px;
       border-radius: 50%;
-      background: var(--lf-primary);
+      background: var(--lf-primary-fill);
       color: #fff;
       box-shadow: 0 0 0 4px var(--lf-card);
       display: flex;

@@ -7,18 +7,20 @@ import { AuthService } from './auth.service';
 export type ChatGate =
   | { allowed: true; reason: 'open' }
   | { allowed: false; step: 'sign_in' }
-  | { allowed: false; step: 'vote'; reason: string }
   | { allowed: false; step: 'follow'; reason: string; peerId: string }
   | { allowed: false; step: 'disabled'; reason: string };
 
 /**
- * Private chat rules (product decision):
- *  1. The poster chose "chat enabled" when creating the post.
- *  2. You upvoted ("I have an idea") - so the chat is lead-driven.
- *  3. You follow each other - so private chat only opens between connections.
+ * Private chat, and only one way in: **you follow each other**.
  *
- * Claiming a KhumbulEkhaya post ("this is me") bypasses rule 2, because the
- * whole point is to let the person get in touch without exposing them.
+ * Reactions have nothing to do with it - a reaction is just a reaction, and
+ * the app never tells anyone that reacting will "unlock" a chat. If you follow
+ * someone and they follow you back, the two of you can message each other.
+ *
+ * Two exceptions, both intentional:
+ *  - the poster themself, who can always be messaged about their own post;
+ *  - someone who claimed a KhumbulEkhaya post as "this is me", because the whole
+ *    point is that they can reach the family without being exposed.
  */
 @Injectable({ providedIn: 'root' })
 export class ChatService {
@@ -59,8 +61,10 @@ export class ChatService {
   }
 
   /**
-   * Evaluates the three rules and tells the UI exactly which step is blocking,
-   * so the button can say "Have an idea to unlock chat" or "Follow to unlock chat".
+   * Is chat open between the viewer and this post's author?
+   *
+   * One rule: you follow each other. There is no reaction step, and the UI must
+   * never suggest there is one.
    */
   async gate(post: Post, claimedByViewer = false): Promise<ChatGate> {
     const me = this.auth.viewerId;
@@ -71,17 +75,13 @@ export class ChatService {
     if (me === post.authorId) return { allowed: true, reason: 'open' };
     if (claimedByViewer || post.khumbu?.claimedByUserId === me) return { allowed: true, reason: 'open' };
 
-    // Only "Have an idea" opens chat. Like, Support and Sad are just reactions.
-    if (post.voterIds[me] !== 'up') {
-      return { allowed: false, step: 'vote', reason: 'Tap "Have an idea" on this post to unlock private chat with the poster.' };
-    }
     const mutual =
       (await this.api.isFollowing(me, post.authorId)) && (await this.api.isFollowing(post.authorId, me));
     if (!mutual) {
       return {
         allowed: false,
         step: 'follow',
-        reason: 'You both need to follow each other before private chat opens. Follow them, and they will see the request.',
+        reason: 'You can message each other once you follow each other.',
         peerId: post.authorId
       };
     }
@@ -89,7 +89,7 @@ export class ChatService {
   }
 
   /** Find an existing thread with this person (optionally about this post) or create one. */
-  async ensureThread(post: Post | null, peerId: string, unlockedVia: ChatThread['unlockedVia'] = 'vote'): Promise<ChatThread | null> {
+  async ensureThread(post: Post | null, peerId: string, unlockedVia: ChatThread['unlockedVia'] = 'follow'): Promise<ChatThread | null> {
     const me = this.auth.viewerId;
     if (!me || me === peerId) return null;
     const existing = (await this.api.threadsFor(me)).find(
@@ -115,7 +115,7 @@ export class ChatService {
       threadId: thread.id,
       fromUserId: 'system' as string,
       body: post
-        ? `Private chat opened from "${post.title}". Everything said here is only visible to the two of you.`
+        ? `Private chat opened from "${post.title}". You follow each other. Everything here is only visible to the two of you.`
         : 'Private chat opened. Be kind, be careful, and never send money to a stranger.',
       at: now,
       read: false,

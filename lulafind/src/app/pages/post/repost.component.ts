@@ -71,7 +71,7 @@ import { timeAgo } from '../../core/utils/format';
   `,
   styles: [`
     .icon-btn { width: 40px; height: 40px; display: grid; place-items: center; border: 0; border-radius: 50%; background: transparent; color: var(--ion-text-color); }
-    .post-btn { height: 32px; padding: 0 18px; margin-right: 8px; border: 0; border-radius: 16px; background: var(--lf-primary); color: #fff; font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; }
+    .post-btn { height: 32px; padding: 0 18px; margin-right: 8px; border: 0; border-radius: 16px; background: var(--lf-primary-fill); color: #fff; font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; }
     .post-btn:disabled { opacity: .5; }
     .wrap { max-width: 640px; margin: 0 auto; padding: 14px 16px 40px; }
     .me { display: flex; align-items: center; gap: 12px; }
@@ -89,7 +89,7 @@ import { timeAgo } from '../../core/utils/format';
     .embed h3 { margin: 0 0 4px; font-size: 16px; }
     .embed p { margin: 0; font-size: 14px; line-height: 1.38; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; white-space: pre-line; }
     .embed img { display: block; width: calc(100% + 24px); margin: 10px -12px -12px; max-height: 260px; object-fit: cover; border-radius: 0 0 8px 8px; }
-    .err { display: flex; align-items: center; gap: 6px; color: var(--lf-signal); font-size: 14px; }
+    .err { display: flex; align-items: center; gap: 6px; color: var(--lf-signal-text); font-size: 14px; }
   `]
 })
 export class RepostComponent implements OnInit {

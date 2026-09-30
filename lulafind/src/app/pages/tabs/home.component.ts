@@ -1,5 +1,5 @@
 import { Component, computed, effect, inject, signal } from '@angular/core';
-import { Router } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { IonContent } from '@ionic/angular/ion-content';
 import { IonRefresher } from '@ionic/angular/ion-refresher';
 import { IonRefresherContent } from '@ionic/angular/ion-refresher-content';
@@ -21,6 +21,9 @@ import { AuthService } from '../../core/services/auth.service';
 import { ChatService } from '../../core/services/chat.service';
 import { PlatformService } from '../../core/services/platform.service';
 import { POST_TYPE_META, Post, ReactionKind } from '../../core/models/types';
+import { feedWithRails } from '../../core/utils/feed';
+import { LookoutService } from '../../core/services/lookout.service';
+import { timeAgo } from '../../core/utils/format';
 
 @Component({
   selector: 'lf-home',
@@ -28,7 +31,8 @@ import { POST_TYPE_META, Post, ReactionKind } from '../../core/models/types';
   imports: [
     IonContent, IonRefresher, IonRefresherContent,
     IonInfiniteScroll, IonInfiniteScrollContent, IonSkeletonText,
-    TopNavComponent, IconComponent, EmptyComponent, PostCardComponent, StoryRailComponent, PeopleRailComponent, FilterBarComponent
+    TopNavComponent, IconComponent, EmptyComponent, PostCardComponent, StoryRailComponent, PeopleRailComponent, FilterBarComponent,
+    RouterLink
   ],
   template: `
     <lf-top-nav />
@@ -38,6 +42,18 @@ import { POST_TYPE_META, Post, ReactionKind } from '../../core/models/types';
         <ion-refresher-content pullingText="Pull to refresh"></ion-refresher-content>
       </ion-refresher>
 
+      <!-- A safety check waiting on you: nothing else on this screen matters more. -->
+      @if (duePrompts().length) {
+        <a class="checkprompt" [routerLink]="'/lookout/' + duePrompts()[0].lookout.id">
+          <lf-icon name="shield" [size]="20" />
+          <div class="lf-grow">
+            <strong>{{ duePrompts()[0].headline }}</strong>
+            <span class="lf-small">{{ duePrompts()[0].sub }}</span>
+          </div>
+          <lf-icon name="chevronRight" [size]="16" />
+        </a>
+      }
+
       <!-- Facebook Feed Filter Chips -->
       <lf-filter-bar
         [filter]="data.filter()"
@@ -45,7 +61,17 @@ import { POST_TYPE_META, Post, ReactionKind } from '../../core/models/types';
         (filterChange)="data.setFilter($event)"
         (reset)="data.resetFilter()" />
 
-      @if (data.loading() && !data.feed().length) {
+      <!-- The network never answered: say so and offer a retry, never spin for ever. -->
+      @if (data.connectionLost() && !data.feed().length && !data.loading()) {
+        <div class="offline" role="alert">
+          <lf-icon name="wifiOff" [size]="22" />
+          <strong>LulaFind can't reach the network</strong>
+          <p>Check your connection and try again. Nothing you posted has been lost.</p>
+          <button class="lf-btn lf-btn--primary" type="button" (click)="data.retryFeed()">Try again</button>
+        </div>
+      }
+
+      @if (data.loading() && !data.feed().length && !data.connectionLost()) {
         @for (i of [1, 2, 3]; track i) {
           <div class="skel">
             <div class="skel__head"><ion-skeleton-text class="skel__av"></ion-skeleton-text><div class="lf-grow"><ion-skeleton-text style="width:40%;height:12px"></ion-skeleton-text><ion-skeleton-text style="width:24%;height:10px"></ion-skeleton-text></div></div>
@@ -56,13 +82,15 @@ import { POST_TYPE_META, Post, ReactionKind } from '../../core/models/types';
         }
       }
 
-      @if (!data.loading() && !data.feed().length) {
+      @if (!data.loading() && !data.feed().length && !data.connectionLost()) {
+        <!-- Nothing in the feed: the story card goes on its own, at the top. -->
+        <lf-story-rail (addStory)="onAddStory()" />
         <lf-empty icon="search" title="No cases here yet"
                   message="Posts people create will show in this feed."
                   actionLabel="Reset filters" (action)="data.resetFilter()" />
       }
 
-      <!-- Stories and People appear only between posts: after every 8th post, never at the top. -->
+      <!-- Stories and People appear after every 8th post, and nowhere else. -->
       @for (item of feedItems(); track item.key) {
         @if (item.post; as p) {
           <lf-post-card
@@ -110,6 +138,15 @@ import { POST_TYPE_META, Post, ReactionKind } from '../../core/models/types';
     </ion-content>
   `,
   styles: [`
+    .checkprompt { display: flex; align-items: center; gap: 12px; margin: 10px var(--lf-gap); padding: 13px 14px;
+      border-radius: var(--lf-radius); background: color-mix(in srgb, var(--lf-beacon) 16%, var(--lf-card));
+      color: inherit; text-decoration: none; box-shadow: var(--lf-shadow); }
+    .checkprompt div { display: flex; flex-direction: column; gap: 2px; }
+    .checkprompt span { color: var(--lf-muted); }
+    .offline { display: flex; flex-direction: column; align-items: center; gap: 6px; margin: 28px 16px;
+      padding: 22px 18px; border: 1px solid var(--lf-line); border-radius: 14px; background: var(--lf-card); text-align: center; }
+    .offline strong { font-size: 16px; }
+    .offline p { margin: 0 0 8px; font-size: 13.5px; color: var(--lf-muted); line-height: 1.4; }
     .skel {
       background: var(--lf-card);
       margin: 0 0 8px;
@@ -146,10 +183,31 @@ import { POST_TYPE_META, Post, ReactionKind } from '../../core/models/types';
 export class HomeComponent {
   protected data = inject(DataService);
   protected auth = inject(AuthService);
+  protected lookouts = inject(LookoutService);
   protected chat = inject(ChatService);
   private platform = inject(PlatformService);
   private router = inject(Router);
   private toast = inject(ToastController);
+
+  /**
+   * Safety checks waiting on the viewer, newest first. This is the one thing
+   * that outranks the feed: someone they follow has been out of contact for 24
+   * hours and only they can answer.
+   */
+  readonly duePrompts = computed(() => {
+    const me = this.auth.user();
+    if (!me) return [];
+    return this.lookouts.waitingOnMe()
+      .map((lookout) => {
+        const who = this.data.authorOf(lookout.userId)?.displayName ?? 'Someone you follow';
+        return {
+          lookout,
+          headline: `Is ${who} okay?`,
+          sub: `They set a lookout ${timeAgo(lookout.startedAt)} - answer to close it or flag them.`
+        };
+      })
+      .filter((p) => !!p.lookout);
+  });
 
   readonly missingPip = computed(() =>
     this.data.feed().filter((p) => p.type === 'missing' && p.status === 'active').length
@@ -166,24 +224,12 @@ export class HomeComponent {
   });
 
   /**
-   * The feed with a carousel slotted in after every 8th post, alternating
-   * Stories then People. A feed shorter than 8 posts has no gap to put one in,
-   * so Stories goes at the very end - otherwise nobody could ever open one.
+   * Stories after the 8th post, People after the 16th, Stories after the 24th
+   * and so on. A feed too short to reach an 8th post still gets one story rail,
+   * after its last post, so the story card is never unreachable.
+   * `feedWithRails` is a plain function so the rule can be tested on its own.
    */
-  readonly feedItems = computed(() => {
-    const posts = this.displayedFeed();
-    const out: { key: string; kind: 'post' | 'stories' | 'people'; post?: Post }[] = [];
-    posts.forEach((p, i) => {
-      out.push({ key: p.id, kind: 'post', post: p });
-      const n = i + 1;
-      if (n % 8 === 0) {
-        const slot = n / 8;
-        out.push({ key: `slot-${slot}`, kind: slot % 2 === 1 ? 'stories' : 'people' });
-      }
-    });
-    if (posts.length > 0 && posts.length < 8 && this.auth.signedIn()) out.push({ key: 'slot-end', kind: 'stories' });
-    return out;
-  });
+  readonly feedItems = computed(() => feedWithRails(this.displayedFeed(), 8, { shortRail: true }));
 
   private chatGates = signal<Record<string, ChatState>>({});
 
@@ -210,7 +256,7 @@ export class HomeComponent {
     const entries = await Promise.all(this.data.feed().map(async (p): Promise<[string, ChatState]> => {
       if (!p.chatEnabled) return [p.id, 'off' as ChatState];
       const g = await this.chat.gate(p, p.khumbu?.claimedByUserId === this.auth.viewerId);
-      const state: ChatState = g.allowed ? 'open' : g.step === 'vote' ? 'locked-vote' : g.step === 'follow' ? 'locked-follow' : 'off';
+      const state: ChatState = g.allowed ? 'open' : g.step === 'follow' ? 'locked-follow' : 'off';
       return [p.id, state];
     }));
     this.chatGates.set(Object.fromEntries(entries));
@@ -218,7 +264,7 @@ export class HomeComponent {
 
   chatStateOf(p: Post): ChatState {
     if (p.authorId === this.auth.viewerId) return 'off';
-    return this.chatGates()[p.id] ?? 'locked-vote';
+    return this.chatGates()[p.id] ?? 'locked-follow';
   }
 
   async onRefresh(e: any): Promise<void> {
@@ -274,13 +320,9 @@ export class HomeComponent {
       if (thread) await this.router.navigate(['/chat', thread.id]);
       return;
     }
-    if (g.step === 'vote') {
-      // Only "Have an idea" opens chat, so the lock button gives that reaction.
-      await this.onVote(p, 'up');
-      await this.show('You have an idea on this post. Follow each other to open chat.');
-      return;
-    }
-    await this.router.navigate(['/post', p.id]);
+    // Chat is mutual-follow only. Following is the honest next step, so the
+    // button takes you to the person rather than pretending a reaction helps.
+    await this.router.navigate(['/user', p.authorId]);
   }
 
   async onAddStory(): Promise<void> {

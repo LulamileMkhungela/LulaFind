@@ -26,7 +26,7 @@ const CATS = [
   standalone: true,
   imports: [IonContent, IconComponent, TopNavComponent],
   template: `
-    <lf-top-nav backTo="/home" />
+    <lf-top-nav title="Tips" backTo="/home" />
 
     <ion-content class="lf-page">
       <button class="lf-banner lf-banner--danger help-jump" type="button" (click)="router.navigate(['/help'])">
@@ -70,7 +70,7 @@ const CATS = [
     .cat { font-size: 11px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase; color: var(--lf-muted); }
     .tip h3 { margin: 0 0 6px; font-size: 16px; line-height: 1.3; }
     .tip p { margin: 0 0 10px; font-size: 13.5px; line-height: 1.55; color: var(--ion-text-color); opacity: .92; }
-    .share { display: inline-flex; align-items: center; gap: 6px; margin-left: 8px; background: none; border: 0;
+    .share { display: inline-flex; align-items: center; gap: 6px; margin-left: 8px; min-height: 40px; padding: 0 4px; background: none; border: 0;
       color: var(--lf-muted); font-size: 12px; font-weight: 700; cursor: pointer; padding: 0; }
   `]
 })

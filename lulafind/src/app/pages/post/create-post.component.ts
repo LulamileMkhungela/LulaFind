@@ -15,6 +15,14 @@ import {
   Audience, MediaItem, Post, PostType, PROVINCES, ProvinceCode
 } from '../../core/models/types';
 
+/** A brand-new composer. Also what "Start fresh" returns to. */
+const blankForm = (): ComposerForm => ({
+  title: '', body: '', media: [], province: null, town: '', lastSeenAt: '', lastSeenWhere: '',
+  caseNumber: '', audience: 'public', spotlightId: null, chatEnabled: true, allowComments: true,
+  anonymous: false, askWanted: false, contactLabel: 'Family contact', contactValue: '', contactVisibleTo: 'verified',
+  guardianConsent: false
+});
+
 const CATEGORIES: { key: PostType; label: string; icon: string }[] = [
   { key: 'missing', label: 'Missing person', icon: 'search' },
   { key: 'khumbulekhaya', label: 'Left home', icon: 'home' },
@@ -30,6 +38,7 @@ const blankSubject = () => ({
 interface ComposerForm {
   title: string; body: string; media: MediaItem[]; province: ProvinceCode | null; town: string;
   lastSeenAt: string; lastSeenWhere: string; caseNumber: string; audience: Audience;
+  /* required when the missing person is under 18 */ guardianConsent: boolean;
   spotlightId: string | null; chatEnabled: boolean; allowComments: boolean; anonymous: boolean;
   askWanted: boolean; contactLabel: string; contactValue: string;
   contactVisibleTo: 'everyone' | 'verified' | 'owner';
@@ -112,8 +121,16 @@ interface MissingField { key: string; label: string; }
               </button>
             }
           </div>
-          @if (editing()) { <p class="inline-note">A post's category cannot be changed after it is shared. Saving marks it as edited.</p> }
+          @if (editing()) { <p class="inline-note">The category can’t change after posting. Saving marks it edited.</p> }
         </section>
+
+        @if (draftKept()) {
+          <div class="draft-note" role="status">
+            <lf-icon name="info" [size]="16" />
+            <span>We kept what you typed. Carry on where you left off.</span>
+            <button type="button" (click)="discardDraft()">Start fresh</button>
+          </div>
+        }
 
         @if (showFieldErrors() && missing().length) {
           <div class="missing" role="alert">
@@ -233,7 +250,7 @@ interface MissingField { key: string; label: string; }
                   <label class="field full"><span>Last seen near</span><input placeholder="Neighbourhood or public place" [value]="f().lastSeenWhere" (input)="patch({ lastSeenWhere: $any($event.target).value })" /></label>
                 }
                 @if (type() === 'khumbulekhaya') {
-                  <label class="field full"><span>What might the family want them to know?</span><input placeholder="Optional — don't assume they want to come home" [value]="khumbuReason()" (input)="khumbuReason.set($any($event.target).value)" /></label>
+                  <label class="field full"><span>What might the family want them to know?</span><input placeholder="Optional — don't assume they want to come home" [value]="khumbuReason()" (input)="setKhumbu($any($event.target).value)" /></label>
                   <label class="switch-row"><input type="checkbox" [checked]="f().askWanted" (change)="patch({ askWanted: $any($event.target).checked })" /><span><strong>Ask the community if they are being looked for</strong><small>People can answer yes or no.</small></span></label>
                 }
 
@@ -254,7 +271,14 @@ interface MissingField { key: string; label: string; }
           </section>
         }
 
+        @if (notice()) { <p class="notice-message"><lf-icon name="info" [size]="15" /> {{ notice() }}</p> }
         @if (error()) { <p class="error-message" role="alert"><lf-icon name="alert" [size]="15" /> {{ error() }}</p> }
+        @if (childCase()) {
+          <label class="consent">
+            <input type="checkbox" [checked]="f().guardianConsent" (change)="patch({ guardianConsent: $any($event.target).checked })" />
+            <span>I am this child\u2019s parent or guardian, or I have their permission to post this. A case about a child is checked by a moderator before it goes out.</span>
+          </label>
+        }
         <p class="footnote">Share only information you are allowed to post. In an emergency, call 10111.</p>
       </main>
     </ion-content>
@@ -266,7 +290,7 @@ interface MissingField { key: string; label: string; }
     .fb-create-topbar h1 { margin: 0; text-align: center; font-size: 16px; font-weight: 700; color: var(--fb-text); }
     .icon-button { width: 36px; height: 36px; border: 0; border-radius: 50%; display: grid; place-items: center; background: var(--fb-soft); color: var(--fb-text); cursor: pointer; transition: background .16s ease, transform .16s ease; }
     .icon-button:active { transform: scale(.94); }
-    .post-button { justify-self: end; min-width: 54px; height: 32px; padding: 0 12px; border: 0; border-radius: 6px; background: var(--fb-blue); color: #fff; font-size: 15px; font-weight: 600; cursor: pointer; transition: filter .15s ease, transform .15s ease; }
+    .post-button { justify-self: end; min-width: 54px; height: 32px; padding: 0 12px; border: 0; border-radius: 6px; background: var(--lf-primary-fill); color: #fff; font-size: 15px; font-weight: 600; cursor: pointer; transition: filter .15s ease, transform .15s ease; }
     .post-button:disabled { opacity: .45; cursor: default; }
     .post-button.ready { box-shadow: 0 0 0 2px color-mix(in srgb, var(--lf-primary) 22%, transparent); }
     .post-button:active:not(:disabled) { transform: scale(.96); }
@@ -274,8 +298,8 @@ interface MissingField { key: string; label: string; }
     .author-row { display: flex; align-items: center; gap: 10px; padding: 0 0 12px; }
     .author-meta { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
     .author-meta > strong { font-size: 14px; }
-    .audience-picker { display: inline-flex; align-items: center; gap: 4px; padding: 3px 7px; border-radius: 5px; background: var(--fb-soft); color: var(--fb-text); font-size: 13px; font-weight: 600; }
-    .audience-picker select, .spotlight-picker select { border: 0; outline: 0; background: transparent; color: inherit; font: inherit; appearance: none; cursor: pointer; }
+    .audience-picker { display: inline-flex; align-items: center; gap: 4px; min-height: 34px; padding: 4px 8px; border-radius: 5px; background: var(--fb-soft); color: var(--fb-text); font-size: 13px; font-weight: 600; }
+    .audience-picker select, .spotlight-picker select { border: 0; outline: 0; background: transparent; color: inherit; font: inherit; appearance: none; cursor: pointer; min-height: 26px; }
     .spotlight-picker { display: flex; gap: 8px; align-items: center; min-height: 36px; padding: 0 10px; margin: 0 0 12px 50px; border: 1px solid var(--fb-line); border-radius: 7px; color: var(--fb-muted); font-size: 14px; }
     .spotlight-picker select { flex: 1; color: var(--fb-text); }
     .inline-note { margin: 0 0 12px 50px; color: var(--fb-muted); font-size: 14px; line-height: 1.4; }
@@ -300,7 +324,7 @@ interface MissingField { key: string; label: string; }
     .field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
     .field.full { width: 100%; }
     .field > span { color: var(--fb-muted); font-size: 13px; font-weight: 600; }
-    .field b { color: var(--lf-signal); }
+    .field b { color: var(--lf-signal-text); }
     .field small { font-size: 12px; font-weight: 500; }
     .field input, .field select, .field textarea { width: 100%; min-height: 38px; box-sizing: border-box; padding: 8px 10px; border: 1px solid var(--fb-line); border-radius: 6px; background: var(--lf-card); color: var(--fb-text); font: inherit; font-size: 15px; outline: none; transition: border-color .16s ease, box-shadow .16s ease; }
     .field textarea { resize: vertical; min-height: 58px; }
@@ -332,15 +356,21 @@ interface MissingField { key: string; label: string; }
     .switch-row strong { font-size: 14px; }
     .switch-row small { color: var(--fb-muted); font-size: 12px; line-height: 1.35; }
     .privacy-switches { margin-top: 4px; }
-    .error-message { display: flex; align-items: center; gap: 6px; padding: 9px 10px; margin: 12px 0 0; border-radius: 6px; background: color-mix(in srgb, var(--lf-signal) 12%, transparent); color: var(--lf-signal); font-size: 14px; }
-    .field-error { margin: 1px 0 0; color: var(--lf-signal); font-size: 13px; font-weight: 600; }
+    .error-message { display: flex; align-items: center; gap: 6px; padding: 9px 10px; margin: 12px 0 0; border-radius: 6px; background: color-mix(in srgb, var(--lf-signal) 12%, transparent); color: var(--lf-signal-text); font-size: 14px; }
+    .notice-message { display: flex; align-items: center; gap: 6px; padding: 9px 10px; margin: 12px 0 0; border-radius: 6px; background: var(--lf-primary-soft); color: var(--lf-primary-soft-text); font-size: 14px; }
+    .field-error { margin: 1px 0 0; color: var(--lf-signal-text); font-size: 13px; font-weight: 600; }
     .field.invalid input, .field.invalid select, .field.invalid textarea,
-    .body-input.field-error { border-color: var(--lf-signal); box-shadow: 0 0 0 2px color-mix(in srgb, var(--lf-signal) 18%, transparent); }
+    .body-input.field-error { border-color: var(--lf-signal-text); box-shadow: 0 0 0 2px color-mix(in srgb, var(--lf-signal) 18%, transparent); }
+    .draft-note { display: flex; align-items: center; gap: 8px; margin: 10px 0 0; padding: 9px 11px; border-radius: 6px; background: var(--lf-primary-soft); color: var(--lf-primary-soft-text); font-size: 13.5px; }
+    .draft-note button { margin-left: auto; border: 0; background: transparent; color: inherit; font: inherit; font-weight: 700; text-decoration: underline; cursor: pointer; }
     .missing { margin: 12px 0 0; padding: 11px 13px; border-radius: 8px; background: color-mix(in srgb, var(--lf-signal) 9%, transparent); color: var(--fb-text); }
-    .missing strong { display: flex; align-items: center; gap: 6px; color: var(--lf-signal); font-size: 14px; }
+    .missing strong { display: flex; align-items: center; gap: 6px; color: var(--lf-signal-text); font-size: 14px; }
     .missing ul { margin: 7px 0 0; padding-left: 20px; }
     .missing li { font-size: 14px; line-height: 1.45; color: var(--fb-muted); }
     .fb-create-header { background: var(--lf-card); }
+    .consent { display: flex; gap: 10px; align-items: flex-start; margin: 14px 0 0; padding: 11px 12px; border-radius: 8px;
+      background: var(--lf-card); border: 1px solid var(--fb-line); font-size: 13.5px; line-height: 1.4; }
+    .consent input { margin-top: 2px; width: 17px; height: 17px; flex-shrink: 0; }
     .footnote { margin: 14px 0 0; color: var(--fb-muted); font-size: 12px; line-height: 1.4; }
     @media (max-width: 370px) { .composer { padding-inline: 10px; } .category-grid { gap: 5px; } .category { padding-inline: 7px; font-size: 13px; } .location-grid, .fields-two { grid-template-columns: 1fr; } }
   `]
@@ -361,6 +391,8 @@ export class CreatePostComponent implements OnInit {
   editing = signal(false);
   busy = signal(false);
   error = signal('');
+  /** Not an error: a plain fact, e.g. this build has no camera module. */
+  notice = signal('');
   postId: string | null = null;
 
   /**
@@ -370,11 +402,7 @@ export class CreatePostComponent implements OnInit {
    * every binding, and the validation below, update the moment something is
    * typed.
    */
-  readonly f = signal<ComposerForm>({
-    title: '', body: '', media: [], province: null, town: '', lastSeenAt: '', lastSeenWhere: '',
-    caseNumber: '', audience: 'public', spotlightId: null, chatEnabled: true, allowComments: true,
-    anonymous: false, askWanted: false, contactLabel: 'Family contact', contactValue: '', contactVisibleTo: 'verified'
-  });
+  readonly f = signal<ComposerForm>(blankForm());
   readonly s = signal(blankSubject());
   readonly khumbuReason = signal('');
 
@@ -385,10 +413,86 @@ export class CreatePostComponent implements OnInit {
   patch(p: Partial<ComposerForm>): void {
     this.f.update((f) => ({ ...f, ...p }));
     if (this.error()) this.error.set('');
+    this.persistDraft();
   }
 
   patchSubject(p: Partial<ReturnType<typeof blankSubject>>): void {
     this.s.update((s) => ({ ...s, ...p }));
+    this.persistDraft();
+  }
+
+  setKhumbu(value: string): void {
+    this.khumbuReason.set(value);
+    this.persistDraft();
+  }
+
+  /* ------------------------------------------------------------------ *
+   * Finish later.
+   *
+   * A long case takes minutes to write, and a phone call interrupts it. The
+   * composer keeps what was typed (text fields - photos are device-local and
+   * cannot come back), and says so when the screen is opened again, with one
+   * tap to start fresh instead. Nothing is silently kept and nothing is
+   * silently lost.
+   * ------------------------------------------------------------------ */
+
+  /** Set when the post is published, so a finished composer stops saving. */
+  private draftClosed = false;
+  /** The composer put back something typed earlier. */
+  readonly draftKept = signal(false);
+  private static readonly DRAFT_KEY = 'lulafind.composer.draft';
+
+  private persistDraft(): void {
+    if (this.editing() || this.draftClosed) return;
+    const f = this.f();
+    const s = this.s();
+    const empty = !this.type() && !f.body.trim() && !f.title.trim() && !f.town.trim()
+      && !f.lastSeenWhere.trim() && !s.name.trim() && !this.khumbuReason().trim();
+    try {
+      if (empty) { localStorage.removeItem(CreatePostComponent.DRAFT_KEY); return; }
+      localStorage.setItem(CreatePostComponent.DRAFT_KEY, JSON.stringify({
+        type: this.type(), f: { ...f, media: [] }, s, khumbu: this.khumbuReason(), at: Date.now()
+      }));
+    } catch { /* storage blocked (private mode) - then nothing is kept, and nothing pretends to be */ }
+  }
+
+  private restoreDraft(): void {
+    let raw: string | null = null;
+    try { raw = localStorage.getItem(CreatePostComponent.DRAFT_KEY); } catch { return; }
+    if (!raw) return;
+    try {
+      const d = JSON.parse(raw) as {
+        type?: PostType | null; f?: Partial<ComposerForm>;
+        s?: Partial<ReturnType<typeof blankSubject>>; khumbu?: string;
+      };
+      const hasStory = !!d.f?.body?.trim() || !!d.f?.title?.trim();
+      if (!hasStory) { localStorage.removeItem(CreatePostComponent.DRAFT_KEY); return; }
+      if (d.type) this.type.set(d.type);
+      if (d.f) this.f.update((f) => ({ ...f, ...d.f, media: [] }));
+      if (d.s) this.s.update((s) => ({ ...s, ...d.s }));
+      if (d.khumbu) this.khumbuReason.set(d.khumbu);
+      this.showFieldErrors.set(false);
+      this.draftKept.set(true);
+    } catch {
+      try { localStorage.removeItem(CreatePostComponent.DRAFT_KEY); } catch { /* ignore */ }
+    }
+  }
+
+  /** Throw the kept draft away and start with a blank composer. */
+  discardDraft(): void {
+    try { localStorage.removeItem(CreatePostComponent.DRAFT_KEY); } catch { /* ignore */ }
+    this.draftKept.set(false);
+    this.type.set(null);
+    this.f.set(blankForm());
+    this.s.set(blankSubject());
+    this.khumbuReason.set('');
+    this.error.set('');
+    this.showFieldErrors.set(false);
+  }
+
+  private clearDraft(): void {
+    this.draftClosed = true;
+    try { localStorage.removeItem(CreatePostComponent.DRAFT_KEY); } catch { /* ignore */ }
   }
 
   /**
@@ -422,6 +526,7 @@ export class CreatePostComponent implements OnInit {
     if (routeType && CATEGORIES.some((category) => category.key === routeType)) this.setType(routeType as PostType);
 
     const editId = this.route.snapshot.paramMap.get('id');
+    if (!editId) this.restoreDraft();
     if (editId) {
       const post = await this.data.loadPost(editId);
       if (!post || !this.data.canEdit(post)) {
@@ -520,10 +625,19 @@ export class CreatePostComponent implements OnInit {
 
   hasVideo(): boolean { return this.f().media.some((item) => item.kind === 'video'); }
 
+  /** A case about someone under 18: the poster must confirm they may publish it. */
+  childCase(): boolean {
+    const t = this.type();
+    if (t !== 'missing' && t !== 'khumbulekhaya') return false;
+    const age = Number(this.s().age);
+    return this.s().age !== '' && Number.isFinite(age) && age >= 0 && age < 18;
+  }
+
   async addPhoto(): Promise<void> {
     const f = this.f();
     if (f.media.length >= 4 || this.hasVideo()) return;
     const item = await this.media.pickImage({ quality: 76 });
+    if (this.media.notice()) this.notice.set(this.media.notice()!);
     if (!item) {
       if (this.media.lastError()) this.error.set(this.media.lastError()!);
       return;
@@ -535,6 +649,7 @@ export class CreatePostComponent implements OnInit {
   async addVideo(): Promise<void> {
     if (this.f().media.length) return;
     const item = await this.media.pickVideo();
+    if (this.media.notice()) this.notice.set(this.media.notice()!);
     if (!item) {
       if (this.media.lastError()) this.error.set(this.media.lastError()!);
       return;
@@ -600,6 +715,7 @@ export class CreatePostComponent implements OnInit {
           lastSeenAt: timestamp, lastSeenWhere: (f.lastSeenWhere || f.town).trim(), geo: null,
           contactLabel: f.contactLabel || 'Family contact', contactValue: f.contactValue,
           contactVisibleTo: f.contactVisibleTo, caseNumber: f.caseNumber || null, reward: null,
+          guardianConsent: f.guardianConsent,
           subject, vehicleDetails: null, audience: f.audience, spotlightId: f.spotlightId,
           chatEnabled: f.chatEnabled, allowComments: f.allowComments, anonymous: f.anonymous,
           askWanted: f.askWanted, khumbu,
@@ -608,6 +724,7 @@ export class CreatePostComponent implements OnInit {
         created = made;
       }
       this.showFieldErrors.set(false);
+      this.clearDraft();
       if (this.editing()) {
         await this.toastMsg('Post updated. It now shows as edited.');
         await this.router.navigate(['/post', this.postId]);

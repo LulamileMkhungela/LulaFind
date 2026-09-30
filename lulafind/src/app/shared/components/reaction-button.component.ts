@@ -1,15 +1,18 @@
 import { ChangeDetectionStrategy, Component, ElementRef, HostListener, computed, inject, input, output, signal } from '@angular/core';
-import { REACTIONS, ReactionKind, VoteValue, isReaction } from '../../core/models/types';
+import { DEFAULT_REACTION, DEFAULT_REACTION_LABEL, REACTIONS, ReactionKind, VoteValue, isReaction } from '../../core/models/types';
 import { IconComponent } from './icon.component';
 import { ReactionIconComponent } from './reaction-icon.component';
 
 /**
- * The reaction control, behaving like LinkedIn's Like button:
+ * The reaction control, behaving exactly like LinkedIn's action button:
  *
- *  - Tap: gives the default reaction, "Have an idea". Tap again to take back
- *    whatever you gave.
- *  - Hold (or hover with a mouse): a tray opens with Like, Support, Sad and
- *    Have an idea. Lift your finger on one, or tap one, to choose it.
+ *  - The main icon is always "Have an idea" (the bulb) until you react.
+ *  - Quick tap: gives "Have an idea". Tap again to take it back.
+ *  - Hold (or hover with a mouse): the tray opens with Like, Support, Sad and
+ *    Have an idea, the way LinkedIn opens its reaction flyout. Slide onto one
+ *    and lift your finger, or tap one, to pick it.
+ *  - The button then reads the reaction you chose ("Like", "Support", "Sad",
+ *    "Have an idea") in that reaction's colour.
  *
  * It only reports the choice through `react`; the page decides what to save.
  */
@@ -38,8 +41,8 @@ import { ReactionIconComponent } from './reaction-icon.component';
     <button type="button" class="btn" [class.on]="!!current()" [style.--tone]="tone()"
             [attr.aria-pressed]="!!current()" [attr.aria-haspopup]="'menu'"
             [attr.aria-label]="ariaLabel()"
-            (pointerdown)="down($event)" (pointerup)="up($event)" (pointercancel)="cancel()"
-            (pointerleave)="leave($event)" (pointermove)="move($event)" (contextmenu)="$event.preventDefault()"
+            (pointerdown)="down($event)" (pointercancel)="cancel()"
+            (pointerleave)="leave($event)" (contextmenu)="$event.preventDefault()"
             (keydown.enter)="tap($event)" (keydown.space)="tap($event)" (click)="$event.preventDefault()">
       @if (current(); as c) {
         <lf-reaction-icon [kind]="c" [size]="22" />
@@ -50,14 +53,28 @@ import { ReactionIconComponent } from './reaction-icon.component';
     </button>
   `,
   styles: [`
-    :host { position: relative; display: block; flex: 1; min-width: 0; }
+    /* The reaction label is the longest in the row, so this button takes the
+       slack and the short labels beside it take only what they need. */
+    :host { position: relative; display: block; flex: 1 1 auto; min-width: 0; }
     .btn {
       width: 100%; height: 40px; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
       border: 0; border-radius: 4px; background: transparent; color: var(--lf-muted);
       font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap;
+      min-width: 0; padding: 0 2px;
       -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; touch-action: manipulation;
     }
     .btn:hover, .btn:active { background: var(--lf-hover); }
+    /* "Have an idea" is the longest label in the row: it may shrink, never overlap. */
+    .btn .label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+    /* The label in this button is the longest in the action row. On phones it
+       steps down so the words stay whole next to Comment / Repost / Send. */
+    @media (max-width: 430px) { .btn { font-size: 13px; gap: 4px; } }
+    @media (max-width: 360px) { .btn { font-size: 11.5px; gap: 3px; } }
+    @media (max-width: 340px) {
+      /* The very small phones: the label steps down rather than losing a word. */
+      .btn { font-size: 10px; gap: 2px; padding: 0; }
+      .btn lf-icon svg { width: 17px; height: 17px; }
+    }
     .btn.on { color: var(--tone); }
     .scrim { position: fixed; inset: 0; z-index: 40; }
     .tray {
@@ -90,15 +107,16 @@ export class ReactionButtonComponent {
 
   readonly current = computed<ReactionKind | null>(() => (isReaction(this.value()) ? (this.value() as ReactionKind) : null));
   readonly mine = this.current;
+  /** Nothing chosen reads "Have an idea" - the default reaction is the action's own name. */
   readonly label = computed(() => {
     const c = this.current();
-    if (!c) return 'Idea';
-    return c === 'up' ? 'Idea' : REACTIONS.find((r) => r.key === c)!.label;
+    if (!c) return DEFAULT_REACTION_LABEL;
+    return REACTIONS.find((r) => r.key === c)!.label;
   });
   readonly tone = computed(() => REACTIONS.find((r) => r.key === this.current())?.color ?? 'var(--lf-muted)');
   readonly ariaLabel = computed(() => this.current()
     ? `Your reaction: ${REACTIONS.find((r) => r.key === this.current())!.label}. Tap to remove, hold to change.`
-    : 'Have an idea. Hold for more reactions.');
+    : `${DEFAULT_REACTION_LABEL}. Hold for Like, Support and Sad.`);
 
   private timer: ReturnType<typeof setTimeout> | null = null;
   private held = false;
@@ -118,26 +136,57 @@ export class ReactionButtonComponent {
     }, 380);
   }
 
-  up(ev: PointerEvent): void {
+  /**
+   * The release is watched on the host, not on the button.
+   *
+   * Holding the button opens the tray, and choosing means sliding onto a
+   * reaction and letting go - the finger (or the mouse, which has no implicit
+   * capture) comes up over the *option*, not over the button. Listening on the
+   * button missed that release entirely: nothing was chosen and the tray stayed
+   * open with its scrim swallowing the next tap on the page.
+   */
+  @HostListener('pointerup', ['$event'])
+  onUp(ev: PointerEvent): void {
     this.clearTimer();
+    const key = this.optionAt(ev.clientX, ev.clientY);
     if (this.held) {
-      // Finger lifted after a long press: pick whatever it is over.
-      const el = document.elementFromPoint(ev.clientX, ev.clientY)?.closest?.('.opt') as HTMLElement | null;
-      const key = el?.dataset['key'] as ReactionKind | undefined;
-      if (key) this.choose(key);
       this.held = false;
+      this.pointerId = null;
+      if (key) { this.choose(key); return; }
+      // Let go away from the choices: nothing chosen, and nothing left open.
+      this.open.set(false);
       return;
     }
-    this.tap();
+    // A quick lift that started and ended on the button is a plain tap.
+    const onButton = !!(ev.target as HTMLElement | null)?.closest?.('.btn');
+    if (onButton) this.tap();
+  }
+
+  /** Which reaction, if any, sits under this point. */
+  private optionAt(x: number, y: number): ReactionKind | undefined {
+    // Not every webview has elementFromPoint, and a throw here used to abort the
+    // release and leave the tray stuck open with its scrim over the page.
+    if (typeof document.elementFromPoint !== 'function') return undefined;
+    const el = document.elementFromPoint(x, y)?.closest?.('.opt') as HTMLElement | null;
+    return el?.dataset['key'] as ReactionKind | undefined;
+  }
+
+  /** Kept for the keyboard path (Enter/Space on the button). */
+  up(ev: PointerEvent): void {
+    this.onUp(ev);
   }
 
   cancel(): void { this.clearTimer(); }
 
-  /** While the tray is open and a finger is down, highlight the reaction under it. */
+  /**
+   * While the tray is open and a finger is down, highlight the reaction under
+   * it. Watched on the host too, so sliding from the button onto an option
+   * highlights it instead of going dark the moment the finger leaves the button.
+   */
+  @HostListener('pointermove', ['$event'])
   move(ev: PointerEvent): void {
     if (!this.held || !this.open()) return;
-    const el = document.elementFromPoint(ev.clientX, ev.clientY)?.closest?.('.opt') as HTMLElement | null;
-    this.hot.set((el?.dataset['key'] as ReactionKind | undefined) ?? null);
+    this.hot.set(this.optionAt(ev.clientX, ev.clientY) ?? null);
   }
 
   /** A mouse hovering over the button opens the tray after a moment. */
@@ -164,7 +213,7 @@ export class ReactionButtonComponent {
     ev?.preventDefault();
     this.open.set(false);
     const c = this.current();
-    this.react.emit(c ?? 'up');
+    this.react.emit(c ?? DEFAULT_REACTION);
   }
 
   choose(key: ReactionKind, ev?: Event): void {

@@ -13,12 +13,27 @@ import { LocationService } from './services/location.service';
 import { ModerationService } from './services/moderation.service';
 import { SafetyService } from './services/safety.service';
 import { defaultPrivacy, emptyFilter, Post } from './models/types';
-import { timeAgo, compact, urgency, parseFullName, contributorLabel } from './utils/format';
+import { timeAgo, compact, urgency, parseFullName, contributorLabel, distanceKm, HOUR } from './utils/format';
 import { searchFocus } from './utils/search-focus';
-import { publicPoster } from './utils/poster';
+import { drawPoster, posterContent, publicPoster, POSTER_TEMPLATES } from './utils/poster';
 import { leadMarkView } from './utils/mark-check';
 import { GBV_CHANNEL_NOTE, HELP_LINES } from './data/sa-help';
 import { avatar } from './data/seed';
+import { askLula } from './data/ask-lula';
+import { feedWithRails } from './utils/feed';
+
+
+/** Pretend the point under the finger is a reaction option with this key. */
+function jestSpyOnElementFromPoint(key: string | null): void {
+  const doc = document as unknown as { elementFromPoint?: (x: number, y: number) => Element | null };
+  doc.elementFromPoint = () => {
+    if (!key) return null;
+    const el = document.createElement('button');
+    el.className = 'opt';
+    el.dataset['key'] = key;
+    return el;
+  };
+}
 
 /**
  * End-to-end tests for the rules that make LulaFind LulaFind:
@@ -153,15 +168,28 @@ describe('DataService voting and comments', () => {
     expect(data.post('p_khumalo')!.upvotes).toBe(p0.upvotes);
   });
 
-  it('only Have an idea unlocks private chat; Like, Support and Sad do not', async () => {
+  it('keeps reactions and private chat apart: no reaction changes the gate', async () => {
     const data = svc<DataService>(DataService);
     const chat = svc<ChatService>(ChatService);
     await svc<AuthService>(AuthService).signInDemo();
     await data.loadFeed();
-    await data.vote('p_lindiwe', 'sad');
-    expect((await chat.gate(data.post('p_lindiwe')!) as any).step).toBe('vote');
-    await data.vote('p_lindiwe', 'up');
-    expect((await chat.gate(data.post('p_lindiwe')!) as any).step).not.toBe('vote');
+
+    // start from a clean slate: the seed has these two following each other
+    const post = data.post('p_lindiwe')!;
+    db.removeFollow(post.authorId, 'u_demo');
+    db.removeFollow('u_demo', post.authorId);
+
+    const before = await chat.gate(data.post(post.id)!);
+    expect(before.allowed).toBe(false);
+    expect((before as any).step).toBe('follow');
+
+    // every reaction, including "Have an idea", leaves chat exactly as it was
+    for (const kind of ['up', 'like', 'support', 'sad'] as const) {
+      await data.vote('p_lindiwe', kind);
+      const gate = await chat.gate(data.post('p_lindiwe')!);
+      expect(gate.allowed, kind).toBe(false);
+      expect((gate as any).step, kind).toBe('follow');
+    }
   });
 
   it('adds a comment, bumps the counter and notifies the poster', async () => {
@@ -279,49 +307,53 @@ describe('Repost and feed activity', () => {
   });
 });
 
-describe('ChatService - the three-rule private chat gate', () => {
+describe('ChatService - private chat is mutual follow only', () => {
   beforeEach(bed);
 
-  it('blocks chat until the viewer upvotes', async () => {
+  it('blocks chat when the viewer does not follow the poster', async () => {
     const data = svc<DataService>(DataService);
     const chat = svc<ChatService>(ChatService);
     await svc<AuthService>(AuthService).signInDemo();
     await data.loadFeed();
 
     const post = data.post('p_lindiwe')!;
-    const gate = await chat.gate(post);
+    if (await data.isFollowing(post.authorId)) await data.toggleFollow(post.authorId);
+    db.removeFollow(post.authorId, 'u_demo');
+
+    const gate = await chat.gate(data.post(post.id)!);
     expect(gate.allowed).toBe(false);
-    expect((gate as any).step).toBe('vote');
+    expect((gate as any).step).toBe('follow');
   });
 
-  it('after the upvote, blocks chat until both users follow each other', async () => {
+  it('a one-way follow is not enough; following back opens the chat', async () => {
     const data = svc<DataService>(DataService);
     const chat = svc<ChatService>(ChatService);
     await svc<AuthService>(AuthService).signInDemo();
     await data.loadFeed();
 
-    // u_ayanda posted p_khumalo. Drop any existing edge so we start one-way.
     const post = data.post('p_khumalo')!;
     expect(post.authorId).toBe('u_ayanda');
-    await data.vote(post.id, 'up');
-    if (await data.isFollowing(post.authorId)) await data.toggleFollow(post.authorId);
     db.removeFollow(post.authorId, 'u_demo');
+    db.removeFollow('u_demo', post.authorId);
 
-    const afterVote = await chat.gate(data.post(post.id)!);
-    expect(afterVote.allowed).toBe(false);
-    expect((afterVote as any).step).toBe('follow');
-
-    // a one-way follow is still not enough
-    await data.toggleFollow(post.authorId);
-    expect(await data.isFollowing(post.authorId)).toBe(true);
+    await data.toggleFollow(post.authorId); // I follow them
     const oneWay = await chat.gate(data.post(post.id)!);
     expect(oneWay.allowed).toBe(false);
     expect((oneWay as any).step).toBe('follow');
 
-    // the other side follows back -> chat opens
     await db.upsertFollow({ id: 'f_back', followerId: post.authorId, followingId: 'u_demo', at: Date.now(), status: 'accepted' });
-    const open = await chat.gate(data.post(post.id)!);
-    expect(open.allowed).toBe(true);
+    const mutual = await chat.gate(data.post(post.id)!);
+    expect(mutual.allowed).toBe(true);
+  });
+
+  it('never asks for a reaction first - there is no vote step left', async () => {
+    const data = svc<DataService>(DataService);
+    const chat = svc<ChatService>(ChatService);
+    await svc<AuthService>(AuthService).signInDemo();
+    await data.loadFeed();
+    const gate = await chat.gate(data.post('p_lindiwe')!);
+    expect((gate as any).step).not.toBe('vote');
+    expect(String((gate as any).reason ?? '')).not.toMatch(/have an idea|upvote|unlock/i);
   });
 
   it('respects a poster who switched chat off', async () => {
@@ -340,18 +372,14 @@ describe('ChatService - the three-rule private chat gate', () => {
     expect((gate as any).step).toBe('disabled');
   });
 
-  it('lets the subject of a KhumbulEkhaya post bypass the upvote rule', async () => {
+  it('lets the person a KhumbulEkhaya post is about reach the family', async () => {
     const data = svc<DataService>(DataService);
     const chat = svc<ChatService>(ChatService);
-    const auth = svc<AuthService>(AuthService);
-    await auth.signInDemo();
+    await svc<AuthService>(AuthService).signInDemo();
     await data.loadFeed();
 
-    // act as Lindiwe herself - the subject of the post
     signInAs('u_lindiwe');
-
-    const post = data.post('p_lindiwe')!;
-    const gate = await chat.gate(post, true);
+    const gate = await chat.gate(data.post('p_lindiwe')!, true);
     expect(gate.allowed).toBe(true);
   });
 
@@ -362,10 +390,11 @@ describe('ChatService - the three-rule private chat gate', () => {
     await data.loadFeed();
 
     const post = data.post('p_lindiwe')!;
-    const thread = await chat.ensureThread(post, post.authorId, 'vote');
+    const thread = await chat.ensureThread(post, post.authorId);
     expect(thread).not.toBeNull();
     expect(thread!.participantIds).toContain('u_demo');
     expect(thread!.postId).toBe(post.id);
+    expect(thread!.unlockedVia).toBe('follow');
 
     await chat.send('I think I saw her at the Isipingo salon.');
     const msgs = chat.messages();
@@ -1344,3 +1373,601 @@ describe('Saved posts, watch alerts and followers', () => {
     expect(data.followerIds()).not.toContain(follower);
   });
 });
+
+describe('the feed interleaving rule', () => {
+  const post = (n: number) => ({ id: `p${n}`, title: `Post ${n}` }) as unknown as Post;
+
+  it('puts nothing above the first post and nothing after the last one', () => {
+    const rows = feedWithRails([post(1), post(2), post(3)]);
+    expect(rows.map((r) => r.kind)).toEqual(['post', 'post', 'post']);
+  });
+
+  it('adds Stories only after the 8th post', () => {
+    const rows = feedWithRails(Array.from({ length: 9 }, (_, i) => post(i + 1)));
+    expect(rows.map((r) => r.kind)).toEqual([
+      'post', 'post', 'post', 'post', 'post', 'post', 'post', 'post', 'stories', 'post'
+    ]);
+  });
+
+  it('gives a short feed one story rail, after its last post', () => {
+    const rows = feedWithRails([post(1), post(2), post(3)], 8, { shortRail: true });
+    expect(rows.map((r) => r.kind)).toEqual(['post', 'post', 'post', 'stories']);
+    // and never a second rail once the 8th post is reached
+    const full = feedWithRails(Array.from({ length: 9 }, (_, i) => post(i + 1)), 8, { shortRail: true });
+    expect(full.filter((r) => r.kind === 'stories').length).toBe(1);
+    expect(full.filter((r) => r.kind === 'people').length).toBe(0);
+  });
+
+  it('adds rail after every 8th post, not just the first', () => {
+    const rows = feedWithRails(Array.from({ length: 17 }, (_, i) => post(i + 1)));
+    expect(rows.map((r) => r.kind).filter((k) => k !== 'post')).toEqual(['stories', 'people']);
+  });
+
+  it('alternates Stories and People on every 8th post, and never both at once', () => {
+    const rows = feedWithRails(Array.from({ length: 25 }, (_, i) => post(i + 1)));
+    const rails = rows.filter((r) => r.kind !== 'post').map((r) => r.kind);
+    expect(rails).toEqual(['stories', 'people', 'stories']);
+    // each rail sits immediately behind the 8th, 16th and 24th post
+    rows.forEach((r, i) => {
+      if (r.kind === 'post') return;
+      expect(rows[i - 1].kind).toBe('post');
+      expect(i % 9).toBe(8);
+    });
+  });
+});
+
+describe('poster templates', () => {
+  it('offers a modern set, each with its own colours', () => {
+    expect(POSTER_TEMPLATES.length).toBeGreaterThanOrEqual(8);
+    expect(POSTER_TEMPLATES.map((t) => t.id)).toContain('halo');
+    expect(POSTER_TEMPLATES.map((t) => t.id)).toContain('pulse');
+    for (const t of POSTER_TEMPLATES) {
+      expect(t.swatch.length).toBe(3);
+      expect(t.name.length).toBeGreaterThan(0);
+    }
+  });
+});
+
+describe('poster drawing', () => {
+  /** A canvas stub that accepts every 2D call the templates make. */
+  function stubContext(): CanvasRenderingContext2D {
+    const noop = (): void => undefined;
+    const gradient = { addColorStop: noop };
+    const ctx: Record<string, unknown> = {
+      save: noop, restore: noop, beginPath: noop, closePath: noop, moveTo: noop, lineTo: noop,
+      arc: noop, arcTo: noop, ellipse: noop, rect: noop, fill: noop, stroke: noop, clip: noop,
+      fillRect: noop, strokeRect: noop, clearRect: noop, fillText: noop, strokeText: noop,
+      drawImage: noop, translate: noop, scale: noop, rotate: noop, setTransform: noop,
+      measureText: (t: string) => ({ width: String(t ?? '').length * 17 }),
+      createLinearGradient: () => gradient,
+      createRadialGradient: () => gradient,
+      createPattern: () => null
+    };
+    return ctx as unknown as CanvasRenderingContext2D;
+  }
+
+  function stubCanvas(): HTMLCanvasElement {
+    return { width: 0, height: 0, getContext: () => stubContext() } as unknown as HTMLCanvasElement;
+  }
+
+  /** No TestBed here: the templates are pure canvas code. */
+  const post = {
+    id: 'p_poster', title: 'Help find Thato Mahlangu', type: 'missing', province: 'GP', town: 'Soweto',
+    lastSeenWhere: 'Orlando East', lastSeenAt: Date.now(), caseNumber: 'CAS 123/09/2026',
+    subject: { name: 'Thato Mahlangu', age: 9, gender: 'male', clothing: 'Blue school shirt', distinguishing: 'Scar' },
+    contactVisibleTo: 'everyone', contactLabel: 'Call the family', contactValue: '071 234 5678'
+  } as unknown as Post;
+
+  it('draws every template - including Halo and Pulse - without throwing', () => {
+    const content = posterContent(post, 'https://lulafind.app/post/p_poster', null);
+    for (const t of POSTER_TEMPLATES) {
+      expect(() => drawPoster(stubCanvas(), t.id, content, null), t.id).not.toThrow();
+    }
+  });
+
+  /**
+   * Nothing may be drawn behind the contact bar.
+   *
+   * The Thato poster rendered "WHEN · 24 September 2026" half-hidden under the
+   * yellow call bar - the label was visible, the date was not, and the date is
+   * the thing a reader needs to know whether the sighting is worth reporting.
+   * This records where every string actually lands on the canvas.
+   */
+  it('keeps every fact clear of the contact line', () => {
+    const content = posterContent(post, 'https://lulafind.app/post/p_poster', null);
+    expect(content.facts.length).toBeGreaterThan(1);
+
+    for (const t of POSTER_TEMPLATES) {
+      const drawn: { text: string; y: number }[] = [];
+      const noop = (): void => undefined;
+      const gradient = { addColorStop: noop };
+      const ctx: Record<string, unknown> = {
+        save: noop, restore: noop, beginPath: noop, closePath: noop, moveTo: noop, lineTo: noop,
+        arc: noop, arcTo: noop, ellipse: noop, rect: noop, fill: noop, stroke: noop, clip: noop,
+        fillRect: noop, strokeRect: noop, clearRect: noop, strokeText: noop,
+        drawImage: noop, translate: noop, scale: noop, rotate: noop, setTransform: noop,
+        fillText: (text: string, _x: number, y: number) => drawn.push({ text: String(text), y }),
+        measureText: (v: string) => ({ width: String(v ?? '').length * 17 }),
+        createLinearGradient: () => gradient,
+        createRadialGradient: () => gradient,
+        createPattern: () => null
+      };
+      drawPoster({ width: 0, height: 0, getContext: () => ctx } as unknown as HTMLCanvasElement, t.id, content, null);
+
+      const contact = drawn.find((d) => d.text === content.contact);
+      expect(contact, `${t.id}: the contact line is missing`).toBeTruthy();
+
+      // Every fact must be on the poster (a missing "WHEN" hides the date), and
+      // nothing at all may be drawn behind the contact bar.
+      const all = drawn.map((d) => d.text).join(' | ');
+      // Each design trims to the facts it has room for, but two things always
+      // hold: the first fact is on the poster, and the police case number is
+      // never the one that gets dropped (it is why families are asked for it).
+      const first = content.facts[0];
+      expect(all, `${t.id}: the "${first.label}" label was never drawn`).toContain(first.label);
+      expect(all, `${t.id}: "${first.label}" has no value drawn`).toContain(first.value.split(' ')[0]);
+      const caseFact = content.facts.find((f) => /case/i.test(f.label));
+      if (caseFact) {
+        expect(all, `${t.id}: the police case number was dropped from the poster`).toContain(caseFact.label);
+      }
+      const hidden = drawn.filter((d) => d.text !== content.contact && d.y > contact!.y - 24 && d.y < contact!.y + 30);
+      expect(hidden.map((h) => h.text), `${t.id}: text is hidden behind the contact bar`).toEqual([]);
+    }
+  });
+
+  it('draws a template with a photo as well as without one', () => {
+    const content = posterContent(post, 'https://lulafind.app/post/p_poster', null);
+    const photo = { width: 800, height: 1000 } as unknown as HTMLImageElement;
+    for (const t of POSTER_TEMPLATES) {
+      expect(() => drawPoster(stubCanvas(), t.id, content, photo), t.id).not.toThrow();
+    }
+  });
+});
+
+describe('Case alerts - the message that actually finds someone', () => {
+  beforeEach(bed);
+
+  /** The same shape the create screen sends. */
+  const casePost = (over: Record<string, unknown> = {}) => ({
+    type: 'missing' as const,
+    title: 'Help find Test Person in Soweto',
+    body: 'This is a long enough description of what happened, when and where.',
+    media: [] as any[], province: 'GP' as const, town: 'Soweto',
+    lastSeenAt: Date.now(), lastSeenWhere: 'Orlando West', geo: null,
+    contactLabel: 'Call', contactValue: '0710000000', contactVisibleTo: 'everyone' as const,
+    caseNumber: null, reward: null,
+    subject: { name: 'Test Person', age: 31, gender: 'female' as const, height: '', build: '', skinTone: '', hair: '', eyes: '', clothing: '', distinguishing: '', medical: '', vehicle: '', languages: '', surname: '', relationship: '' },
+    audience: 'public' as const, spotlightId: null, chatEnabled: true, allowComments: true,
+    anonymous: false, askWanted: false, khumbu: null, ...over
+  });
+
+  /** Every member's inbox, keyed by id, for one-line assertions. */
+  async function inboxes(): Promise<Record<string, number>> {
+    const api = TestBed.inject(LULA_API) as MockApi;
+    const out: Record<string, number> = {};
+    for (const u of await api.users()) {
+      out[u.id] = (await api.notifications(u.id)).filter((n) => n.kind === 'missing').length;
+    }
+    return out;
+  }
+
+  it('alerts the province when a case goes live, and never the author', async () => {
+    const data = svc<DataService>(DataService);
+    await svc<AuthService>(AuthService).signInDemo();
+    const post = await data.createPost(casePost());
+    const boxes = await inboxes();
+    expect(boxes['u_demo']).toBe(0);
+    // u_lerato is a seeded member in GP, so a case in Soweto reaches her
+    expect(boxes['u_lerato']).toBeGreaterThan(0);
+    // u_sipho is in KZN: same country, different province, no alert
+    expect(boxes['u_sipho']).toBe(0);
+    expect(post.status).toBe('active');
+  });
+
+  it('honours the master switch, children only and a different province', async () => {
+    const api = TestBed.inject(LULA_API) as MockApi;
+    const off = { ...(await api.user('u_kabelo'))!, alertPrefs: { enabled: false, childrenOnly: false, province: 'all' as const, radiusKm: 50 } };
+    await api.saveUser(off);
+    // A member who asked for another province's alerts must not get a GP one.
+    const elsewhere = { ...(await api.user('u_bongani'))!, alertPrefs: { enabled: true, childrenOnly: false, province: 'WC' as const, radiusKm: 50 } };
+    await api.saveUser(elsewhere);
+    const kidsOnly = { ...(await api.user('u_lerato'))!, alertPrefs: { enabled: true, childrenOnly: true, province: 'all' as const, radiusKm: 50 } };
+    await api.saveUser(kidsOnly);
+
+    const data = svc<DataService>(DataService);
+    await svc<AuthService>(AuthService).signInDemo();
+    await data.createPost(casePost());           // an adult case
+    const boxes = await inboxes();
+    expect(boxes['u_kabelo']).toBe(0);           // switch off
+    expect(boxes['u_bongani']).toBe(0);          // asked for Western Cape alerts only
+    expect(boxes['u_lerato']).toBe(0);           // children only, adult case
+
+    // A child case is held for review, so its alert goes out when an admin
+    // publishes it - and then the children-only member gets it.
+    const child = await data.createPost(casePost({
+      title: 'Help find a missing child in Soweto',
+      subject: { ...casePost().subject, name: 'Test Child', age: 9 },
+      guardianConsent: true
+    }));
+    expect(child.status).toBe('under_review');
+    signInAs('u_mod');
+    await svc<ModerationService>(ModerationService).approveCase(child.id);
+    const after = await inboxes();
+    expect(after['u_lerato']).toBeGreaterThan(0); // a child case always gets through
+    expect(after['u_kabelo']).toBe(0);            // still switched off
+  });
+
+  it('holds a child case for review and only alerts the area on approval', async () => {
+    const data = svc<DataService>(DataService);
+    const mod = svc<ModerationService>(ModerationService);
+    await svc<AuthService>(AuthService).signInDemo();
+    const child = await data.createPost(casePost({
+      title: 'Help find a missing child in Soweto',
+      subject: { ...casePost().subject, name: 'Test Child', age: 9 },
+      guardianConsent: true
+    }));
+
+    expect(child.status).toBe('under_review');
+    expect((await inboxes())['u_lerato']).toBe(0);
+
+    signInAs('u_mod');
+    await mod.loadPending();
+    expect(mod.pendingCases().some((p) => p.id === child.id)).toBe(true);
+    const reached = await mod.approveCase(child.id);
+    expect(reached).toBeGreaterThan(0);
+    expect((await data.loadPost(child.id))?.status).toBe('active');
+    expect((await inboxes())['u_lerato']).toBeGreaterThan(0);
+  });
+
+  it('never alerts about a case an admin refused', async () => {
+    const data = svc<DataService>(DataService);
+    const mod = svc<ModerationService>(ModerationService);
+    await svc<AuthService>(AuthService).signInDemo();
+    const child = await data.createPost(casePost({
+      title: 'Help find a missing child in Soweto',
+      subject: { ...casePost().subject, name: 'Test Child', age: 9 },
+      guardianConsent: true
+    }));
+    signInAs('u_mod');
+    await mod.rejectCase(child.id, 'Could not confirm this case.');
+    expect((await data.loadPost(child.id))?.status).toBe('removed');
+    expect((await inboxes())['u_lerato']).toBe(0);
+  });
+});
+
+describe('How far a case alert is', () => {
+  beforeEach(bed);
+
+  it('measures the distance between two points', () => {
+    const jhb = { lat: -26.2041, lng: 28.0473 };
+    const durban = { lat: -29.8587, lng: 31.0218 };
+    expect(distanceKm(jhb, durban)).toBeGreaterThan(480);
+    expect(distanceKm(jhb, durban)).toBeLessThan(520);
+    expect(distanceKm(jhb, jhb)).toBe(0);
+  });
+
+  it('reads a shared device fix back, and nothing when there is none', () => {
+    const data = svc<DataService>(DataService);
+    expect(data.devicePoint()).toBeNull();
+    localStorage.setItem('lulafind.lastLocation', JSON.stringify({ point: { lat: -26.2, lng: 28.04 }, at: Date.now() }));
+    expect(data.devicePoint()?.lat).toBe(-26.2);
+    localStorage.setItem('lulafind.lastLocation', 'not json');
+    expect(data.devicePoint()).toBeNull();
+  });
+});
+
+describe('First-hours checklist', () => {
+  beforeEach(bed);
+
+  const caseInput = (over: Record<string, unknown> = {}) => ({
+    type: 'missing' as const,
+    title: 'Help find Test Person in Soweto',
+    body: 'This is a long enough description of what happened, when and where.',
+    media: [] as any[], province: 'GP' as const, town: 'Soweto',
+    lastSeenAt: Date.now(), lastSeenWhere: 'Orlando West', geo: null,
+    contactLabel: 'Call', contactValue: '0710000000', contactVisibleTo: 'everyone' as const,
+    caseNumber: null, reward: null,
+    subject: { name: 'Test Person', age: 31, gender: 'female' as const, height: '', build: '', skinTone: '', hair: '', eyes: '', clothing: '', distinguishing: '', medical: '', vehicle: '', languages: '', surname: '', relationship: '' },
+    audience: 'public' as const, spotlightId: null, chatEnabled: true, allowComments: true,
+    anonymous: false, askWanted: false, khumbu: null, ...over
+  });
+
+  it('lets the poster tick steps and only they can', async () => {
+    const data = svc<DataService>(DataService);
+    await svc<AuthService>(AuthService).signInDemo();
+    const post = await data.createPost(caseInput());
+    expect(post.plan).not.toBeNull();
+
+    const ticked = await data.tickStep(post.id, 'saps_case', true);
+    expect(ticked?.plan?.done.saps_case).toBe(true);
+
+    signInAs('u_lerato');
+    await expect(data.tickStep(post.id, 'spokesperson', true)).rejects.toThrow(/Only the person/i);
+  });
+
+  it('marks the case-number step from the post itself', async () => {
+    const data = svc<DataService>(DataService);
+    await svc<AuthService>(AuthService).signInDemo();
+    const post = await data.createPost(caseInput({ caseNumber: 'OB 123/09/2026' }));
+    expect(post.plan?.done.case_number).toBe(true);
+  });
+
+  it('keeps the investigating officer on the case, not the public screen', async () => {
+    const data = svc<DataService>(DataService);
+    await svc<AuthService>(AuthService).signInDemo();
+    const post = await data.createPost(caseInput());
+    const saved = await data.saveOfficer(post.id, 'Sgt Dlamini', '082 000 0000');
+    expect(saved?.plan?.officerName).toBe('Sgt Dlamini');
+    expect(saved?.plan?.done.officer_details).toBe(true);
+    // the officer is not part of the poster or any share text
+    expect(publicPoster(saved!).shareText.toLowerCase()).not.toContain('dlamini');
+  });
+
+  it('refuses a child case without guardian permission, and records it with one', async () => {
+    const data = svc<DataService>(DataService);
+    await svc<AuthService>(AuthService).signInDemo();
+    const child = caseInput({
+      title: 'Help find a missing child in Soweto',
+      subject: { ...caseInput().subject, name: 'Test Child', age: 9 }
+    });
+    await expect(data.createPost(child)).rejects.toThrow(/guardian/i);
+    const ok = await data.createPost({ ...child, guardianConsent: true });
+    expect(ok.consent.some((c) => c.kind === 'guardian' && c.granted)).toBe(true);
+  });
+});
+
+describe('The found page feed', () => {
+  beforeEach(bed);
+
+  it('shows closed cases with how long it took', () => {
+    const data = svc<DataService>(DataService);
+    const foundCase = data.feed().find((p) => p.outcome?.found);
+    if (foundCase) {
+      const at = foundCase.outcome!.foundAt ?? 0;
+      expect(at).toBeGreaterThan(0);
+    }
+    // the shape the page reads must exist on every post
+    for (const p of data.feed()) expect(p.outcome).toBeTruthy();
+  });
+});
+
+describe('A child case is invisible until a moderator publishes it', () => {
+  beforeEach(bed);
+
+  const childCase = (over: Record<string, unknown> = {}) => ({
+    type: 'missing' as const,
+    title: 'Help find a missing child in Soweto',
+    body: 'This is a long enough description of what happened, when and where.',
+    media: [] as any[], province: 'GP' as const, town: 'Soweto',
+    lastSeenAt: Date.now(), lastSeenWhere: 'Orlando West', geo: null,
+    contactLabel: 'Call', contactValue: '0710000000', contactVisibleTo: 'everyone' as const,
+    caseNumber: null, reward: null,
+    subject: { name: 'Test Child', age: 9, gender: 'female' as const, height: '', build: '', skinTone: '', hair: '', eyes: '', clothing: '', distinguishing: '', medical: '', vehicle: '', languages: '', surname: '', relationship: '' },
+    audience: 'public' as const, spotlightId: null, chatEnabled: true, allowComments: true,
+    anonymous: false, askWanted: false, khumbu: null, guardianConsent: true, ...over
+  });
+
+  it('never puts it in another member\u2019s feed, and still finds it for the moderator', async () => {
+    const data = svc<DataService>(DataService);
+    const api = TestBed.inject(LULA_API) as MockApi;
+    await svc<AuthService>(AuthService).signInDemo();
+    const child = await data.createPost(childCase());
+    expect(child.status).toBe('under_review');
+
+    // The moderator's queue is a real query, not a filter over the feed.
+    const queue = await api.postsForReview();
+    expect(queue.map((p) => p.id)).toContain(child.id);
+
+    // u_lerato: another member in the same province. She must not see it.
+    signInAs('u_lerato');
+    const hers = await api.queryFeed(emptyFilter(), 'u_lerato');
+    expect(hers.map((p) => p.id)).not.toContain(child.id);
+
+    // The author still sees their own case while it waits.
+    const mine = await api.queryFeed(emptyFilter(), 'u_demo');
+    expect(mine.map((p) => p.id)).toContain(child.id);
+
+    // The moderator sees it in the feed too, so they can open and read it.
+    signInAs('u_mod');
+    const modFeed = await api.queryFeed(emptyFilter(), 'u_mod');
+    expect(modFeed.map((p) => p.id)).toContain(child.id);
+  });
+
+  it('appears to everyone the moment it is published', async () => {
+    const data = svc<DataService>(DataService);
+    const api = TestBed.inject(LULA_API) as MockApi;
+    const mod = svc<ModerationService>(ModerationService);
+    await svc<AuthService>(AuthService).signInDemo();
+    const child = await data.createPost(childCase());
+
+    signInAs('u_mod');
+    await mod.loadPending();
+    expect(mod.pendingCases().map((p) => p.id)).toContain(child.id);
+
+    await mod.approveCase(child.id);
+    expect(mod.pendingCases().map((p) => p.id)).not.toContain(child.id);
+
+    signInAs('u_lerato');
+    const hers = await api.queryFeed(emptyFilter(), 'u_lerato');
+    expect(hers.map((p) => p.id)).toContain(child.id);
+  });
+
+  it('drops it from the queue when a moderator refuses it', async () => {
+    const data = svc<DataService>(DataService);
+    const mod = svc<ModerationService>(ModerationService);
+    await svc<AuthService>(AuthService).signInDemo();
+    const child = await data.createPost(childCase());
+    signInAs('u_mod');
+    await mod.loadPending();
+    await mod.rejectCase(child.id, 'Could not confirm.');
+    expect(mod.pendingCases().map((p) => p.id)).not.toContain(child.id);
+  });
+});
+
+describe('The queries that do not go through the feed', () => {
+  beforeEach(bed);
+
+  it('keeps found cases out of the feed, which is why /found has its own query', async () => {
+    const api = TestBed.inject(LULA_API) as MockApi;
+    const data = svc<DataService>(DataService);
+    await svc<AuthService>(AuthService).signInDemo();
+    await data.loadFeed();
+
+    // The default feed filter is "active": a case that closed is not in it.
+    const feed = await api.queryFeed(emptyFilter(), 'u_demo');
+    expect(feed.some((p) => p.status === 'found')).toBe(false);
+
+    // But the reunions query finds them, with the outcome attached.
+    const closed = await data.closedCases();
+    expect(closed.length).toBeGreaterThan(0);
+    for (const c of closed) {
+      expect(c.status).toBe('found');
+      expect(c.outcome.found).toBe(true);
+      expect(typeof c.outcome.foundAt).toBe('number');
+    }
+    // newest reunion first
+    const times = closed.map((c) => c.outcome.foundAt ?? 0);
+    expect([...times].sort((a, b) => b - a)).toEqual(times);
+  });
+
+  it('keeps a family member\u2019s own case on their profile after it is found', async () => {
+    const data = svc<DataService>(DataService);
+    await svc<AuthService>(AuthService).signInDemo();
+    const post = await data.createPost({
+      type: 'missing' as const,
+      title: 'Help find Test Person in Soweto',
+      body: 'This is a long enough description of what happened, when and where.',
+      media: [] as any[], province: 'GP' as const, town: 'Soweto',
+      lastSeenAt: Date.now(), lastSeenWhere: 'Orlando West', geo: null,
+      contactLabel: 'Call', contactValue: '0710000000', contactVisibleTo: 'everyone' as const,
+      caseNumber: null, reward: null,
+      subject: { name: 'Test Person', age: 31, gender: 'female' as const, height: '', build: '', skinTone: '', hair: '', eyes: '', clothing: '', distinguishing: '', medical: '', vehicle: '', languages: '', surname: '', relationship: '' },
+      audience: 'public' as const, spotlightId: null, chatEnabled: true, allowComments: true,
+      anonymous: false, askWanted: false, khumbu: null
+    });
+
+    // On their profile while it is active...
+    expect(data.myPosts().map((p) => p.id)).toContain(post.id);
+
+    // ...and still there after it closes, which is when it matters most.
+    await data.markFound(post.id, { whereabouts: 'Home', finderUserId: null });
+    await data.loadUserScoped();
+    expect(data.myPosts().map((p) => p.id)).toContain(post.id);
+  });
+
+  it('never answers the review queue from the feed', async () => {
+    const api = TestBed.inject(LULA_API) as MockApi;
+    await svc<AuthService>(AuthService).signInDemo();
+    // Nothing is pending in the seed, and the queue says so rather than guessing.
+    expect(await api.postsForReview()).toEqual([]);
+  });
+});
+
+describe('Concurrent writes to the same case', () => {
+  beforeEach(bed);
+
+  it('patches fields without wiping what another writer just saved', async () => {
+    const api = TestBed.inject(LULA_API) as MockApi;
+    const data = svc<DataService>(DataService);
+    await svc<AuthService>(AuthService).signInDemo();
+    await data.loadFeed();
+    const post = data.feed().find((p) => p.authorId === 'u_demo')!;
+
+    // One writer opens a ground search...
+    await data.openSearchParty(post.id, 'Orlando East police station', Date.now() + HOUR, ['Orlando West']);
+
+    // ...and a background bookkeeping write touches the same case.
+    await data.setOutcomeNudged(post.id);
+
+    // The search party must still be there: the old full-copy save wiped it.
+    const after = (await data.loadPost(post.id))!;
+    expect(after.searchParty?.open).toBe(true);
+    expect(after.searchParty?.zones.length).toBe(1);
+    expect(after.outcomeNudgeAt).toBeGreaterThan(0);
+
+    // A patch only changes the fields it names.
+    await api.patchPost(post.id, { caseNumber: 'OB 445/09/2026' });
+    const patched = (await data.loadPost(post.id))!;
+    expect(patched.caseNumber).toBe('OB 445/09/2026');
+    expect(patched.searchParty?.open).toBe(true);
+    expect(patched.title).toBe(after.title);
+  });
+
+  it('still lets a volunteer claim one zone while another is claimed', async () => {
+    const data = svc<DataService>(DataService);
+    const auth = svc<AuthService>(AuthService);
+    await auth.signInDemo();
+    await data.loadFeed();
+    const post = data.feed().find((p) => p.authorId === 'u_demo')!;
+    await data.openSearchParty(post.id, 'Orlando East police station', Date.now() + HOUR, ['Orlando West', 'Mofolo North']);
+
+    const zones = (await data.loadPost(post.id))!.searchParty!.zones;
+    await data.claimSearchZone(post.id, zones[0].id);
+    signInAs('u_lerato');
+    await data.claimSearchZone(post.id, zones[1].id);
+
+    const after = (await data.loadPost(post.id))!;
+    expect(after.searchParty!.zones.find((z) => z.id === zones[0].id)!.takenBy).toBe('u_demo');
+    expect(after.searchParty!.zones.find((z) => z.id === zones[1].id)!.takenBy).toBe('u_lerato');
+  });
+});
+
+/**
+ * What driving the real app in a real browser found.
+ *
+ * Each of these was a defect a person would hit; none of them showed up in a
+ * service-level test, which is why the browser drive exists.
+ */
+describe('Bugs the browser found', () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  it('answers the most natural phrasing of the first-hours question', () => {
+    // "what do I do in the first hour" used to fall through to "I don't have a
+    // good answer" because the keyword was stored as "first hours".
+    for (const q of [
+      'what do I do in the first hour',
+      'what do I do in the first 72 hours',
+      'first hour',
+      'What should I do first?',
+      'there is no 24 hour waiting period right?'
+    ]) {
+      const a = askLula(q);
+      expect(a.text, `"${q}" should get the first-hours answer`).toMatch(/first 72 hours/i);
+    }
+    // and it still says so honestly when it genuinely does not know
+    expect(askLula('what is the weather in Durban tomorrow').text).toMatch(/rather say so than guess/i);
+  });
+
+  it('lets go of the reaction tray wherever the finger is lifted', async () => {
+    // The control must mark itself released even when the pointer comes up over
+    // an option rather than the button - otherwise the tray and its full-screen
+    // scrim stay on the page and swallow the next tap anywhere.
+    const { ReactionButtonComponent } = await import('../shared/components/reaction-button.component');
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({ imports: [ReactionButtonComponent] });
+    const f = TestBed.createComponent(ReactionButtonComponent);
+    f.detectChanges();
+    const c = f.componentInstance;
+    const at = (x: number, y: number) => ({ pointerType: 'touch', button: 0, pointerId: 1, clientX: x, clientY: y }) as PointerEvent;
+
+    c.down(at(5, 5));
+    await new Promise((r) => setTimeout(r, 450));
+    expect(c.open(), 'holding the button should open the tray').toBe(true);
+
+    c.onUp({ ...at(5, 5), target: null } as unknown as PointerEvent);
+    expect(c.open(), 'the tray must not stay open after a release').toBe(false);
+
+    // and a release over a choice picks it
+    const picked: string[] = [];
+    c.react.subscribe((k) => picked.push(k));
+    c.down(at(5, 5));
+    await new Promise((r) => setTimeout(r, 450));
+    jestSpyOnElementFromPoint('like');
+    c.onUp({ ...at(5, 5), target: null } as unknown as PointerEvent);
+    expect(picked, 'releasing over Like should choose Like').toEqual(['like']);
+    expect(c.open()).toBe(false);
+  });
+});
+

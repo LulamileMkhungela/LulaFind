@@ -72,7 +72,7 @@ interface Line { id: string; from: 'me' | 'lula'; text: string; links?: LulaAnsw
     .msg { display: flex; gap: 8px; align-items: flex-end; max-width: 86%; }
     .msg.mine { align-self: flex-end; flex-direction: row-reverse; }
     .bubble { padding: 9px 13px; border-radius: 18px; background: var(--lf-card-2); }
-    .msg.mine .bubble { background: var(--lf-primary); color: #fff; }
+    .msg.mine .bubble { background: var(--lf-primary-fill); color: #fff; }
     .bubble p { margin: 0; font-size: 15px; line-height: 1.38; white-space: pre-wrap; }
     .links { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
     .links button { display: inline-flex; align-items: center; justify-content: space-between; gap: 6px; padding: 8px 12px;

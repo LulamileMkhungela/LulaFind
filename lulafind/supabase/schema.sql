@@ -458,6 +458,7 @@ using (
   )
   or (collection = 'users'
     and (id = (select public.lula_uid()) or public.lula_is_admin()))
+  or (collection = 'lookouts' and public.lula_lookout_visible(id, (select public.lula_uid())))
   or (collection = 'notifications' and payload->>'userId' = (select public.lula_uid()))
   or (collection = 'threads' and public.lula_in_thread(id, (select public.lula_uid())))
   or (collection = 'messages' and public.lula_in_thread(payload->>'threadId', (select public.lula_uid())))
@@ -506,6 +507,7 @@ with check (
       or (collection = 'notifications' and nullif(payload->>'userId', '') is not null)
       or (collection = 'spotlights' and payload->>'ownerId' = (select public.lula_uid()))
       or (collection = 'reports' and payload->>'byUserId' = (select public.lula_uid()))
+      or (collection = 'lookouts' and payload->>'userId' = (select public.lula_uid()))
     )
   )
 );
@@ -528,6 +530,9 @@ using (
   or (collection = 'spotlights' and payload->>'ownerId' = (select public.lula_uid()))
   or (collection = 'threads' and public.lula_in_thread(id, (select public.lula_uid())))
   or (collection = 'messages' and public.lula_in_thread(payload->>'threadId', (select public.lula_uid())))
+  -- A follower's answer is not a plain update: it can flag someone, so it goes
+  -- through lula_answer_lookout. Only the person themselves edits a lookout.
+  or (collection = 'lookouts' and payload->>'userId' = (select public.lula_uid()))
 )
 with check (
   public.lula_is_admin()
@@ -550,6 +555,7 @@ with check (
     or (collection = 'messages'
       and public.lula_in_thread(payload->>'threadId', (select public.lula_uid()))
       and (payload->>'fromUserId' = (select public.lula_uid()) or payload->>'kind' = 'system'))
+    or (collection = 'lookouts' and payload->>'userId' = (select public.lula_uid()))
   )
 );
 
@@ -566,6 +572,7 @@ using (
   or (collection = 'follows'
     and (payload->>'followerId' = (select public.lula_uid())
       or payload->>'followingId' = (select public.lula_uid())))
+  or (collection = 'lookouts' and payload->>'userId' = (select public.lula_uid()))
 );
 
 -- Spotlight membership changes go through a narrow SECURITY DEFINER function
@@ -890,3 +897,300 @@ revoke all on function public.lula_post_interact(text, jsonb) from public;
 revoke all on function public.lula_link_spotlight_post(text, text, boolean) from public;
 grant execute on function public.lula_post_interact(text, jsonb) to anon, authenticated;
 grant execute on function public.lula_link_spotlight_post(text, text, boolean) to anon, authenticated;
+
+/* ---------------------------------------------------------------------------
+ * Patch fields on a post with a jsonb merge, in one statement.
+ *
+ * The client uses this instead of writing back a copy of the post it read
+ * earlier: two writers touching the same case at once (a "did you get help?"
+ * nudge and a search zone being claimed, say) used to mean the slower write
+ * silently threw away the other one. Postgres does the merge, so the record
+ * can only move forward.
+ * ------------------------------------------------------------------------- */
+/* ------------------------------------------------------------------ *
+ * Be on the lookout
+ *
+ * The rules are the same ones the app runs offline (src/app/core/utils/lookout.ts);
+ * this is the server-side copy so two phones cannot both close a lookout, and so
+ * the case LulaFind publishes lands in the same transaction as the "no" that
+ * caused it. Nothing else in this file can post a case on someone's behalf.
+ * ------------------------------------------------------------------ */
+
+create or replace function public.lula_lookout_visible(lookout_id text, viewer text)
+returns boolean language sql stable security definer set search_path = pg_catalog as $$
+  select viewer is not null and exists (
+    select 1 from public.records r
+    where r.collection = 'lookouts'
+      and r.id = lookout_id
+      and (
+        r.payload->>'userId' = viewer
+        or viewer in (select jsonb_array_elements_text(coalesce(r.payload->'askedIds', '[]'::jsonb)))
+        or exists (
+          select 1 from public.records f
+          where f.collection = 'follows'
+            and f.payload->>'followingId' = r.payload->>'userId'
+            and f.payload->>'followerId' = viewer
+            and coalesce(f.payload->>'status', 'accepted') = 'accepted'
+        )
+      )
+  );
+$$;
+
+revoke all on function public.lula_lookout_visible(text, text) from public;
+grant execute on function public.lula_lookout_visible(text, text) to anon, authenticated;
+
+-- The person edits their own lookout: it is their safety status.
+create or replace function public.lula_patch_lookout(lookout_id text, patch jsonb)
+returns void language plpgsql security definer set search_path = pg_catalog as $$
+declare
+  owner text;
+begin
+  select r.payload->>'userId' into owner
+    from public.records r
+   where r.collection = 'lookouts' and r.id = lookout_id;
+
+  if owner is null then
+    raise exception 'no such lookout';
+  end if;
+
+  if not (public.lula_is_self(owner) or public.lula_is_admin()) then
+    raise exception 'not allowed';
+  end if;
+
+  update public.records
+     set payload = payload || patch,
+         updated_at = ((extract(epoch from now()) * 1000)::bigint)
+   where collection = 'lookouts' and id = lookout_id;
+end;
+$$;
+
+/*
+ * A follower answers "are they okay?".
+ *
+ * One "no" flags the person. The case is published here - built from the
+ * person's own record and the area they named - and only when that person
+ * turned "Let LulaFind post a case about me" on. If they did not, the answer is
+ * still recorded and their followers are still told; there is simply no post.
+ */
+create or replace function public.lula_answer_lookout(lookout_id text, answerer text, they_are_ok boolean)
+returns void language plpgsql security definer set search_path = pg_catalog as $$
+declare
+  actor text := (select public.lula_uid());
+  lo jsonb;
+  owner text;
+  owner_row jsonb;
+  privacy jsonb;
+  asked jsonb;
+  answers jsonb;
+  now_ms bigint := ((extract(epoch from now()) * 1000)::bigint);
+  everyone_ok boolean := false;
+  publish boolean := false;
+  post_id text;
+  who text;
+begin
+  if actor is null or actor <> answerer then
+    raise exception 'Sign in to answer';
+  end if;
+
+  -- Lock the row: two followers answering at the same time must not both read
+  -- "everyone said yes" and both close it.
+  select r.payload into lo
+    from public.records r
+   where r.collection = 'lookouts' and r.id = lookout_id
+     for update;
+
+  if lo is null then
+    raise exception 'That lookout is not here any more';
+  end if;
+
+  owner := lo->>'userId';
+  if owner = actor then
+    raise exception 'Only the people following you can answer this';
+  end if;
+
+  if not public.lula_lookout_visible(lookout_id, actor) then
+    raise exception 'not allowed';
+  end if;
+
+  asked := coalesce(lo->'askedIds', '[]'::jsonb);
+  if jsonb_array_length(asked) > 0 and not asked ? actor then
+    raise exception 'You were not asked about this lookout';
+  end if;
+
+  -- One answer each, and the first one stands: a change of heart does not
+  -- un-flag someone, and a second tap changes nothing.
+  if exists (
+    select 1 from jsonb_array_elements(coalesce(lo->'answers', '[]'::jsonb)) a
+     where a->>'byUserId' = actor
+  ) then
+    return;
+  end if;
+
+  answers := coalesce(lo->'answers', '[]'::jsonb)
+    || jsonb_build_object('byUserId', actor, 'ok', they_are_ok, 'at', now_ms);
+
+  if they_are_ok then
+    select jsonb_array_length(asked) > 0 and not exists (
+      select 1 from jsonb_array_elements_text(asked) want
+       where not exists (
+         select 1 from jsonb_array_elements(answers) a
+          where a->>'byUserId' = want and coalesce((a->>'ok')::boolean, false)
+       )
+    ) into everyone_ok;
+  end if;
+
+  if not they_are_ok then
+    update public.records
+       set payload = payload || jsonb_build_object(
+             'answers', answers,
+             'status', 'escalated',
+             'closedAt', now_ms,
+             'closedReason', 'escalated'),
+           updated_at = now_ms
+     where collection = 'lookouts' and id = lookout_id;
+
+    select r.payload into owner_row
+      from public.records r
+     where r.collection = 'users' and r.id = owner;
+
+    privacy := coalesce(owner_row->'privacy', '{}'::jsonb);
+    publish := coalesce((privacy->>'allowSafetyAlertPosts')::boolean, false);
+
+    if publish then
+      post_id := 'p_lookout_' || lookout_id;
+      who := coalesce(nullif(owner_row->>'displayName', ''), 'A LulaFind member');
+
+      insert into public.records (collection, id, owner_id, payload, updated_at)
+      values (
+        'posts', post_id, owner,
+        jsonb_build_object(
+          'id', post_id, 'type', 'missing', 'status', 'active', 'danger', null,
+          'authorId', owner, 'anonymous', false, 'askWanted', false,
+          'title', 'Have you seen ' || who || '? They may be missing',
+          'body', 'LulaFind asked ' || jsonb_array_length(asked) || ' followers to check on ' || who
+                  || ' after 24 hours, and someone said something is wrong.'
+                  || case when coalesce(lo->>'note', '') <> ''
+                          then E'\n\nThey wrote: "' || (lo->>'note') || '"' else '' end
+                  || E'\n\nIf you see them, do not approach. Call 10111.',
+          'media', '[]'::jsonb,
+          'province', coalesce(owner_row->>'province', 'GP'),
+          'town', coalesce(owner_row->>'town', ''),
+          'lastSeenAt', coalesce((lo->>'locationAt')::bigint, (lo->>'startedAt')::bigint),
+          'lastSeenWhere', coalesce(nullif(lo->>'area', ''), coalesce(owner_row->>'town', '')),
+          'contactLabel', 'Message on LulaFind', 'contactValue', '', 'contactVisibleTo', 'everyone',
+          'createdAt', now_ms, 'updatedAt', now_ms,
+          'audience', coalesce(nullif(privacy->>'safetyAlertAudience', ''), 'followers'),
+          'spotlightId', case when privacy->>'safetyAlertAudience' = 'surname'
+                              then nullif(privacy->>'safetyAlertSpotlightId', '') else null end,
+          'chatEnabled', false, 'allowComments', true, 'allowShare', true,
+          'appPosted', true, 'lookoutId', lookout_id
+        ),
+        now_ms
+      )
+      on conflict (collection, id) do nothing;
+
+      update public.records
+         set payload = payload || jsonb_build_object('escalatedPostId', post_id),
+             updated_at = now_ms
+       where collection = 'lookouts' and id = lookout_id;
+    end if;
+
+    return;
+  end if;
+
+  update public.records
+     set payload = payload || jsonb_build_object(
+           'answers', answers,
+           'status', case when everyone_ok then 'cleared' else 'checking' end,
+           'closedAt', case when everyone_ok then now_ms else null end,
+           'closedReason', case when everyone_ok then 'all_ok' else '' end),
+         updated_at = now_ms
+   where collection = 'lookouts' and id = lookout_id;
+end;
+$$;
+
+/*
+ * The 24-hour clock, server side.
+ *
+ * The app also runs this check whenever someone opens it, but a follower should
+ * not have to have the app open for the question to be asked. The pg_cron
+ * example below is written with line comments on purpose: a schedule expression
+ * inside a block comment would end the comment early.
+ */
+-- Schedule the check once, to fire on its own:
+--   select cron.schedule('lula-lookout-due', 'every five minutes', 'select public.lula_lookout_ask_due()');
+-- (or the usual cron syntax: five minutes = star-slash-5 followed by four spaces and stars)
+create or replace function public.lula_lookout_ask_due()
+returns integer language plpgsql security definer set search_path = pg_catalog as $$
+declare
+  due record;
+  followers jsonb;
+  now_ms bigint := ((extract(epoch from now()) * 1000)::bigint);
+  asked integer := 0;
+begin
+  for due in
+    select r.id, r.payload
+      from public.records r
+     where r.collection = 'lookouts'
+       and coalesce(r.payload->>'status', 'active') = 'active'
+       and r.payload->>'askedAt' is null
+       and coalesce((r.payload->>'checkAt')::bigint, 0) <= now_ms
+       for update
+  loop
+    select coalesce(jsonb_agg(distinct f.payload->>'followerId'), '[]'::jsonb) into followers
+      from public.records f
+     where f.collection = 'follows'
+       and f.payload->>'followingId' = due.payload->>'userId'
+       and coalesce(f.payload->>'status', 'accepted') = 'accepted';
+
+    update public.records
+       set payload = payload || jsonb_build_object(
+             'askedIds', followers,
+             'askedAt', now_ms,
+             'status', case when jsonb_array_length(followers) > 0 then 'checking' else 'active' end),
+           updated_at = now_ms
+     where collection = 'lookouts' and id = due.id;
+
+    asked := asked + 1;
+  end loop;
+
+  return asked;
+end;
+$$;
+
+revoke all on function public.lula_patch_lookout(text, jsonb) from public;
+revoke all on function public.lula_answer_lookout(text, text, boolean) from public;
+revoke all on function public.lula_lookout_ask_due() from public;
+grant execute on function public.lula_patch_lookout(text, jsonb) to authenticated;
+grant execute on function public.lula_answer_lookout(text, text, boolean) to authenticated;
+grant execute on function public.lula_lookout_ask_due() to authenticated;
+
+create or replace function public.lula_patch_post(post_id text, patch jsonb)
+returns void language plpgsql security definer set search_path = pg_catalog as $$
+declare
+  target_author text;
+begin
+  select r.payload->>'authorId' into target_author
+    from public.records r
+   where r.collection = 'posts' and r.id = post_id;
+
+  if target_author is null then
+    raise exception 'no such post';
+  end if;
+
+  -- The author, an admin, or a volunteer claiming a search zone. A volunteer
+  -- may only ever touch the searchParty field; nothing else is theirs to change.
+  if not (
+    public.lula_is_self(target_author)
+    or public.lula_is_admin()
+    or (select coalesce(bool_and(k in ('searchParty', 'updatedAt')), false) from jsonb_object_keys(patch) k)
+  ) then
+    raise exception 'not allowed';
+  end if;
+
+  update public.records
+     set payload = payload || patch,
+         updated_at = ((extract(epoch from now()) * 1000)::bigint)
+   where collection = 'posts' and id = post_id;
+end;
+$$;

@@ -128,6 +128,11 @@ export class PostActionsService {
       { text: 'Copy link to post', icon: 'link', handler: () => void this.copyLink(p) }
     ];
     if (mine) {
+      // The poster page is no longer linked from the post page (it is meant to
+      // be a post, not a file), so the author's menu is where it lives now.
+      if (!isRepost && (p.type === 'missing' || p.type === 'pet' || p.type === 'khumbulekhaya')) {
+        buttons.push({ text: 'Make a poster', icon: 'layout', handler: () => void this.router.navigate(['/post', p.id, 'poster']) });
+      }
       if (!isRepost) buttons.push({ text: 'Edit post', icon: 'pencil', handler: () => void this.router.navigate(['/post', p.id, 'edit']) });
       buttons.push({
         text: isRepost ? 'Delete repost' : 'Delete post', role: 'destructive', icon: 'trash',

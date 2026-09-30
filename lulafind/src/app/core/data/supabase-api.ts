@@ -2,10 +2,11 @@ import { Observable, Subject } from 'rxjs';
 import { createClient, SupabaseClient, RealtimeChannel } from '@supabase/supabase-js';
 import { FirebaseAuthBridge, firebaseAuthConfigured } from './firebase-auth';
 import { LulaApi, SavePostOptions } from './api';
+import { answerBlocker } from '../utils/lookout';
 import { SUPABASE_URL, SUPABASE_KEY, supabaseNotice } from './supabase-client';
 import { LocalDb } from './local-db';
 import {
-  ChatMessage, ChatThread, Comment, FeedFilter, FollowEdge, MediaItem,
+  ChatMessage, ChatThread, Lookout, Comment, FeedFilter, FollowEdge, MediaItem,
   Notification, Post, Spotlight, Story, StoryReply, StoryView, Tip, UserProfile
 } from '../models/types';
 
@@ -484,6 +485,55 @@ export class SupabaseApi implements LulaApi {
     }
   }
 
+  /**
+   * Cases held for review. Queried directly, because queryFeed hides them from
+   * everyone except the author and would hand the moderation screen an empty list.
+   */
+  async postsForReview(): Promise<Post[]> {
+    const { data, error } = await this.client
+      .from('records')
+      .select('payload')
+      .eq('collection', 'posts')
+      // status lives inside the payload jsonb - the records table has no status column
+      .filter('payload->>status', 'eq', 'under_review')
+      .order('updated_at', { ascending: true })
+      .limit(200);
+    if (error) throw new Error(error.message);
+    const posts = await Promise.all((data ?? []).map((row) => this.signRecordMedia('posts', row.payload as Post)));
+    return posts.filter((p) => p.status === 'under_review');
+  }
+
+  /**
+   * Cases that closed as found, for the reunions page. Read directly from the
+   * records, because the feed hides found cases by design.
+   */
+  async foundCases(): Promise<Post[]> {
+    const { data, error } = await this.client
+      .from('records')
+      .select('payload')
+      .eq('collection', 'posts')
+      .filter('payload->>status', 'eq', 'found')
+      .order('updated_at', { ascending: false })
+      .limit(200);
+    if (error) throw new Error(error.message);
+    const posts = await Promise.all((data ?? []).map((row) => this.signRecordMedia('posts', row.payload as Post)));
+    return posts.filter((p) => p.status === 'found');
+  }
+
+  /**
+   * Patch fields on a post with a jsonb merge inside the database, so a second
+   * writer cannot clobber the first with a copy it read earlier. Needs
+   * `lula_patch_post` from supabase/schema.sql.
+   */
+  async patchPost(id: string, patch: Partial<Post>): Promise<Post | undefined> {
+    const { error } = await this.client.rpc('lula_patch_post', {
+      post_id: id,
+      patch: { ...patch, id } as unknown as Record<string, unknown>
+    });
+    if (error) throw new Error(error.message);
+    return this.post(id);
+  }
+
   async queryFeed(f: FeedFilter, viewerId: string | null): Promise<Post[]> {
     try {
       // RLS is the source of truth for private audiences. Fetch the visible
@@ -594,6 +644,74 @@ export class SupabaseApi implements LulaApi {
 
   async deletePost(id: string): Promise<void> {
     await this.remove('posts', id);
+  }
+
+  // —— be on the lookout ————————————————————————————————————————————————
+
+  /** RLS decides what this returns: my own lookouts, and those I follow. */
+  async lookouts(): Promise<Lookout[]> {
+    const all = await this.getAll<Lookout>('lookouts');
+    return all.sort((a, b) => b.startedAt - a.startedAt);
+  }
+
+  async saveLookout(l: Lookout): Promise<void> {
+    await this.upsert('lookouts', l, l.userId);
+  }
+
+  async patchLookout(id: string, patch: Partial<Lookout>): Promise<Lookout | undefined> {
+    const { error } = await this.client.rpc('lula_patch_lookout', { lookout_id: id, patch: { ...patch, id } });
+    if (error) {
+      console.warn('Supabase patchLookout failed:', error.message);
+      return undefined;
+    }
+    this.rx.next(++this.tick);
+    return this.getOne<Lookout>('lookouts', id);
+  }
+
+  /**
+   * A follower answers "are they okay?".
+   *
+   * This goes through one SECURITY DEFINER function because the decision spans
+   * rows the answerer does not own: their answer, and - when they say something
+   * is wrong - a case published on the person's behalf. Doing it in one
+   * statement also means two followers answering at once cannot both read the
+   * same "everyone said yes" state and both close the lookout.
+   */
+  async answerLookout(id: string, byUserId: string, ok: boolean): Promise<Lookout | undefined> {
+    /* The database enforces this too (lula_answer_lookout); the check here is
+       what gives the same message offline and online. */
+    const local = (await this.getAll<Lookout>('lookouts')).find((l) => l.id === id);
+    const blocked = local ? answerBlocker(local, byUserId) : null;
+    if (blocked) throw new Error(blocked);
+    const { error } = await this.client.rpc('lula_answer_lookout', {
+      lookout_id: id, answerer: byUserId, they_are_ok: ok
+    });
+    if (error) {
+      console.warn('Supabase answerLookout failed:', error.message);
+      throw new Error(error.message);
+    }
+    this.rx.next(++this.tick);
+    try {
+      return await this.getOne<Lookout>('lookouts', id);
+    } catch {
+      return undefined;
+    }
+  }
+
+  /** "I'm here": delete the case the app published for this lookout. */
+  async deleteLookoutCase(lookoutId: string): Promise<void> {
+    const { data, error } = await this.client
+      .from('records')
+      .select('id')
+      .eq('collection', 'posts')
+      .filter('payload->>lookoutId', 'eq', lookoutId);
+    if (error) {
+      console.warn('Supabase deleteLookoutCase lookup failed:', error.message);
+      return;
+    }
+    for (const row of data ?? []) {
+      await this.remove('posts', (row as { id: string }).id);
+    }
   }
 
   // ─── comments ────────────────────────────────────────────────────────────

@@ -1,3 +1,94 @@
+# Session state — 2026-09-29 (round 3)
+
+## Post card, checked against LinkedIn line by line
+
+Fixed on `lf-post-card` (the differences were real, not cosmetic):
+
+- **The poster's headline** now sits under their name, which is LinkedIn's
+  second header line and was missing here (`authorHeadline()`).
+- **Text clamps to three lines**, not four, with a muted "…see more" that reads
+  like LinkedIn's link rather than a bold button.
+- **The header aligns to the top** of the avatar block instead of centring it.
+- **The embedded original** in a reshare shows the original author's headline
+  (falling back to the province) instead of "province · category".
+- Stats line sized like LinkedIn's (13px), body text 14.5px/1.4.
+
+What is still deliberately not LinkedIn: the category chip above the text (this
+is a missing-person app; the chip is the label) and the private-chat row under
+the action bar (chat opens only for "Have an idea" plus a mutual follow). The
+react button says "Have an idea" rather than "Like" by your instruction.
+
+## The story card is reachable from any feed now
+
+`feedWithRails(posts, 8, { shortRail: true })`: a feed that never reaches its
+8th post gets **one story rail after its last post** (previously a short feed had
+no rail at all). A feed with nothing in it renders the story rail **above the
+empty state**, so the story card is always somewhere on Home. Rails still never
+appear above the first post, and a feed that does reach an 8th post uses the
+normal slots (Stories 8, People 16, Stories 24) with no extra rail.
+
+## Tests
+
+134 pass (`npx ng test --watch=false`), including new render tests that mount
+the **post page** (asserting the case-details accordion and the poster link are
+gone from it) and **Home** (asserting the story rail and its "Create story" card
+are in the DOM), plus the pure `feedWithRails` cases for the short-feed rail.
+
+# Session state — 2026-09-29 (round 2)
+
+## What this round changed, in the order the review asked for it
+
+1. **Reactions are LinkedIn's, with "Have an idea" as the default.**
+   `DEFAULT_REACTION_LABEL` ("Have an idea") lives in `core/models/types.ts`.
+   The button reads that until you react, then reads the reaction you chose
+   (Like / Support / Sad / Have an idea) in that reaction's colour. Quick tap =
+   default reaction; hold (420ms mouse hover) opens the tray of four; release
+   over one to pick it. Only `up` opens private chat - `ChatService.gate`
+   checks `voterIds[me] === 'up'`, so Like/Support/Sad never unlock a chat.
+2. **Feed rails moved to where they were asked to be.** `feedWithRails()`
+   (`core/utils/feed.ts`) is now a tested pure function: Stories after the 8th
+   post, People after the 16th, Stories after the 24th. Nothing above the first
+   post, nothing after the last one. No "fallback" rail at the end of a short
+   feed any more.
+3. **Reshares look like LinkedIn's.** A repost card opens with
+   "You reposted this" / "<Name> reposted this" and the repost glyph above the
+   header, then the reposter's own words, then the original inside a bordered
+   frame with its own avatar, name, headline, time and globe. Same line and same
+   frame on the post page.
+4. **The post page is now a post.** The case-facts accordion, the contact card
+   and the row of pills (poster, help, escalate, location) are gone from it.
+   What is left: the post, the stats line, the LinkedIn action bar
+   (react / Comment / Repost / Send), one compact private-chat line when the
+   poster enabled it, then "This is me / Not me" or "Mark as found /
+   Still searching", then the comments. The poster page moved to the author's
+   "..." menu so it is still reachable.
+5. **Comments are LinkedIn's.** One composer in the flow (the duplicate footer
+   composer is gone), "Most relevant / Most recent", then bordered comment cards
+   with the author's name + bio, comment text, and a Like / Reply / count / time
+   row inside the card. Replies indent under "View N replies". Editing a comment
+   shows "Edited" and deleting says "Comment deleted".
+6. **Stories stop disappearing.** The viewer keeps its own copy of the story, so
+   a background rail refresh cannot pull it out from under the reader. Reading
+   time is longer (6s + ~0.5s a word, floor 9s, ceiling 45s). The moment someone
+   engages - types a reply, opens the viewer list, holds to read - auto-advance
+   switches off for that visit; a plain tap still moves on. On the last story the
+   bar stops instead of closing the viewer. The reply box stays "typing" while it
+   has text in it, so dismissing the keyboard no longer resumes the timer.
+7. **Camera on Android is handled instead of thrown.** `PlatformService.hasPlugin()`
+   wraps `Capacitor.isPluginAvailable`, `MediaService` never calls a plugin that
+   is not in the build, asks for the camera permission before using it, and falls
+   back to the phone's photo picker with a plain notice ("This build has no camera
+   module..."). `PermissionsService` is a real wrapper now: it checks and requests
+   Camera / Geolocation / PushNotifications and reports "Not in this build"
+   instead of a raw UNIMPLEMENTED error. To get the camera itself, rebuild the
+   APK after `npx cap sync` - the Gradle settings already include the plugin.
+8. **Posters.** Two new templates, `halo` (mesh-gradient glass card) and `pulse`
+   (neon grid, ringed portrait) join the existing six, so there are eight modern
+   designs. Tested in `lulafind.spec.ts`.
+
+Everything above is covered by `npx ng test --watch=false`: 128/128 pass, and
+`ng build --configuration production` is clean.
+
 # Session state — 2026-09-28
 
 ## Where things stand
@@ -135,3 +226,111 @@ Main had a parallel build of the same areas. Where both touched the same screen,
 Kept from main: `lastLike`/`lastComment` and the "X commented on this" line on cards, comment `likedIds`, the `repost` notification kind (now sent by `repost()`), `suggestedPeople` (now ranks the people rail), the "who reacted" sheet (rewritten for the four reactions, opens from the reaction count on cards and post detail), `.gitignore`/README changes.
 
 Dropped from main (still in git history at `2e94389`): floating Lula assistant, discover rail, text-template poster composer + `poster-parse` + `poster-visual`, `reshare()`/`reshareOf`/`repostCount` (duplicate of `repost()`/`repostOf`).
+
+## Round 4 — research round: alerts, review and leads (commit `68f3df0`)
+
+**Private chat is mutual follow only.** A reaction never unlocks chat, and no
+copy anywhere promises it: `ChatService`'s gate has no `'vote'` reason, and a
+test fails the build if the gate ever mentions a reaction again.
+
+**Case alerts exist now.** `DataService.alertCase()` sends a new missing or
+KhumbulEkhaya case to members in the province it happened in, honouring each
+member's own `alertPrefs` (switch, children-only, province) which Settings
+keeps on their profile. The author and suspended accounts are never alerted.
+Each alert shows a distance from the member's own last location fix.
+
+**A child case is checked before it is broadcast.** Under-18 cases are created
+`under_review`; the admin screen has a Review tab where an admin publishes
+(which sends the alert and reports how many members it reached) or rejects
+(off the feed, no alert). `ModerationService.pendingCases/approveCase/rejectCase`.
+
+**Leads are surfaced.** The case page counts leads, shows the newest one and how
+many are checked, and an admin can mark a sighting as checked against CCTV,
+police, records or a photo (`sightingVerified`, already modelled, now visible).
+
+**Density.** Help, settings, safety centre, profile and create-post prose were
+trimmed; the long answers live on `/faqs`, generated from `LULA_TOPICS` plus
+housekeeping entries. New answers: SAPS 55 form, the 24-hour myth, what never
+goes in a case post, spotting a scam, who receives an alert, and the review
+queue.
+
+**Story composer.** Full-screen black canvas by default, typing straight on it
+(WhatsApp-status style), with a privacy choice; colours are the fallback, not
+the default.
+
+**Research file.** `docs/RESEARCH-COMPETITORS.md` holds the SA figures with
+sources, the competitor matrix and the features mined but not built yet
+(search-party zones, first-72-hours checklist, post-quality guard, scam
+shortcut, cross-border flag, NGO/SAPS verification).
+
+**Every journey, gated and finished.** `tools/e2e-journeys.mjs` drives a real browser through
+sign-up (five steps, each one refusing to advance without its own data), the composer, comments,
+the action row, editing, reporting, following, search, the poster maker, the story composer and
+sign-in - 40 verdicts, read back from the app's own store. It found and fixed:
+
+- the composer lost everything typed if the phone rang mid-post: it now keeps the text and says so,
+  with **Start fresh** to throw it away (the story composer does the same);
+- the story **Share** button was disabled with no reason - now it always answers a tap and names
+  what is missing;
+- a removed post rendered as an empty screen - now "This post is no longer available" with the way
+  back home;
+- `/admin` bounced a signed-in non-admin home with no explanation - now it says why;
+- the action row clipped the longest label ("Have …"). It is now measured at 390 / 360 / 320 px:
+  every word stays whole, and nothing overlaps.
+
+The results table and the honest list of what a browser run cannot click (camera, share sheet,
+push, the admin actions, the cron) are in `docs/JOURNEYS.md`.
+
+**The last-seen control now exists.** `privacy.showLastSeen` was read by the profile and lookout
+screens but no screen could set it. Settings → Privacy & data now has **Show my town and last
+seen**, and the lookout run drives it: off reaches the account (`showLastSeen:false`, screenshot
+`03b`) and the toast says what an open lookout still shows, then back on. The run is 17 steps,
+0 problems.
+
+**Measured: responsive, aligned, quiet, quick.** `tools/e2e-quality.mjs` renders 18 screens x 6
+widths (320 / 360 / 390 / 414 / 768 / 1024) with real content and reads the numbers off the page:
+**0 sideways scroll, 0 off-edge elements, 0 clipped words, 0 targets under 24px, 0 overlapping
+controls, 0 contrast failures** (was 53 low-contrast text runs at every width, 15-16 tiny targets,
+3 clipped words). What it found and I fixed:
+
+- `Tips` and `Terms & privacy` rendered **without a title** - the header showed the home search bar;
+- the `Chats` row cut a full sentence off with an ellipsis; it wraps now;
+- `Share this tip` was a 111x13 button; follower counts 82x15; the audience picker 178x15 inside a
+  21px label; `Browse as guest` 123x15; round icon buttons 36x36; consent checkboxes 19x19 - all
+  raised to comfortable sizes;
+- white on `--lf-primary` failed AA in dark mode, red-as-text used the fill red, and dark links
+  sat at 4.06:1: new `--lf-primary-fill` / `--lf-signal-text` tokens, and a dark `--lf-link`;
+- the "Local data mode" banner was white on blue at 3.46:1 - now a quiet card strip.
+
+**Production build had no minification** (`optimization` off): 2.3 MB of readable JS. Now minified
++ brotli/gzip with a one-year cache on hashed files (`tools/serve-www.mjs`, preview on :4300):
+**first load 456 kB, FCP 128-160 ms**; reload 0 kB. Route change 11-24 ms, tap-to-change 23-27 ms,
+0 long tasks, 0 layout shift. `docs/QUALITY.md` has the tables and the honest limits (no network
+throttling, one engine, no screen-reader pass).
+
+**A fast preview that still has the development switches.** A production build deliberately
+disables `?data=local` and `?demo=1` (a real build must never invent data), so the production
+preview cannot be used interactively here - the hosted project is unreachable. `ng build
+--configuration development --optimization=true` gives a minified build that still has the dev
+switches: served by `tools/serve-www.mjs` on 4300 (brotli/gzip, SPA fallback, one-year cache on
+hashed files), it renders the home feed with FCP 60-200 ms and 0 console errors. The production
+numbers in `docs/QUALITY.md` come from the real production build before that.
+
+**Data saver was a switch that changed nothing.** Settings → Appearance had "Data saver (smaller
+images)" and "Autoplay media in the feed", both stored and rendered, and no code read either one.
+While measuring the first load I found why the app pulls ~98 script files: `PrefetchService` walks
+the route table after start-up and imports every screen on purpose, so taps are instant - which is
+~550 kB of JavaScript nobody asked for on a phone in Soweto. Now:
+
+- Data saver (renamed "less background loading") stops the walk, and so does the phone's own
+  `navigator.connection.saveData`, a 2G link, or being offline. Cold load: **387 kB / 61 requests
+  instead of 596 kB / 105**. A screen then costs its chunk when opened - 19 ms and 24 kB for
+  Spotlight on localhost, one round-trip on a real network;
+- Autoplay (renamed "Autoplay stories") decides whether a story advances on its own;
+- `core/prefetch.spec.ts` pins the rule (5 tests, suite now 182).
+
+**Corrected load numbers.** The earlier table in docs/QUALITY.md (456 kB, FCP 128-160 ms) was wrong:
+warm cache, and a window that ended before the last chunks arrived. `tools/measure-load.mjs` uses a
+fresh context per run: cold load is **596 kB / 105 requests / FCP 224-288 ms**, reload 0 kB. The
+production config also had optimization off (2.3 MB of readable JS) - now minified and served
+compressed by `tools/serve-www.mjs`.

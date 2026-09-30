@@ -18,9 +18,12 @@ import { CreatePostComponent } from '../pages/post/create-post.component';
 import { CreateStoryComponent } from '../pages/story/create-story.component';
 import { ProfileComponent } from '../pages/user/profile.component';
 import { TermsComponent } from '../pages/terms/terms.component';
+import { PostDetailComponent } from '../pages/post/post-detail.component';
+import { HomeComponent } from '../pages/tabs/home.component';
 import { AdminComponent } from '../pages/admin/admin.component';
 import { SpotlightDetailComponent } from '../pages/spotlight/spotlight-detail.component';
 import { SUPPORT_EMAIL } from './config';
+import { ActivatedRoute, convertToParamMap } from '@angular/router';
 
 /**
  * Render tests. These mount the real components with the real services so a
@@ -98,19 +101,100 @@ describe('Components render', () => {
     const f = TestBed.createComponent(PostCardComponent);
     f.componentInstance.post = post;
     f.componentInstance.author = (await data.profile('u_demo'))!;
-    f.componentInstance.chatState = 'locked-vote';
+    f.componentInstance.chatState = 'locked-follow';
     f.detectChanges();
     await f.whenStable();
     const html: string = (f.nativeElement as HTMLElement).innerHTML;
     expect(html).toContain('Follow');
-    expect(html).toContain('Idea');
+    // LinkedIn's default reaction reads as its own name, never a yes/no vote.
+    expect(html).toContain('Have an idea');
     expect(html).not.toContain('No idea');
+    // LinkedIn's card anatomy: the poster's headline under their name, the
+    // three-line clamp with a muted "…see more", a stats line and the four
+    // action buttons.
+    expect(html).toContain('Community organiser');
+    expect(html).toContain('fb-clamp');
+    expect(html).toContain('see more');
+    expect(html).toContain('fb-stats-bar');
+    expect(html).toContain('Comment');
     expect(html).toContain('Repost');
     expect(html).toContain('Send');
     // the seeded latest activity shows above the post, LinkedIn-style
     expect(html).toContain('Lerato Mahlangu');
     expect(html).toContain('commented on this');
     expect(html).toContain('Comment');
+  });
+
+  it('renders a reshared post the way LinkedIn does: reposter line, then the original in a frame', async () => {
+    const data = TestBed.inject(DataService);
+    await data.loadFeed();
+    const original = (await data.loadPost('p_thato'))!;
+    const f = TestBed.createComponent(PostCardComponent);
+    f.componentInstance.post = {
+      ...original,
+      id: 'p_repost_mine',
+      authorId: original.authorId,
+      body: 'Please keep sharing this.',
+      repostOf: original.id,
+      media: []
+    };
+    f.componentInstance.author = (await data.profile(original.authorId))!;
+    f.detectChanges();
+    await f.whenStable();
+    const html: string = (f.nativeElement as HTMLElement).innerHTML;
+    expect(html).toContain('reposted this');
+    expect(html).toContain('fb-embed');
+    expect(html).toContain('Repost');
+  });
+
+  /** Lets the component's own async work land, without waiting on app-wide timers. */
+  async function settle(f: ComponentFixture<unknown>): Promise<void> {
+    for (let i = 0; i < 6; i++) {
+      await new Promise((r) => setTimeout(r, 0));
+      f.detectChanges();
+    }
+  }
+
+  it('renders the post page as a post: header, action bar, comments - and no case-details clutter', async () => {
+    // Its own module, because this page needs a post id from the route.
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter(ROUTES),
+        provideIonicAngular(),
+        { provide: LULA_API, useValue: new MockApi(new LocalDb(true)) },
+        {
+          provide: ActivatedRoute,
+          useValue: { snapshot: { paramMap: convertToParamMap({ id: 'p_thato' }), fragment: null } }
+        }
+      ]
+    });
+    const data = TestBed.inject(DataService);
+    await data.loadFeed();
+    const f = TestBed.createComponent(PostDetailComponent);
+    await settle(f);
+    const html: string = (f.nativeElement as HTMLElement).innerHTML;
+
+    expect(html).toContain('Help find Thato Mokoena');
+    expect(html).toContain('Comment');
+    expect(html).toContain('Repost');
+    expect(html).toContain('Send');
+    // the things that were taken off this page must stay off it
+    expect(html).not.toContain('Case details');
+    expect(html).not.toContain('Make a poster');
+  });
+
+  it('renders the home feed with the story rail reachable', async () => {
+    const data = TestBed.inject(DataService);
+    await data.loadFeed();
+    const f = TestBed.createComponent(HomeComponent);
+    await settle(f);
+    const html: string = (f.nativeElement as HTMLElement).innerHTML;
+    // A feed that never reaches its 8th post still carries one story rail, and
+    // the "Create story" card is in it.
+    expect(html).toContain('lf-story-rail');
+    expect(html).toContain('Create story');
+    expect(html).toContain('lf-post-card');
   });
 
   it('renders the LulaFind welcome and login screens', async () => {
@@ -257,11 +341,20 @@ describe('Components render', () => {
     f.detectChanges();
     await f.whenStable();
     const html: string = (f.nativeElement as HTMLElement).innerHTML;
-    expect(html).toContain('Who can see this story?');
+    // WhatsApp-style canvas: type on the story itself, with a privacy selector.
+    expect(html).toContain('Type a status');
+    expect(html).toContain('Background');
     expect(html).toContain('Everyone');
-    expect(html).toContain('My followers');
-    expect(html).toContain('People who follow you can view');
-    expect(html).toContain('My Spotlight');
+    expect(html).toContain('Share');
+
+    // open the privacy panel and check the three audiences are offered
+    f.componentInstance.toggle('privacy');
+    f.detectChanges();
+    const withPrivacy: string = (f.nativeElement as HTMLElement).innerHTML;
+    expect(withPrivacy).toContain('Who can see this story?');
+    expect(withPrivacy).toContain('My Spotlight');
+    expect(withPrivacy).toContain('My followers');
+    expect(withPrivacy).toContain('People who follow you can view');
   });
 
   it('renders a profile and hides what the owner hid', async () => {

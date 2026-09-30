@@ -27,6 +27,23 @@ export class PlatformService {
     this.isNative = Capacitor.isNativePlatform();
   }
 
+  /**
+   * Is this native plugin actually compiled into the build?
+   *
+   * This is the difference between a real feature and a raw
+   * "plugin is not implemented on android" error: an APK built before
+   * `npx cap sync` registered the plugin has no native half, so calling it can
+   * only fail. Every caller can ask first instead.
+   */
+  hasPlugin(name: string): boolean {
+    if (!this.isNative) return false;
+    try {
+      return Capacitor.isPluginAvailable(name);
+    } catch {
+      return false;
+    }
+  }
+
   /** Can this device open a real share sheet? */
   async canShare(): Promise<boolean> {
     try {

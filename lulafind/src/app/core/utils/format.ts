@@ -1,3 +1,5 @@
+import { GeoPoint } from '../models/types';
+
 export const MIN = 60_000;
 export const HOUR = 60 * MIN;
 export const DAY = 24 * HOUR;
@@ -154,4 +156,19 @@ export function headingIsNew(title: string | null | undefined, body: string | nu
   if (!t) return false;
   const b = (body ?? '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
   return !b.startsWith(t);
+}
+
+/**
+ * Straight-line distance in km between two points. Used to show how far a case
+ * alert is from the member's own device fix, so the alert radius means something.
+ */
+export function distanceKm(a: GeoPoint, b: GeoPoint): number {
+  const R = 6371;
+  const rad = (d: number) => (d * Math.PI) / 180;
+  const dLat = rad(b.lat - a.lat);
+  const dLng = rad(b.lng - a.lng);
+  const h =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLng / 2) ** 2;
+  return Math.round(2 * R * Math.asin(Math.sqrt(h)));
 }

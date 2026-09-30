@@ -3,12 +3,14 @@ import { Subscription } from 'rxjs';
 import { toObservable } from '@angular/core/rxjs-interop';
 import { LULA_API, LulaApi } from '../data/api';
 import {
-  Audience, Comment, DangerAlert, FeedFilter, FollowEdge, Notification, Post, PostType, Spotlight, Story, StoryReply, StoryView, Tip, UserProfile,
+  AlertPrefs, Audience, CasePlan, CaseStepId, Comment, DangerAlert, GeoPoint, FeedFilter, FollowEdge, Lookout, Notification, Post, PostType, Spotlight, Story, StoryReply, StoryView, Tip, UserProfile,
   VoteValue, ReactionKind, REACTIONS, RETIRED_POST_TYPES, isReaction, VehicleDetails, dangerLabel, emptyFilter, provinceName
 } from '../models/types';
 import { avatar, cover, hueOf, scene } from '../data/seed';
 import { HOUR, DAY, compact, uid } from '../utils/format';
+import { withTimeout } from '../utils/net';
 import { AuthService } from './auth.service';
+import { SettingsService } from './settings.service';
 import { SUPPORT_EMAIL } from '../config';
 
 /** The subset of a post its author (or an admin) may change after publishing. */
@@ -36,6 +38,7 @@ export interface UpdatePostInput {
   askWanted?: boolean;
   khumbu?: Post['khumbu'];
   danger?: Post['danger'];
+  plan?: CasePlan | null;
 }
 
 export interface CreatePostInput {
@@ -63,6 +66,12 @@ export interface CreatePostInput {
   askWanted: boolean;
   khumbu: Post['khumbu'];
   danger?: DangerAlert | null;
+  /**
+   * Required for a case about someone under 18: the poster confirms they are the
+   * guardian, or have the guardian's permission, to publish it. Same rule the
+   * community platforms apply, and the reason the child review queue exists.
+   */
+  guardianConsent?: boolean;
 }
 
 /**
@@ -80,13 +89,31 @@ export function uniqueById<T extends { id: string }>(items: T[]): T[] {
 export class DataService {
   private api = inject(LULA_API);
   private auth = inject(AuthService);
+  private settings = inject(SettingsService);
 
   /* --------------------------- state --------------------------- */
   readonly filter = signal<FeedFilter>(emptyFilter());
   readonly feed = signal<Post[]>([]);
   /** Found cases matching the current type and province. Shown on the newsfeed, not only behind the Found filter. */
   readonly broughtHome = signal<Post[]>([]);
+  /**
+   * Live "be on the lookout" records the viewer may see - their own and those
+   * of the people they follow.
+   */
+  readonly lookouts = signal<Lookout[]>([]);
   readonly loading = signal(false);
+  /**
+   * Bumped on every sync. Time-based rules (a 24-hour lookout coming due) hang
+   * off this instead of their own timer, so they run exactly when the app next
+   * talks to the network.
+   */
+  readonly syncTick = signal(0);
+  /**
+   * The last read never came back. Set when a load times out or the network
+   * refuses the request, so a screen can say so and offer a retry instead of
+   * showing its loading state for ever.
+   */
+  readonly connectionLost = signal(false);
   readonly spotlights = signal<Spotlight[]>([]);
   readonly stories = signal<Story[]>([]);
   readonly tips = signal<Tip[]>([]);
@@ -101,7 +128,15 @@ export class DataService {
   readonly followerIds = signal<string[]>([]);
 
   readonly unreadNotifications = computed(() => this.notifications().filter((n) => !n.read).length);
-  readonly myPosts = computed(() => this.feed().filter((p) => p.authorId === this.auth.viewerId));
+  /**
+   * The viewer's own posts, whatever stage they are at.
+   *
+   * This cannot be a filter over the feed: the feed is the public active list, so
+   * a mother's case would vanish from her own profile the day it was marked
+   * found - exactly when she needs to show it to someone.
+   */
+  readonly myAuthored = signal<Post[]>([]);
+  readonly myPosts = computed(() => this.myAuthored());
   readonly activeMissingCount = computed(
     () => this.feed().filter((p) => p.type === 'missing' && p.status === 'active').length
   );
@@ -168,6 +203,7 @@ export class DataService {
     if (this.poll) return;
     this.poll = setInterval(() => {
       if (typeof document !== 'undefined' && document.hidden) return;
+      this.syncTick.update((n) => n + 1);
       void this.loadFeed();
       void this.loadStatic();
     }, everyMs);
@@ -185,11 +221,58 @@ export class DataService {
     this.stopAutoSync();
   }
 
+  /* ------------------------ be on the lookout ----------------------- */
+
+  /**
+   * Readers that must run when lookouts arrive - the 24-hour check hangs off
+   * this, so it can never run against a list that has not loaded yet.
+   */
+  private lookoutListeners: (() => void | Promise<void>)[] = [];
+
+  onLookoutsLoaded(fn: () => void | Promise<void>): void {
+    this.lookoutListeners.push(fn);
+  }
+
+  /** Read every lookout this viewer is allowed to see. */
+  async loadLookouts(): Promise<Lookout[]> {
+    try {
+      const list = (await this.api.lookouts()).sort((a, b) => b.startedAt - a.startedAt);
+      this.lookouts.set(list);
+      /* A safety check must name the person it is about, not "someone". */
+      void this.cacheAuthors(list.map((l) => l.userId));
+      for (const fn of this.lookoutListeners) {
+        try { await fn(); } catch (err) { console.warn('lookout listener failed:', err); }
+      }
+      return list;
+    } catch (err) {
+      console.warn('Lookouts could not be loaded:', err instanceof Error ? err.message : err);
+      return this.lookouts();
+    }
+  }
+
+  /** The open lookout of one person, if any. */
+  openLookout(userId: string): Lookout | null {
+    return this.lookouts().find((l) => l.userId === userId && (l.status === 'active' || l.status === 'checking')) ?? null;
+  }
+
+  /** Every lookout about one person, newest first - their safety history. */
+  lookoutsFor(userId: string): Lookout[] {
+    return this.lookouts().filter((l) => l.userId === userId);
+  }
+
+  /** Keep the local copy in step after a write. */
+  mergeLookout(next: Lookout): void {
+    const list = this.lookouts();
+    const i = list.findIndex((l) => l.id === next.id);
+    this.lookouts.set(i >= 0 ? list.map((l) => (l.id === next.id ? next : l)) : [next, ...list]);
+  }
+
   /* --------------------------- feed ---------------------------- */
   async loadFeed(f: FeedFilter = this.filter(), viewerId: string | null = this.auth.viewerId): Promise<Post[]> {
     this.loading.set(true);
     try {
-      const list = uniqueById((await this.api.queryFeed(f, viewerId)).filter((p) => !RETIRED_POST_TYPES.includes(p.type)));
+      const list = uniqueById((await this.readFeed(f, viewerId)).filter((p) => !RETIRED_POST_TYPES.includes(p.type)));
+      this.connectionLost.set(false);
       const hidden = this.hiddenIds();
       const visible = hidden.length ? list.filter((p) => !hidden.includes(p.id)) : list;
       this.feed.set(visible);
@@ -197,16 +280,33 @@ export class DataService {
       if (f.status === 'found') {
         this.broughtHome.set(visible);
       } else {
-        const found = uniqueById((await this.api.queryFeed({ ...f, status: 'found' }, viewerId)).filter((p) => !RETIRED_POST_TYPES.includes(p.type)));
+        const found = uniqueById((await this.readFeed({ ...f, status: 'found' }, viewerId)).filter((p) => !RETIRED_POST_TYPES.includes(p.type)));
         const shown = (hidden.length ? found.filter((p) => !hidden.includes(p.id)) : found)
           .sort((a, b) => (b.outcome?.foundAt ?? b.updatedAt) - (a.outcome?.foundAt ?? a.updatedAt));
         this.broughtHome.set(shown);
         this.mergeCache(found);
       }
       return visible;
+    } catch (err) {
+      // A stalled cellphone connection used to leave the feed loading for ever.
+      // Now the screen is told, and the person can try again.
+      this.connectionLost.set(true);
+      console.warn('Feed load failed:', err instanceof Error ? err.message : err);
+      return this.feed();
     } finally {
       this.loading.set(false);
     }
+  }
+
+  /** One feed read, with a deadline so a dead connection cannot hang the screen. */
+  private readFeed(f: FeedFilter, viewerId: string | null): Promise<Post[]> {
+    return withTimeout(this.api.queryFeed(f, viewerId), 12_000, 'The feed');
+  }
+
+  /** Try the feed again after a failed load. Used by the "Try again" button. */
+  async retryFeed(): Promise<void> {
+    this.connectionLost.set(false);
+    await this.loadFeed();
   }
 
   setFilter(patch: Partial<FeedFilter>): void {
@@ -277,6 +377,8 @@ export class DataService {
 
   async loadStatic(): Promise<void> {
     const [spots, rawStories, tips] = await Promise.all([this.api.spotlights(), this.api.stories(), this.api.tips()]);
+    this.syncTick.update((n) => n + 1);
+    void this.loadLookouts();
     this.spotlights.set(spots);
     const me = this.auth.viewerId;
     // The story rail only ever shows the first handful, and each story costs an
@@ -316,15 +418,18 @@ export class DataService {
       this.followingIds.set([]);
       this.followerIds.set([]);
       this.followRequests.set([]);
+      this.myAuthored.set([]);
       return;
     }
-    const [notes, following, followers, requests] = await Promise.all([
+    const [notes, following, followers, requests, mine] = await Promise.all([
       this.api.notifications(id),
       this.api.followsFor(id, 'following'),
       this.api.followsFor(id, 'followers'),
-      this.api.followRequests(id)
+      this.api.followRequests(id),
+      this.api.postsByAuthor(id).catch(() => [] as Post[])
     ]);
     this.notifications.set(notes);
+    this.myAuthored.set([...mine].sort((a, b) => b.createdAt - a.createdAt));
     this.followingIds.set(following.map((edge) => edge.followingId));
     this.followerIds.set(followers.map((edge) => edge.followerId));
     this.followRequests.set(requests);
@@ -515,6 +620,9 @@ export class DataService {
     if (input.type === 'danger' && !input.lastSeenWhere.trim()) throw new Error('Say the place where you saw this');
     if (input.type === 'danger' && !input.danger?.kind) throw new Error('Choose what kind of danger you saw');
     if (input.type === 'khumbulekhaya' && !input.khumbu) throw new Error('Add the basic details about when they left home');
+    if (isChildSubject(input) && !input.guardianConsent) {
+      throw new Error('A case about a child can only be posted by their guardian, or with the guardian\u2019s permission');
+    }
     if (input.audience === 'surname' && !input.spotlightId) throw new Error('Choose which Spotlight community should see this');
     this.requireMembership(input.spotlightId);
     if (input.media.length > 1 && input.media.some((m) => m.kind === 'video')) {
@@ -543,6 +651,9 @@ export class DataService {
       contactVisibleTo: input.contactVisibleTo,
       caseNumber: input.caseNumber?.trim() || null,
       reward: input.reward?.trim() || null,
+      plan: isCasePost({ type: input.type } as Post)
+        ? { done: input.caseNumber?.trim() ? { case_number: true } : {}, updatedAt: now }
+        : null,
       createdAt: now,
       updatedAt: now,
       subject: input.type === 'vehicle' ? null : input.subject,
@@ -561,7 +672,9 @@ export class DataService {
       lastLike: null,
       lastComment: null,
       escalation: { requested: false, consentGranted: false, consentAt: null, partners: [] },
-      consent: [],
+      consent: input.guardianConsent
+        ? [{ kind: 'guardian' as const, label: 'Guardian permission to publish a child case', granted: true, at: now, expiresAt: null }]
+        : [],
       sightingVerified: null,
       searchParty: null,
       locationCheck: {
@@ -586,11 +699,14 @@ export class DataService {
     };
     await this.api.savePost(post);
     if (post.type === 'danger') await this.alertProvince(post);
+    // A child case is held for review first, so its alert goes out on approval.
+    if (isCasePost(post) && post.status === 'active') await this.alertCase(post);
     if (post.spotlightId) {
       // the post is already live; a failed Spotlight index must not look like a failed post
       await this.api.linkSpotlightPost(post.spotlightId, post.id, true).catch((e) => console.warn(e?.message));
     }
     this.mergeCache([post]);
+    this.myAuthored.update((list) => [post, ...list.filter((x) => x.id !== post.id)]);
     await this.loadFeed();
     return post;
   }
@@ -918,7 +1034,7 @@ export class DataService {
           await this.api.pushNotification({
             id: uid('n'), userId: me, kind: 'vote',
             title: n === 1 ? `Someone has an idea about ${who}` : `${n} people have an idea about ${who}`,
-            body: `New Idea on ${where}. Open it to read the leads.`,
+            body: `Someone has an idea on ${where}. Open it to read the leads.`,
             at: Date.now(), read: false, route: `/post/${p.id}`, postId: p.id
           });
           sent++;
@@ -1383,6 +1499,8 @@ export class DataService {
     };
     await this.api.savePost(next);
     this.mergeCache([next]);
+    // Their own profile shows the case at every stage, found included.
+    this.myAuthored.update((list) => list.map((x) => (x.id === next.id ? next : x)));
     await this.loadFeed();
     return next;
   }
@@ -1408,7 +1526,9 @@ export class DataService {
   async dismissOutcomeNudge(postId: string): Promise<void> {
     const p = await this.loadPost(postId);
     if (!p) return;
-    await this.api.savePost({ ...p, outcomeNudgeAt: Date.now(), updatedAt: Date.now() });
+    // A patch, not a copy of the post: this fires in the background while the
+    // family may be editing the same case.
+    await this.api.patchPost(postId, { outcomeNudgeAt: Date.now(), updatedAt: Date.now() });
     await this.loadFeed();
   }
 
@@ -1513,6 +1633,125 @@ export class DataService {
    * Tell other people in the same province. The poster already knows.
    * The alert stays on the feed for everyone; the notice is for people nearby.
    */
+  /* --------------------------- case alerts ---------------------- */
+
+  /**
+   * Tell the right people a new case is live.
+   *
+   * The whole point of a missing-person app is this one message, so the rules are
+   * explicit and each member's own alert preferences (Settings -> Alerts, kept on
+   * their profile) decide whether they get it:
+   *
+   *  - the master push switch off means nothing at all;
+   *  - "missing children only" silences everything except under-18 cases;
+   *  - the alert province narrows it to one province, or all nine;
+   *  - a case with no coordinates still goes out by province, because an address
+   *    nobody has yet must never stop an alert.
+   *
+   * Returns how many members were reached, which the admin review screen shows.
+   */
+  async alertCase(post: Post): Promise<number> {
+    if (!isCasePost(post) || post.status !== 'active') return 0;
+    const child = isChildCase(post);
+    const users = await this.api.users().catch(() => [] as UserProfile[]);
+    const place = [post.town, provinceName(post.province)].filter(Boolean).join(', ');
+    let sent = 0;
+    for (const u of users) {
+      if (u.id === post.authorId || u.suspended) continue;
+      const prefs = u.alertPrefs ?? null;
+      if (prefs) {
+        if (!prefs.enabled) continue;
+        if (prefs.childrenOnly && !child) continue;
+        if (prefs.province !== 'all' && prefs.province !== post.province) continue;
+      } else if (u.province && u.province !== post.province) {
+        // No saved preferences: province-level alerts, never a silent drop.
+        continue;
+      }
+      await this.api.pushNotification({
+        id: uid('n'),
+        userId: u.id,
+        kind: 'missing',
+        title: child ? 'A child is missing nearby' : 'A new missing case nearby',
+        body: `${post.subject?.name?.trim() || 'Someone'} · ${place}. Open the case for the poster.`,
+        at: Date.now(),
+        read: false,
+        route: `/post/${post.id}`,
+        postId: post.id
+      });
+      sent++;
+    }
+    return sent;
+  }
+
+  /**
+   * Where this phone last saw itself, if the member ever shared a location.
+   * Used only to say how far a case alert is from them. Nothing is uploaded.
+   */
+  devicePoint(): GeoPoint | null {
+    try {
+      const raw = typeof localStorage !== 'undefined' ? localStorage.getItem('lulafind.lastLocation') : null;
+      if (!raw) return null;
+      const parsed = JSON.parse(raw) as { point?: GeoPoint };
+      const point = parsed?.point;
+      return point && typeof point.lat === 'number' && typeof point.lng === 'number' ? point : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /** Cases that closed as found, for the reunions page. */
+  closedCases(): Promise<Post[]> {
+    return this.api.foundCases();
+  }
+
+  /**
+   * Tick a step on a case's first-hours checklist. Author or admin only.
+   * Nothing here is public: the checklist is the family's own working sheet.
+   */
+  async tickStep(postId: string, step: CaseStepId, done: boolean): Promise<Post | undefined> {
+    const me = this.auth.user();
+    const p = await this.loadPost(postId);
+    if (!me || !p) throw new Error('That post is not here any more');
+    if (p.authorId !== me.id && me.isAdmin !== true) throw new Error('Only the person who posted this can change the plan');
+    const plan: CasePlan = { done: { ...(p.plan?.done ?? {}) }, officerName: p.plan?.officerName, officerContact: p.plan?.officerContact, updatedAt: Date.now() };
+    plan.done[step] = done;
+    if (!done) delete plan.done[step];
+    const next = await this.api.patchPost(postId, { plan, updatedAt: Date.now() });
+    if (next) this.touch(next);
+    return next;
+  }
+
+  /** Save the investigating officer once, for the family's own eyes. */
+  async saveOfficer(postId: string, officerName: string, officerContact: string): Promise<Post | undefined> {
+    const me = this.auth.user();
+    const p = await this.loadPost(postId);
+    if (!me || !p) throw new Error('That post is not here any more');
+    if (p.authorId !== me.id && me.isAdmin !== true) throw new Error('Only the person who posted this can add that');
+    const plan: CasePlan = {
+      done: { ...(p.plan?.done ?? {}) },
+      officerName: officerName.trim(),
+      officerContact: officerContact.trim(),
+      updatedAt: Date.now()
+    };
+    if (plan.officerName && plan.officerContact) plan.done.officer_details = true;
+    const next = await this.api.patchPost(postId, { plan, updatedAt: Date.now() });
+    if (next) this.touch(next);
+    return next;
+  }
+
+  /**
+   * Keep the signed-in member's alert preferences on their profile, so a case
+   * posted from any phone can be matched to them.
+   */
+  async saveAlertPrefs(prefs: AlertPrefs): Promise<void> {
+    const me = this.auth.user();
+    if (!me) return;
+    const updated: UserProfile = { ...me, alertPrefs: prefs };
+    await this.api.saveUser(updated);
+    this.touchAuthor(updated);
+    this.auth.syncUser(updated);
+  }
+
   private async alertProvince(post: Post): Promise<void> {
     const users = await this.api.users();
     const kind = dangerLabel(post.danger?.kind);
@@ -1764,7 +2003,11 @@ export class DataService {
     const list = zones.map((name) => ({
       id: uid('z'), name: name.trim(), priority: 'medium' as const, takenBy: null, done: false, note: ''
     })).filter((z) => z.name);
-    await this.api.savePost({ ...p, searchParty: { open: true, meetAt: meetAt.trim(), meetWhen, zones: list } });
+    const next = await this.api.patchPost(postId, {
+      searchParty: { open: true, meetAt: meetAt.trim(), meetWhen, zones: list },
+      updatedAt: Date.now()
+    });
+    if (next) this.touch(next);
     await this.loadFeed();
   }
 
@@ -1774,10 +2017,15 @@ export class DataService {
     if (!p?.searchParty) throw new Error('That case has no open search party');
     const me = this.auth.viewerId;
     if (!me) throw new Error('Sign in to join a search party');
-    const zones = p.searchParty.zones.map((z) =>
+    // Re-read first: a volunteer is claiming one zone while someone else may be
+    // claiming another, and only the searchParty field is written back.
+    const fresh = (await this.api.post(postId)) ?? p;
+    const party = fresh.searchParty ?? p.searchParty;
+    const zones = party.zones.map((z) =>
       z.id === zoneId ? { ...z, takenBy: z.takenBy === me ? null : me } : z
     );
-    await this.api.savePost({ ...p, searchParty: { ...p.searchParty, zones } });
+    const next = await this.api.patchPost(postId, { searchParty: { ...party, zones }, updatedAt: Date.now() });
+    if (next) this.touch(next);
     await this.loadFeed();
   }
 
@@ -1822,10 +2070,14 @@ export class DataService {
   async completeSearchZone(postId: string, zoneId: string, note = ''): Promise<void> {
     const p = this.cache()[postId] ?? (await this.api.post(postId));
     if (!p?.searchParty) throw new Error('That case has no open search party');
-    const zones = p.searchParty.zones.map((z) =>
+    // Same reason as claiming a zone: re-read, then write back only this field.
+    const fresh = (await this.api.post(postId)) ?? p;
+    const party = fresh.searchParty ?? p.searchParty;
+    const zones = party.zones.map((z) =>
       z.id === zoneId ? { ...z, done: !z.done, note: note.trim().slice(0, 200) || z.note } : z
     );
-    await this.api.savePost({ ...p, searchParty: { ...p.searchParty, zones } });
+    const next = await this.api.patchPost(postId, { searchParty: { ...party, zones }, updatedAt: Date.now() });
+    if (next) this.touch(next);
     await this.loadFeed();
   }
 
@@ -1873,4 +2125,22 @@ export class DataService {
   get newestAt(): number {
     return this.feed().reduce((max, p) => Math.max(max, p.updatedAt), 0) || Date.now() - DAY;
   }
+}
+
+/** Public case types that deserve an alert when they go live. */
+function isCasePost(p: Post): boolean {
+  return p.type === 'missing' || p.type === 'khumbulekhaya';
+}
+
+/** A child case: the one kind that must never be silenced. */
+function isChildCase(p: Post): boolean {
+  const age = p.subject?.age;
+  return typeof age === 'number' && age < 18;
+}
+
+/** Does this post describe someone under 18? */
+function isChildSubject(input: CreatePostInput): boolean {
+  if (input.type !== 'missing' && input.type !== 'khumbulekhaya') return false;
+  const age = input.subject?.age;
+  return typeof age === 'number' && age < 18;
 }

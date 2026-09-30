@@ -8,6 +8,7 @@ import { PrefetchService } from './core/services/prefetch.service';
 import { BACKGROUNDS, SettingsService } from './core/services/settings.service';
 import { RepostSheetComponent } from './shared/components/repost-sheet.component';
 import { supabaseNotice } from './core/data/supabase-client';
+import { demoMode, localMode } from './core/data/demo';
 
 @Component({
   selector: 'lf-root',
@@ -15,6 +16,18 @@ import { supabaseNotice } from './core/data/supabase-client';
   imports: [IonApp, IonRouterOutlet, RepostSheetComponent],
   template: `
     <ion-app>
+      @if (demoMode()) {
+        <p class="lf-notice lf-notice--demo" role="status">
+          Demo data - sample cases, not real people. Turn it off in the URL with ?demo=0
+        </p>
+      }
+
+      @if (localMode()) {
+        <p class="lf-notice lf-notice--demo" role="status">
+          Local data mode - this device is the database. Nothing here is shared.
+        </p>
+      }
+
       @if (notice()) {
         <p class="lf-notice" role="alert">{{ notice() }}</p>
       }
@@ -92,6 +105,8 @@ import { supabaseNotice } from './core/data/supabase-client';
     }
     .lf-notice { margin: 0; padding: 10px 14px; padding-top: max(10px, var(--lf-safe-top));
       background: var(--lf-signal); color: #fff; font: 600 13px/1.35 var(--ion-font-family); }
+    /* Informational, not an alarm: a card surface reads better than a blue bar. */
+    .lf-notice--demo { background: var(--lf-card-2); color: var(--ion-text-color); }
     @media (prefers-reduced-motion: reduce) {
       .lf-splash, .lf-splash__logo,
       .lf-splash__tagline, .lf-splash__dots,
@@ -106,6 +121,8 @@ export class AppComponent implements OnInit {
   private prefetch = inject(PrefetchService);
   private settings = inject(SettingsService);
   readonly notice = supabaseNotice;
+  readonly demoMode = demoMode;
+  readonly localMode = localMode;
 
   /** Splash overlay state — visible until auth.ready(), then fades for .55s and removes. */
   readonly splashVisible = signal(true);

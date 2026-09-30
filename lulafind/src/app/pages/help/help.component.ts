@@ -1,5 +1,5 @@
 import { Component, inject } from '@angular/core';
-import { Router } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { IonContent } from '@ionic/angular/ion-content';
 import { IonHeader } from '@ionic/angular/ion-header';
 import { IonToolbar } from '@ionic/angular/ion-toolbar';
@@ -20,7 +20,7 @@ import {
 @Component({
   selector: 'lf-help',
   standalone: true,
-  imports: [IonContent, IonHeader, IonToolbar, IonButtons, IonTitle, IconComponent],
+  imports: [IonContent, IonHeader, IonToolbar, IonButtons, IonTitle, RouterLink, IconComponent],
   template: `
     <!-- Deliberately no back button: leaving help clears history on purpose (see leave()). -->
     <ion-header [translucent]="false">
@@ -41,7 +41,8 @@ import {
         </div>
       </div>
 
-      <p class="quiet">If someone hurting you can see this phone, tap Leave. It goes back to the feed and does not stay in Back.</p>
+      <p class="quiet">Tap Leave to go straight back to the feed: this page does not stay in Back.</p>
+      <a class="lf-btn lf-btn--block" routerLink="/faqs"><lf-icon name="info" [size]="16" /> Questions and answers</a>
       <section>
         <h2>Contact LulaFind</h2>
         <a class="line" [href]="'mailto:' + support">
@@ -110,7 +111,7 @@ import {
       padding: 12px; margin-bottom: 8px; border-radius: var(--lf-radius);
       border: 0; box-shadow: var(--lf-shadow); background: var(--lf-card); }
     .line:active { transform: scale(.99); }
-    .num { min-width: 92px; font-size: 16px; font-weight: 800; letter-spacing: -.3px; color: var(--lf-signal); }
+    .num { min-width: 92px; font-size: 16px; font-weight: 800; letter-spacing: -.3px; color: var(--lf-signal-text); }
     .meta { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
     .meta strong { font-size: 14px; }
     .meta span { font-size: 12.5px; line-height: 1.35; color: var(--lf-muted); }

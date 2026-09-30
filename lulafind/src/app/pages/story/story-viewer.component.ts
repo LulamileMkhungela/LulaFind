@@ -1,12 +1,16 @@
-import { Component, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, computed, effect, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { IconComponent } from '../../shared/components/icon.component';
 import { AvatarComponent } from '../../shared/components/avatar.component';
+import { SettingsService } from '../../core/services/settings.service';
 import { DataService } from '../../core/services/data.service';
 import { AuthService } from '../../core/services/auth.service';
 import { Story } from '../../core/models/types';
 import { countdown, timeAgo } from '../../core/utils/format';
 import { STORY_BLACK, storyBg } from '../../core/data/seed';
+
+/** How long a finger has to stay down before a press counts as "hold to read". */
+const HOLD_MS = 420;
 
 @Component({
   selector: 'lf-story-viewer',
@@ -40,12 +44,12 @@ import { STORY_BLACK, storyBg } from '../../core/data/seed';
       @if (!story()) {
         <div class="ended"><span class="ended-icon"><lf-icon name="clock" [size]="22" /></span><strong>This story is no longer available</strong><p>Stories disappear 24 hours after they are shared.</p><button type="button" (click)="close()">Back to LulaFind</button></div>
       } @else {
-        <main class="story-canvas" (click)="advance()" (pointerdown)="hold(true)" (pointerup)="hold(false)" (pointercancel)="hold(false)" (pointerleave)="hold(false)" (contextmenu)="$event.preventDefault()">
+        <main class="story-canvas" (click)="advance()" (pointerdown)="pressStart()" (pointerup)="pressEnd()" (pointercancel)="pressEnd()" (pointerleave)="pressEnd()" (contextmenu)="$event.preventDefault()">
           @if (currentMedia()) { <img [src]="currentMedia()!.src" class="shot" alt="Story photo" /> }
           @if (story()!.text) { <div class="story-text" [class.over-photo]="!!currentMedia()">{{ story()!.text }}</div> }
           <button class="tap-zone tap-zone--left" type="button" aria-label="Previous photo" (click)="$event.stopPropagation(); previous()"></button>
           <button class="tap-zone tap-zone--right" type="button" aria-label="Next photo" (click)="$event.stopPropagation(); advance()"></button>
-          @if (paused()) { <span class="paused"><lf-icon name="clock" [size]="12" /> Paused</span> }
+          @if (paused()) { <span class="paused"><lf-icon name="clock" [size]="12" /> {{ pausedLabel() }}</span> }
           @if (segmentCount() > 1) { <span class="image-count">{{ mediaIndex() + 1 }} / {{ segmentCount() }}</span> }
         </main>
 
@@ -84,8 +88,8 @@ import { STORY_BLACK, storyBg } from '../../core/data/seed';
           <footer class="reply-footer">
             @if (me()) {
               <input #replyBox aria-label="Private story reply" placeholder="Reply privately…" [disabled]="sending()"
-                     (focus)="typing.set(true)" (blur)="typing.set(false)" (input)="typing.set(true)"
-                     (keydown.enter)="sendReply(replyBox)" />
+                     (focus)="onReplyFocus()" (blur)="onReplyBlur(replyBox)"
+                     (input)="onReplyInput($event)" (keydown.enter)="sendReply(replyBox)" />
               <button class="send" type="button" (click)="sendReply(replyBox)" [disabled]="sending() || !replyBox.value.trim()" aria-label="Send private reply">
                 <lf-icon [name]="sending() ? 'clock' : 'send'" [size]="18" />
               </button>
@@ -164,6 +168,7 @@ import { STORY_BLACK, storyBg } from '../../core/data/seed';
 export class StoryViewerComponent implements OnInit, OnDestroy {
   protected data = inject(DataService);
   private auth = inject(AuthService);
+  private settings = inject(SettingsService);
   private route = inject(ActivatedRoute);
   private router = inject(Router);
 
@@ -180,21 +185,46 @@ export class StoryViewerComponent implements OnInit, OnDestroy {
   typing = signal(false);
   /** a finger is held on the story */
   holding = signal(false);
+  /**
+   * Once the person does anything with this story - types a reply, opens the
+   * viewer list, holds to read - the story stops advancing by itself and stays
+   * exactly where they left it. That is the fix for "it goes off while I am
+   * typing or reading". Nobody is pulled away from a story they are using.
+   */
+  engaged = signal(false);
+  /** The rail refreshed and dropped this story. We keep showing the copy we have. */
+  private held = signal<Story | null>(null);
   private hidden = signal(typeof document !== 'undefined' && document.hidden);
   private onVisibility = () => this.hidden.set(document.hidden);
   private timer: ReturnType<typeof setInterval> | null = null;
+  private pressTimer: ReturnType<typeof setTimeout> | null = null;
 
   readonly me = computed(() => this.auth.viewerId);
-  /** Nothing moves on while someone is typing, holding, reading replies or away. */
-  readonly paused = computed(() => this.typing() || this.holding() || this.hidden() || (this.isOwner() && this.insightsOpen()) || this.sending());
+  /**
+   * Nothing moves on while someone is typing, holding, reading replies, away,
+   * or once they have engaged with the story at all.
+   */
+  readonly paused = computed(() =>
+    this.typing() || this.holding() || this.hidden() || this.engaged()
+    || (this.isOwner() && this.insightsOpen()) || this.sending());
   readonly rail = computed(() => this.data.visibleStories());
-  readonly story = computed(() => this.rail().find((item) => item.id === this.id()) ?? null);
+  readonly story = computed(() =>
+    this.rail().find((item) => item.id === this.id()) ?? this.held());
   readonly isOwner = computed(() => !!this.story() && this.story()!.authorId === this.me());
   readonly authorName = computed(() => this.data.authorOf(this.story()?.authorId ?? '')?.displayName ?? 'Member');
   readonly avatar = computed(() => this.data.avatarFor(this.data.authorOf(this.story()?.authorId ?? '')));
   readonly bg = computed(() => storyBg(this.story()?.bgHue ?? STORY_BLACK));
   readonly currentMedia = computed(() => this.story()?.media[this.mediaIndex()] ?? null);
   readonly segments = computed(() => Array.from({ length: Math.max(1, this.story()?.media.length ?? 0) }));
+
+  constructor() {
+    // Remember the story the moment we can see it, so a background refresh of
+    // the rail can never pull it out from under the person reading it.
+    effect(() => {
+      const live = this.rail().find((item) => item.id === this.id());
+      if (live) this.held.set(live);
+    });
+  }
 
   async ngOnInit(): Promise<void> {
     this.id.set(this.route.snapshot.paramMap.get('id') ?? '');
@@ -208,16 +238,48 @@ export class StoryViewerComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     if (this.timer) clearInterval(this.timer);
+    this.clearPress();
     document.removeEventListener('visibilitychange', this.onVisibility);
   }
 
-  hold(on: boolean): void { this.holding.set(on); }
+  /**
+   * A press only counts as a hold after a moment, so a plain tap still moves to
+   * the next story and does not switch auto-advance off for the whole session.
+   */
+  pressStart(): void {
+    this.clearPress();
+    this.pressTimer = setTimeout(() => {
+      this.holding.set(true);
+      this.engage();
+    }, HOLD_MS);
+  }
 
-  /** Time on screen: longer for words, so a caption can be read. */
+  pressEnd(): void {
+    this.clearPress();
+    this.holding.set(false);
+  }
+
+  private clearPress(): void {
+    if (this.pressTimer) { clearTimeout(this.pressTimer); this.pressTimer = null; }
+  }
+
+  /**
+   * Time on screen: long enough to actually read the caption. Roughly half a
+   * second a word on top of six seconds, never under nine seconds.
+   */
   private duration(): number {
     const s = this.story();
     const words = (s?.text ?? '').trim().split(/\s+/).filter(Boolean).length;
-    return Math.min(30_000, Math.max(7_000, 5_000 + words * 400));
+    const photos = Math.max(0, (s?.media.length ?? 0) - 1);
+    return Math.min(45_000, Math.max(9_000, 6_000 + words * 520 + photos * 1_500));
+  }
+
+  /** "Paused" or "Not moving on" - whatever is actually true. */
+  pausedLabel(): string {
+    if (this.typing()) return 'Paused while you type';
+    if (this.engaged()) return 'Paused';
+    if (this.hidden()) return 'Paused';
+    return 'Paused';
   }
 
   segmentCount(): number { return Math.max(1, this.story()?.media.length ?? 0); }
@@ -230,20 +292,75 @@ export class StoryViewerComponent implements OnInit, OnDestroy {
   private start(): void {
     if (this.timer) clearInterval(this.timer);
     this.pct.set(0);
+    /* Nobody asked for photos to move on their own. The switch in Settings says
+       whether this app may do that, and Data saver turns it off too: a story
+       that waits for a tap downloads nothing in advance. */
+    const s = this.settings.settings();
+    if (!s.autoplayMedia || s.dataSaving) { this.pct.set(0); return; }
     let elapsed = 0;
     const total = this.duration();
     this.timer = setInterval(() => {
       if (this.paused()) return;
       elapsed += 100;
       this.pct.set(Math.min(100, (elapsed / total) * 100));
-      if (elapsed >= total) this.advance();
+      if (elapsed >= total) this.autoAdvance();
     }, 100);
+  }
+
+  /**
+   * The timer ran out. Move to the next photo or story, but never close the
+   * viewer on someone: on the last story the bar simply stops at the end and
+   * waits for a tap. If the person has engaged with the story at all, nothing
+   * happens - they leave when they choose to.
+   */
+  private autoAdvance(): void {
+    if (this.engaged()) { this.pct.set(100); return; }
+    const story = this.story();
+    if (!story) return;
+    if (this.mediaIndex() + 1 < story.media.length) {
+      this.mediaIndex.set(this.mediaIndex() + 1);
+      this.start();
+      return;
+    }
+    const next = this.rail()[this.currentIndex() + 1];
+    if (next) {
+      this.goTo(next);
+      return;
+    }
+    // Last story: hold here instead of jumping the person back home.
+    this.pct.set(100);
+    if (this.timer) { clearInterval(this.timer); this.timer = null; }
+  }
+
+  private goTo(story: Story): void {
+    this.id.set(story.id);
+    this.held.set(story);
+    this.mediaIndex.set(0);
+    this.insightsOpen.set(story.authorId === this.me());
+    void this.data.markStorySeen(story.id);
+    this.start();
+  }
+
+  /** Anything the person does counts as "I am using this story, do not move on". */
+  engage(): void { this.engaged.set(true); }
+
+  onReplyFocus(): void { this.typing.set(true); this.engage(); }
+  onReplyInput(ev: Event): void {
+    const el = ev.target as HTMLInputElement;
+    this.typing.set(!!el.value.trim());
+    this.engage();
+  }
+  onReplyBlur(el: HTMLInputElement): void {
+    // Keep it paused while there is still text in the box, even after the
+    // keyboard is dismissed - the person is not finished.
+    this.typing.set(!!el.value.trim());
   }
 
   currentIndex(): number { return this.rail().findIndex((item) => item.id === this.id()); }
 
   remaining(): number { return Math.max(0, (this.story()?.expiresAt ?? Date.now()) - Date.now()); }
 
+  /** A deliberate tap on the story: move to the next photo, story, or close. */
   advance(): void {
     const story = this.story();
     if (!story) { this.close(); return; }
@@ -253,15 +370,8 @@ export class StoryViewerComponent implements OnInit, OnDestroy {
       return;
     }
     const next = this.rail()[this.currentIndex() + 1];
-    if (next) {
-      this.id.set(next.id);
-      this.mediaIndex.set(0);
-      this.insightsOpen.set(next.authorId === this.me());
-      void this.data.markStorySeen(next.id);
-      this.start();
-    } else {
-      this.close();
-    }
+    if (next) this.goTo(next);
+    else this.close();
   }
 
   previous(): void {
@@ -273,13 +383,17 @@ export class StoryViewerComponent implements OnInit, OnDestroy {
     const prev = this.rail()[this.currentIndex() - 1];
     if (prev) {
       this.id.set(prev.id);
+      this.held.set(prev);
       this.mediaIndex.set(Math.max(0, prev.media.length - 1));
       this.insightsOpen.set(prev.authorId === this.me());
       this.start();
     }
   }
 
-  toggleInsights(): void { this.insightsOpen.set(!this.insightsOpen()); }
+  toggleInsights(): void {
+    this.engage();
+    this.insightsOpen.set(!this.insightsOpen());
+  }
 
   async sendReply(input: HTMLInputElement): Promise<void> {
     const text = input.value.trim();
@@ -290,6 +404,7 @@ export class StoryViewerComponent implements OnInit, OnDestroy {
       await this.data.replyToStory(this.id(), text);
       input.value = '';
       this.typing.set(false);
+      this.engage();
     } catch (e: any) {
       this.errorMessage.set(e?.message ?? 'Could not send reply');
     } finally {

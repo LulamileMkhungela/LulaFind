@@ -27,15 +27,12 @@ import { clockTime, timeAgo } from '../../core/utils/format';
             <strong>Ask Lula</strong>
             <span class="pin"><lf-icon name="pin" [size]="11" /> Pinned</span>
           </div>
-          <span class="lf-small lf-muted lf-ellipsis">Reporting, posters, safety and how LulaFind works</span>
+          <span class="lf-small lf-muted">Reporting, posters, safety and how LulaFind works</span>
         </div>
       </button>
       <div class="gate-note">
-        <span class="fb-row__icon"><lf-icon name="lock" [size]="18" /></span>
-        <div>
-          Private chat only opens after you <strong>upvote a post</strong> and <strong>follow each other</strong>.
-          That is deliberate: it keeps chats between people who genuinely want to help.
-        </div>
+        <lf-icon name="lock" [size]="16" />
+        <span>You can message someone once <strong>you follow each other</strong>.</span>
       </div>
 
       @if (!auth.signedIn()) {
@@ -43,7 +40,7 @@ import { clockTime, timeAgo } from '../../core/utils/format';
                   message="Chats are private and tied to your account." actionLabel="Sign in" (action)="goAuth()" />
       } @else if (!threads().length) {
         <lf-empty icon="chat" title="No conversations yet"
-                  message="Find a case you can help with, upvote it, follow the poster, and the chat unlocks."
+                  message="Follow someone on a case and you can message each other."
                   actionLabel="Browse the feed" (action)="goHome()" />
       } @else {
         <div class="list">
@@ -70,7 +67,7 @@ import { clockTime, timeAgo } from '../../core/utils/format';
     </ion-content>
   `,
   styles: [`
-    .gate-note { display: flex; gap: 12px; align-items: center; padding: 12px 16px; font-size: 13px; line-height: 1.35;
+    .gate-note { display: flex; gap: 8px; align-items: center; padding: 10px 16px; font-size: 13px; line-height: 1.35;
       color: var(--lf-muted); background: var(--lf-card); border-bottom: 1px solid var(--lf-line-soft); }
     .gate-note strong { color: var(--ion-text-color); font-weight: 600; }
     .list { display: flex; flex-direction: column; background: var(--lf-card); padding: 4px 0 24px; }

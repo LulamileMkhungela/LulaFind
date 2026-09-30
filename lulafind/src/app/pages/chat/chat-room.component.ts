@@ -47,7 +47,7 @@ import { MediaService } from '../../core/services/media.service';
 
       <div class="notice">
         <lf-icon name="lock" [size]="14" />
-        Private chat. Unlocked because you upvoted and follow each other. Never send money to a stranger.
+        Private chat - you follow each other. Never send money to a stranger.
       </div>
 
       <div class="msgs">
@@ -118,7 +118,7 @@ import { MediaService } from '../../core/services/media.service';
     /* Messenger bubbles: grey for them, blue for me. */
     .bubble { padding: 8px 12px; border-radius: 18px; background: var(--lf-card-2); border: 0; }
     .bubble p { margin: 0 0 2px; font-size: 15px; line-height: 1.34; white-space: pre-wrap; word-break: break-word; }
-    .msg.mine .bubble { background: var(--lf-primary); color: #fff; }
+    .msg.mine .bubble { background: var(--lf-primary-fill); color: #fff; }
     :host-context(.lf-dark) .msg.mine .bubble { background: #0a7cff; }
     .bubble .lf-tiny { color: var(--lf-muted); font-size: 11px; }
     .msg.mine .bubble .lf-tiny { color: rgba(255,255,255,.75); }
