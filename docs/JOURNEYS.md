@@ -95,6 +95,7 @@ LD_LIBRARY_PATH=/tmp/alibs/lib node tools/e2e-journeys.mjs
 | Sign in | the right password | a wrong password is refused with a message; the right one reaches `/home` | ✔ screenshot `14` |
 | Admin | an admin account | a signed-in non-admin sees "This page is for the LulaFind creator and the trust & safety team" instead of being bounced home | ✔ |
 | Quiet screens | — | Saved, Connections, Notifications, Reunited, Tips, Help, FAQs, Terms, Settings, Safety centre, Ask Lula, Search all render with their own content | ✔ |
+| Show my town and last seen | an on/off choice | toggling it in Settings reaches the account (`true → false → true`), and the screen says what an open lookout still shows | ✔ screenshot `03b` (lookout run) |
 
 ### The safety journeys (see `docs/E2E-LOOKOUT.md`)
 

@@ -173,7 +173,7 @@ import { fullDate, timeAgo } from '../../core/utils/format';
       box-shadow: var(--lf-shadow); display: flex; flex-direction: column; gap: 10px; }
     .row { display: flex; gap: 10px; align-items: flex-start; }
     .row .lf-grow { display: flex; flex-direction: column; gap: 2px; }
-    .row.warn { color: var(--lf-signal); }
+    .row.warn { color: var(--lf-signal-text); }
     .row.ok { color: var(--lf-ubuntu); }
     .btns { display: flex; flex-direction: column; gap: 8px; }
     .danger { background: var(--lf-signal); color: #fff; }

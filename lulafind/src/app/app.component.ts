@@ -105,7 +105,8 @@ import { demoMode, localMode } from './core/data/demo';
     }
     .lf-notice { margin: 0; padding: 10px 14px; padding-top: max(10px, var(--lf-safe-top));
       background: var(--lf-signal); color: #fff; font: 600 13px/1.35 var(--ion-font-family); }
-    .lf-notice--demo { background: var(--lf-primary); color: #fff; }
+    /* Informational, not an alarm: a card surface reads better than a blue bar. */
+    .lf-notice--demo { background: var(--lf-card-2); color: var(--ion-text-color); }
     @media (prefers-reduced-motion: reduce) {
       .lf-splash, .lf-splash__logo,
       .lf-splash__tagline, .lf-splash__dots,

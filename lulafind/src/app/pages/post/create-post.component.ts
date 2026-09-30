@@ -290,7 +290,7 @@ interface MissingField { key: string; label: string; }
     .fb-create-topbar h1 { margin: 0; text-align: center; font-size: 16px; font-weight: 700; color: var(--fb-text); }
     .icon-button { width: 36px; height: 36px; border: 0; border-radius: 50%; display: grid; place-items: center; background: var(--fb-soft); color: var(--fb-text); cursor: pointer; transition: background .16s ease, transform .16s ease; }
     .icon-button:active { transform: scale(.94); }
-    .post-button { justify-self: end; min-width: 54px; height: 32px; padding: 0 12px; border: 0; border-radius: 6px; background: var(--fb-blue); color: #fff; font-size: 15px; font-weight: 600; cursor: pointer; transition: filter .15s ease, transform .15s ease; }
+    .post-button { justify-self: end; min-width: 54px; height: 32px; padding: 0 12px; border: 0; border-radius: 6px; background: var(--lf-primary-fill); color: #fff; font-size: 15px; font-weight: 600; cursor: pointer; transition: filter .15s ease, transform .15s ease; }
     .post-button:disabled { opacity: .45; cursor: default; }
     .post-button.ready { box-shadow: 0 0 0 2px color-mix(in srgb, var(--lf-primary) 22%, transparent); }
     .post-button:active:not(:disabled) { transform: scale(.96); }
@@ -298,8 +298,8 @@ interface MissingField { key: string; label: string; }
     .author-row { display: flex; align-items: center; gap: 10px; padding: 0 0 12px; }
     .author-meta { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
     .author-meta > strong { font-size: 14px; }
-    .audience-picker { display: inline-flex; align-items: center; gap: 4px; padding: 3px 7px; border-radius: 5px; background: var(--fb-soft); color: var(--fb-text); font-size: 13px; font-weight: 600; }
-    .audience-picker select, .spotlight-picker select { border: 0; outline: 0; background: transparent; color: inherit; font: inherit; appearance: none; cursor: pointer; }
+    .audience-picker { display: inline-flex; align-items: center; gap: 4px; min-height: 34px; padding: 4px 8px; border-radius: 5px; background: var(--fb-soft); color: var(--fb-text); font-size: 13px; font-weight: 600; }
+    .audience-picker select, .spotlight-picker select { border: 0; outline: 0; background: transparent; color: inherit; font: inherit; appearance: none; cursor: pointer; min-height: 26px; }
     .spotlight-picker { display: flex; gap: 8px; align-items: center; min-height: 36px; padding: 0 10px; margin: 0 0 12px 50px; border: 1px solid var(--fb-line); border-radius: 7px; color: var(--fb-muted); font-size: 14px; }
     .spotlight-picker select { flex: 1; color: var(--fb-text); }
     .inline-note { margin: 0 0 12px 50px; color: var(--fb-muted); font-size: 14px; line-height: 1.4; }
@@ -324,7 +324,7 @@ interface MissingField { key: string; label: string; }
     .field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
     .field.full { width: 100%; }
     .field > span { color: var(--fb-muted); font-size: 13px; font-weight: 600; }
-    .field b { color: var(--lf-signal); }
+    .field b { color: var(--lf-signal-text); }
     .field small { font-size: 12px; font-weight: 500; }
     .field input, .field select, .field textarea { width: 100%; min-height: 38px; box-sizing: border-box; padding: 8px 10px; border: 1px solid var(--fb-line); border-radius: 6px; background: var(--lf-card); color: var(--fb-text); font: inherit; font-size: 15px; outline: none; transition: border-color .16s ease, box-shadow .16s ease; }
     .field textarea { resize: vertical; min-height: 58px; }
@@ -356,15 +356,15 @@ interface MissingField { key: string; label: string; }
     .switch-row strong { font-size: 14px; }
     .switch-row small { color: var(--fb-muted); font-size: 12px; line-height: 1.35; }
     .privacy-switches { margin-top: 4px; }
-    .error-message { display: flex; align-items: center; gap: 6px; padding: 9px 10px; margin: 12px 0 0; border-radius: 6px; background: color-mix(in srgb, var(--lf-signal) 12%, transparent); color: var(--lf-signal); font-size: 14px; }
+    .error-message { display: flex; align-items: center; gap: 6px; padding: 9px 10px; margin: 12px 0 0; border-radius: 6px; background: color-mix(in srgb, var(--lf-signal) 12%, transparent); color: var(--lf-signal-text); font-size: 14px; }
     .notice-message { display: flex; align-items: center; gap: 6px; padding: 9px 10px; margin: 12px 0 0; border-radius: 6px; background: var(--lf-primary-soft); color: var(--lf-primary-soft-text); font-size: 14px; }
-    .field-error { margin: 1px 0 0; color: var(--lf-signal); font-size: 13px; font-weight: 600; }
+    .field-error { margin: 1px 0 0; color: var(--lf-signal-text); font-size: 13px; font-weight: 600; }
     .field.invalid input, .field.invalid select, .field.invalid textarea,
-    .body-input.field-error { border-color: var(--lf-signal); box-shadow: 0 0 0 2px color-mix(in srgb, var(--lf-signal) 18%, transparent); }
+    .body-input.field-error { border-color: var(--lf-signal-text); box-shadow: 0 0 0 2px color-mix(in srgb, var(--lf-signal) 18%, transparent); }
     .draft-note { display: flex; align-items: center; gap: 8px; margin: 10px 0 0; padding: 9px 11px; border-radius: 6px; background: var(--lf-primary-soft); color: var(--lf-primary-soft-text); font-size: 13.5px; }
     .draft-note button { margin-left: auto; border: 0; background: transparent; color: inherit; font: inherit; font-weight: 700; text-decoration: underline; cursor: pointer; }
     .missing { margin: 12px 0 0; padding: 11px 13px; border-radius: 8px; background: color-mix(in srgb, var(--lf-signal) 9%, transparent); color: var(--fb-text); }
-    .missing strong { display: flex; align-items: center; gap: 6px; color: var(--lf-signal); font-size: 14px; }
+    .missing strong { display: flex; align-items: center; gap: 6px; color: var(--lf-signal-text); font-size: 14px; }
     .missing ul { margin: 7px 0 0; padding-left: 20px; }
     .missing li { font-size: 14px; line-height: 1.45; color: var(--fb-muted); }
     .fb-create-header { background: var(--lf-card); }

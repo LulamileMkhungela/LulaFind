@@ -22,7 +22,7 @@ import { SUPPORT_EMAIL, SUPPORT_NAME } from '../../core/config';
   standalone: true,
   imports: [IonContent, IconComponent, TopNavComponent],
   template: `
-    <lf-top-nav backTo="/settings" />
+    <lf-top-nav title="Terms &amp; privacy" backTo="/settings" />
 
     <ion-content class="lf-page">
       <div class="wrap">

@@ -27,7 +27,7 @@ import { clockTime, timeAgo } from '../../core/utils/format';
             <strong>Ask Lula</strong>
             <span class="pin"><lf-icon name="pin" [size]="11" /> Pinned</span>
           </div>
-          <span class="lf-small lf-muted lf-ellipsis">Reporting, posters, safety and how LulaFind works</span>
+          <span class="lf-small lf-muted">Reporting, posters, safety and how LulaFind works</span>
         </div>
       </button>
       <div class="gate-note">

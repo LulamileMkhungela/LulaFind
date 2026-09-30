@@ -160,7 +160,7 @@ const STEPS = [
     .hero p { font-size: 15px; line-height: 1.55; margin: 14px 0; }
     .bigmark { width: 64px; height: 64px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
       font-size: 34px; font-weight: 700; color: #fff;
-      background: var(--lf-primary); }
+      background: var(--lf-primary-fill); }
     .rows { display: flex; flex-direction: column; gap: 10px; }
     .r { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 8px;
       border: 0; box-shadow: var(--lf-shadow); background: var(--lf-card); font-size: 14px; line-height: 1.4; }
@@ -168,7 +168,7 @@ const STEPS = [
     .center { display: flex; flex-direction: column; gap: 12px; align-items: stretch; }
     .center > lf-avatar { margin: 6px auto 0; }
     .perms { display: flex; flex-direction: column; gap: 8px; }
-    .err { color: var(--lf-signal); font-size: 12.5px; font-weight: 700; margin: 8px 2px 0; }
+    .err { color: var(--lf-signal-text); font-size: 12.5px; font-weight: 700; margin: 8px 2px 0; }
     .plist { display: flex; flex-direction: column; gap: 3px; margin-top: 4px; }
     .prow { display: flex; align-items: center; gap: 10px; padding: 12px; border-radius: 11px; border: 1px solid transparent;
       background: transparent; color: inherit; font-size: 14.5px; font-weight: 600; text-align: left; cursor: pointer; }

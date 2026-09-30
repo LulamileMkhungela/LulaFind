@@ -422,7 +422,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
     .snap-btn:active { transform: scale(.98); }
     .snap-btn:hover { filter: brightness(.97); }
     .snap-btn[disabled] { opacity: .5; pointer-events: none; }
-    .snap-btn--blue { background: var(--lf-primary); color: #fff; }
+    .snap-btn--blue { background: var(--lf-primary-fill); color: #fff; }
     :host-context(.lf-dark) .snap-btn--blue { background: #2374e1; }
     .snap-btn--google, .snap-btn--black {
       background: transparent;
@@ -434,7 +434,8 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
     .snap-switch { text-align: center; font-size: 15px; color: var(--ion-text-color); margin: 6px 0 0; }
     .snap-link { background: none; border: 0; color: var(--lf-link); font-family: inherit; font-weight: 600; font-size: 15px; cursor: pointer; }
-    .snap-link-muted { background: none; border: 0; color: var(--lf-muted); font-family: inherit; font-size: 15px; font-weight: 500; cursor: pointer; }
+    .snap-link-muted {
+      min-height: 40px; display: inline-flex; align-items: center; background: none; border: 0; color: var(--lf-muted); font-family: inherit; font-size: 15px; font-weight: 500; cursor: pointer; }
 
     .snap-form {
       box-sizing: border-box;
@@ -531,10 +532,10 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
     .snap-check { display: flex; gap: 10px; font-size: 14px; color: var(--ion-text-color); line-height: 1.4; }
     .snap-check input { accent-color: var(--lf-primary); width: 20px; height: 20px; flex-shrink: 0; }
 
-    .field-err { color: var(--lf-signal); font-size: 13px; font-weight: 500; margin: 2px 0 0; }
+    .field-err { color: var(--lf-signal-text); font-size: 13px; font-weight: 500; margin: 2px 0 0; }
     .field-err--block { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 8px; font-weight: 600; }
     .field-ok { display: flex; align-items: center; gap: 5px; margin: 3px 0 0; color: var(--lf-ubuntu); font-size: 13px; font-weight: 600; }
-    .err-msg { color: var(--lf-signal); font-size: 14px; margin: 12px 0 0; text-align: center; display: flex; align-items: center; justify-content: center; gap: 6px; }
+    .err-msg { color: var(--lf-signal-text); font-size: 14px; margin: 12px 0 0; text-align: center; display: flex; align-items: center; justify-content: center; gap: 6px; }
     .ok-msg { color: var(--lf-ubuntu); font-size: 14px; margin: 12px 0 0; text-align: center; display: flex; align-items: center; justify-content: center; gap: 6px; }
 
     .linklike { background: none; border: 0; color: var(--lf-link); font-weight: 600; cursor: pointer; padding: 0; font-size: inherit; font-family: inherit; }

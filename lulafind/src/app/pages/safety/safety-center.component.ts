@@ -225,16 +225,16 @@ import { fullDate, timeAgo } from '../../core/utils/format';
     .btns { display: flex; gap: 8px; flex-wrap: wrap; }
     .consent { display: flex; gap: 10px; align-items: center; padding: 11px 12px; border-radius: 11px;
       background: var(--lf-card-2); color: var(--lf-ubuntu); }
-    .consent.off { color: var(--lf-signal); }
+    .consent.off { color: var(--lf-signal-text); }
     .mine { display: flex; flex-direction: column; gap: 2px; padding: 11px 12px; border-radius: 11px;
       background: color-mix(in srgb, var(--lf-ubuntu) 14%, transparent); }
     .mine.bad { background: color-mix(in srgb, var(--lf-signal) 16%, transparent); }
     .field { display: flex; flex-direction: column; gap: 5px; font-size: 12.5px; color: var(--lf-muted); }
     .inp { min-height: 42px; padding: 9px 11px; border-radius: 11px; border: 1px solid var(--lf-line);
       background: var(--lf-card-2); color: inherit; font-size: 14px; }
-    .row-check { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--lf-muted); }
-    .row-check input { width: 19px; height: 19px; accent-color: var(--lf-beacon); }
-    .err { color: var(--lf-signal); font-size: 12.5px; margin: 0; }
+    .row-check { display: flex; align-items: center; gap: 10px; min-height: 44px; font-size: 13px; color: var(--lf-muted); }
+    .row-check input { width: 24px; height: 24px; accent-color: var(--lf-beacon); }
+    .err { color: var(--lf-signal-text); font-size: 12.5px; margin: 0; }
     .consent div { display: flex; flex-direction: column; gap: 2px; }
   `]
 })

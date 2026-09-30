@@ -280,6 +280,30 @@ if ((await state()).users.find((u) => u.name === A.name)?.alerts !== true) {
   problems.push('the setting did not reach the account');
 }
 
+/* The other half of the privacy story: the last-seen control, exercised here
+   instead of being assumed. It has to reach the account and change the town. */
+const lastSeenToggle = await page.evaluate(() => {
+  const row = Array.from(document.querySelectorAll('ion-item')).find((i) => (i.innerText || '').includes('Show my town and last seen'));
+  const t = row?.querySelector('ion-toggle');
+  if (!t) return false;
+  t.scrollIntoView({ block: 'center' });
+  t.click();
+  return true;
+});
+if (!lastSeenToggle) problems.push('no "Show my town and last seen" toggle in Settings');
+await sleep(1200);
+await shot('03b-last-seen-off', 'the person hides their town themselves');
+const hidden = (await state()).users.find((u) => u.name === A.name)?.showLastSeen;
+if (hidden !== false) problems.push(`hiding the town did not reach the account (saw ${hidden})`);
+/* Put it back: the run needs the area visible for the last-seen steps that follow. */
+await page.evaluate(() => {
+  const row = Array.from(document.querySelectorAll('ion-item')).find((i) => (i.innerText || '').includes('Show my town and last seen'));
+  row?.querySelector('ion-toggle')?.click();
+});
+await sleep(1000);
+const back = (await state()).users.find((u) => u.name === A.name)?.showLastSeen;
+if (back !== true) problems.push(`turning the town back on did not reach the account (saw ${back})`);
+
 await goto('/safety');
 await waitForText(/Be on the lookout/);
 await shot('04-safety-centre', 'the same choice, where a lookout is started');

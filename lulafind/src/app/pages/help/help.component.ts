@@ -111,7 +111,7 @@ import {
       padding: 12px; margin-bottom: 8px; border-radius: var(--lf-radius);
       border: 0; box-shadow: var(--lf-shadow); background: var(--lf-card); }
     .line:active { transform: scale(.99); }
-    .num { min-width: 92px; font-size: 16px; font-weight: 800; letter-spacing: -.3px; color: var(--lf-signal); }
+    .num { min-width: 92px; font-size: 16px; font-weight: 800; letter-spacing: -.3px; color: var(--lf-signal-text); }
     .meta { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
     .meta strong { font-size: 14px; }
     .meta span { font-size: 12.5px; line-height: 1.35; color: var(--lf-muted); }

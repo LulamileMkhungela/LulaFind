@@ -132,7 +132,7 @@ import { uid } from '../../core/utils/format';
     .result div { display: flex; flex-direction: column; gap: 2px; }
     .state { display: flex; gap: 10px; align-items: center; padding: 12px; border-radius: 12px; background: var(--lf-card-2); }
     .state[data-s="granted"] { color: var(--lf-ubuntu); }
-    .state[data-s="declined"] { color: var(--lf-signal); }
+    .state[data-s="declined"] { color: var(--lf-signal-text); }
     .state[data-s="requested"] { color: var(--lf-marigold); }
     .state div { display: flex; flex-direction: column; gap: 2px; }
     .points { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }

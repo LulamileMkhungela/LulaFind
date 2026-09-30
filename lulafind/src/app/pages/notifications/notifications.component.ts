@@ -55,7 +55,7 @@ import { distanceKm, timeAgo } from '../../core/utils/format';
     .row .lf-tiny { font-size: 13px; }
     .row.unread .lf-tiny { color: var(--lf-primary-soft-text); font-weight: 600; }
     .ic { width: 56px; height: 56px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
-      background: var(--lf-primary); color: #fff; flex-shrink: 0; }
+      background: var(--lf-primary-fill); color: #fff; flex-shrink: 0; }
     .ic[data-kind="danger"], .ic[data-kind="missing"] { background: var(--lf-signal); }
     .ic[data-kind="escalation"], .ic[data-kind="vote"] { background: var(--lf-ubuntu); }
     .ic[data-kind="outcome"], .ic[data-kind="claim"] { background: var(--lf-marigold); }

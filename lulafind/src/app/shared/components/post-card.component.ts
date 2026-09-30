@@ -298,7 +298,7 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
       padding: 3px 8px; border-radius: 6px; font-size: 12px; font-weight: 600;
       background: var(--lf-card-2); color: var(--ion-text-color);
     }
-    .fb-chip--danger { background: color-mix(in srgb, var(--lf-signal) 12%, transparent); color: var(--lf-signal); }
+    .fb-chip--danger { background: color-mix(in srgb, var(--lf-signal) 12%, transparent); color: var(--lf-signal-text); }
     .fb-chip--success { background: color-mix(in srgb, var(--lf-ubuntu) 14%, transparent); color: var(--lf-ubuntu); }
     .fb-chip--beacon { background: var(--lf-primary-soft); color: var(--lf-primary-soft-text); }
 
@@ -417,8 +417,9 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
       .fb-action-btn span { font-size: 11.5px; }
     }
     @media (max-width: 340px) {
-      .fb-action-btn span { font-size: 11px; }
-      .fb-action-btn lf-icon svg { width: 18px; height: 18px; }
+      .fb-action-btn span { font-size: 10.5px; }
+      .fb-action-btn { padding: 0 1px; }
+      .fb-action-btn lf-icon svg { width: 17px; height: 17px; }
     }
 
     .fb-chat-cta {

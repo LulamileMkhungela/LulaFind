@@ -186,9 +186,9 @@ import { STORY_BLACK, storyBg } from '../../core/data/seed';
       background: rgba(0,0,0,.28); color: #fff; cursor: pointer; }
     .grow { flex: 1; }
     .send { display: inline-flex; align-items: center; gap: 7px; height: 40px; padding: 0 16px; border: 0; border-radius: 20px;
-      background: var(--lf-primary); color: #fff; font: inherit; font-size: 15px; font-weight: 700; cursor: pointer; }
+      background: var(--lf-primary-fill); color: #fff; font: inherit; font-size: 15px; font-weight: 700; cursor: pointer; }
     .send:disabled { opacity: .45; }
-    .send.ready { background: var(--lf-blue); color: #fff; }
+    .send.ready { background: var(--lf-primary-fill); color: #fff; }
 
     /* the canvas IS the story: words typed straight onto it, centred like WhatsApp */
     .canvas { position: relative; z-index: 1; flex: 1; display: flex; flex-direction: column; align-items: center;

@@ -490,7 +490,7 @@ import { leadMarkView } from '../../core/utils/mark-check';
     .ask__q { margin: 0 0 2px; font-size: 15px; font-weight: 700; }
     .big { display: flex; align-items: center; justify-content: center; gap: 8px; height: 44px; border: 1px solid var(--lf-line); border-radius: 8px;
       background: transparent; color: var(--ion-text-color); font: inherit; font-size: 15px; font-weight: 600; cursor: pointer; }
-    .big--go { background: var(--lf-primary); border-color: var(--lf-primary); color: #fff; }
+    .big--go { background: var(--lf-primary-fill); border-color: var(--lf-primary-fill); color: #fff; }
     .note { margin: 8px var(--edge); padding: 10px 12px; border-radius: 8px; background: var(--lf-card); color: var(--ion-text-color); font-size: 14px; line-height: 1.45; }
 
     /* comments - LinkedIn's comment card: avatar, bordered box, Like/Reply row inside */
@@ -498,8 +498,8 @@ import { leadMarkView } from '../../core/utils/mark-check';
     .cbox { display: flex; align-items: flex-start; gap: 8px; }
     .field { flex: 1; min-width: 0; display: flex; align-items: flex-end; gap: 6px; padding: 6px 6px 6px 14px; border: 1px solid var(--lf-line); border-radius: 20px; background: var(--lf-card); }
     .field textarea { flex: 1; min-width: 0; max-height: 120px; padding: 6px 0; border: 0; outline: 0; resize: none; background: transparent; color: var(--ion-text-color); font: inherit; font-size: 15px; line-height: 1.35; }
-    .field .post { height: 30px; padding: 0 14px; margin-bottom: 1px; border: 0; border-radius: 15px; background: var(--lf-primary); color: #fff; font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; }
-    .signin { width: 100%; height: 42px; border: 0; border-radius: 21px; background: var(--lf-primary); color: #fff; font: inherit; font-weight: 700; cursor: pointer; }
+    .field .post { height: 30px; padding: 0 14px; margin-bottom: 1px; border: 0; border-radius: 15px; background: var(--lf-primary-fill); color: #fff; font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; }
+    .signin { width: 100%; height: 42px; border: 0; border-radius: 21px; background: var(--lf-primary-fill); color: #fff; font: inherit; font-weight: 700; cursor: pointer; }
     .replying { display: flex; align-items: center; justify-content: space-between; margin: 0 0 6px 48px; font-size: 13px; color: var(--lf-muted); }
     .replying button { border: 0; background: transparent; color: inherit; cursor: pointer; }
     .leadrow { margin: 0 0 8px 48px; font-size: 13px; color: var(--lf-muted); display: flex; flex-direction: column; gap: 6px; }
@@ -545,7 +545,7 @@ import { leadMarkView } from '../../core/utils/mark-check';
     .edit__row { display: flex; gap: 8px; margin: 4px 0 0; }
     .pill { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px; border: 1px solid var(--lf-line); border-radius: 15px;
       background: transparent; color: var(--ion-text-color); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
-    .pill--go { background: var(--lf-primary); border-color: var(--lf-primary); color: #fff; }
+    .pill--go { background: var(--lf-primary-fill); border-color: var(--lf-primary-fill); color: #fff; }
     .fine { margin: 12px var(--edge) 28px; font-size: 12px; text-align: center; color: var(--lf-muted); }
 
     .sheetwrap { position: fixed; inset: 0; z-index: 40; background: var(--lf-scrim); display: flex; align-items: flex-end; justify-content: center; }

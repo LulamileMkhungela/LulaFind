@@ -71,8 +71,9 @@ import { ReactionIconComponent } from './reaction-icon.component';
     @media (max-width: 430px) { .btn { font-size: 13px; gap: 4px; } }
     @media (max-width: 360px) { .btn { font-size: 11.5px; gap: 3px; } }
     @media (max-width: 340px) {
-      .btn { font-size: 10.5px; gap: 2px; padding: 0; }
-      .btn lf-icon svg { width: 19px; height: 19px; }
+      /* The very small phones: the label steps down rather than losing a word. */
+      .btn { font-size: 10px; gap: 2px; padding: 0; }
+      .btn lf-icon svg { width: 17px; height: 17px; }
     }
     .btn.on { color: var(--tone); }
     .scrim { position: fixed; inset: 0; z-index: 40; }

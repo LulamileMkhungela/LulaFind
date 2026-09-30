@@ -128,6 +128,15 @@ import { SUPPORT_EMAIL, SUPPORT_NAME } from '../../core/config';
             </ion-select>
           </ion-item>
         }
+        <!--
+          Last seen is shown to everyone; this is the one control over it, and it
+          is what the profile and the lookout screen read before showing a town.
+        -->
+        <ion-item>
+          <ion-label><strong>Show my town and last seen</strong><br />
+            <span class="lf-muted lf-small">Everyone can see the town on your cases and when you were last around</span></ion-label>
+          <ion-toggle [checked]="showLastSeen()" (ionChange)="setShowLastSeen($any($event.detail).checked)"></ion-toggle>
+        </ion-item>
         <ion-item>
           <ion-label><strong>Let LulaFind match me to cases</strong><br />
             <span class="lf-muted lf-small">If a KhumbulEkhaya post matches your name we will ask you first</span></ion-label>
@@ -253,6 +262,8 @@ export class SettingsComponent {
   readonly findable = computed(() => this.auth.user()?.findableProfile ?? false);
   readonly allowAlerts = computed(() => this.auth.user()?.privacy?.allowSafetyAlertPosts === true);
   readonly alertAudience = computed(() => this.auth.user()?.privacy?.safetyAlertAudience ?? 'followers');
+  /** On by default: last seen is visible to everyone unless the person says otherwise. */
+  readonly showLastSeen = computed(() => this.auth.user()?.privacy?.showLastSeen !== false);
 
   /**
    * The same setting the Safety centre writes. It lives in both places on
@@ -269,6 +280,18 @@ export class SettingsComponent {
     await this.say(on
       ? 'LulaFind may post a case about you - only after a follower says something is wrong.'
       : 'LulaFind will never post a case about you.');
+  }
+
+  async setShowLastSeen(on: boolean): Promise<void> {
+    const me = this.auth.user();
+    if (!me) return;
+    const saved = await this.auth.updateProfile({
+      privacy: { ...defaultPrivacy(), ...(me.privacy ?? {}), showLastSeen: on }
+    });
+    this.data.touchAuthor(saved);
+    await this.say(on
+      ? 'Your town and last seen are visible to everyone.'
+      : 'Your town is hidden. A lookout still shows the area while it is open, so people can help look.');
   }
 
   async setAlertAudience(audience: Audience): Promise<void> {

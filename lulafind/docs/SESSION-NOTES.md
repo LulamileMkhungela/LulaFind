@@ -280,3 +280,30 @@ sign-in - 40 verdicts, read back from the app's own store. It found and fixed:
 
 The results table and the honest list of what a browser run cannot click (camera, share sheet,
 push, the admin actions, the cron) are in `docs/JOURNEYS.md`.
+
+**The last-seen control now exists.** `privacy.showLastSeen` was read by the profile and lookout
+screens but no screen could set it. Settings → Privacy & data now has **Show my town and last
+seen**, and the lookout run drives it: off reaches the account (`showLastSeen:false`, screenshot
+`03b`) and the toast says what an open lookout still shows, then back on. The run is 17 steps,
+0 problems.
+
+**Measured: responsive, aligned, quiet, quick.** `tools/e2e-quality.mjs` renders 18 screens x 6
+widths (320 / 360 / 390 / 414 / 768 / 1024) with real content and reads the numbers off the page:
+**0 sideways scroll, 0 off-edge elements, 0 clipped words, 0 targets under 24px, 0 overlapping
+controls, 0 contrast failures** (was 53 low-contrast text runs at every width, 15-16 tiny targets,
+3 clipped words). What it found and I fixed:
+
+- `Tips` and `Terms & privacy` rendered **without a title** - the header showed the home search bar;
+- the `Chats` row cut a full sentence off with an ellipsis; it wraps now;
+- `Share this tip` was a 111x13 button; follower counts 82x15; the audience picker 178x15 inside a
+  21px label; `Browse as guest` 123x15; round icon buttons 36x36; consent checkboxes 19x19 - all
+  raised to comfortable sizes;
+- white on `--lf-primary` failed AA in dark mode, red-as-text used the fill red, and dark links
+  sat at 4.06:1: new `--lf-primary-fill` / `--lf-signal-text` tokens, and a dark `--lf-link`;
+- the "Local data mode" banner was white on blue at 3.46:1 - now a quiet card strip.
+
+**Production build had no minification** (`optimization` off): 2.3 MB of readable JS. Now minified
++ brotli/gzip with a one-year cache on hashed files (`tools/serve-www.mjs`, preview on :4300):
+**first load 456 kB, FCP 128-160 ms**; reload 0 kB. Route change 11-24 ms, tap-to-change 23-27 ms,
+0 long tasks, 0 layout shift. `docs/QUALITY.md` has the tables and the honest limits (no network
+throttling, one engine, no screen-reader pass).

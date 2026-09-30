@@ -292,8 +292,8 @@ import { MediaService } from '../../core/services/media.service';
     .clear { border: 0; background: transparent; color: var(--lf-link); font-weight: 600; font-size: 13px; cursor: pointer; }
     .status.safe, .status[data-status="safe"] { background: color-mix(in srgb, var(--lf-ubuntu) 16%, transparent); }
     .stats { display: flex; gap: 16px; flex-wrap: wrap; }
-    .stats div, .stats button { display: flex; align-items: baseline; gap: 4px;
-      border: 0; background: transparent; color: inherit; padding: 0; cursor: pointer; font-family: inherit; }
+    .stats div, .stats button { display: flex; align-items: center; gap: 4px; min-height: 40px;
+      border: 0; background: transparent; color: inherit; padding: 0 6px; margin: -10px -6px; cursor: pointer; font-family: inherit; }
     .stats strong { font-size: 15px; font-weight: 700; }
     .stats span { font-size: 15px; color: var(--lf-muted); }
     .menu-tabs { margin-top: 8px; }
@@ -310,7 +310,7 @@ import { MediaService } from '../../core/services/media.service';
     .qi-green { background: color-mix(in srgb, var(--lf-ubuntu) 16%, transparent); color: var(--lf-ubuntu); }
     .qi-yellow { background: color-mix(in srgb, var(--lf-marigold) 20%, transparent); color: #c98f00; }
     .qi-green { background: color-mix(in srgb, var(--lf-ubuntu) 16%, transparent); color: var(--lf-ubuntu); }
-    .qi-red { background: color-mix(in srgb, var(--lf-signal) 14%, transparent); color: var(--lf-signal); }
+    .qi-red { background: color-mix(in srgb, var(--lf-signal) 14%, transparent); color: var(--lf-signal-text); }
     .qi-grey { background: var(--lf-card-2); color: var(--ion-text-color); }
     .qi-purple { background: color-mix(in srgb, #a33bc2 16%, transparent); color: #a33bc2; }
     .qi-teal { background: color-mix(in srgb, #1bb5a3 16%, transparent); color: #12998a; }
@@ -330,12 +330,12 @@ import { MediaService } from '../../core/services/media.service';
     .req { display: flex; align-items: center; gap: 9px; padding: 9px 0; border-top: 1px solid var(--lf-line); }
     .req strong { display: block; font-size: 14px; }
     .req span { display: block; }
-    .field-err { color: var(--lf-signal); font-size: 12px; font-weight: 600; margin: -2px 0 6px 4px; }
+    .field-err { color: var(--lf-signal-text); font-size: 12px; font-weight: 600; margin: -2px 0 6px 4px; }
     .ident-lock { display: flex; align-items: center; gap: 10px; padding: 10px 12px; margin: 4px 0 8px;
       border-radius: 8px; border: 1px dashed var(--lf-line); background: var(--lf-card-2); }
     .ident-lock .k { display: block; font-size: 11px; color: var(--lf-muted); font-weight: 700; }
     .ident-lock lf-icon { margin-left: auto; color: var(--lf-muted); }
-    .err { display: flex; align-items: center; gap: 8px; color: var(--lf-signal); font-size: 13px; margin: 6px 0 0; }
+    .err { display: flex; align-items: center; gap: 8px; color: var(--lf-signal-text); font-size: 13px; margin: 6px 0 0; }
     ion-item.bad { --border-color: var(--lf-signal); box-shadow: inset 0 0 0 1.5px var(--lf-signal); }
     .sheet { padding: 20px var(--lf-gap) 34px; }
     .row { display: flex; gap: 10px; margin-top: 18px; }

@@ -206,7 +206,7 @@ const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
     .intro { margin: 0 0 14px; line-height: 1.45; }
     ion-item { margin-bottom: 8px; }
     ion-item.bad { --border-color: var(--lf-signal); box-shadow: inset 0 0 0 1.5px var(--lf-signal); }
-    .field-err { color: var(--lf-signal); font-size: 12px; font-weight: 600; margin: -4px 0 8px 4px;
+    .field-err { color: var(--lf-signal-text); font-size: 12px; font-weight: 600; margin: -4px 0 8px 4px;
       display: flex; align-items: center; gap: 5px; text-decoration: none; }
     .err { display: flex; align-items: center; gap: 8px; color: var(--lf-signal); font-size: 13px; margin: 4px 0 0; }
     .create { margin-top: 16px; }

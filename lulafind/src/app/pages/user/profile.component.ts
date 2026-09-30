@@ -243,7 +243,7 @@ import { cover } from '../../core/data/seed';
     .quickbtn:active { transform: scale(.98); }
     .quickbtn.safe { border-color: var(--lf-ubuntu); color: var(--lf-ubuntu); }
     .quickbtn.safe.on { background: var(--lf-ubuntu); color: #fff; border-color: var(--lf-ubuntu); }
-    .quickbtn.help { border-color: var(--lf-signal); color: var(--lf-signal); }
+    .quickbtn.help { border-color: var(--lf-signal); color: var(--lf-signal-text); }
     .quickbtn.help.on { background: var(--lf-signal); color: #fff; border-color: var(--lf-signal); }
     .quickbtn:disabled { opacity: .55; cursor: wait; }
     .checkin { display: flex; align-items: center; gap: 10px; padding: 11px 13px; border-radius: 12px;

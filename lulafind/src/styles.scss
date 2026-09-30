@@ -383,6 +383,7 @@ ion-back-button {
   display: inline-flex;
   align-items: center;
   gap: 5px;
+  min-height: 36px;
   padding: 3px 8px;
   border-radius: 6px;
   font-size: 12px;
@@ -394,7 +395,7 @@ ion-back-button {
 }
 
 .lf-chip--danger {
-  color: var(--lf-signal);
+  color: var(--lf-signal-text);
   background: color-mix(in srgb, var(--lf-signal) 12%, transparent);
 }
 
@@ -450,10 +451,9 @@ ion-back-button {
 }
 
 .lf-btn--primary {
-  background: var(--lf-primary);
+  background: var(--lf-primary-fill);
   color: var(--lf-primary-text);
 }
-:root.lf-dark .lf-btn--primary { background: #2374e1; }
 
 .lf-btn--soft {
   background: var(--lf-primary-soft);
@@ -482,6 +482,7 @@ ion-back-button {
 }
 
 .lf-btn--sm {
+  min-height: 36px;
   min-height: 32px;
   padding: 0 10px;
   font-size: 14px;
@@ -515,8 +516,8 @@ ion-back-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
   border: 0;
   background: var(--lf-card-2);
@@ -749,6 +750,7 @@ ion-back-button {
 
 /* =========================== banner ============================ */
 
+.lf-banner a { display: inline-block; padding: 8px 2px; font-weight: 700; }
 .lf-banner {
   display: flex;
   gap: 10px;
