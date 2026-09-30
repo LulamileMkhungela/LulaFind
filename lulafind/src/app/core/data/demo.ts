@@ -29,7 +29,8 @@ function remembered(): boolean {
 
 function remember(on: boolean): void {
   try {
-    on ? sessionStorage.setItem(KEY, '1') : sessionStorage.removeItem(KEY);
+    if (on) sessionStorage.setItem(KEY, '1');
+    else sessionStorage.removeItem(KEY);
   } catch {
     /* private mode - the choice then lasts until the next navigation only */
   }

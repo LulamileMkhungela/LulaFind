@@ -17,7 +17,6 @@ import { AuthService } from '../../core/services/auth.service';
 import { LULA_API } from '../../core/data/api';
 import { Post } from '../../core/models/types';
 import { fullDate } from '../../core/utils/format';
-import { uid } from '../../core/utils/format';
 
 @Component({
   selector: 'lf-location-check',

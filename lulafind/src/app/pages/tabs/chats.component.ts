@@ -9,7 +9,7 @@ import { LogoComponent } from '../../shared/components/logo.component';
 import { ChatService } from '../../core/services/chat.service';
 import { DataService } from '../../core/services/data.service';
 import { AuthService } from '../../core/services/auth.service';
-import { clockTime, timeAgo } from '../../core/utils/format';
+import { timeAgo } from '../../core/utils/format';
 
 @Component({
   selector: 'lf-chats',
@@ -109,7 +109,7 @@ export class ChatsComponent {
     return this.data.avatarFor(this.data.authorOf(this.otherId(t.participantIds)));
   }
 
-  preview(threadId: string): string {
+  preview(_threadId: string): string {
     return 'Open conversation';
   }
 

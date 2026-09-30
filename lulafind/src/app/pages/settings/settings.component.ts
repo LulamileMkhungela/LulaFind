@@ -1,5 +1,5 @@
 import { Component, computed, inject } from '@angular/core';
-import { Router, RouterLink } from '@angular/router';
+import { RouterLink } from '@angular/router';
 import { IonContent } from '@ionic/angular/ion-content';
 
 
@@ -16,14 +16,15 @@ import { AlertController } from '@ionic/angular/alert-controller';
 import { ToastController } from '@ionic/angular/toast-controller';
 import { IconComponent } from '../../shared/components/icon.component';
 import { TopNavComponent } from '../../shared/components/top-nav.component';
-import { BACKGROUNDS, BackgroundKey, SettingsService, ThemeMode } from '../../core/services/settings.service';
+import { BACKGROUNDS, BackgroundKey, SettingsService } from '../../core/services/settings.service';
 import { AuthService } from '../../core/services/auth.service';
 import { DataService } from '../../core/services/data.service';
 import { AlertPrefs, Audience, defaultPrivacy } from '../../core/models/types';
 import { ModerationService } from '../../core/services/moderation.service';
 import { PlatformService } from '../../core/services/platform.service';
 import { PermissionsService, PermKind } from '../../core/services/permissions.service';
-import { PROVINCES, ProvinceCode } from '../../core/models/types';
+import { PushService } from '../../core/services/push.service';
+import { PROVINCES } from '../../core/models/types';
 import { environment } from '../../../environments/environment';
 import { SUPPORT_EMAIL, SUPPORT_NAME } from '../../core/config';
 
@@ -245,6 +246,7 @@ export class SettingsComponent {
   private mod = inject(ModerationService);
   private platform = inject(PlatformService);
   protected perms = inject(PermissionsService);
+  private push = inject(PushService);
   private alert = inject(AlertController);
   private toast = inject(ToastController);
 
@@ -349,8 +351,11 @@ export class SettingsComponent {
   async enablePerm(kind: PermKind): Promise<void> {
     const ok = await this.perms.enable(kind);
     if (kind === 'notifications') {
+      // The OS grant alone reaches nothing: this is what gets the FCM token.
+      if (ok) await this.push.requestAndRegister();
       this.settings.update({ pushEnabled: ok });
       await this.saveAlertPrefs();
+      if (this.push.registrationError()) this.say('Notifications are on, but this phone could not register for push: ' + this.push.registrationError());
     }
   }
 

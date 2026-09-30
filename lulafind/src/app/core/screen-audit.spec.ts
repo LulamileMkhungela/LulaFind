@@ -1,7 +1,7 @@
 import { Component, Type } from '@angular/core';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import { describe, expect, it, beforeEach } from 'vitest';
-import { provideRouter, ActivatedRoute, Router } from '@angular/router';
+import { provideRouter, ActivatedRoute } from '@angular/router';
 import { provideIonicAngular } from '@ionic/angular';
 import { writeFileSync, mkdirSync } from 'node:fs';
 
@@ -174,7 +174,7 @@ function proseBlocks(root: HTMLElement, userWords: string[]): Block[] {
 }
 
 /** Everything anyone has written into the app: posts, comments, chats, stories. */
-function userWords(data: DataService): string[] {
+function userWords(_data: DataService): string[] {
   const out: string[] = [];
   const push = (v: unknown): void => {
     if (typeof v === 'string' && words(v) >= 18) out.push(v.replace(/\s+/g, ' ').trim());

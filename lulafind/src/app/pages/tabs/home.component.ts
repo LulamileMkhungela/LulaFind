@@ -14,13 +14,11 @@ import { ChatState, PostCardComponent } from '../../shared/components/post-card.
 import { StoryRailComponent } from '../../shared/components/story-rail.component';
 import { PeopleRailComponent } from '../../shared/components/people-rail.component';
 import { FilterBarComponent } from '../../shared/components/filter-bar.component';
-import { CHECK_IN_COPY } from '../../core/services/safety.service';
-import { UserProfile } from '../../core/models/types';
 import { DataService } from '../../core/services/data.service';
 import { AuthService } from '../../core/services/auth.service';
 import { ChatService } from '../../core/services/chat.service';
 import { PlatformService } from '../../core/services/platform.service';
-import { POST_TYPE_META, Post, ReactionKind } from '../../core/models/types';
+import { Post, ReactionKind } from '../../core/models/types';
 import { feedWithRails } from '../../core/utils/feed';
 import { LookoutService } from '../../core/services/lookout.service';
 import { timeAgo } from '../../core/utils/format';

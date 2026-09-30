@@ -9,7 +9,7 @@ import { DataService } from './services/data.service';
 import { LookoutService } from './services/lookout.service';
 import { LOOKOUT_WINDOW_MS, Lookout, UserProfile, defaultPrivacy } from './models/types';
 import {
-  clearedBySelf, answerBlocker, applyAnswer, hasAnswered, isDue, lastSeenOf, newLookout, waitingOn, withAnswer, withAsked
+  clearedBySelf, applyAnswer, hasAnswered, isDue, lastSeenOf, newLookout, waitingOn, withAnswer, withAsked
 } from './utils/lookout';
 import { lookoutCasePost } from './utils/lookout-case';
 import { HOUR } from './utils/format';

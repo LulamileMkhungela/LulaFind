@@ -47,6 +47,13 @@ Then press **Run** (emulator or USB device). The Firebase config
 After changing web code, repeat `npm run build && npx cap sync` (or
 `npm run cap:sync`), then re-run from Android Studio.
 
+> **Good to know:** since the `capSync` Gradle task landed, pressing **Run**
+> in Android Studio also syncs for you — a build never packages stale web
+> assets or drops the Capacitor plugin registry (the cause of "old UI on the
+> phone" and "… plugin is not implemented on android"). Details, the Google
+> sign-in (SHA-1) checklist and the full permission matrix live in
+> [docs/ANDROID.md](docs/ANDROID.md).
+
 ## Run in Xcode (macOS)
 
 ```bash

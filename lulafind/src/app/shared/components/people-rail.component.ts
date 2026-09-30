@@ -63,7 +63,8 @@ export class PeopleRailComponent {
     // Re-rank when who you follow changes, so a followed person leaves the rail.
     effect(() => {
       this.data.followingIds();
-      this.auth.viewerId;
+      // Reading the viewer tracks the user signal: a sign-in/out re-ranks the rail.
+      this.auth.user();
       void this.data.suggestedPeople(12).then((list) => this.people.set(list)).catch(() => undefined);
     });
   }
