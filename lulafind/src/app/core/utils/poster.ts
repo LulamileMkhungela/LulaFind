@@ -2,15 +2,19 @@ import { Post, PostType, provinceName } from '../models/types';
 import { dayMonth } from './format';
 
 /** The stamp across the top of the poster, picked from the category. */
+export const isPosterType = (type: PostType): boolean =>
+  type === 'missing' || type === 'pet' || type === 'khumbulekhaya';
+
 export const posterKicker = (type: PostType): string =>
   type === 'pet' ? 'LOST PET'
   : type === 'sighting' ? 'SIGHTING'
   : type === 'khumbulekhaya' ? 'LEFT HOME'
-  : 'MISSING';
+  : type === 'missing' ? 'MISSING'
+  : '';
 
 /** The safety line across the bottom of the poster. */
 export const posterClose = (_type: PostType): string =>
-  'If they are in danger, call 10111. This is not a police poster.';
+  'Details and updates are available on LulaFind.';
 
 /**
  * A public flyer. PawBoost's own poster advice is to keep it short and leave
@@ -18,6 +22,7 @@ export const posterClose = (_type: PostType): string =>
  * stays off too — a public amount is how fake tipsters pick a family.
  */
 export function publicPoster(post: Post): { lines: string[]; withheld: string | null; shareText: string } {
+  if (!isPosterType(post.type)) return { lines: [], withheld: null, shareText: '' };
   const lines: string[] = [];
   if (post.subject?.name) {
     lines.push(post.subject.age != null ? `${post.subject.name}, ${post.subject.age}` : post.subject.name);
@@ -34,8 +39,6 @@ export function publicPoster(post: Post): { lines: string[]; withheld: string | 
     lines.push(`${post.contactLabel || 'Contact'}: ${post.contactValue}`);
   }
   if (!lines.length) {
-    // A sighting or danger alert with no structured fields still deserves a
-    // poster - fall back to the opening of what was typed.
     const brief = post.body.replace(/\s+/g, ' ').trim().slice(0, 220);
     if (brief) lines.push(brief);
   }
@@ -82,6 +85,9 @@ export interface PosterContent {
 }
 
 export function posterContent(post: Post, link: string, withPhoto: string | null): PosterContent {
+  if (!isPosterType(post.type)) {
+    return { kicker: '', name: '', ageLine: '', facts: [], contact: '', link: '', foot: '', photo: null };
+  }
   const s = post.subject;
   const kicker = post.type === 'pet' ? 'LOST PET' : post.type === 'khumbulekhaya' ? 'HAVE YOU SEEN' : 'MISSING';
   const name = (s?.name || (post.type === 'pet' ? 'Pet' : 'Someone we love')).trim();
@@ -99,7 +105,7 @@ export function posterContent(post: Post, link: string, withPhoto: string | null
     ? `${post.contactLabel || 'Contact'}: ${post.contactValue}` : 'Message the family on LulaFind';
   return {
     kicker, name, ageLine: bits.join(' · '), facts, contact, link,
-    foot: 'If they are in danger, call 10111. This is not a police poster.',
+    foot: 'Details and updates are available on LulaFind.',
     photo: withPhoto
   };
 }
@@ -218,11 +224,13 @@ function spaced(c: Ctx, on: boolean): void {
   if ('letterSpacing' in c) (c as unknown as { letterSpacing: string }).letterSpacing = on ? '6px' : '0px';
 }
 
-function footer(c: Ctx, p: PosterContent, color: string, y = POSTER_H - 58): void {
+function footer(c: Ctx, p: PosterContent, color: string, y = POSTER_H - 60): void {
   c.fillStyle = color;
-  c.font = `500 22px ${SANS}`;
   c.textAlign = 'left';
-  c.fillText(p.foot, 64, y);
+  c.font = `500 18px ${SANS}`;
+  c.fillText(p.foot, 64, y, 952);
+  c.font = `700 21px ${SANS}`;
+  c.fillText(`Read more: ${p.link || 'LulaFind'}`, 64, Math.min(y + 30, POSTER_H - 12), 952);
 }
 
 function noPhoto(c: Ctx, x: number, y: number, w: number, h: number, r: number, a: string, b: string, ink: string): void {
@@ -300,18 +308,18 @@ function aurora(c: Ctx, p: PosterContent, img: HTMLImageElement | null): void {
   c.restore();
 
   // frosted panel
-  const py = 620, ph = 570;
+  const py = 620, ph = 500;
   c.save(); rr(c, 64, py, 952, ph, 44); c.fillStyle = 'rgba(255,255,255,.16)'; c.fill();
   c.strokeStyle = 'rgba(255,255,255,.45)'; c.lineWidth = 2; c.stroke(); c.restore();
   c.fillStyle = '#fff'; c.textAlign = 'center';
   fitOneLine(c, p.name, 860, 88, 800, SANS, 44); c.fillText(p.name, cx, py + 100);
   if (p.ageLine) { c.font = `500 32px ${SANS}`; c.fillStyle = 'rgba(255,255,255,.85)'; c.fillText(p.ageLine, cx, py + 150); }
   c.textAlign = 'left';
-  facts(c, p.facts, 120, py + 215, 840, 'rgba(255,255,255,.65)', '#fff', 16, 3, 1214);
-  c.fillStyle = '#fff'; rr(c, 64, 1215, 952, 68, 34); c.fill();
-  c.fillStyle = '#2b1478'; c.font = `800 28px ${SANS}`; c.textAlign = 'center'; c.fillText(p.contact, cx, 1259, 900);
+  facts(c, p.facts, 120, py + 215, 840, 'rgba(255,255,255,.65)', '#fff', 16, 2, 1110);
+  c.fillStyle = '#fff'; rr(c, 64, 1132, 952, 68, 34); c.fill();
+  c.fillStyle = '#2b1478'; c.font = `800 28px ${SANS}`; c.textAlign = 'center'; c.fillText(p.contact, cx, 1176, 900);
   c.textAlign = 'left';
-  footer(c, p, 'rgba(255,255,255,.75)', POSTER_H - 34);
+  footer(c, p, 'rgba(255,255,255,.75)', POSTER_H - 135);
 }
 
 /* ---- 3. Editorial: warm paper, serif headline ---- */
@@ -358,7 +366,8 @@ function beacon(c: Ctx, p: PosterContent, img: HTMLImageElement | null): void {
   c.fillStyle = '#111'; rr(c, 64, 990, 952, 150, 24); c.fill();
   c.fillStyle = '#ffd400'; c.font = `800 26px ${SANS}`; spaced(c, true); c.fillText('CALL OR MESSAGE', 100, 1046); spaced(c, false);
   c.fillStyle = '#fff'; fitOneLine(c, p.contact, 880, 48, 800, SANS, 26); c.fillText(p.contact, 100, 1104);
-  c.fillStyle = '#111'; c.font = `600 22px ${SANS}`; c.fillText(p.foot, 64, 1200);
+  c.fillStyle = '#111'; c.font = `600 22px ${SANS}`; c.fillText(p.foot, 64, 1200, 952);
+  c.font = `800 24px ${SANS}`; c.fillText(`Read more: ${p.link || 'LulaFind'}`, 64, 1254, 952);
 }
 
 /* ---- 5. Ubuntu: deep green, gold and red geometry ---- */
@@ -380,13 +389,13 @@ function ubuntu(c: Ctx, p: PosterContent, img: HTMLImageElement | null): void {
   if (img) cover(c, img, cx - r, cy - r, r * 2, r * 2); else { c.fillStyle = '#17574d'; c.fillRect(cx - r, cy - r, r * 2, r * 2); c.fillStyle = 'rgba(255,255,255,.6)'; c.beginPath(); c.arc(cx, cy - 40, 80, 0, Math.PI * 2); c.fill(); c.beginPath(); c.ellipse(cx, cy + 200, 150, 130, 0, Math.PI, 0); c.fill(); }
   c.restore();
   c.textAlign = 'center'; c.fillStyle = '#fff';
-  fitOneLine(c, p.name, 900, 88, 800, SANS, 44); c.fillText(p.name, cx, 985);
-  if (p.ageLine) { c.fillStyle = '#f4b400'; c.font = `700 34px ${SANS}`; c.fillText(p.ageLine, cx, 1035); }
+  fitOneLine(c, p.name, 900, 88, 800, SANS, 44); c.fillText(p.name, cx, 930);
+  if (p.ageLine) { c.fillStyle = '#f4b400'; c.font = `700 34px ${SANS}`; c.fillText(p.ageLine, cx, 975); }
   c.textAlign = 'left';
-  facts(c, p.facts, 110, 1062, 860, '#f4b400', '#fff', 6, 2, 1236);
-  c.fillStyle = '#f4b400'; rr(c, 64, 1240, 952, 60, 30); c.fill();
-  c.fillStyle = '#0c2f2a'; c.font = `800 26px ${SANS}`; c.textAlign = 'center'; c.fillText(p.contact, cx, 1279, 900); c.textAlign = 'left';
-  footer(c, p, 'rgba(255,255,255,.6)', POSTER_H - 20);
+  facts(c, p.facts, 110, 1003, 860, '#f4b400', '#fff', 6, 2, 1168);
+  c.fillStyle = '#f4b400'; rr(c, 64, 1180, 952, 60, 30); c.fill();
+  c.fillStyle = '#0c2f2a'; c.font = `800 26px ${SANS}`; c.textAlign = 'center'; c.fillText(p.contact, cx, 1219, 900); c.textAlign = 'left';
+  footer(c, p, 'rgba(255,255,255,.6)', POSTER_H - 100);
 }
 
 /* ---- 6. Noir: full-bleed photo, cinematic type ---- */

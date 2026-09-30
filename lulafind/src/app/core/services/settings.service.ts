@@ -36,6 +36,7 @@ export interface Settings {
   pushRadiusKm: number;
   showAnonymousAs: string;
   reduceMotion: boolean;
+  /** Legacy stored value; Story viewing is now manual regardless of this flag. */
   autoplayMedia: boolean;
   dataSaving: boolean;
 }
@@ -50,7 +51,7 @@ const DEFAULTS: Settings = {
   pushRadiusKm: 50,
   showAnonymousAs: 'Anonymous',
   reduceMotion: false,
-  autoplayMedia: true,
+  autoplayMedia: false,
   dataSaving: false
 };
 

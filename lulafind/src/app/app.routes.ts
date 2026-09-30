@@ -9,7 +9,14 @@ export const routes: Routes = [
       { path: '', pathMatch: 'full', redirectTo: 'home' },
       { path: 'home', loadComponent: () => import('./pages/tabs/home.component').then((m) => m.HomeComponent) },
       { path: 'spotlight', loadComponent: () => import('./pages/tabs/spotlight.component').then((m) => m.SpotlightComponent) },
-      { path: 'chats', loadComponent: () => import('./pages/tabs/chats.component').then((m) => m.ChatsComponent) },
+      {
+        path: 'chats',
+        children: [
+          { path: '', pathMatch: 'full', loadComponent: () => import('./pages/tabs/chats.component').then((m) => m.ChatsComponent) },
+          { path: 'ask-lula', canActivate: [authGuard], loadComponent: () => import('./pages/chat/ask-lula.component').then((m) => m.AskLulaComponent) },
+          { path: 'thread/:threadId', canActivate: [authGuard], loadComponent: () => import('./pages/chat/chat-room.component').then((m) => m.ChatRoomComponent) }
+        ]
+      },
       { path: 'create', redirectTo: '/new', pathMatch: 'full' },
       { path: 'me', loadComponent: () => import('./pages/tabs/me.component').then((m) => m.MeComponent) }
     ]
@@ -28,7 +35,8 @@ export const routes: Routes = [
     canActivate: [authGuard],
     loadComponent: () => import('./pages/onboarding/onboarding.component').then((m) => m.OnboardingComponent)
   },
-  { path: 'ask-lula', canActivate: [authGuard], loadComponent: () => import('./pages/chat/ask-lula.component').then((m) => m.AskLulaComponent) },
+  { path: 'ask-lula', pathMatch: 'full', redirectTo: '/chats/ask-lula' },
+  { path: 'chat/:threadId', pathMatch: 'full', redirectTo: '/chats/thread/:threadId' },
   { path: 'repost/:id', canActivate: [authGuard], loadComponent: () => import('./pages/post/repost.component').then((m) => m.RepostComponent) },
   { path: 'post/:id/poster', loadComponent: () => import('./pages/post/poster.component').then((m) => m.PosterComponent) },
   { path: 'post/:id', loadComponent: () => import('./pages/post/post-detail.component').then((m) => m.PostDetailComponent) },
@@ -56,11 +64,6 @@ export const routes: Routes = [
     path: 'create-story',
     canActivate: [authGuard],
     loadComponent: () => import('./pages/story/create-story.component').then((m) => m.CreateStoryComponent)
-  },
-  {
-    path: 'chat/:threadId',
-    canActivate: [authGuard],
-    loadComponent: () => import('./pages/chat/chat-room.component').then((m) => m.ChatRoomComponent)
   },
   { path: 'safety', loadComponent: () => import('./pages/safety/safety-center.component').then((m) => m.SafetyCenterComponent) },
   {

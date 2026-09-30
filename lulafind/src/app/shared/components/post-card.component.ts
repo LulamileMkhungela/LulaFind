@@ -19,7 +19,7 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
  *
  *   optional "X reposted this" line
  *   avatar · name + Follow · headline · time · province · globe · "…"
- *   three lines of text with a muted "…see more"
+ *   three lines of text with a muted "Read more"
  *   media, or the original post in a frame when this is a reshare
  *   stats: reaction icons + count .......... comments / reposts
  *   action bar: react (hold for the tray) · Comment · Repost · Send
@@ -87,7 +87,7 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
           <div class="fb-card-body fb-card-body--thoughts" [routerLink]="'/post/' + post.id">
             <p class="fb-post-text" [class.fb-clamp]="!expanded()">{{ post.body }}</p>
             @if (longBody()) {
-              <button class="fb-readmore" (click)="toggleExpand($event)">{{ expanded() ? 'See less' : '\u2026see more' }}</button>
+              <button class="fb-readmore" (click)="toggleExpand($event)">{{ expanded() ? 'See less' : 'Read more' }}</button>
             }
           </div>
         }
@@ -103,7 +103,9 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
             </div>
             <h3 class="fb-post-title">{{ o.title }}</h3>
             <p class="fb-embed__text">{{ o.body }}</p>
-            @if (o.media.length) { <img class="fb-embed__img" [src]="o.media[0].src" [alt]="o.title" loading="lazy" /> }
+            @if (o.poster?.media?.src) {
+              <img class="fb-embed__img fb-embed__poster" [src]="o.poster!.media.src" [alt]="'LulaFind poster: ' + o.title" loading="lazy" />
+            } @else if (o.media.length) { <img class="fb-embed__img" [src]="o.media[0].src" [alt]="o.title" loading="lazy" /> }
           </a>
         } @else {
           <div class="fb-embed fb-embed--gone">
@@ -135,21 +137,25 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
             }
           </div>
         }
-        @if (post.lastSeenWhere && !said(post.lastSeenWhere)) {
+        @if ((post.lastSeenWhere || post.town) && !said(post.lastSeenWhere || post.town)) {
           <div class="fb-fact-row">
             <lf-icon name="pin" [size]="14" />
-            <span>Last seen: {{ post.lastSeenWhere }}</span>
+            <span>Last seen: {{ post.lastSeenWhere || post.town }}</span>
           </div>
         }
         <p class="fb-post-text" [class.fb-clamp]="!expanded()">{{ post.body }}</p>
         @if (longBody()) {
           <button class="fb-readmore" (click)="toggleExpand($event)">
-            {{ expanded() ? 'See less' : '\u2026see more' }}
+            {{ expanded() ? 'See less' : 'Read more' }}
           </button>
         }
       </div>
 
-      @if (post.media.length) {
+      @if (post.poster?.media?.src) {
+        <div class="fb-media fb-media--poster" [routerLink]="'/post/' + post.id">
+          <img class="fb-media-img" [src]="post.poster!.media.src" [alt]="'LulaFind poster: ' + post.title" loading="lazy" />
+        </div>
+      } @else if (post.media.length) {
         <div class="fb-media" [routerLink]="'/post/' + post.id">
           @if (post.media.length === 1) {
             <img class="fb-media-img" [src]="post.media[0].src" [alt]="post.title" loading="lazy" />
@@ -253,7 +259,7 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
       display: block; font-size: 12px; color: var(--lf-muted); line-height: 1.3;
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
-    /* LinkedIn clamps feed text to three lines and offers a muted "…see more". */
+    /* LinkedIn clamps feed text to three lines and offers a clear Read more action. */
     .fb-clamp {
       display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
       overflow: hidden; white-space: normal;
@@ -313,6 +319,8 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
 
     .fb-media { width: 100%; overflow: hidden; background: var(--lf-card-2); cursor: pointer; }
     .fb-media-img { width: 100%; object-fit: cover; max-height: 520px; display: block; }
+    .fb-media--poster { background: #101116; }
+    .fb-media--poster .fb-media-img { object-fit: contain; max-height: 720px; }
     .fb-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2px; }
     .fb-grid[data-count="3"] .fb-grid__tile:first-child { grid-column: 1 / -1; aspect-ratio: 2 / 1; }
     .fb-grid__tile { position: relative; aspect-ratio: 1 / 1; overflow: hidden; }
@@ -361,6 +369,7 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
     .fb-embed__text { margin: 0; font-size: 14px; line-height: 1.35; color: var(--ion-text-color);
       display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; white-space: pre-line; }
     .fb-embed__img { display: block; width: calc(100% + 24px); margin: 10px -12px -12px; max-height: 260px; object-fit: cover; border-radius: 0 0 8px 8px; }
+    .fb-embed__poster { object-fit: contain; background: #111; }
     .fb-embed--gone { display: flex; align-items: center; gap: 8px; color: var(--lf-muted); font-size: 14px; }
     .fb-media { border-radius: 0; }
     .fb-like-icon {
@@ -500,7 +509,7 @@ export class PostCardComponent implements OnInit, OnChanges {
   readonly authorRoute = computed(() =>
     this.post?.anonymous && !this.isMine() ? ['/post/' + this.post.id] : ['/user/' + (this.author?.id ?? '')]
   );
-  readonly longBody = computed(() => (this.post?.body?.trim().length ?? 0) > 190);
+  readonly longBody = computed(() => (this.post?.body?.trim().length ?? 0) > 120);
 
   /** LinkedIn's second header line: the poster's own line about themselves. */
   readonly authorHeadline = computed(() =>

@@ -1,4 +1,4 @@
-import { Component, computed, inject } from '@angular/core';
+import { Component, computed, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { IonContent } from '@ionic/angular/ion-content';
 import { IconComponent } from '../../shared/components/icon.component';
@@ -9,6 +9,7 @@ import { LogoComponent } from '../../shared/components/logo.component';
 import { ChatService } from '../../core/services/chat.service';
 import { DataService } from '../../core/services/data.service';
 import { AuthService } from '../../core/services/auth.service';
+import { ChatMessage } from '../../core/models/types';
 import { timeAgo } from '../../core/utils/format';
 
 @Component({
@@ -92,9 +93,20 @@ export class ChatsComponent {
   protected readonly timeAgo = timeAgo;
   protected readonly me = computed(() => this.auth.viewerId ?? '');
   readonly threads = computed(() => this.chat.threads());
+  readonly previews = signal<Record<string, ChatMessage | null>>({});
 
-  constructor() {
-    void this.chat.load();
+  constructor() { void this.loadThreads(); }
+
+  ionViewWillEnter(): void { void this.loadThreads(); }
+
+  private async loadThreads(): Promise<void> {
+    try {
+      await this.chat.load();
+      const entries = await Promise.all(this.chat.threads().map(async (thread) => [
+        thread.id, await this.chat.latestMessage(thread.id)
+      ] as const));
+      this.previews.set(Object.fromEntries(entries));
+    } catch { /* the empty/list state remains accurate if chat is offline */ }
   }
 
   otherId(participantIds: string[]): string {
@@ -109,8 +121,12 @@ export class ChatsComponent {
     return this.data.avatarFor(this.data.authorOf(this.otherId(t.participantIds)));
   }
 
-  preview(_threadId: string): string {
-    return 'Open conversation';
+  preview(threadId: string): string {
+    const message = this.previews()[threadId];
+    if (!message) return 'No messages yet';
+    if (message.kind === 'system') return 'Private conversation opened';
+    const content = message.body || (message.media?.kind === 'video' ? 'Video sent' : message.media ? 'Photo sent' : 'Message');
+    return `${message.fromUserId === this.auth.viewerId ? 'You: ' : ''}${content}`.slice(0, 72);
   }
 
   postOf(id: string | null) {
@@ -118,11 +134,11 @@ export class ChatsComponent {
   }
 
   open(id: string): void {
-    void this.router.navigate(['/chat', id]);
+    void this.router.navigate(['/chats/thread', id]);
   }
 
   askLula(): void {
-    void this.router.navigate([this.auth.signedIn() ? '/ask-lula' : '/auth'], this.auth.signedIn() ? {} : { queryParams: { next: '/ask-lula' } });
+    void this.router.navigate([this.auth.signedIn() ? '/chats/ask-lula' : '/auth'], this.auth.signedIn() ? {} : { queryParams: { next: '/chats/ask-lula' } });
   }
 
   goAuth(): void {

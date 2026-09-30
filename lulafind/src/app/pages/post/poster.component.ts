@@ -8,9 +8,10 @@ import { TopNavComponent } from '../../shared/components/top-nav.component';
 import { DataService } from '../../core/services/data.service';
 import { AuthService } from '../../core/services/auth.service';
 import { PlatformService } from '../../core/services/platform.service';
-import { Post } from '../../core/models/types';
+import { MediaItem, Post } from '../../core/models/types';
+import { uid } from '../../core/utils/format';
 import {
-  POSTER_TEMPLATES, PosterContent, PosterTemplateId, drawPoster, loadPosterImage, posterContent, publicPoster
+  POSTER_TEMPLATES, PosterContent, PosterTemplateId, drawPoster, isPosterType, loadPosterImage, posterContent, publicPoster
 } from '../../core/utils/poster';
 import { SAPS_MISSING_LIST } from '../../core/data/sa-help';
 
@@ -39,7 +40,7 @@ import { SAPS_MISSING_LIST } from '../../core/data/sa-help';
 
         <div class="picker" role="listbox" aria-label="Poster designs">
           @for (t of templates; track t.id) {
-            <button type="button" class="tpl" role="option" [attr.aria-selected]="tpl() === t.id" [class.on]="tpl() === t.id" (click)="choose(t.id)">
+            <button type="button" class="tpl" role="option" [attr.aria-selected]="tpl() === t.id" [class.on]="tpl() === t.id" [disabled]="busy()" (click)="choose(t.id)">
               <span class="tpl__sw" [style.background]="'linear-gradient(135deg,' + t.swatch[0] + ' 0%,' + t.swatch[2] + ' 55%,' + t.swatch[1] + ' 100%)'"></span>
               <strong>{{ t.name }}</strong>
               <small>{{ t.tagline }}</small>
@@ -47,13 +48,28 @@ import { SAPS_MISSING_LIST } from '../../core/data/sa-help';
           }
         </div>
 
+        @if (!hasPersonPhoto()) {
+          <p class="note photo-required" role="status">Add a clear photo of the person to this post before sharing a poster. The poster preview is not shareable without their photo.</p>
+        } @else if (!photoReady()) {
+          <p class="note photo-required" role="status">Preparing the person’s photo. If it does not appear, edit the post and try a different image. The poster cannot be shared until the photo is included.</p>
+        }
         @if (isMine() && flyer().withheld) {
           <p class="note">Kept off every poster: {{ flyer().withheld }}. Ask a caller to name that mark before you trust them.</p>
         }
 
         <div class="actions">
-          <button class="lf-btn lf-btn--primary lf-btn--block" type="button" (click)="share()"><lf-icon name="share" [size]="16" /> Share poster</button>
-          <button class="lf-btn lf-btn--block" type="button" (click)="download()"><lf-icon name="download" [size]="16" /> Save picture</button>
+          @if (isMine()) {
+            <button class="lf-btn lf-btn--primary lf-btn--block" type="button" (click)="useSelectedInFeed()"
+                    [disabled]="busy() || savingPost() || !photoReady() || !previewReady()">
+              <lf-icon name="image" [size]="16" />
+              {{ savingPost() ? 'Saving to feed…' : posterOnFeed() ? 'Update poster in feed' : 'Add poster to feed' }}
+            </button>
+            @if (posterOnFeed()) {
+              <p class="feed-saved" role="status">Current feed design: {{ savedTemplateName() }}. Save this selection to update it.</p>
+            }
+          }
+          <button class="lf-btn lf-btn--block" type="button" (click)="share()" [disabled]="busy() || !photoReady() || !previewReady()"><lf-icon name="share" [size]="16" /> Share poster</button>
+          <button class="lf-btn lf-btn--block" type="button" (click)="download()" [disabled]="busy() || !photoReady() || !previewReady()"><lf-icon name="download" [size]="16" /> Save picture</button>
           <a class="lf-btn lf-btn--block" [href]="sapsList" target="_blank" rel="noopener">Official SAPS missing list</a>
           <button class="skip" type="button" (click)="done()">{{ justPosted() ? 'Skip for now' : 'Back to post' }}</button>
         </div>
@@ -75,6 +91,9 @@ import { SAPS_MISSING_LIST } from '../../core/data/sa-help';
     .tpl__sw { width: 100%; height: 64px; border-radius: 8px; margin-bottom: 4px; }
     .tpl strong { font-size: 14px; } .tpl small { font-size: 11.5px; color: var(--lf-muted); line-height: 1.25; }
     .note { margin: 4px var(--lf-gap) 0; font-size: 13px; color: var(--lf-muted); }
+    .photo-required { color: var(--lf-signal-text); font-weight: 600; }
+    .feed-saved { margin: 0; color: var(--lf-ubuntu); font-size: 13px; font-weight: 600; text-align: center; }
+    .actions .lf-btn:disabled { opacity: .5; cursor: default; }
     .actions { display: flex; flex-direction: column; gap: 8px; padding: 12px var(--lf-gap) 32px; max-width: 520px; margin: 0 auto; }
     a.lf-btn { text-decoration: none; }
     .skip { border: 0; background: none; color: var(--lf-muted); font: inherit; font-weight: 600; padding: 10px; cursor: pointer; }
@@ -100,18 +119,30 @@ export class PosterComponent implements OnInit, AfterViewInit {
   private image: HTMLImageElement | null = null;
   private content: PosterContent | null = null;
   private ready = false;
-  private photoFailed = false;
+  readonly photoReady = signal(false);
+  readonly previewReady = signal(false);
+  readonly savingPost = signal(false);
 
   readonly flyer = computed(() => publicPoster(this.p()!));
+  readonly hasPersonPhoto = computed(() => !!this.p()?.media.some((item) => item.kind === 'image'));
   readonly isMine = computed(() => this.p()?.authorId === this.auth.viewerId);
+  readonly posterOnFeed = computed(() => !!this.p()?.poster?.media?.src);
 
   async ngOnInit(): Promise<void> {
     this.id = this.route.snapshot.paramMap.get('id') ?? '';
     this.justPosted.set(this.route.snapshot.queryParamMap.get('new') === '1');
     const cached = this.data.post(this.id);
-    if (cached) this.p.set(cached);
+    if (cached) {
+      if (!isPosterType(cached.type)) { await this.leaveUnsupported(); return; }
+      this.p.set(cached);
+      this.restoreTemplate(cached);
+    }
     const fresh = await this.data.loadPost(this.id);
-    if (fresh) this.p.set(fresh);
+    if (fresh) {
+      if (!isPosterType(fresh.type)) { await this.leaveUnsupported(); return; }
+      this.p.set(fresh);
+      this.restoreTemplate(fresh);
+    }
     await this.prepare();
   }
 
@@ -120,22 +151,41 @@ export class PosterComponent implements OnInit, AfterViewInit {
     void this.render();
   }
 
+  private async leaveUnsupported(): Promise<void> {
+    await this.say('Poster templates are available for missing-person, pet, and left-home posts.');
+    await this.router.navigate(['/post', this.id]);
+  }
+
+  private restoreTemplate(post: Post): void {
+    const id = post.poster?.templateId as PosterTemplateId | undefined;
+    if (id && this.templates.some((template) => template.id === id)) this.tpl.set(id);
+  }
+
+  savedTemplateName(): string {
+    const id = this.p()?.poster?.templateId;
+    return this.templates.find((template) => template.id === id)?.name ?? 'poster';
+  }
+
   private async prepare(): Promise<void> {
     const post = this.p();
     if (!post) return;
     const src = post.media.find((m) => m.kind === 'image')?.src ?? null;
+    this.photoReady.set(false);
+    this.previewReady.set(false);
     this.image = await loadPosterImage(src);
+    this.photoReady.set(!!this.image);
     this.content = posterContent(post, this.platform.link(`/post/${post.id}`), src);
     // the canvas exists only once the post has rendered
     setTimeout(() => void this.render(), 0);
   }
 
   async choose(id: PosterTemplateId): Promise<void> {
+    if (this.busy()) return;
     this.tpl.set(id);
     await this.render();
   }
 
-  private async render(withPhoto = true): Promise<void> {
+  private async render(): Promise<void> {
     const el = this.cv?.nativeElement;
     if (!el || !this.content || !this.ready) return;
     this.busy.set(true);
@@ -143,26 +193,20 @@ export class PosterComponent implements OnInit, AfterViewInit {
       if (typeof document !== 'undefined' && 'fonts' in document) {
         await (document as Document & { fonts: FontFaceSet }).fonts.ready.catch(() => undefined);
       }
-      drawPoster(el, this.tpl(), this.content, withPhoto ? this.image : null);
+      drawPoster(el, this.tpl(), this.content, this.image);
+      this.previewReady.set(true);
     } finally {
       this.busy.set(false);
     }
   }
 
-  /** PNG blob of the poster. If a remote photo taints the canvas, redraw without it. */
+  /** PNG blob of the poster; a generated poster is never exported without the person's photo. */
   private async blob(): Promise<Blob | null> {
     const el = this.cv?.nativeElement;
-    if (!el) return null;
-    const toBlob = () => new Promise<Blob | null>((resolve) => {
+    if (!el || !this.image || !this.photoReady() || !this.previewReady()) return null;
+    return new Promise<Blob | null>((resolve) => {
       try { el.toBlob((b) => resolve(b), 'image/png'); } catch { resolve(null); }
     });
-    let b = await toBlob();
-    if (!b && this.image) {
-      this.photoFailed = true;
-      await this.render(false);
-      b = await toBlob();
-    }
-    return b;
   }
 
   private fileName(): string {
@@ -171,8 +215,9 @@ export class PosterComponent implements OnInit, AfterViewInit {
   }
 
   async download(): Promise<void> {
+    if (!this.photoReady()) return void this.say('Add a clear photo of the person to the post before saving a poster.');
     const b = await this.blob();
-    if (!b) return void this.say('Could not make the picture. Try another design.');
+    if (!b) return void this.say('Could not make the poster with the photo. Try another design or photo.');
     if (Capacitor.isNativePlatform()) {
       const uri = await this.saveNative(b);
       if (uri) return void this.say('Saved. Open Share to send it.');
@@ -182,13 +227,15 @@ export class PosterComponent implements OnInit, AfterViewInit {
     a.href = url; a.download = this.fileName();
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 4000);
-    await this.say(this.photoFailed ? 'Saved without the photo (it could not be read).' : 'Poster saved to your downloads');
+    await this.say('Poster saved to your downloads');
   }
 
   async share(): Promise<void> {
     const post = this.p();
     if (!post) return;
+    if (!this.photoReady()) return void this.say('Add a clear photo of the person to the post before sharing a poster.');
     const b = await this.blob();
+    if (!b) return void this.say('Could not make the poster with the photo. Try another design or photo.');
     const text = publicPoster(post).shareText;
     const link = this.platform.link(`/post/${post.id}`);
     if (b && Capacitor.isNativePlatform()) {
@@ -225,6 +272,39 @@ export class PosterComponent implements OnInit, AfterViewInit {
       return res.uri;
     } catch {
       return null;
+    }
+  }
+
+  async useSelectedInFeed(): Promise<void> {
+    const post = this.p();
+    if (!post || !this.isMine() || this.savingPost()) return;
+    if (!this.photoReady()) {
+      await this.say('Add a clear photo of the person to the post before adding a poster to the feed.');
+      return;
+    }
+    this.savingPost.set(true);
+    try {
+      const image = await this.blob();
+      if (!image) throw new Error('Could not make the selected poster with the photo. Try another design.');
+      const src = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = () => reject(reader.error ?? new Error('Could not read the poster image'));
+        reader.readAsDataURL(image);
+      });
+      const poster: NonNullable<Post['poster']> = {
+        templateId: this.tpl(),
+        createdAt: Date.now(),
+        media: { id: uid('poster'), kind: 'image', src } as MediaItem
+      };
+      const updated = await this.data.updatePost(post.id, { poster });
+      if (!updated) throw new Error('The post could not be updated. Try again.');
+      this.p.set(updated);
+      await this.say('Poster added to the feed. The original post text remains readable with Read more.');
+    } catch (e: unknown) {
+      await this.say(e instanceof Error ? e.message : 'Could not add the poster to the feed');
+    } finally {
+      this.savingPost.set(false);
     }
   }
 

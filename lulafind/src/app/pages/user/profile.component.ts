@@ -516,7 +516,7 @@ export class ProfileComponent implements OnInit {
       return;
     }
     const thread = await this.chat.ensureThread(null, u.id, 'friend');
-    if (thread) await this.router.navigate(['/chat', thread.id]);
+    if (thread) await this.router.navigate(['/chats/thread', thread.id]);
   }
 
   async share(): Promise<void> {

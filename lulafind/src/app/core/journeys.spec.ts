@@ -176,10 +176,10 @@ describe('Journey: a child case goes through moderation before anyone is alerted
   });
 });
 
-describe('Journey: the first-hours checklist on the case page', () => {
+describe('Journey: focused case details and a meaningful Still searching update', () => {
   beforeEach(bed);
 
-  it('ticks a step on the real screen and keeps it after a reload', async () => {
+  it('keeps the status actions visible without checklist clutter and saves the open-case update', async () => {
     const data = TestBed.inject(DataService) as DataService;
     await TestBed.inject(AuthService).signInDemo();
     const post = await data.createPost(caseInput());
@@ -188,32 +188,20 @@ describe('Journey: the first-hours checklist on the case page', () => {
     const page = TestBed.createComponent(PostDetailComponent);
     await settle(page);
     const first = textOf(page);
-    expect(first).toContain('First hours');
-    expect(first).toContain('No waiting period');
-    note('7. The case page, checklist closed', first.split('Comments')[0]);
+    expect(first).toContain('Mark as found');
+    expect(first).toContain('Still searching');
+    expect(first).not.toContain('First hours');
+    expect(first).not.toContain('No waiting period');
+    note('7. The focused case page with the status actions', first.split('Comments')[0]);
 
-    await clickButton(page, 'First hours');
-    const open = textOf(page);
-    expect(open).toContain('Open a case at any police station');
-    expect(open).toContain('SAPS 55(A) form');
-    note('8. The checklist opened', open);
-
-    // Tick "Open a case" by clicking its row.
-    const rows = Array.from((page.nativeElement as HTMLElement).querySelectorAll('button.plan__row'));
-    const row = rows.find((r) => (r.textContent ?? '').includes('Open a case at any police station'));
-    expect(row).toBeTruthy();
-    (row as HTMLElement).click();
+    await clickButton(page, 'Still searching');
     await settle(page);
-
-    expect((await data.loadPost(post.id))?.plan?.done.saps_case).toBe(true);
-    note('9. After tapping "Open a case at any police station"', textOf(page).split('Comments')[0]);
-
-    // Reload the page from scratch: the tick is still there.
-    const reloaded = TestBed.createComponent(PostDetailComponent);
-    await settle(reloaded);
-    await clickButton(reloaded, 'First hours');
-    expect(textOf(reloaded)).toContain('1 of 7');
-    note('10. After a full reload, the same case page', textOf(reloaded).split('Comments')[0]);
+    const updated = await data.loadPost(post.id);
+    expect(updated?.status).toBe(post.status);
+    expect(updated?.outcome.found).toBe(false);
+    expect(updated?.events.at(-1)?.kind).toBe('still_searching');
+    expect(textOf(page)).toContain('This case remains open');
+    note('8. After the poster confirms they are still searching', textOf(page).split('Comments')[0]);
   });
 
   it('shows the closure step once a case is found', async () => {

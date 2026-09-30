@@ -20,7 +20,7 @@ declare
   k text;
   allowed text[] := array[
     'voterIds', 'upvotes', 'commentCount', 'views', 'shares', 'lookingIds',
-    'searchParty', 'danger', 'khumbu', 'flags', 'events', 'updatedAt', 'status', 'outcome'
+    'searchParty', 'danger', 'khumbu', 'flags', 'events', 'lastComment', 'updatedAt', 'status', 'outcome'
   ];
   my_old text;
   my_new text;
@@ -28,6 +28,7 @@ declare
   claimed_new text;
   is_claimed boolean;
   merged jsonb;
+  last_comment jsonb;
   n_old int;
 begin
   if me is null then
@@ -74,6 +75,42 @@ begin
   -- 3. Counters: comments are counted, views and shares go up by one at most.
   merged := jsonb_set(merged, '{commentCount}', to_jsonb((
     select count(*) from public.records c where c.collection = 'comments' and c.payload->>'postId' = post_id)), true);
+
+  -- Feed previews may name a saved top-level comment, never invented text.
+  -- On deletion, the preview may be cleared only when no top-level comment remains.
+  if (cur->'lastComment') is distinct from (next->'lastComment') then
+    if next->'lastComment' is null or next->'lastComment' = 'null'::jsonb then
+      if exists (
+        select 1 from public.records c
+        where c.collection = 'comments' and c.payload->>'postId' = post_id
+          and c.payload->>'parentId' is null
+      ) then
+        raise exception 'The latest comment preview cannot be cleared while comments remain';
+      end if;
+      merged := jsonb_set(merged, '{lastComment}', 'null'::jsonb, true);
+    else
+      select jsonb_build_object(
+        'userId', c.payload->>'authorId',
+        'displayName', coalesce((
+          select u.payload->>'displayName' from public.records u
+          where u.collection = 'users' and u.id = c.payload->>'authorId'
+        ), 'Someone'),
+        'body', left(c.payload->>'body', 280),
+        'at', c.payload->'createdAt'
+      ) into last_comment
+      from public.records c
+      where c.collection = 'comments'
+        and c.payload->>'postId' = post_id
+        and c.payload->>'parentId' is null
+        and c.payload->>'createdAt' = next->'lastComment'->>'at'
+        and left(c.payload->>'body', 280) = next->'lastComment'->>'body'
+      limit 1;
+      if last_comment is null then
+        raise exception 'The latest comment preview must match a saved comment';
+      end if;
+      merged := jsonb_set(merged, '{lastComment}', last_comment, true);
+    end if;
+  end if;
   if coalesce((next->>'views')::int, 0) = coalesce((cur->>'views')::int, 0) + 1 then
     merged := jsonb_set(merged, '{views}', next->'views', true);
   end if;

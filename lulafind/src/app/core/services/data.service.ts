@@ -3,7 +3,7 @@ import { Subscription } from 'rxjs';
 import { toObservable } from '@angular/core/rxjs-interop';
 import { LULA_API } from '../data/api';
 import {
-  AlertPrefs, Audience, CasePlan, CaseStepId, Comment, DangerAlert, GeoPoint, FeedFilter, FollowEdge, Lookout, Notification, Post, PostType, Spotlight, Story, StoryReply, StoryView, Tip, UserProfile,
+  AlertPrefs, Audience, CasePlan, CaseStepId, Comment, DangerAlert, GeoPoint, FeedFilter, FollowEdge, Lookout, MediaItem, Notification, Post, PostType, Spotlight, Story, StoryReply, StoryView, Tip, UserProfile,
   VoteValue, ReactionKind, REACTIONS, RETIRED_POST_TYPES, isReaction, VehicleDetails, dangerLabel, emptyFilter, provinceName
 } from '../models/types';
 import { avatar, cover, hueOf, scene } from '../data/seed';
@@ -18,6 +18,7 @@ export interface UpdatePostInput {
   title?: string;
   body?: string;
   media?: Post['media'];
+  poster?: Post['poster'];
   province?: Post['province'];
   town?: string;
   lastSeenAt?: number | null;
@@ -446,7 +447,10 @@ export class DataService {
     const me = this.auth.viewerId;
     if (!me) throw new Error('Sign in to react');
     if (this.auth.user()?.suspended) throw new Error('Your account is suspended');
-    const p = await this.loadPost(postId);
+    // Feed cards are already cached. Use that copy and paint the reaction before
+    // waiting for the network; fetching the post + all comments first made a tap
+    // feel delayed even when the card was right in front of the person.
+    const p = this.post(postId) ?? await this.loadPost(postId);
     if (!p) return undefined;
     const current: VoteValue = p.voterIds[me] ?? null;
     const next: VoteValue = current === value ? null : value;
@@ -461,20 +465,34 @@ export class DataService {
         ? { userId: me, displayName: this.auth.user()?.displayName ?? 'Someone', at: Date.now() }
         : p.lastLike ?? null
     };
-    await this.api.savePost(nextPost);
-    this.mergeCache([nextPost]);
+    this.replacePostViews(nextPost);
+    try {
+      await this.api.savePost(nextPost);
+    } catch (error) {
+      this.replacePostViews(p);
+      throw error;
+    }
     if (isReaction(next) && !isReaction(current) && p.authorId !== me) {
       const who = this.auth.user()?.displayName ?? 'Someone';
       const label = REACTIONS.find((r) => r.key === next)?.label.toLowerCase() ?? 'reacted';
-      await this.notify({
+      // Notifications are secondary to the immediate reaction; do not make a
+      // successful tap wait on the notification write.
+      void this.notify({
         userId: p.authorId, kind: 'vote',
         title: next === 'up' ? `${who} has an idea about your post` : `${who} reacted (${label}) to your post`,
         body: `${p.subject?.name?.trim() || p.title} · open it to chat or read their comment.`,
         route: `/post/${p.id}`, postId: p.id
       }).catch(() => undefined);
     }
-    await this.loadFeed();
     return nextPost;
+  }
+
+  /** Replace a post in the view signals as well as the cache (used optimistically). */
+  private replacePostViews(post: Post): void {
+    this.mergeCache([post]);
+    this.feed.update((items) => items.map((item) => item.id === post.id ? post : item));
+    this.broughtHome.update((items) => items.map((item) => item.id === post.id ? post : item));
+    this.myAuthored.update((items) => items.map((item) => item.id === post.id ? post : item));
   }
 
   myVote(p: Post): VoteValue {
@@ -494,55 +512,67 @@ export class DataService {
     isLead?: boolean;
     sighting?: Comment['sighting'];
     markGuess?: string;
+    media?: MediaItem[];
   }): Promise<Comment> {
     const me = this.auth.viewerId;
     if (!me) throw new Error('Sign in to comment');
     if (this.auth.user()?.suspended) throw new Error('Your account is suspended');
+    const body = input.body.trim();
+    const media = await Promise.all((input.media ?? []).map((item) => this.api.uploadMedia(me, item)));
+    if (!body && !media.length) throw new Error('Write a comment or attach a photo/video');
+    const p = this.post(input.postId) ?? await this.loadPost(input.postId);
+    if (!p) throw new Error('That post is not available');
     const c: Comment = {
       id: uid('c'),
       postId: input.postId,
       parentId: input.parentId ?? null,
       authorId: me,
-      body: input.body.trim(),
+      body,
       createdAt: Date.now(),
       upvotes: 0,
       likedIds: [],
       isLead: input.isLead ?? false,
+      media: media.length ? media : undefined,
       sighting: input.sighting,
       markGuess: input.markGuess || undefined
     };
     await this.api.saveComment(c);
-    const p = await this.loadPost(input.postId);
-    if (p) {
-      // A top-level comment refreshes the feed's "X commented" preview.
-      // Replies stay inside the thread - the preview always shows a
-      // top-level comment.
-      const topLevel = !c.parentId;
-      const next = {
-        ...p,
-        commentCount: (await this.api.commentsFor(p.id)).length,
-        updatedAt: Date.now(),
-        lastComment: topLevel
-          ? { userId: me, displayName: this.auth.user()?.displayName ?? 'Someone', body: c.body.slice(0, 280), at: c.createdAt }
-          : p.lastComment ?? null
-      };
+
+    // Keep the top-level comment preview and count fresh without making the
+    // person wait for another full feed download. Replies count too but do not
+    // replace the feed's top-level comment preview.
+    const topLevel = !c.parentId;
+    const next: Post = {
+      ...p,
+      commentCount: p.commentCount + 1,
+      updatedAt: Date.now(),
+      lastComment: topLevel
+        ? { userId: me, displayName: this.auth.user()?.displayName ?? 'Someone', body: c.body.slice(0, 280), at: c.createdAt }
+        : p.lastComment ?? null
+    };
+    try {
       await this.api.savePost(next);
-      this.mergeCache([next]);
+    } catch (error) {
+      // A comment is already saved; do not tell the author it failed because a
+      // secondary feed-counter/preview write failed. The detail still renders
+      // the saved comment, and a future refresh can rebuild the counter.
+      console.warn('Could not refresh the comment preview:', error);
     }
-    if (p && p.authorId !== me) {
-      await this.api.pushNotification({
+    this.replacePostViews(next);
+
+    if (p.authorId !== me) {
+      void this.api.pushNotification({
         id: uid('n'),
         userId: p.authorId,
         kind: input.isLead ? 'vote' : 'comment',
         title: `${input.isLead ? 'New lead on' : 'Comment on'} your post`,
-        body: c.body.slice(0, 110),
+        body: c.body.slice(0, 110) || 'A photo or video was attached',
         at: Date.now(),
         read: false,
         route: `/post/${p.id}`,
         postId: p.id
-      });
+      }).catch(() => undefined);
     }
-    await this.loadFeed();
     return c;
   }
 
@@ -623,8 +653,10 @@ export class DataService {
     if (isChildSubject(input) && !input.guardianConsent) {
       throw new Error('A case about a child can only be posted by their guardian, or with the guardian\u2019s permission');
     }
-    if (input.audience === 'surname' && !input.spotlightId) throw new Error('Choose which Spotlight community should see this');
-    this.requireMembership(input.spotlightId);
+    if (input.audience === 'surname') {
+      if (!input.spotlightId) throw new Error('Choose which Spotlight community should see this');
+      this.requireMembership(input.spotlightId);
+    }
     if (input.media.length > 1 && input.media.some((m) => m.kind === 'video')) {
       throw new Error('Choose photos or one video - not both');
     }
@@ -659,7 +691,7 @@ export class DataService {
       subject: input.type === 'vehicle' ? null : input.subject,
       vehicleDetails: input.type === 'vehicle' ? input.vehicleDetails ?? null : null,
       audience: input.audience,
-      spotlightId: input.spotlightId,
+      spotlightId: input.audience === 'surname' ? input.spotlightId : null,
       chatEnabled: input.chatEnabled,
       allowComments: input.allowComments,
       allowShare: true,
@@ -728,17 +760,30 @@ export class DataService {
       throw new Error('The description must be at least 30 characters');
     }
     if (patch.province !== undefined && !patch.province) throw new Error('Choose a province');
-    // Moving a post into a community is posting there, so it needs membership too.
-    if (patch.spotlightId && patch.spotlightId !== p.spotlightId) this.requireMembership(patch.spotlightId);
+    // Changing the audience to a community is also posting there. Check the
+    // final audience even if the Spotlight id stayed the same, since someone
+    // may have left or been removed from that community since the last edit.
+    const nextAudience = patch.audience ?? p.audience;
+    const nextSpotlightId = patch.spotlightId !== undefined ? patch.spotlightId : p.spotlightId;
+    if (nextAudience === 'surname') {
+      if (!nextSpotlightId) throw new Error('Choose which Spotlight community should see this');
+      this.requireMembership(nextSpotlightId);
+    }
     const media = patch.media
       ? await Promise.all(patch.media.map((item) => this.api.uploadMedia(me.id, item)))
       : p.media;
+    const poster = patch.poster === undefined
+      ? p.poster ?? null
+      : patch.poster
+        ? { ...patch.poster, media: await this.api.uploadMedia(me.id, patch.poster.media) }
+        : null;
 
     const next: Post = {
       ...p,
       title: patch.title !== undefined ? patch.title.trim() : p.title,
       body: patch.body !== undefined ? patch.body.trim() : p.body,
       media,
+      poster,
       province: patch.province ?? p.province,
       town: patch.town !== undefined ? patch.town.trim() : p.town,
       lastSeenAt: patch.lastSeenAt !== undefined ? patch.lastSeenAt : p.lastSeenAt,
@@ -751,8 +796,8 @@ export class DataService {
       reward: patch.reward !== undefined ? patch.reward?.trim() || null : p.reward,
       subject: patch.subject !== undefined ? patch.subject : p.subject,
       vehicleDetails: patch.vehicleDetails !== undefined ? patch.vehicleDetails : p.vehicleDetails ?? null,
-      audience: patch.audience ?? p.audience,
-      spotlightId: patch.spotlightId !== undefined ? patch.spotlightId : p.spotlightId,
+      audience: nextAudience,
+      spotlightId: nextAudience === 'surname' ? nextSpotlightId : null,
       chatEnabled: patch.chatEnabled ?? p.chatEnabled,
       allowComments: patch.allowComments ?? p.allowComments,
       anonymous: patch.anonymous ?? p.anonymous,
@@ -1522,14 +1567,36 @@ export class DataService {
     if (applied) this.mergeCache([next]);
   }
 
-  /** Poster says "no, still looking" - resets the nudge timer. */
-  async dismissOutcomeNudge(postId: string): Promise<void> {
-    const p = await this.loadPost(postId);
-    if (!p) return;
-    // A patch, not a copy of the post: this fires in the background while the
-    // family may be editing the same case.
-    await this.api.patchPost(postId, { outcomeNudgeAt: Date.now(), updatedAt: Date.now() });
-    await this.loadFeed();
+  /** The poster confirms the case is still open; keep a visible, saved update. */
+  async confirmStillSearching(postId: string): Promise<Post> {
+    const me = this.auth.viewerId;
+    if (!me) throw new Error('Sign in to update this case');
+    if (this.auth.user()?.suspended) throw new Error('Your account is suspended');
+    const p = this.post(postId) ?? await this.loadPost(postId);
+    if (!p) throw new Error('That post is not here any more');
+    if (p.authorId !== me) throw new Error('Only the person who posted this can update the case');
+    if (p.status !== 'active' && p.status !== 'under_review') {
+      throw new Error('This case is no longer open. Its status has not been changed.');
+    }
+    if (p.type !== 'missing' && p.type !== 'khumbulekhaya') {
+      throw new Error('This status update is only available on a missing-person case');
+    }
+
+    const now = Date.now();
+    const event = {
+      at: now,
+      kind: 'still_searching' as const,
+      byUserId: me,
+      note: 'The poster confirmed that they are still searching. The case remains open.'
+    };
+    const updated = await this.api.patchPost(postId, {
+      events: [...(p.events ?? []), event],
+      outcomeNudgeAt: now,
+      updatedAt: now
+    });
+    if (!updated) throw new Error('Could not save the case update. Try again.');
+    this.replacePostViews(updated);
+    return updated;
   }
 
   /* --------------------- KhumbulEkhaya flow -------------------- */

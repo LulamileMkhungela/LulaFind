@@ -74,7 +74,7 @@ import { DataService } from '../../core/services/data.service';
     :host { display: block; }
     /* Fills the whole toolbar between the left edge and the bell, so the search
        pill takes every pixel LinkedIn's does. */
-    .row { flex: 1 1 auto; display: flex; align-items: center; gap: 10px; padding: 0 0 0 12px; min-width: 0; }
+    .row { flex: 1 1 0; width: 0; display: flex; align-items: center; gap: 10px; padding: 0 0 0 12px; min-width: 0; }
     .me { display: inline-flex; flex-shrink: 0; border-radius: 50%; text-decoration: none; }
     /* LinkedIn's search: a pill that takes every pixel between photo and bell. */
     .search {

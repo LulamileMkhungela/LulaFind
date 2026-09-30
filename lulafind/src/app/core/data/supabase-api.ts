@@ -190,27 +190,43 @@ export class SupabaseApi implements LulaApi {
   }
 
   private async signRecordMedia<T>(collection: string, record: T): Promise<T> {
-    if (collection !== 'posts' && collection !== 'stories') return record;
-    const value = record as T & { media?: MediaItem[] };
-    if (!Array.isArray(value.media) || !value.media.length) return record;
-    const media = await Promise.all(value.media.map(async (item) => {
+    if (collection !== 'posts' && collection !== 'stories' && collection !== 'comments') return record;
+    const value = record as T & {
+      media?: MediaItem[];
+      poster?: { templateId: string; media: MediaItem; createdAt: number } | null;
+    };
+    const signItem = async (item: MediaItem): Promise<MediaItem> => {
       const path = this.storagePath(item.src);
       if (!path) return item;
       const src = await this.signedStorageUrl(path);
       return { ...item, src: src ?? '' };
-    }));
-    return { ...value, media };
+    };
+    const media = Array.isArray(value.media)
+      ? await Promise.all(value.media.map((item) => signItem(item)))
+      : value.media;
+    const poster = collection === 'posts' && value.poster?.media
+      ? { ...value.poster, media: await signItem(value.poster.media) }
+      : value.poster;
+    if (media === value.media && poster === value.poster) return record;
+    return { ...value, media, poster };
   }
 
   private persistRecordMedia<T>(collection: string, record: T): T {
-    if (collection !== 'posts' && collection !== 'stories') return record;
-    const value = record as T & { media?: MediaItem[] };
-    if (!Array.isArray(value.media)) return record;
-    const media = value.media.map((item) => {
+    if (collection !== 'posts' && collection !== 'stories' && collection !== 'comments') return record;
+    const value = record as T & {
+      media?: MediaItem[];
+      poster?: { templateId: string; media: MediaItem; createdAt: number } | null;
+    };
+    const persistItem = (item: MediaItem): MediaItem => {
       const path = this.storagePath(item.src);
       return path ? { ...item, src: `storage://photos/${path}` } : item;
-    });
-    return { ...value, media };
+    };
+    const media = Array.isArray(value.media) ? value.media.map((item) => persistItem(item)) : value.media;
+    const poster = collection === 'posts' && value.poster?.media
+      ? { ...value.poster, media: persistItem(value.poster.media) }
+      : value.poster;
+    if (media === value.media && poster === value.poster) return record;
+    return { ...value, media, poster };
   }
 
   private async getAll<T>(collection: string): Promise<T[]> {
@@ -411,7 +427,7 @@ export class SupabaseApi implements LulaApi {
         .filter(`payload->>${field}`, 'eq', value)
         .order('updated_at', { ascending: false });
       if (error) throw new Error(error.message);
-      return (data ?? []).map((r) => r.payload as T);
+      return await Promise.all((data ?? []).map((r) => this.signRecordMedia(collection, r.payload as T)));
     } catch (e: any) {
       console.warn(`Supabase getAllWhere(${collection}) fallback:`, e?.message);
       const all = this.localDb.getAll<any>(collection);

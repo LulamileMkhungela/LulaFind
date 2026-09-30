@@ -55,6 +55,38 @@ export class ChatService {
     await this.load();
   }
 
+  async latestMessage(threadId: string): Promise<ChatMessage | null> {
+    const messages = await this.api.messages(threadId);
+    return messages[messages.length - 1] ?? null;
+  }
+
+  /** Keep inbox order and unread badges in sync across Local, Firebase and Supabase. */
+  private async storeMessage(message: ChatMessage): Promise<void> {
+    const thread = await this.api.thread(message.threadId);
+    await this.api.saveMessage(message);
+    if (!thread) return;
+
+    const unread = { ...thread.unread };
+    for (const participantId of thread.participantIds) {
+      if (participantId !== message.fromUserId) {
+        unread[participantId] = (unread[participantId] ?? 0) + 1;
+      }
+    }
+    await this.api.saveThread({ ...thread, lastMessageAt: message.at, unread });
+  }
+
+  async refreshOpenThread(): Promise<void> {
+    const threadId = this.openThreadId();
+    const me = this.auth.viewerId;
+    if (!threadId || !me) return;
+    const fresh = await this.api.messages(threadId);
+    this.messages.set(fresh);
+    if (fresh.some((message) => message.fromUserId !== me && !message.read)) {
+      await this.api.markThreadRead(threadId, me);
+    }
+    await this.load();
+  }
+
   async close(): Promise<void> {
     this.openThreadId.set(null);
     this.messages.set([]);
@@ -110,7 +142,7 @@ export class ChatService {
       unlockedVia
     };
     await this.api.saveThread(thread);
-    await this.api.saveMessage({
+    await this.storeMessage({
       id: uid('m'),
       threadId: thread.id,
       fromUserId: 'system' as string,
@@ -138,7 +170,7 @@ export class ChatService {
     if (!me || !threadId || (!text && !media)) return;
     this.sending.set(true);
     try {
-      await this.api.saveMessage({
+      await this.storeMessage({
         id: uid('m'),
         threadId,
         fromUserId: me,
@@ -158,7 +190,7 @@ export class ChatService {
   /** System message used to record consent/escalation milestones inside the chat. */
   async systemNote(threadId: string, body: string, postId?: string): Promise<void> {
     const now = Date.now();
-    await this.api.saveMessage({
+    await this.storeMessage({
       id: uid('m'),
       threadId,
       fromUserId: 'system',

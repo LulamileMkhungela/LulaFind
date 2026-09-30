@@ -1,4 +1,4 @@
-import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { Component, ElementRef, OnInit, ViewChild, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { ToastController } from '@ionic/angular/toast-controller';
 import { IonContent } from '@ionic/angular/ion-content';
@@ -12,8 +12,11 @@ import { AuthService } from '../../core/services/auth.service';
 import { DataService } from '../../core/services/data.service';
 import { MediaService } from '../../core/services/media.service';
 import {
-  Audience, MediaItem, Post, PostType, PROVINCES, ProvinceCode
+  Audience, MediaItem, Post, PostPoster, PostType, PROVINCES, ProvinceCode
 } from '../../core/models/types';
+import { uid } from '../../core/utils/format';
+import { drawPoster, isPosterType, loadPosterImage, posterContent, POSTER_TEMPLATES, type PosterTemplateId } from '../../core/utils/poster';
+import { PlatformService } from '../../core/services/platform.service';
 
 /** A brand-new composer. Also what "Start fresh" returns to. */
 const blankForm = (): ComposerForm => ({
@@ -35,6 +38,107 @@ const blankSubject = () => ({
   height: '', clothing: '', distinguishing: '', hair: '', vehicle: ''
 });
 
+interface TemplateValues {
+  name: string;
+  age: number | null;
+  gender: 'female' | 'male' | 'other' | 'unknown';
+  location: string;
+  town: string;
+  province: ProvinceCode | null;
+  when: number | null;
+  happened: string;
+  clothing: string;
+  caseNumber: string;
+  contact: string;
+  privateMark: string;
+  familyNote: string;
+}
+
+const TEMPLATE_SECTIONS: Record<string, keyof TemplateValues> = {
+  'full name': 'name', 'pet name': 'name', 'name': 'name',
+  'age': 'age', 'gender': 'gender',
+  'location': 'location', 'location town suburb province': 'location',
+  'location last seen town suburb province': 'location', 'location last seen': 'location', 'last seen location': 'location',
+  'when last seen': 'when', 'when they left': 'when', 'when seen': 'when', 'date and time': 'when',
+  'what happened': 'happened', 'what i personally saw': 'happened', 'what i saw': 'happened',
+  'clothing identifying details': 'clothing', 'coat collar identifying details': 'clothing',
+  'what they were wearing': 'clothing', 'appearance': 'clothing', 'coat collar or identifying details': 'clothing',
+  'saps case number': 'caseNumber', 'case number': 'caseNumber',
+  'contact details': 'contact', 'contact': 'contact',
+  'private identifying detail': 'privateMark', 'private mark known only to family': 'privateMark',
+  'what the family wants them to know': 'familyNote'
+};
+
+const sectionKey = (line: string): { key: keyof TemplateValues; value: string } | null => {
+  const match = line.match(/^\s*([^:]{2,90}):\s*(.*)$/);
+  if (!match) return null;
+  const label = match[1].toLowerCase().replace(/\([^)]*\)/g, ' ').replace(/[^a-z0-9]+/g, ' ').trim();
+  const key = TEMPLATE_SECTIONS[label];
+  return key ? { key, value: match[2].trim() } : null;
+};
+
+function templateForType(type: PostType): string {
+  switch (type) {
+    case 'missing':
+      return 'Full name:\nAge:\nGender:\nLocation (town/suburb, province):\nWhen last seen:\nWhat happened:\nClothing / identifying details:\nSAPS case number (optional):\nContact details (optional):\nPrivate identifying detail (optional; not shared publicly):';
+    case 'khumbulekhaya':
+      return 'Full name:\nAge:\nLocation last seen (town/suburb, province):\nWhen they left:\nWhat happened:\nWhat the family wants them to know (optional):\nContact details (optional):';
+    case 'pet':
+      return 'Pet name:\nAge:\nGender:\nLocation (town/suburb, province):\nWhen last seen:\nWhat happened:\nCoat, collar or identifying details:\nContact details (optional):';
+    case 'sighting':
+      return 'Location (town/suburb, province):\nWhen seen:\nWhat I personally saw:\nWhat they were wearing (if known):';
+    default:
+      return 'What happened:\nLocation (town/suburb, province):';
+  }
+}
+
+function parseTemplate(text: string): TemplateValues {
+  const sections: Partial<Record<keyof TemplateValues, string[]>> = {};
+  let current: keyof TemplateValues | null = null;
+  for (const line of text.split(/\r?\n/)) {
+    const parsed = sectionKey(line);
+    if (parsed) {
+      current = parsed.key;
+      (sections[current] ??= []).push(parsed.value);
+    } else if (current) {
+      (sections[current] ??= []).push(line.trim());
+    }
+  }
+  const value = (key: keyof TemplateValues): string => (sections[key] ?? []).join('\n').trim();
+  const location = value('location');
+  let province: ProvinceCode | null = null;
+  let town = location;
+  const normalizedLocation = location.toLowerCase().trim();
+  for (const item of PROVINCES) {
+    const endings = [item.name.toLowerCase(), item.code.toLowerCase()];
+    const ending = endings.find((candidate) => {
+      if (!normalizedLocation.endsWith(candidate)) return false;
+      const before = normalizedLocation.slice(0, -candidate.length);
+      return !before || /[,\s]$/.test(before);
+    });
+    if (ending) {
+      province = item.code;
+      town = location.slice(0, location.length - ending.length).replace(/[,\s]+$/, '').trim();
+      break;
+    }
+  }
+  const rawAge = value('age').match(/\d{1,3}/)?.[0];
+  const ageNumber = rawAge === undefined ? null : Number(rawAge);
+  const age = ageNumber !== null && ageNumber >= 0 && ageNumber <= 120 ? ageNumber : null;
+  const rawGender = value('gender').toLowerCase();
+  const gender: TemplateValues['gender'] = /female|woman|girl/.test(rawGender) ? 'female'
+    : /male|man|boy/.test(rawGender) ? 'male'
+      : /other|non.?binary/.test(rawGender) ? 'other' : 'unknown';
+  const dateText = value('when');
+  const date = dateText ? new Date(dateText) : null;
+  const when = date && Number.isFinite(date.getTime()) ? date.getTime() : null;
+  return {
+    name: value('name'), age, gender, location, town, province, when,
+    happened: value('happened'), clothing: value('clothing'), caseNumber: value('caseNumber'),
+    contact: value('contact'), privateMark: value('privateMark'), familyNote: value('familyNote')
+  };
+}
+
 interface ComposerForm {
   title: string; body: string; media: MediaItem[]; province: ProvinceCode | null; town: string;
   lastSeenAt: string; lastSeenWhere: string; caseNumber: string; audience: Audience;
@@ -55,20 +159,58 @@ interface MissingField { key: string; label: string; }
     <ion-header class="fb-create-header" [translucent]="false">
       <ion-toolbar>
         <ion-buttons slot="start">
-          <button class="icon-button" type="button" (click)="close()" aria-label="Close composer">
-            <lf-icon name="x" [size]="20" />
+          <button class="icon-button" type="button" (click)="posterMode() ? closeGenerator() : close()"
+                  [attr.aria-label]="posterMode() ? 'Back to composer' : 'Close composer'">
+            <lf-icon [name]="posterMode() ? 'chevronLeft' : 'x'" [size]="20" />
           </button>
         </ion-buttons>
-        <ion-title>{{ editing() ? 'Edit post' : 'Create post' }}</ion-title>
-        <ion-buttons slot="end">
-          <button class="post-button" type="button" [disabled]="busy()" [class.ready]="canPost()" (click)="submit()">
-            {{ busy() ? 'Posting…' : 'Post' }}
-          </button>
-        </ion-buttons>
+        <ion-title>{{ posterMode() ? 'Generate post' : editing() ? 'Edit post' : 'Create post' }}</ion-title>
+        @if (!posterMode()) {
+          <ion-buttons slot="end">
+            <button class="post-button" type="button" [disabled]="busy()" [class.ready]="canPost()" (click)="submit()">
+              {{ busy() ? 'Posting…' : 'Post' }}
+            </button>
+          </ion-buttons>
+        }
       </ion-toolbar>
     </ion-header>
 
     <ion-content class="lf-page">
+      @if (posterMode()) {
+        <section class="generator lf-fade-in" aria-label="Generate a post design">
+          <div class="generator__intro">
+            <strong>Choose a design</strong>
+            <p>Preview your post as a shareable image. The first attached photo is included when available; without one, the design stays text-led.</p>
+          </div>
+          <div class="generated-stage">
+            <canvas #generatedCanvas role="img" [attr.aria-label]="'Preview using the ' + selectedTemplateName() + ' design'"></canvas>
+            @if (posterBusy()) { <div class="generated-stage__busy">Updating preview…</div> }
+          </div>
+          @if (firstImage()) {
+            <div class="preview-choice" role="group" aria-label="Preview with or without the attached photo">
+              <button type="button" [class.active]="previewWithImage()" (click)="setPreviewPhoto(true)">With photo</button>
+              <button type="button" [class.active]="!previewWithImage()" (click)="setPreviewPhoto(false)">Text only</button>
+            </div>
+          }
+          <p class="image-state" role="status">
+            {{ firstImage() ? (previewWithImage() ? 'Preview includes your first attached photo.' : 'Preview without the photo; the published design includes your attached photo.') : 'No photo attached — previewing the text-only design.' }}
+          </p>
+          <div class="template-picker" role="listbox" aria-label="Post design templates">
+            @for (template of posterTemplates; track template.id) {
+              <button type="button" class="template-choice" role="option" [class.on]="selectedTemplate() === template.id"
+                      [attr.aria-selected]="selectedTemplate() === template.id" [disabled]="posterBusy()"
+                      (click)="chooseTemplate(template.id)">
+                <span class="template-swatch" [style.background]="'linear-gradient(135deg,' + template.swatch[0] + ' 0%,' + template.swatch[2] + ' 55%,' + template.swatch[1] + ' 100%)'"></span>
+                <strong>{{ template.name }}</strong><small>{{ template.tagline }}</small>
+              </button>
+            }
+          </div>
+          <div class="generator__actions">
+            <button type="button" class="use-design" [disabled]="posterBusy()" (click)="useGeneratedDesign()">Use this design</button>
+            <button type="button" class="cancel-design" (click)="closeGenerator()">Back to post</button>
+          </div>
+        </section>
+      } @else {
       <main class="composer lf-fade-in">
         <div class="author-row">
           <lf-avatar [src]="userAvatar()" [name]="userName()" [size]="40" />
@@ -114,12 +256,6 @@ interface MissingField { key: string; label: string; }
                 @if (type() === category.key) { <lf-icon class="selected-check" name="check" [size]="14" /> }
               </button>
             }
-            @if (!editing()) {
-              <button type="button" class="category" (click)="goStory()">
-                <lf-icon name="camera" [size]="17" />
-                <span>Story</span>
-              </button>
-            }
           </div>
           @if (editing()) { <p class="inline-note">The category can’t change after posting. Saving marks it edited.</p> }
         </section>
@@ -148,33 +284,41 @@ interface MissingField { key: string; label: string; }
           </div>
         } @else {
           <section class="post-fields" aria-label="Post content">
-            <label class="field full heading-field">
-              <span>Short heading <small>(optional)</small></span>
-              <input class="heading-input" type="text" maxlength="120" placeholder="Type a short heading"
-                     [value]="f().title" (input)="patch({ title: $any($event.target).value })" />
-            </label>
-            <textarea class="body-input" rows="5" maxlength="5000" data-field="body" [placeholder]="bodyPlaceholder()"
-                      [value]="f().body" (input)="patch({ body: $any($event.target).value })"></textarea>
+            @if (editing()) {
+              <label class="field full heading-field">
+                <span>Short heading <small>(optional)</small></span>
+                <input class="heading-input" type="text" maxlength="120" placeholder="Type a short heading"
+                       [value]="f().title" (input)="patch({ title: $any($event.target).value })" />
+              </label>
+            } @else {
+              <p class="template-instruction">Fill in the prompts. Your post will stay as readable text unless you choose Generate.</p>
+            }
+            <textarea class="body-input" [class.body-input--template]="!editing()" [rows]="editing() ? 5 : 13"
+                      maxlength="5000" data-field="body" [placeholder]="editing() ? bodyPlaceholder() : ''"
+                      [value]="f().body" (input)="patch({ body: $any($event.target).value })"
+                      aria-label="Post text template"></textarea>
             @if (fieldError('body')) { <p class="field-error">{{ fieldError('body') }}</p> }
 
-            <div class="location-grid">
-              <label class="field" [class.invalid]="fieldError('province')">
-                <span>Province <b aria-hidden="true">*</b></span>
-                <select [value]="f().province ?? ''" (change)="patch({ province: $any($event.target).value || null })">
-                  <option value="">Choose province</option>
-                  @for (province of provinces; track province.code) {
-                    <option [value]="province.code">{{ province.name }}</option>
-                  }
-                </select>
-                @if (fieldError('province')) { <small class="field-error">{{ fieldError('province') }}</small> }
-              </label>
-              <label class="field" [class.invalid]="fieldError('town')">
-                <span>Town or suburb <b aria-hidden="true">*</b></span>
-                <input type="text" maxlength="80" placeholder="e.g. Soweto" [value]="f().town"
-                       (input)="patch({ town: $any($event.target).value })" />
-                @if (fieldError('town')) { <small class="field-error">{{ fieldError('town') }}</small> }
-              </label>
-            </div>
+            @if (editing()) {
+              <div class="location-grid">
+                <label class="field" [class.invalid]="fieldError('province')">
+                  <span>Province <b aria-hidden="true">*</b></span>
+                  <select [value]="f().province ?? ''" (change)="patch({ province: $any($event.target).value || null })">
+                    <option value="">Choose province</option>
+                    @for (province of provinces; track province.code) {
+                      <option [value]="province.code">{{ province.name }}</option>
+                    }
+                  </select>
+                  @if (fieldError('province')) { <small class="field-error">{{ fieldError('province') }}</small> }
+                </label>
+                <label class="field" [class.invalid]="fieldError('town')">
+                  <span>Town or suburb <b aria-hidden="true">*</b></span>
+                  <input type="text" maxlength="80" placeholder="e.g. Soweto" [value]="f().town"
+                         (input)="patch({ town: $any($event.target).value })" />
+                  @if (fieldError('town')) { <small class="field-error">{{ fieldError('town') }}</small> }
+                </label>
+              </div>
+            }
 
             @if (f().media.length) {
               <div class="media-preview" aria-label="Attached media">
@@ -202,71 +346,107 @@ interface MissingField { key: string; label: string; }
                       [disabled]="busy() || hasVideo() || f().media.length > 0">
                 <lf-icon name="video" [size]="18" /> <span>Video</span>
               </button>
+              @if (!editing() && canGenerate()) {
+                <button type="button" class="attachment-button generate-button" (click)="openGenerator()" [disabled]="busy()">
+                  <lf-icon name="layout" [size]="18" /> <span>Generate</span>
+                </button>
+              }
               <span class="attachment-hint">Up to 4 photos or 1 video</span>
             </div>
+            @if (posterTemplate()) {
+              <p class="generated-selection" role="status"><lf-icon name="check" [size]="15" /> {{ selectedTemplateName() }} design will be published with this post.
+                <button type="button" (click)="clearGeneratedDesign()">Remove</button>
+              </p>
+            }
+            @if (posterStale()) {
+              <p class="generator-stale" role="status">The text or photos changed, so the old preview was cleared. Generate again to use a design.</p>
+            }
 
-            <button type="button" class="details-toggle" [attr.aria-expanded]="moreOpen()" (click)="moreOpen.set(!moreOpen())">
-              <span class="details-icon"><lf-icon name="plus" [size]="17" /></span>
-              <span class="details-copy"><strong>{{ detailsLabel() }}</strong><small>Optional details help people respond accurately</small></span>
-              <lf-icon [name]="moreOpen() ? 'chevronDown' : 'chevronRight'" [size]="17" />
-            </button>
+            @if (editing()) {
+              <button type="button" class="details-toggle" [attr.aria-expanded]="moreOpen()" (click)="moreOpen.set(!moreOpen())">
+                <span class="details-icon"><lf-icon name="plus" [size]="17" /></span>
+                <span class="details-copy"><strong>{{ detailsLabel() }}</strong><small>Optional details help people respond accurately</small></span>
+                <lf-icon [name]="moreOpen() ? 'chevronDown' : 'chevronRight'" [size]="17" />
+              </button>
 
-            @if (moreOpen()) {
-              <section class="extra-fields lf-fade-in" aria-label="Additional post details">
-                @if (type() === 'missing' || type() === 'khumbulekhaya') {
-                  <div class="section-heading compact"><strong>{{ type() === 'missing' ? 'Person details' : 'About the person' }}</strong><span>Optional</span></div>
-                  <label class="field full"><span>Full name</span><input placeholder="Name used by family" [value]="s().name" (input)="patchSubject({ name: $any($event.target).value })" /></label>
-                  <div class="fields-two">
-                    <label class="field"><span>Age</span><input type="number" min="0" max="120" inputmode="numeric" placeholder="Age" [value]="s().age" (input)="patchSubject({ age: $any($event.target).value })" /></label>
-                    <label class="field"><span>Gender</span><select [value]="s().gender" (change)="patchSubject({ gender: $any($event.target).value })">
-                      <option value="unknown">Not specified</option><option value="female">Female</option><option value="male">Male</option><option value="other">Other</option>
-                    </select></label>
-                  </div>
-                  <label class="field full"><span>Clothing or identifying details</span><textarea rows="2" placeholder="What were they wearing? Any details that could help identify them?" [value]="s().clothing" (input)="patchSubject({ clothing: $any($event.target).value })"></textarea></label>
-                  @if (type() === 'missing') {
-                    <label class="field full"><span>Private identifying detail <small>(kept off the public poster)</small></span><input placeholder="A mark only the family knows" [value]="s().distinguishing" (input)="patchSubject({ distinguishing: $any($event.target).value })" /></label>
+              @if (moreOpen()) {
+                <section class="extra-fields lf-fade-in" aria-label="Additional post details">
+                  @if (type() === 'missing' || type() === 'khumbulekhaya') {
+                    <div class="section-heading compact"><strong>{{ type() === 'missing' ? 'Person details' : 'About the person' }}</strong><span>Optional</span></div>
+                    <label class="field full"><span>Full name</span><input placeholder="Name used by family" [value]="s().name" (input)="patchSubject({ name: $any($event.target).value })" /></label>
+                    <div class="fields-two">
+                      <label class="field"><span>Age</span><input type="number" min="0" max="120" inputmode="numeric" placeholder="Age" [value]="s().age" (input)="patchSubject({ age: $any($event.target).value })" /></label>
+                      <label class="field"><span>Gender</span><select [value]="s().gender" (change)="patchSubject({ gender: $any($event.target).value })">
+                        <option value="unknown">Not specified</option><option value="female">Female</option><option value="male">Male</option><option value="other">Other</option>
+                      </select></label>
+                    </div>
+                    <label class="field full"><span>Clothing or identifying details</span><textarea rows="2" placeholder="What were they wearing? Any details that could help identify them?" [value]="s().clothing" (input)="patchSubject({ clothing: $any($event.target).value })"></textarea></label>
+                    @if (type() === 'missing') {
+                      <label class="field full"><span>Private identifying detail <small>(kept off the public poster)</small></span><input placeholder="A mark only the family knows" [value]="s().distinguishing" (input)="patchSubject({ distinguishing: $any($event.target).value })" /></label>
+                    }
                   }
-                }
 
-                @if (type() === 'pet') {
-                  <div class="section-heading compact"><strong>Pet details</strong><span>Optional</span></div>
-                  <label class="field full"><span>Pet's name</span><input placeholder="Name and breed" [value]="s().name" (input)="patchSubject({ name: $any($event.target).value })" /></label>
-                  <label class="field full"><span>Colour, collar or identifying marks</span><input placeholder="A short description" [value]="s().distinguishing" (input)="patchSubject({ distinguishing: $any($event.target).value })" /></label>
-                }
+                  @if (type() === 'pet') {
+                    <div class="section-heading compact"><strong>Pet details</strong><span>Optional</span></div>
+                    <label class="field full"><span>Pet's name</span><input placeholder="Name and breed" [value]="s().name" (input)="patchSubject({ name: $any($event.target).value })" /></label>
+                    <label class="field full"><span>Colour, collar or identifying marks</span><input placeholder="A short description" [value]="s().distinguishing" (input)="patchSubject({ distinguishing: $any($event.target).value })" /></label>
+                  }
 
-                @if (type() === 'sighting') {
-                  <div class="section-heading compact"><strong>Sighting details</strong><span>Optional</span></div>
-                  <label class="field full"><span>Where did you see them?</span><input placeholder="Nearest landmark or public place" [value]="f().lastSeenWhere" (input)="patch({ lastSeenWhere: $any($event.target).value })" /></label>
-                  <label class="field full"><span>Appearance</span><input placeholder="Describe only what you actually saw" [value]="s().clothing" (input)="patchSubject({ clothing: $any($event.target).value })" /></label>
-                }
+                  @if (type() === 'sighting') {
+                    <div class="section-heading compact"><strong>Sighting details</strong><span>Optional</span></div>
+                    <label class="field full"><span>Where did you see them?</span><input placeholder="Nearest landmark or public place" [value]="f().lastSeenWhere" (input)="patch({ lastSeenWhere: $any($event.target).value })" /></label>
+                    <label class="field full"><span>Appearance</span><input placeholder="Describe only what you actually saw" [value]="s().clothing" (input)="patchSubject({ clothing: $any($event.target).value })" /></label>
+                  }
 
-                @if (type() !== 'sighting') {
-                  <label class="field full"><span>Last seen near</span><input placeholder="Neighbourhood or public place" [value]="f().lastSeenWhere" (input)="patch({ lastSeenWhere: $any($event.target).value })" /></label>
-                }
-                @if (type() !== 'pet' && type() !== 'sighting') {
-                  <label class="field full"><span>SAPS case number <small>(optional)</small></span><input placeholder="Police case reference" [value]="f().caseNumber" (input)="patch({ caseNumber: $any($event.target).value })" /></label>
-                }
-                @if (type() === 'pet') {
-                  <label class="field full"><span>Last seen near</span><input placeholder="Neighbourhood or public place" [value]="f().lastSeenWhere" (input)="patch({ lastSeenWhere: $any($event.target).value })" /></label>
-                }
-                @if (type() === 'khumbulekhaya') {
-                  <label class="field full"><span>What might the family want them to know?</span><input placeholder="Optional — don't assume they want to come home" [value]="khumbuReason()" (input)="setKhumbu($any($event.target).value)" /></label>
-                  <label class="switch-row"><input type="checkbox" [checked]="f().askWanted" (change)="patch({ askWanted: $any($event.target).checked })" /><span><strong>Ask the community if they are being looked for</strong><small>People can answer yes or no.</small></span></label>
-                }
+                  @if (type() !== 'sighting') {
+                    <label class="field full"><span>Last seen near</span><input placeholder="Neighbourhood or public place" [value]="f().lastSeenWhere" (input)="patch({ lastSeenWhere: $any($event.target).value })" /></label>
+                  }
+                  @if (type() !== 'pet' && type() !== 'sighting') {
+                    <label class="field full"><span>SAPS case number <small>(optional)</small></span><input placeholder="Police case reference" [value]="f().caseNumber" (input)="patch({ caseNumber: $any($event.target).value })" /></label>
+                  }
+                  @if (type() === 'pet') {
+                    <label class="field full"><span>Last seen near</span><input placeholder="Neighbourhood or public place" [value]="f().lastSeenWhere" (input)="patch({ lastSeenWhere: $any($event.target).value })" /></label>
+                  }
+                  @if (type() === 'khumbulekhaya') {
+                    <label class="field full"><span>What might the family want them to know?</span><input placeholder="Optional — don't assume they want to come home" [value]="khumbuReason()" (input)="setKhumbu($any($event.target).value)" /></label>
+                    <label class="switch-row"><input type="checkbox" [checked]="f().askWanted" (change)="patch({ askWanted: $any($event.target).checked })" /><span><strong>Ask the community if they are being looked for</strong><small>People can answer yes or no.</small></span></label>
+                  }
 
-                <label class="field full"><span>Last seen date and time <small>(optional)</small></span><input type="datetime-local" [value]="f().lastSeenAt" (input)="patch({ lastSeenAt: $any($event.target).value })" /></label>
-                <label class="field full"><span>Contact label</span><input placeholder="Family contact" [value]="f().contactLabel" (input)="patch({ contactLabel: $any($event.target).value })" /></label>
-                <label class="field full"><span>Contact details <small>(optional)</small></span><input placeholder="Phone or email" [value]="f().contactValue" (input)="patch({ contactValue: $any($event.target).value })" /></label>
-                <label class="field full"><span>Contact visibility</span><select [value]="f().contactVisibleTo" (change)="patch({ contactVisibleTo: $any($event.target).value })">
-                  <option value="everyone">Everyone</option><option value="verified">Verified members</option><option value="owner">Only me</option>
-                </select></label>
+                  <label class="field full"><span>Last seen date and time <small>(optional)</small></span><input type="datetime-local" [value]="f().lastSeenAt" (input)="patch({ lastSeenAt: $any($event.target).value })" /></label>
+                  <label class="field full"><span>Contact label</span><input placeholder="Family contact" [value]="f().contactLabel" (input)="patch({ contactLabel: $any($event.target).value })" /></label>
+                  <label class="field full"><span>Contact details <small>(optional)</small></span><input placeholder="Phone or email" [value]="f().contactValue" (input)="patch({ contactValue: $any($event.target).value })" /></label>
+                  <label class="field full"><span>Contact visibility</span><select [value]="f().contactVisibleTo" (change)="patch({ contactVisibleTo: $any($event.target).value })">
+                    <option value="everyone">Everyone</option><option value="verified">Verified members</option><option value="owner">Only me</option>
+                  </select></label>
 
-                <div class="privacy-switches">
-                  <label class="switch-row"><input type="checkbox" [checked]="f().anonymous" (change)="patch({ anonymous: $any($event.target).checked })" /><span><strong>Post anonymously</strong><small>Your profile stays private on this post.</small></span></label>
-                  <label class="switch-row"><input type="checkbox" [checked]="f().allowComments" (change)="patch({ allowComments: $any($event.target).checked })" /><span><strong>Allow comments</strong><small>People can share leads in the thread.</small></span></label>
-                  <label class="switch-row"><input type="checkbox" [checked]="f().chatEnabled" (change)="patch({ chatEnabled: $any($event.target).checked })" /><span><strong>Allow private chat</strong><small>Chat still needs an idea vote and mutual follow.</small></span></label>
-                </div>
-              </section>
+                  <div class="privacy-switches">
+                    <label class="switch-row"><input type="checkbox" [checked]="f().anonymous" (change)="patch({ anonymous: $any($event.target).checked })" /><span><strong>Post anonymously</strong><small>Your profile stays private on this post.</small></span></label>
+                    <label class="switch-row"><input type="checkbox" [checked]="f().allowComments" (change)="patch({ allowComments: $any($event.target).checked })" /><span><strong>Allow comments</strong><small>People can share leads in the thread.</small></span></label>
+                    <label class="switch-row"><input type="checkbox" [checked]="f().chatEnabled" (change)="patch({ chatEnabled: $any($event.target).checked })" /><span><strong>Allow private chat</strong><small>Chat still needs an idea vote and mutual follow.</small></span></label>
+                  </div>
+                </section>
+              }
+            } @else {
+              <button type="button" class="details-toggle" [attr.aria-expanded]="moreOpen()" (click)="moreOpen.set(!moreOpen())">
+                <span class="details-icon"><lf-icon name="plus" [size]="17" /></span>
+                <span class="details-copy"><strong>Post settings</strong><small>Privacy and who can respond</small></span>
+                <lf-icon [name]="moreOpen() ? 'chevronDown' : 'chevronRight'" [size]="17" />
+              </button>
+              @if (moreOpen()) {
+                <section class="extra-fields lf-fade-in" aria-label="Post settings">
+                  <label class="field full"><span>Contact visibility</span><select [value]="f().contactVisibleTo" (change)="patch({ contactVisibleTo: $any($event.target).value })">
+                    <option value="everyone">Everyone</option><option value="verified">Verified members</option><option value="owner">Only me</option>
+                  </select></label>
+                  <div class="privacy-switches">
+                    <label class="switch-row"><input type="checkbox" [checked]="f().anonymous" (change)="patch({ anonymous: $any($event.target).checked })" /><span><strong>Post anonymously</strong><small>Your profile stays private on this post.</small></span></label>
+                    <label class="switch-row"><input type="checkbox" [checked]="f().allowComments" (change)="patch({ allowComments: $any($event.target).checked })" /><span><strong>Allow comments</strong><small>People can share leads in the thread.</small></span></label>
+                    <label class="switch-row"><input type="checkbox" [checked]="f().chatEnabled" (change)="patch({ chatEnabled: $any($event.target).checked })" /><span><strong>Allow private chat</strong><small>Chat still needs a mutual follow.</small></span></label>
+                    @if (type() === 'khumbulekhaya') {
+                      <label class="switch-row"><input type="checkbox" [checked]="f().askWanted" (change)="patch({ askWanted: $any($event.target).checked })" /><span><strong>Ask the community if they are being looked for</strong><small>People can answer yes or no.</small></span></label>
+                    }
+                  </div>
+                </section>
+              }
             }
           </section>
         }
@@ -281,13 +461,12 @@ interface MissingField { key: string; label: string; }
         }
         <p class="footnote">Share only information you are allowed to post. In an emergency, call 10111.</p>
       </main>
+      }
     </ion-content>
   `,
   styles: [`
     :host { --fb-blue: var(--lf-primary); --fb-text: var(--ion-text-color); --fb-muted: var(--lf-muted); --fb-line: var(--lf-line); --fb-soft: var(--lf-input); }
     .fb-create-header { background: var(--lf-card); border-bottom: 1px solid var(--fb-line); }
-    .fb-create-topbar { min-height: 50px; display: grid; grid-template-columns: 40px 1fr 56px; align-items: center; gap: 8px; padding: 0 12px; }
-    .fb-create-topbar h1 { margin: 0; text-align: center; font-size: 16px; font-weight: 700; color: var(--fb-text); }
     .icon-button { width: 36px; height: 36px; border: 0; border-radius: 50%; display: grid; place-items: center; background: var(--fb-soft); color: var(--fb-text); cursor: pointer; transition: background .16s ease, transform .16s ease; }
     .icon-button:active { transform: scale(.94); }
     .post-button { justify-self: end; min-width: 54px; height: 32px; padding: 0 12px; border: 0; border-radius: 6px; background: var(--lf-primary-fill); color: #fff; font-size: 15px; font-weight: 600; cursor: pointer; transition: filter .15s ease, transform .15s ease; }
@@ -317,8 +496,10 @@ interface MissingField { key: string; label: string; }
     .start-hint p { margin: 0; font-size: 15px; }
     .hint-icon { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 50%; background: var(--lf-primary-soft); color: var(--lf-primary-soft-text); }
     .post-fields { display: flex; flex-direction: column; gap: 11px; padding-top: 13px; }
+    .template-instruction { margin: 0; color: var(--fb-muted); font-size: 13px; line-height: 1.4; }
     .body-input { width: 100%; box-sizing: border-box; min-height: 112px; padding: 8px 0; border: 0;
       background: transparent; color: var(--fb-text); font: inherit; font-size: 15px; line-height: 1.5; outline: 0; resize: vertical; }
+    .body-input--template { min-height: 290px; padding: 12px; border: 1px solid var(--fb-line); border-radius: 9px; background: var(--lf-card); white-space: pre-wrap; }
     .body-input::placeholder { color: var(--lf-muted); }
     .location-grid, .fields-two { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
     .field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
@@ -372,6 +553,32 @@ interface MissingField { key: string; label: string; }
       background: var(--lf-card); border: 1px solid var(--fb-line); font-size: 13.5px; line-height: 1.4; }
     .consent input { margin-top: 2px; width: 17px; height: 17px; flex-shrink: 0; }
     .footnote { margin: 14px 0 0; color: var(--fb-muted); font-size: 12px; line-height: 1.4; }
+    .generate-button { color: var(--lf-primary); }
+    .generated-selection, .generator-stale { display: flex; align-items: center; gap: 8px; margin: 3px 0 0; color: var(--lf-primary-soft-text); font-size: 13px; }
+    .generated-selection button { margin-left: auto; border: 0; background: transparent; color: inherit; font: inherit; font-weight: 700; text-decoration: underline; cursor: pointer; }
+    .generator { width: min(100%, 640px); margin: 0 auto; padding: 16px 14px calc(28px + var(--lf-safe-bottom)); }
+    .generator__intro { margin: 0 auto 12px; max-width: 460px; text-align: center; }
+    .generator__intro strong { font-size: 17px; }
+    .generator__intro p { margin: 5px 0 0; color: var(--fb-muted); font-size: 13px; line-height: 1.4; }
+    .generated-stage { position: relative; width: min(88%, 420px); margin: 0 auto; overflow: hidden; border-radius: 14px; aspect-ratio: 1080 / 1350; background: #101116; box-shadow: 0 12px 34px rgba(0,0,0,.28); }
+    .generated-stage canvas { display: block; width: 100%; height: 100%; }
+    .generated-stage__busy { position: absolute; inset: 0; display: grid; place-items: center; background: #0008; color: #fff; font-weight: 700; }
+    .preview-choice { display: flex; width: fit-content; gap: 3px; padding: 3px; margin: 9px auto 0; border: 1px solid var(--fb-line); border-radius: 22px; background: var(--lf-card); }
+    .preview-choice button { min-height: 32px; padding: 0 14px; border: 0; border-radius: 18px; background: transparent; color: var(--fb-muted); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+    .preview-choice button.active { background: var(--lf-primary-fill); color: #fff; }
+    .image-state { margin: 8px 0 0; text-align: center; color: var(--fb-muted); font-size: 12px; }
+    .template-picker { display: flex; gap: 9px; overflow-x: auto; padding: 14px 2px 8px; scroll-snap-type: x proximity; scrollbar-width: none; }
+    .template-picker::-webkit-scrollbar { display: none; }
+    .template-choice { flex: 0 0 126px; scroll-snap-align: start; display: flex; flex-direction: column; align-items: flex-start; gap: 3px; padding: 7px; border: 2px solid var(--fb-line); border-radius: 12px; background: var(--lf-card); color: var(--fb-text); text-align: left; cursor: pointer; }
+    .template-choice.on { border-color: var(--lf-primary); background: var(--lf-primary-soft); }
+    .template-choice:disabled { opacity: .65; cursor: wait; }
+    .template-swatch { width: 100%; height: 56px; border-radius: 7px; }
+    .template-choice strong { font-size: 13px; }
+    .template-choice small { color: var(--fb-muted); font-size: 11px; line-height: 1.2; }
+    .generator__actions { display: flex; flex-direction: column; gap: 7px; max-width: 420px; margin: 8px auto 0; }
+    .use-design { min-height: 44px; border: 0; border-radius: 22px; background: var(--lf-primary-fill); color: #fff; font: inherit; font-weight: 700; cursor: pointer; }
+    .use-design:disabled { opacity: .5; cursor: default; }
+    .cancel-design { min-height: 38px; border: 0; background: transparent; color: var(--fb-muted); font: inherit; font-weight: 600; cursor: pointer; }
     @media (max-width: 370px) { .composer { padding-inline: 10px; } .category-grid { gap: 5px; } .category { padding-inline: 7px; font-size: 13px; } .location-grid, .fields-two { grid-template-columns: 1fr; } }
   `]
 })
@@ -382,14 +589,30 @@ export class CreatePostComponent implements OnInit {
   private router = inject(Router);
   private route = inject(ActivatedRoute);
   private toaster = inject(ToastController);
+  private platform = inject(PlatformService);
 
   protected readonly provinces = PROVINCES;
   protected readonly categories = CATEGORIES;
+  protected readonly posterTemplates = POSTER_TEMPLATES;
   protected readonly moreOpen = signal(false);
+  private generatedCanvas: HTMLCanvasElement | null = null;
+  private generatedImage: HTMLImageElement | null = null;
+
+  @ViewChild('generatedCanvas')
+  set canvasElement(ref: ElementRef<HTMLCanvasElement> | undefined) {
+    this.generatedCanvas = ref?.nativeElement ?? null;
+    if (this.generatedCanvas) setTimeout(() => void this.renderGenerated(), 0);
+  }
 
   type = signal<PostType | null>(null);
   editing = signal(false);
   busy = signal(false);
+  posterMode = signal(false);
+  posterBusy = signal(false);
+  selectedTemplate = signal<PosterTemplateId>('signal');
+  previewWithImage = signal(true);
+  posterTemplate = signal<PosterTemplateId | null>(null);
+  posterStale = signal(false);
   error = signal('');
   /** Not an error: a plain fact, e.g. this build has no camera module. */
   notice = signal('');
@@ -406,14 +629,28 @@ export class CreatePostComponent implements OnInit {
   readonly s = signal(blankSubject());
   readonly khumbuReason = signal('');
 
+  readonly templateValues = computed(() => parseTemplate(this.f().body));
+  readonly firstImage = computed(() => this.f().media.find((item) => item.kind === 'image')?.src ?? null);
+  readonly canGenerate = computed(() => this.type() !== null && isPosterType(this.type()!));
   readonly userAvatar = computed(() => this.data.avatarFor(this.auth.user()));
   readonly userName = computed(() => this.auth.user()?.displayName ?? 'You');
   readonly mySpotlights = computed(() => this.data.mySpotlights());
 
   patch(p: Partial<ComposerForm>): void {
+    if (p.body !== undefined && p.body !== this.f().body) this.invalidateGenerated();
     this.f.update((f) => ({ ...f, ...p }));
     if (this.error()) this.error.set('');
     this.persistDraft();
+  }
+
+  private invalidateGenerated(): void {
+    if (!this.posterTemplate()) return;
+    this.posterTemplate.set(null);
+    this.posterStale.set(true);
+  }
+
+  selectedTemplateName(): string {
+    return this.posterTemplates.find((template) => template.id === this.selectedTemplate())?.name ?? 'selected';
   }
 
   patchSubject(p: Partial<ReturnType<typeof blankSubject>>): void {
@@ -487,6 +724,8 @@ export class CreatePostComponent implements OnInit {
     this.s.set(blankSubject());
     this.khumbuReason.set('');
     this.error.set('');
+    this.posterTemplate.set(null);
+    this.posterStale.set(false);
     this.showFieldErrors.set(false);
   }
 
@@ -502,10 +741,18 @@ export class CreatePostComponent implements OnInit {
   readonly missing = computed<MissingField[]>(() => {
     const f = this.f();
     const out: MissingField[] = [];
-    if (!this.type()) out.push({ key: 'type', label: 'Choose what you are posting' });
-    if (!f.body.trim()) out.push({ key: 'body', label: 'Write what happened so people know how to help' });
-    if (!f.province) out.push({ key: 'province', label: 'Choose the province' });
-    if (!f.town.trim()) out.push({ key: 'town', label: 'Add the town or suburb' });
+    const type = this.type();
+    if (!type) out.push({ key: 'type', label: 'Choose what you are posting' });
+    if (this.editing()) {
+      if (!f.body.trim()) out.push({ key: 'body', label: 'Write what happened so people know how to help' });
+      if (!f.province) out.push({ key: 'province', label: 'Choose the province' });
+      if (!f.town.trim()) out.push({ key: 'town', label: 'Add the town or suburb' });
+    } else if (type) {
+      const values = this.templateValues();
+      if (values.happened.trim().length < 30) out.push({ key: 'body', label: 'Add at least 30 characters about what happened' });
+      if (!values.town || !values.province) out.push({ key: 'location', label: 'Complete the location line with a town and province' });
+      if (this.childCase() && !f.guardianConsent) out.push({ key: 'consent', label: 'Confirm guardian permission for this child’s case' });
+    }
     if (f.audience === 'surname' && !f.spotlightId) out.push({ key: 'spotlightId', label: 'Choose a Spotlight community' });
     return out;
   });
@@ -526,7 +773,33 @@ export class CreatePostComponent implements OnInit {
     if (routeType && CATEGORIES.some((category) => category.key === routeType)) this.setType(routeType as PostType);
 
     const editId = this.route.snapshot.paramMap.get('id');
-    if (!editId) this.restoreDraft();
+    const historyState = typeof window !== 'undefined' && window.history.state && typeof window.history.state === 'object'
+      ? window.history.state as Record<string, unknown>
+      : {};
+    const photoAttachment = historyState['photoAttachment'] as MediaItem | undefined;
+    const mediaNotice = historyState['mediaNotice'];
+    if (typeof mediaNotice === 'string') this.notice.set(mediaNotice);
+    if ('photoAttachment' in historyState || 'mediaNotice' in historyState) {
+      const consumedState = { ...historyState };
+      delete consumedState['photoAttachment'];
+      delete consumedState['mediaNotice'];
+      window.history.replaceState(consumedState, document.title, window.location.href);
+    }
+
+    if (!editId) {
+      this.restoreDraft();
+      if (photoAttachment?.kind === 'image' && photoAttachment.src) {
+        const existingMedia = this.f().media;
+        if (!existingMedia.some((item) => item.id === photoAttachment.id)) {
+          if (existingMedia.length >= 4 || existingMedia.some((item) => item.kind === 'video')) {
+            this.error.set('This draft already has a video or the four-photo limit. Remove existing media before adding this photo.');
+          } else {
+            this.invalidateGenerated();
+            this.f.update((form) => ({ ...form, media: [...form.media, photoAttachment] }));
+          }
+        }
+      }
+    }
     if (editId) {
       const post = await this.data.loadPost(editId);
       if (!post || !this.data.canEdit(post)) {
@@ -570,19 +843,145 @@ export class CreatePostComponent implements OnInit {
 
   setType(type: PostType): void {
     if (this.editing()) return;
+    const previousType = this.type();
+    const previousTemplate = previousType ? templateForType(previousType) : '';
+    const currentBody = this.f().body;
+    const body = !currentBody.trim() || currentBody === previousTemplate ? templateForType(type) : currentBody;
+    this.invalidateGenerated();
     this.type.set(type);
+    this.posterStale.set(false);
     this.moreOpen.set(false);
     this.s.set(blankSubject());
     this.f.update((f) => ({
-      ...f,
-      caseNumber: '',
-      lastSeenAt: '',
-      lastSeenWhere: '',
+      ...f, body, caseNumber: '', lastSeenAt: '', lastSeenWhere: '',
       askWanted: type === 'khumbulekhaya'
     }));
     this.khumbuReason.set('');
     this.error.set('');
     this.showFieldErrors.set(false);
+    this.persistDraft();
+  }
+
+  private publicBody(): string {
+    const values = this.templateValues();
+    return [
+      values.happened,
+      values.clothing ? `Clothing / identifying details: ${values.clothing}` : '',
+      values.familyNote ? `What the family wants them to know: ${values.familyNote}` : ''
+    ].filter((part) => part.trim()).join('\n\n').trim();
+  }
+
+  private subjectFromTemplate(): Post['subject'] {
+    const type = this.type();
+    const values = this.templateValues();
+    if (!type || !isPosterType(type)) return type === 'sighting' && (values.name || values.clothing) ? {
+      name: values.name, age: null, gender: 'unknown', height: '', build: '', skinTone: '', hair: '', eyes: '',
+      clothing: values.clothing, distinguishing: '', medical: '', vehicle: '', languages: '', surname: '', relationship: ''
+    } : null;
+    return {
+      name: values.name.trim(), age: values.age, gender: values.gender, height: '', build: '', skinTone: '', hair: '', eyes: '',
+      clothing: values.clothing.trim(), distinguishing: values.privateMark.trim(), medical: '', vehicle: '', languages: '',
+      surname: values.name.trim().split(/\s+/).at(-1) ?? '', relationship: ''
+    };
+  }
+
+  private previewPost(): Post | null {
+    const type = this.type();
+    if (!type || !isPosterType(type)) return null;
+    const values = this.templateValues();
+    const subject = this.subjectFromTemplate();
+    return {
+      id: 'post-preview', type, status: 'active', danger: null,
+      authorId: this.auth.viewerId ?? 'preview', anonymous: this.f().anonymous, askWanted: this.f().askWanted,
+      title: this.generatedTitle(type, values.name), body: this.publicBody(), media: this.f().media, poster: null,
+      province: (values.province ?? '') as ProvinceCode, town: values.town,
+      lastSeenAt: values.when, lastSeenWhere: '', geo: null,
+      contactLabel: 'Family contact', contactValue: values.contact, contactVisibleTo: this.f().contactVisibleTo,
+      caseNumber: values.caseNumber || null, reward: null, subject,
+      vehicleDetails: null, audience: this.f().audience, spotlightId: this.f().spotlightId,
+      chatEnabled: this.f().chatEnabled, allowComments: this.f().allowComments, allowShare: true,
+      upvotes: 0, commentCount: 0, shares: 0, views: 0, savedBy: 0, voterIds: {}, lastLike: null, lastComment: null,
+      escalation: { requested: false, consentGranted: false, consentAt: null, partners: [] }, consent: [],
+      sightingVerified: null, searchParty: null, locationCheck: {
+        subjectRegisteredInApp: false, requestedBy: null, requestedAt: null, consentFromSubject: 'none', consentAt: null,
+        points: [], deviceReachable: false, lastKnownAt: null, note: ''
+      }, khumbu: null, outcome: { found: false, foundAt: null, whereaboutsFound: '', closedBy: null, note: '' },
+      events: [], flags: [], outcomeNudgeAt: null, createdAt: Date.now(), updatedAt: Date.now()
+    } as unknown as Post;
+  }
+
+  async openGenerator(): Promise<void> {
+    if (!this.canGenerate()) return;
+    this.error.set('');
+    this.posterMode.set(true);
+    this.selectedTemplate.set(this.posterTemplate() ?? this.selectedTemplate());
+    this.previewWithImage.set(true);
+    this.posterBusy.set(true);
+    this.generatedImage = await loadPosterImage(this.firstImage());
+    this.posterBusy.set(false);
+    await this.renderGenerated();
+  }
+
+  private async renderGenerated(): Promise<void> {
+    const canvas = this.generatedCanvas;
+    const post = this.previewPost();
+    if (!canvas || !post || !this.posterMode() || this.posterBusy()) return;
+    this.posterBusy.set(true);
+    try {
+      const imageSrc = this.previewWithImage() ? this.firstImage() : null;
+      const content = posterContent(post, this.platform.baseUrl, imageSrc);
+      drawPoster(canvas, this.selectedTemplate(), content, this.previewWithImage() ? this.generatedImage : null);
+    } finally {
+      this.posterBusy.set(false);
+    }
+  }
+
+  async setPreviewPhoto(include: boolean): Promise<void> {
+    if (this.posterBusy()) return;
+    this.previewWithImage.set(include);
+    await this.renderGenerated();
+  }
+
+  async chooseTemplate(id: PosterTemplateId): Promise<void> {
+    if (this.posterBusy()) return;
+    this.selectedTemplate.set(id);
+    await this.renderGenerated();
+  }
+
+  useGeneratedDesign(): void {
+    if (this.posterBusy() || !this.generatedCanvas) return;
+    this.posterTemplate.set(this.selectedTemplate());
+    this.posterStale.set(false);
+    this.posterMode.set(false);
+  }
+
+  closeGenerator(): void { this.posterMode.set(false); }
+
+  clearGeneratedDesign(): void {
+    this.posterTemplate.set(null);
+    this.posterStale.set(false);
+  }
+
+  private async attachGeneratedPoster(post: Post, templateId: PosterTemplateId, photoSrc: string | null): Promise<void> {
+    const canvas = document.createElement('canvas');
+    const src = photoSrc;
+    const image = await loadPosterImage(src);
+    if (src && !image) throw new Error('The photo could not be opened for the generated image');
+    const content = posterContent(post, this.platform.link(`/post/${post.id}`), src);
+    drawPoster(canvas, templateId, content, image);
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
+    if (!blob) throw new Error('The generated image could not be exported');
+    const dataUrl = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result));
+      reader.onerror = () => reject(reader.error ?? new Error('Could not read the generated image'));
+      reader.readAsDataURL(blob);
+    });
+    const poster: PostPoster = {
+      templateId, createdAt: Date.now(),
+      media: { id: uid('poster'), kind: 'image', src: dataUrl }
+    };
+    await this.data.updatePost(post.id, { poster });
   }
 
   setAudience(value: string): void {
@@ -627,10 +1026,10 @@ export class CreatePostComponent implements OnInit {
 
   /** A case about someone under 18: the poster must confirm they may publish it. */
   childCase(): boolean {
-    const t = this.type();
-    if (t !== 'missing' && t !== 'khumbulekhaya') return false;
-    const age = Number(this.s().age);
-    return this.s().age !== '' && Number.isFinite(age) && age >= 0 && age < 18;
+    const type = this.type();
+    if (type !== 'missing' && type !== 'khumbulekhaya') return false;
+    const age = this.editing() ? (this.s().age === '' ? null : Number(this.s().age)) : this.templateValues().age;
+    return age !== null && Number.isFinite(age) && age >= 0 && age < 18;
   }
 
   async addPhoto(): Promise<void> {
@@ -643,6 +1042,7 @@ export class CreatePostComponent implements OnInit {
       return;
     }
     const src = await this.media.compress(item.src, 1200);
+    this.invalidateGenerated();
     this.f.update((current) => ({ ...current, media: [...current.media, { ...item, src }] }));
   }
 
@@ -654,10 +1054,12 @@ export class CreatePostComponent implements OnInit {
       if (this.media.lastError()) this.error.set(this.media.lastError()!);
       return;
     }
+    this.invalidateGenerated();
     this.f.update((current) => ({ ...current, media: [item] }));
   }
 
   removeMedia(id: string): void {
+    this.invalidateGenerated();
     this.f.update((current) => ({ ...current, media: current.media.filter((item) => item.id !== id) }));
   }
 
@@ -676,63 +1078,86 @@ export class CreatePostComponent implements OnInit {
       return;
     }
 
-    const timestamp = f.lastSeenAt ? new Date(f.lastSeenAt).getTime() : null;
-    const personType = type === 'missing' || type === 'khumbulekhaya' || type === 'pet';
-    const subject = personType ? {
-      name: s.name.trim(),
-      age: s.age ? Number(s.age) : null,
-      gender: s.gender,
-      height: s.height.trim(), build: '', skinTone: '', hair: s.hair.trim(), eyes: '',
-      clothing: s.clothing.trim(), distinguishing: s.distinguishing.trim(), medical: '',
-      vehicle: '', languages: '', surname: s.name.trim().split(/\s+/).at(-1) ?? '', relationship: ''
-    } : (type === 'sighting' && (s.name || s.clothing) ? {
-      name: s.name.trim(), age: null, gender: 'unknown' as const, height: '', build: '', skinTone: '', hair: '', eyes: '',
-      clothing: s.clothing.trim(), distinguishing: '', medical: '', vehicle: '', languages: '', surname: '', relationship: ''
-    } : null);
-    const title = f.title.trim() || this.generatedTitle(type!, subject?.name ?? '');
+    const values = this.templateValues();
+    const timestamp = this.editing()
+      ? (f.lastSeenAt ? new Date(f.lastSeenAt).getTime() : null)
+      : values.when;
+    const subject = this.editing() ? (() => {
+      const personType = type === 'missing' || type === 'khumbulekhaya' || type === 'pet';
+      return personType ? {
+        name: s.name.trim(), age: s.age ? Number(s.age) : null, gender: s.gender,
+        height: s.height.trim(), build: '', skinTone: '', hair: s.hair.trim(), eyes: '',
+        clothing: s.clothing.trim(), distinguishing: s.distinguishing.trim(), medical: '',
+        vehicle: '', languages: '', surname: s.name.trim().split(/\s+/).at(-1) ?? '', relationship: ''
+      } : (type === 'sighting' && (s.name || s.clothing) ? {
+        name: s.name.trim(), age: null, gender: 'unknown' as const, height: '', build: '', skinTone: '', hair: '', eyes: '',
+        clothing: s.clothing.trim(), distinguishing: '', medical: '', vehicle: '', languages: '', surname: '', relationship: ''
+      } : null);
+    })() : this.subjectFromTemplate();
+    const body = this.editing() ? f.body : this.publicBody();
+    const locationProvince = this.editing() ? f.province! : values.province!;
+    const town = this.editing() ? f.town.trim() : values.town.trim();
+    const lastSeenWhere = this.editing() ? (f.lastSeenWhere || f.town).trim() : '';
+    const caseNumber = this.editing() ? (f.caseNumber || null) : (values.caseNumber.trim() || null);
+    const contactValue = this.editing() ? f.contactValue : values.contact.trim();
+    const title = this.editing()
+      ? (f.title.trim() || this.generatedTitle(type!, subject?.name ?? ''))
+      : this.generatedTitle(type!, values.name.trim());
     const khumbu = type === 'khumbulekhaya' ? {
       daysOut: timestamp ? Math.max(0, Math.floor((Date.now() - timestamp) / 86_400_000)) : null,
       leftHomeAt: timestamp,
       reasonGuess: this.khumbuReason().trim(), claimedByUserId: null, claimedAt: null,
       subjectResponse: 'none' as const, subjectNote: '', wantedAnswers: { yes: 0, no: 0, myVote: null }
     } : null;
+    const generatedTemplate = !this.editing() ? this.posterTemplate() : null;
 
     let created: Post | null = null;
+    let posterFailure = false;
     this.busy.set(true);
     try {
       if (this.editing() && this.postId) {
         await this.data.updatePost(this.postId, {
-          title, body: f.body, media: f.media, province: f.province!, town: f.town.trim(),
-          lastSeenAt: timestamp, lastSeenWhere: (f.lastSeenWhere || f.town).trim(), caseNumber: f.caseNumber || null,
+          title, body: f.body, media: f.media, province: locationProvince, town,
+          lastSeenAt: timestamp, lastSeenWhere, caseNumber,
           subject, vehicleDetails: null, audience: f.audience, spotlightId: f.spotlightId,
           chatEnabled: f.chatEnabled, allowComments: f.allowComments, anonymous: f.anonymous,
           askWanted: f.askWanted, contactLabel: f.contactLabel, contactValue: f.contactValue,
           contactVisibleTo: f.contactVisibleTo, khumbu
         });
       } else {
-        const made = await this.data.createPost({
-          type: type!, title, body: f.body, media: f.media, province: f.province!, town: f.town.trim(),
-          lastSeenAt: timestamp, lastSeenWhere: (f.lastSeenWhere || f.town).trim(), geo: null,
-          contactLabel: f.contactLabel || 'Family contact', contactValue: f.contactValue,
-          contactVisibleTo: f.contactVisibleTo, caseNumber: f.caseNumber || null, reward: null,
+        created = await this.data.createPost({
+          type: type!, title, body, media: f.media, province: locationProvince, town,
+          lastSeenAt: timestamp, lastSeenWhere, geo: null,
+          contactLabel: f.contactLabel || 'Family contact', contactValue,
+          contactVisibleTo: f.contactVisibleTo, caseNumber, reward: null,
           guardianConsent: f.guardianConsent,
           subject, vehicleDetails: null, audience: f.audience, spotlightId: f.spotlightId,
           chatEnabled: f.chatEnabled, allowComments: f.allowComments, anonymous: f.anonymous,
           askWanted: f.askWanted, khumbu,
           danger: null
         });
-        created = made;
       }
       this.showFieldErrors.set(false);
       this.clearDraft();
       if (this.editing()) {
         await this.toastMsg('Post updated. It now shows as edited.');
         await this.router.navigate(['/post', this.postId]);
-      } else if (created && (type === 'missing' || type === 'khumbulekhaya' || type === 'pet')) {
-        await this.router.navigate(['/post', created.id, 'poster'], { queryParams: { new: '1' } });
-      } else {
-        await this.toastMsg('Posted');
-        await this.router.navigate(['/home']);
+      } else if (created) {
+        if (generatedTemplate) {
+          try {
+            await this.attachGeneratedPoster(created, generatedTemplate, this.firstImage());
+          } catch (e) {
+            posterFailure = true;
+            console.error('Post was shared, but the generated design could not be attached.', e);
+          }
+        }
+        if (posterFailure) {
+          await this.toastMsg('Post shared, but its design could not be attached.');
+          await this.router.navigate(['/post', created.id]);
+        } else {
+          await this.toastMsg(generatedTemplate ? 'Post shared with generated design.' : 'Post shared.');
+          await this.router.navigate(['/home']);
+        }
       }
     } catch (e: any) {
       this.error.set(e?.message ?? 'Could not share this post');
@@ -750,9 +1175,11 @@ export class CreatePostComponent implements OnInit {
   }
 
   private generatedTitle(type: PostType, name: string): string {
-    if (name) return `${this.categoryLabel()}: ${name}`;
-    const opening = this.f().body.trim().split(/[.!?\n]/)[0]?.trim() ?? '';
-    return `${this.categoryLabel()}: ${opening.slice(0, 64) || 'Community update'}`;
+    const category = this.categories.find((item) => item.key === type)?.label ?? 'Post';
+    if (name) return `${category}: ${name}`;
+    const source = this.editing() ? this.f().body : this.templateValues().happened;
+    const opening = source.trim().split(/[.!?\n]/)[0]?.trim() ?? '';
+    return `${category}: ${opening.slice(0, 64) || 'Community update'}`;
   }
 
   private toLocalDateTime(timestamp: number | null): string {
@@ -765,8 +1192,6 @@ export class CreatePostComponent implements OnInit {
     const t = await this.toaster.create({ message, duration: 2400, position: 'bottom' });
     await t.present();
   }
-
-  goStory(): void { void this.router.navigate(['/create-story']); }
 
   close(): void { void this.router.navigate(['/home']); }
 }

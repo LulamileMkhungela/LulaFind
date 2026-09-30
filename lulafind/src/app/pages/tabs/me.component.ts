@@ -11,6 +11,7 @@ import { IonLabel } from '@ionic/angular/ion-label';
 import { IonToggle } from '@ionic/angular/ion-toggle';
 import { ToastController } from '@ionic/angular/toast-controller';
 import { AlertController } from '@ionic/angular/alert-controller';
+import { ActionSheetController } from '@ionic/angular/action-sheet-controller';
 import { ReactionKind } from '../../core/models/types';
 import { IconComponent } from '../../shared/components/icon.component';
 import { TopNavComponent } from '../../shared/components/top-nav.component';
@@ -51,7 +52,7 @@ import { MediaService } from '../../core/services/media.service';
           <button class="face" type="button" (click)="addPhoto()" [attr.aria-label]="me()!.avatarUrl ? 'Change profile photo' : 'Add a profile photo'">
             <lf-avatar [src]="avatar()" [name]="me()!.displayName" [size]="128"
                        [status]="me()!.checkIn?.status ?? null" />
-            <span class="cam"><lf-icon name="camera" [size]="18" /></span>
+            <span class="cam"><lf-icon name="image" [size]="18" /></span>
           </button>
           <div>
             <h1 class="name">
@@ -130,6 +131,7 @@ import { MediaService } from '../../core/services/media.service';
             <div class="quick">
               <a class="q" routerLink="/connections"><span class="qi qi-blue"><lf-icon name="users" [size]="20" /></span><span>Friends</span>
                 @if (data.followRequests().length) { <em class="lf-badge">{{ data.followRequests().length }}</em> }</a>
+              <button class="q" type="button" (click)="createStory()"><span class="qi qi-blue"><lf-icon name="image" [size]="20" /></span><span>Add a Story</span></button>
               <a class="q" routerLink="/safety"><span class="qi qi-green"><lf-icon name="shield" [size]="20" /></span><span>Safety</span></a>
               <a class="q" routerLink="/tips"><span class="qi qi-yellow"><lf-icon name="info" [size]="20" /></span><span>Tips</span></a>
               @if (isAdmin()) {
@@ -196,7 +198,7 @@ import { MediaService } from '../../core/services/media.service';
           </div>
           <p class="lf-small lf-muted">Your name is set from signup and cannot be changed. Everything else here is yours to edit.</p>
           <button class="lf-btn lf-btn--ghost lf-btn--block" type="button" (click)="addPhoto()">
-            <lf-icon name="camera" [size]="15" /> {{ me()!.avatarUrl ? 'Change profile photo' : 'Add profile photo' }}
+            <lf-icon name="image" [size]="15" /> {{ me()!.avatarUrl ? 'Change profile photo' : 'Add profile photo' }}
           </button>
           @if (me()!.avatarUrl) {
             <button class="lf-btn lf-btn--ghost lf-btn--block" type="button" (click)="removePhoto()">Use initials instead</button>
@@ -351,6 +353,7 @@ export class MeComponent {
   private safety = inject(SafetyService);
   private media = inject(MediaService);
   private alert = inject(AlertController);
+  private actionSheet = inject(ActionSheetController);
   protected mod = inject(ModerationService);
 
   protected readonly compact = compact;
@@ -481,14 +484,33 @@ export class MeComponent {
   }
 
   async addPhoto(): Promise<void> {
+    if (this.saving()) return;
     this.formError.set('');
-    const item = await this.media.pickImage({ source: 'gallery', quality: 70 });
+    const sheet = await this.actionSheet.create({
+      header: 'Profile photo',
+      buttons: [
+        { text: 'Take a photo', icon: 'camera', handler: () => { void this.pickProfilePhoto('camera'); } },
+        { text: 'Choose from photos', icon: 'image', handler: () => { void this.pickProfilePhoto('gallery'); } },
+        { text: 'Cancel', role: 'cancel' }
+      ]
+    });
+    await sheet.present();
+  }
+
+  private async pickProfilePhoto(source: 'camera' | 'gallery'): Promise<void> {
+    const item = await this.media.pickImage({ source, quality: 70 });
+    const notice = this.media.notice();
     if (!item) {
-      if (this.media.lastError()) this.formError.set(this.media.lastError()!);
+      const message = this.media.lastError() || notice;
+      if (message) {
+        this.formError.set(message);
+        await this.toast.create({ message, duration: 2600, position: 'bottom' }).then((x) => x.present());
+      }
       return;
     }
     this.saving.set(true);
     try {
+      if (notice) await this.toast.create({ message: notice, duration: 2800, position: 'bottom' }).then((x) => x.present());
       // 360px is plenty for a round avatar and keeps the profile row small.
       const src = await this.media.compress(item.src, 360);
       await this.auth.updateProfile({ avatarUrl: src });
@@ -496,7 +518,9 @@ export class MeComponent {
       await this.toast.create({ message: 'Profile photo saved', duration: 1400, position: 'bottom' }).then((x) => x.present());
     } catch (e: any) {
       // Never claim success when the write did not land.
-      this.formError.set(e?.message ?? 'Could not save the photo. Try a smaller picture.');
+      const message = e?.message ?? 'Could not save the photo. Try a smaller picture.';
+      this.formError.set(message);
+      await this.toast.create({ message, duration: 2800, position: 'bottom' }).then((x) => x.present());
     } finally {
       this.saving.set(false);
     }
@@ -617,6 +641,10 @@ export class MeComponent {
 
   create(): void {
     void this.router.navigate(['/create']);
+  }
+
+  createStory(): void {
+    void this.router.navigate(['/create-story']);
   }
 
   goAuth(): void {

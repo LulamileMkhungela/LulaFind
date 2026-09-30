@@ -363,6 +363,8 @@ export interface Comment {
   /** People who liked this comment - drives the filled state; `upvotes` equals its length. Older records lack it. */
   likedIds?: string[];
   isLead: boolean;
+  /** Media attached to this comment/reply (never promoted to a separate post). */
+  media?: MediaItem[];
   /** sighting details attached to a comment on a case post */
   sighting?: Sighting;
   /** Named by the viewer. Shown only to the family, never on the public poster. */
@@ -409,6 +411,7 @@ export interface VerificationEvent {
     | 'not_going_home'
     | 'found'
     | 'whereabouts_found'
+    | 'still_searching'
     | 'false_claim_removed';
   byUserId: string | null;
   note?: string;
@@ -464,6 +467,14 @@ export interface CasePlan {
   updatedAt: number;
 }
 
+export interface PostPoster {
+  /** Selected layout used to generate the poster image. */
+  templateId: string;
+  /** Generated poster is stored with the post, separately from the original attachments. */
+  media: MediaItem;
+  createdAt: number;
+}
+
 export interface Post {
   id: string;
   type: PostType;
@@ -479,6 +490,8 @@ export interface Post {
   title: string;
   body: string;
   media: MediaItem[];
+  /** Optional poster design published with the feed post. */
+  poster?: PostPoster | null;
   province: ProvinceCode;
   town: string;
   lastSeenAt: number | null;

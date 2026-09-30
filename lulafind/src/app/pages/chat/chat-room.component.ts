@@ -1,4 +1,4 @@
-import { Component, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, ViewChild, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { IonContent } from '@ionic/angular/ion-content';
 import { IonHeader } from '@ionic/angular/ion-header';
@@ -25,9 +25,10 @@ import { MediaService } from '../../core/services/media.service';
         <ion-buttons slot="start"><ion-back-button defaultHref="/chats" text=""></ion-back-button></ion-buttons>
         <div class="peer">
           <lf-avatar [src]="peerAvatar()" [name]="peerName()" [size]="34" />
-          <div>
+          <div class="peer-copy">
             <strong>{{ peerName() }}</strong>
             <span class="lf-tiny lf-muted">{{ peerHandle() }}</span>
+            @if (peerHeadline()) { <span class="peer-headline">{{ peerHeadline() }}</span> }
           </div>
         </div>
         <ion-buttons slot="end">
@@ -40,7 +41,7 @@ import { MediaService } from '../../core/services/media.service';
       @if (post()) {
         <a class="casebar" [routerLink]="'/post/' + post()!.id">
           <lf-icon name="pin" [size]="16" />
-          <span class="lf-ellipsis">{{ post()!.title }}</span>
+          <span class="casebar-copy"><small>About this post</small><strong class="lf-ellipsis">{{ post()!.title }}</strong></span>
           <lf-icon name="chevronRight" [size]="16" />
         </a>
       }
@@ -50,28 +51,44 @@ import { MediaService } from '../../core/services/media.service';
         Private chat - you follow each other. Never send money to a stranger.
       </div>
 
-      <div class="msgs">
-        @for (m of chat.messages(); track m.id) {
-          @if (m.kind === 'system') {
-            <div class="sys">{{ m.body }}</div>
-          } @else {
-            <div class="msg" [class.mine]="m.fromUserId === me()">
-              @if (m.fromUserId !== me()) { <lf-avatar [src]="peerAvatar()" [name]="peerName()" [size]="28" /> }
-              <div class="bubble">
-                @if (m.media) {
-                  <a [href]="m.media.src" target="_blank" rel="noopener">
-                    <img [src]="m.media.src" alt="Photo sent in this chat" loading="lazy" />
-                  </a>
-                }
-                @if (m.body) { <p>{{ m.body }}</p> }
-                <span class="lf-tiny">{{ clockTime(m.at) }}</span>
-              </div>
-            </div>
+      <div class="thread-frame">
+        <div class="msgs" aria-label="Conversation">
+          @if (!chat.messages().length) {
+            <div class="thread-empty"><span><lf-icon name="chat" [size]="22" /></span><strong>Start the conversation</strong><p>Messages stay private between you and {{ peerName() }}.</p></div>
           }
-        }
+          @for (m of chat.messages(); track m.id; let i = $index) {
+            @if (dayBoundary(i); as day) { <div class="day-divider"><span>{{ day }}</span></div> }
+            @if (m.kind === 'system') {
+              <div class="sys"><lf-icon name="lock" [size]="13" /><span>{{ m.body }}</span></div>
+            } @else {
+              <div class="msg" [class.mine]="m.fromUserId === me()" [class.continued]="!showMessageHeader(i)">
+                @if (m.fromUserId !== me()) {
+                  @if (showMessageHeader(i)) {
+                    <lf-avatar [src]="peerAvatar()" [name]="peerName()" [size]="30" />
+                  } @else { <span class="avatar-space" aria-hidden="true"></span> }
+                }
+                <div class="msg-stack">
+                  @if (showMessageHeader(i)) {
+                    <div class="msg-meta"><strong>{{ m.fromUserId === me() ? 'You' : peerName() }}</strong><time>{{ clockTime(m.at) }}</time></div>
+                  }
+                  <div class="bubble">
+                    @if (m.media?.kind === 'video') {
+                      <video [src]="m.media!.src" controls playsinline preload="metadata" aria-label="Video sent in this chat"></video>
+                    } @else if (m.media) {
+                      <a [href]="m.media.src" target="_blank" rel="noopener"><img [src]="m.media.src" alt="Photo sent in this chat" loading="lazy" /></a>
+                    }
+                    @if (m.body) { <p>{{ m.body }}</p> }
+                    <span class="msg-time">{{ clockTime(m.at) }}</span>
+                  </div>
+                </div>
+              </div>
+            }
+          }
+        </div>
       </div>
     </ion-content>
 
+    @if (sendError()) { <p class="send-error" role="alert">{{ sendError() }}</p> }
     <div class="composer">
       @if (pending()) {
         <div class="pending">
@@ -102,27 +119,49 @@ import { MediaService } from '../../core/services/media.service';
     </div>
   `,
   styles: [`
-    .peer { display: flex; align-items: center; gap: 10px; }
-    .peer div { display: flex; flex-direction: column; line-height: 1.2; }
-    .room { --padding-bottom: 80px; }
-    .casebar { display: flex; align-items: center; gap: 8px; margin: 10px var(--lf-gap); padding: 10px 12px;
-      border-radius: var(--lf-radius); border: 0; background: var(--lf-bg);
+    .peer { display: flex; align-items: center; gap: 10px; min-width: 0; }
+    .peer-copy { display: flex; flex-direction: column; min-width: 0; line-height: 1.2; }
+    .peer-copy > strong { max-width: 42vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .peer-headline { max-width: 50vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--lf-muted); font-size: 10px; }
+    .room { --padding-bottom: 104px; }
+    .casebar { display: flex; align-items: center; gap: 8px; margin: 10px var(--lf-gap); padding: 11px 13px;
+      border-radius: 9px; border: 1px solid var(--lf-line-soft); background: var(--lf-card);
       color: inherit; text-decoration: none; font-size: 13px; font-weight: 600; }
-    .notice { display: flex; gap: 8px; margin: 0 var(--lf-gap) 8px; font-size: 12px; color: var(--lf-muted);
-      padding: 8px 10px; border-radius: 8px; background: var(--lf-bg); line-height: 1.4; }
-    .msgs { display: flex; flex-direction: column; gap: 8px; padding: 6px var(--lf-gap) 20px; }
-    .sys { align-self: center; max-width: 82%; text-align: center; font-size: 12px; color: var(--lf-muted);
-      padding: 6px 12px; }
-    .msg { display: flex; gap: 8px; align-items: flex-end; max-width: 82%; }
-    .msg.mine { align-self: flex-end; flex-direction: row-reverse; }
-    /* Messenger bubbles: grey for them, blue for me. */
-    .bubble { padding: 8px 12px; border-radius: 18px; background: var(--lf-card-2); border: 0; }
-    .bubble p { margin: 0 0 2px; font-size: 15px; line-height: 1.34; white-space: pre-wrap; word-break: break-word; }
-    .msg.mine .bubble { background: var(--lf-primary-fill); color: #fff; }
-    :host-context(.lf-dark) .msg.mine .bubble { background: #0a7cff; }
-    .bubble .lf-tiny { color: var(--lf-muted); font-size: 11px; }
-    .msg.mine .bubble .lf-tiny { color: rgba(255,255,255,.75); }
-    .bubble img { display: block; max-width: 210px; width: 100%; border-radius: 12px; margin-bottom: 4px; }
+    .casebar > :first-child { color: var(--lf-primary); }
+    .casebar-copy { display: flex; flex: 1; flex-direction: column; gap: 2px; min-width: 0; }
+    .casebar-copy small { color: var(--lf-muted); font-size: 10px; font-weight: 500; }
+    .casebar-copy strong { color: var(--ion-text-color); font-size: 13px; }
+    .notice { display: flex; align-items: flex-start; gap: 8px; max-width: 690px; margin: 0 auto 8px; padding: 8px 14px;
+      color: var(--lf-muted); font-size: 12px; line-height: 1.4; }
+    .notice lf-icon { flex: none; color: var(--lf-primary); }
+    .thread-frame { min-height: calc(100% - 48px); padding: 6px 0 20px; }
+    .msgs { display: flex; flex-direction: column; gap: 7px; width: min(100%, 720px); box-sizing: border-box; margin: 0 auto; padding: 6px var(--lf-gap) 24px; }
+    .thread-empty { display: flex; flex-direction: column; align-items: center; gap: 7px; margin: auto; padding: 35px 24px; color: var(--lf-muted); text-align: center; }
+    .thread-empty > span { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; background: var(--lf-primary-soft); color: var(--lf-primary); }
+    .thread-empty strong { color: var(--ion-text-color); font-size: 15px; }
+    .thread-empty p { margin: 0; font-size: 13px; }
+    .day-divider { display: flex; align-items: center; gap: 10px; margin: 14px 0 6px; color: var(--lf-muted); font-size: 11px; font-weight: 600; }
+    .day-divider::before, .day-divider::after { content: ''; height: 1px; flex: 1; background: var(--lf-line-soft); }
+    .day-divider span { flex: none; }
+    .sys { align-self: center; display: flex; align-items: center; gap: 6px; max-width: 88%; margin: 7px 0; padding: 7px 12px;
+      border-radius: 8px; background: var(--lf-bg); color: var(--lf-muted); font-size: 11px; line-height: 1.35; text-align: center; }
+    .sys lf-icon { flex: none; color: var(--lf-primary); }
+    .msg { display: flex; gap: 7px; align-items: flex-end; max-width: min(86%, 560px); align-self: flex-start; }
+    .msg.mine { align-self: flex-end; }
+    .msg.continued { margin-top: -4px; }
+    .avatar-space { flex: 0 0 30px; }
+    .msg-stack { display: flex; flex-direction: column; gap: 3px; min-width: 0; max-width: 100%; }
+    .msg.mine .msg-stack { align-items: flex-end; }
+    .msg-meta { display: flex; align-items: baseline; gap: 7px; padding: 0 4px; color: var(--lf-muted); font-size: 11px; }
+    .msg-meta strong { color: var(--ion-text-color); font-size: 12px; font-weight: 700; }
+    .msg-meta time { font-size: 10px; }
+    .bubble { max-width: 100%; box-sizing: border-box; padding: 9px 12px 6px; border: 1px solid var(--lf-line-soft);
+      border-radius: 12px 12px 12px 4px; background: var(--lf-card); color: var(--ion-text-color); box-shadow: 0 1px 2px rgba(0,0,0,.04); }
+    .msg.mine .bubble { border-color: color-mix(in srgb, var(--lf-primary) 22%, var(--lf-line-soft)); border-radius: 12px 12px 4px 12px;
+      background: var(--lf-primary-soft); color: var(--ion-text-color); }
+    .bubble p { margin: 0 0 3px; font-size: 15px; line-height: 1.38; white-space: pre-wrap; word-break: break-word; }
+    .msg-time { display: block; color: var(--lf-muted); font-size: 10px; line-height: 1.2; text-align: right; }
+    .bubble img, .bubble video { display: block; max-width: min(260px, 62vw); width: 100%; max-height: 320px; border-radius: 8px; margin-bottom: 5px; object-fit: contain; }
     .bar { display: flex; align-items: flex-end; gap: 8px; width: 100%; }
     .ico { flex: none; width: 36px; height: 36px; border: none; border-radius: 50%; cursor: pointer;
       background: transparent; color: var(--lf-primary); display: grid; place-items: center; }
@@ -139,6 +178,8 @@ import { MediaService } from '../../core/services/media.service';
     .pending span { font-size: 12px; color: var(--lf-muted); flex: 1; }
     .pending .rm { flex: none; width: 26px; height: 26px; border: none; border-radius: 50%; cursor: pointer;
       background: var(--lf-card-2); color: var(--lf-muted); display: grid; place-items: center; }
+    .send-error { position: fixed; z-index: 12; left: 12px; right: 12px; bottom: calc(66px + var(--keyboard-offset, 0px)); max-width: 680px; margin: 0 auto;
+      padding: 8px 11px; border-radius: 7px; background: #ffebe9; color: #b42318; font-size: 12px; }
     .composer { position: fixed; left: 0; right: 0; bottom: var(--keyboard-offset, 0px); display: flex; flex-direction: column;
       padding: 10px 14px; padding-bottom: max(10px, var(--lf-safe-bottom, 0px));
       padding-left: max(14px, var(--lf-safe-left, 0px)); padding-right: max(14px, var(--lf-safe-right, 0px));
@@ -153,6 +194,8 @@ import { MediaService } from '../../core/services/media.service';
   `]
 })
 export class ChatRoomComponent implements OnInit, OnDestroy {
+  @ViewChild(IonContent) private content?: IonContent;
+
   protected chat = inject(ChatService);
   protected data = inject(DataService);
   private media = inject(MediaService);
@@ -160,6 +203,7 @@ export class ChatRoomComponent implements OnInit, OnDestroy {
   private route = inject(ActivatedRoute);
 
   protected readonly clockTime = clockTime;
+  protected readonly sendError = signal('');
   draft = '';
   private timer: any;
 
@@ -182,6 +226,7 @@ export class ChatRoomComponent implements OnInit, OnDestroy {
   readonly peer = computed(() => this.data.authorOf(this.peerId()));
   readonly peerName = computed(() => this.peer()?.displayName ?? 'LulaFind member');
   readonly peerHandle = computed(() => (this.peer() ? '@' + this.peer()!.handle : ''));
+  readonly peerHeadline = computed(() => this.peer()?.bio ?? '');
   readonly peerAvatar = computed(() => this.data.avatarFor(this.peer()));
   readonly post = computed(() => {
     const id = this.thread()?.postId;
@@ -193,12 +238,56 @@ export class ChatRoomComponent implements OnInit, OnDestroy {
     if (!id) return;
     await this.chat.load();
     await this.chat.openThread(id);
-    this.timer = setInterval(() => void this.chat.load(), 4000);
+    setTimeout(() => void this.scrollToLatest(true), 0);
+    this.timer = setInterval(() => void this.refreshMessages(), 4000);
   }
 
   ngOnDestroy(): void {
     clearInterval(this.timer);
     void this.chat.close();
+  }
+
+  private async refreshMessages(): Promise<void> {
+    const previous = this.chat.messages().at(-1)?.id;
+    await this.chat.refreshOpenThread().catch(() => undefined);
+    if (previous !== this.chat.messages().at(-1)?.id) await this.scrollToLatest(false);
+  }
+
+  private async scrollToLatest(force: boolean): Promise<void> {
+    if (!this.content) return;
+    const el = await this.content.getScrollElement();
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 180;
+    if (force || nearBottom) await this.content.scrollToBottom(120);
+  }
+
+  /** Show one sender line for a run of messages, like a professional inbox thread. */
+  showMessageHeader(index: number): boolean {
+    const messages = this.chat.messages();
+    const current = messages[index];
+    const previous = messages[index - 1];
+    return !previous || !current || previous.kind === 'system' || current.kind === 'system'
+      || previous.fromUserId !== current.fromUserId || current.at - previous.at > 5 * 60_000;
+  }
+
+  /** A visible date divider keeps long conversations readable. */
+  dayBoundary(index: number): string | null {
+    const messages = this.chat.messages();
+    const current = messages[index];
+    const previous = messages[index - 1];
+    if (!current) return null;
+    const day = new Date(current.at);
+    if (previous) {
+      const before = new Date(previous.at);
+      if (day.getFullYear() === before.getFullYear() && day.getMonth() === before.getMonth() && day.getDate() === before.getDate()) return null;
+    }
+    const today = new Date();
+    if (day.toDateString() === today.toDateString()) return 'Today';
+    const yesterday = new Date(today);
+    yesterday.setDate(today.getDate() - 1);
+    if (day.toDateString() === yesterday.toDateString()) return 'Yesterday';
+    return new Intl.DateTimeFormat('en-ZA', {
+      weekday: 'short', day: 'numeric', month: 'short', ...(day.getFullYear() !== today.getFullYear() ? { year: 'numeric' } : {})
+    }).format(day);
   }
 
   protected addEmoji(e: string): void {
@@ -209,8 +298,8 @@ export class ChatRoomComponent implements OnInit, OnDestroy {
   protected async attach(camera = false): Promise<void> {
     this.emojiOpen.set(false);
     try {
-      const m = await this.media.pickImage({ source: camera ? 'camera' : 'gallery' });
-      if (m) this.pending.set(m);
+      const m = await this.media.pickImage({ source: camera ? 'camera' : 'gallery', quality: 78 });
+      if (m) this.pending.set({ ...m, src: await this.media.compress(m.src, 1200) });
     } catch {
       /* the picker was cancelled or blocked - nothing to send */
     }
@@ -224,9 +313,17 @@ export class ChatRoomComponent implements OnInit, OnDestroy {
     const text = this.draft.trim();
     const photo = this.pending();
     if (!text && !photo) return;
-    this.draft = '';
-    this.pending.set(null);
     this.emojiOpen.set(false);
-    await this.chat.send(text, photo);
+    this.sendError.set('');
+    try {
+      await this.chat.send(text, photo);
+      this.draft = '';
+      this.pending.set(null);
+      await this.scrollToLatest(true);
+    } catch (e) {
+      this.draft = text;
+      this.pending.set(photo);
+      this.sendError.set(e instanceof Error ? e.message : 'Could not send. Your message is still here.');
+    }
   }
 }
