@@ -307,3 +307,11 @@ controls, 0 contrast failures** (was 53 low-contrast text runs at every width, 1
 **first load 456 kB, FCP 128-160 ms**; reload 0 kB. Route change 11-24 ms, tap-to-change 23-27 ms,
 0 long tasks, 0 layout shift. `docs/QUALITY.md` has the tables and the honest limits (no network
 throttling, one engine, no screen-reader pass).
+
+**A fast preview that still has the development switches.** A production build deliberately
+disables `?data=local` and `?demo=1` (a real build must never invent data), so the production
+preview cannot be used interactively here - the hosted project is unreachable. `ng build
+--configuration development --optimization=true` gives a minified build that still has the dev
+switches: served by `tools/serve-www.mjs` on 4300 (brotli/gzip, SPA fallback, one-year cache on
+hashed files), it renders the home feed with FCP 60-200 ms and 0 console errors. The production
+numbers in `docs/QUALITY.md` come from the real production build before that.

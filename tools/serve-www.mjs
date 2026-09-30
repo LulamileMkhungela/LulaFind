@@ -37,6 +37,7 @@ createServer((req, res) => {
   let path = join(ROOT, normalize(decodeURIComponent(url.pathname)).replace(/^(\.\.[/\\])+/, ''));
   if (!existsSync(path) || statSync(path).isDirectory()) path = join(ROOT, 'index.html');
   try {
+    const stat = statSync(path);
     let body = readFileSync(path);
     const ext = extname(path);
     const headers = {
@@ -49,7 +50,9 @@ createServer((req, res) => {
       const br = accept.includes('br');
       /* Compress once and keep it: a real host does this at build time, so the
          measurement should be about the app, not about my server's CPU. */
-      const key = path + (br ? '|br' : '|gz');
+      /* Keyed by the file's own timestamp and size: a rebuild replaces the
+         bundle and this must never serve yesterday's copy. */
+      const key = `${path}|${stat.mtimeMs}|${stat.size}|${br ? 'br' : 'gz'}`;
       let cached = cache.get(key);
       if (!cached) {
         cached = br ? brotliCompressSync(body) : gzipSync(body);
