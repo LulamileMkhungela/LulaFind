@@ -542,7 +542,6 @@ describe('Follow requests', () => {
 
     // the target turns approval on
     const profile = (await data.profile(target))!;
-    await auth.updateProfile === undefined; // no-op guard, updateProfile is on the viewer only
     const api = TestBed.inject(LULA_API);
     await api.saveUser({ ...profile, privacy: { ...profile.privacy, requireFollowApproval: true } });
 

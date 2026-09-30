@@ -2,7 +2,7 @@ import { Injectable, computed, effect, inject, signal, untracked } from '@angula
 import { LULA_API } from '../data/api';
 import { Lookout, UserProfile } from '../models/types';
 import { uid } from '../utils/format';
-import { answerBlocker, clearedByOwner, clearedBySelf, hasAnswered, isDue, newLookout, waitingOn, withAnswer, withAsked } from '../utils/lookout';
+import { answerBlocker, clearedByOwner, clearedBySelf, hasAnswered, isDue, newLookout, waitingOn, withAsked } from '../utils/lookout';
 import { AuthService } from './auth.service';
 import { DataService } from './data.service';
 import { LocationService } from './location.service';
@@ -207,7 +207,6 @@ export class LookoutService {
       if (next) this.data.mergeLookout(next);
 
       const owner = await this.api.user(lookout.userId);
-      const name = owner?.displayName ?? 'The person you follow';
 
       if (!ok) {
         await this.onEscalated(next ?? lookout, owner);

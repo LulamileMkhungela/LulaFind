@@ -482,7 +482,7 @@ help points
 Green ring: safe. Orange ring: unfamiliar place. Red ring: check on me.
 Check in
 Edit profile
-Joined 01 Jun 2026
+Joined 02 Jun 2026
 All shortcuts
 Posts
 Saved
@@ -510,13 +510,14 @@ Demo data - sample cases, not real people. Turn it off in the URL with ?demo=0
 Ask Lula
 Help with LulaFind
 Lula gives written guidance, not a live person. In an emergency call 10111.
-Hi, I'm Lula. I can help with reporting someone missing, what to do in the first 72 hours, posters, privacy and how LulaFind works. What do you need?
+Hi, I'm Lula. I can help with reporting someone missing, what to do in the first 72 hours, posters, lookouts, privacy and how LulaFind works. What do you need?
 How do I report a missing person?
 What should I do in the first 72 hours?
 How do I make a poster?
 I think I saw someone
 What is KhumbulEkhaya?
 How does private chat work?
+What is "be on the lookout"?
 ```
 
 ### 17-ask-lula-answer
@@ -528,10 +529,10 @@ Demo data - sample cases, not real people. Turn it off in the URL with ?demo=0
 Ask Lula
 Help with LulaFind
 Lula gives written guidance, not a live person. In an emergency call 10111.
-Hi, I'm Lula. I can help with reporting someone missing, what to do in the first 72 hours, posters, privacy and how LulaFind works. What do you need?
+Hi, I'm Lula. I can help with reporting someone missing, what to do in the first 72 hours, posters, lookouts, privacy and how LulaFind works. What do you need?
 what do I do in the first hour
 The first 72 hours matter most. 1) Open a SAPS case and get the number. 2) Choose one family spokesperson. 3) Gather a recent, clear photo. 4) Write down exactly what they wore, shoes and jewellery included. 5) Post on LulaFind and share the poster where they usually go: the taxi rank, clinic, church or school.
-Read the safety tips
+Read the safe
 ```
 
 ### 18-notifications - /notifications
@@ -623,8 +624,8 @@ Background
 Pick the colour behind the app
 Black
 Reduce motion
-Autoplay media in the feed
-Data saver (smaller images)
+Autoplay stories
+Data saver (less background loading)
 Alerts
 Push notifications
 Missing children only
@@ -638,10 +639,10 @@ Terms, privacy and community rules
 Admin - reports and moderation
 FAQs
 Who sees your profile is set in Me → Edit profile.
-Let LulaFind match me to cases
-If a KhumbulEkhaya post matches your name we will ask you first
-Haptic feedback
-Phone permission
+Let LulaFind post a case about me
+Only after a follower says something is wrong on a lookout
+Show my town and last seen
+Everyone
 ```
 
 ### 22-faqs - /faqs
@@ -722,11 +723,10 @@ Safety beacon
 Send "I am safe" check-ins with your location to people you choose. Off by default.
 Beacon enabled
 Send an "I am safe" check-in now
-Being found
-We can ask you if a case is about you. Your account is never handed to the family.
-Allow name matching
-Consent log on my cases
-Family reported at the station and messaged Pink Ladies. Lu
+Be on the lookout
+Tell your followers you may not feel safe where you are going. They see the area, and 24 hours later we ask them to check on you.
+Where are you going, or which area worries you?
+An
 ```
 
 ### 25-search-soweto

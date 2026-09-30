@@ -1,5 +1,5 @@
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
-import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { IonContent } from '@ionic/angular/ion-content';
 
 
@@ -12,9 +12,8 @@ import { AlertController } from '@ionic/angular/alert-controller';
 import { ReactionKind } from '../../core/models/types';
 import { IconComponent } from '../../shared/components/icon.component';
 import { TopNavComponent } from '../../shared/components/top-nav.component';
-import { AvatarComponent } from '../../shared/components/avatar.component';
 import { EmptyComponent } from '../../shared/components/empty.component';
-import { ChatState, PostCardComponent } from '../../shared/components/post-card.component';
+import { PostCardComponent } from '../../shared/components/post-card.component';
 import { DataService } from '../../core/services/data.service';
 import { AuthService } from '../../core/services/auth.service';
 import { PlatformService } from '../../core/services/platform.service';
@@ -139,7 +138,6 @@ export class SpotlightDetailComponent implements OnInit {
   });
 
   readonly posts = computed(() => {
-    const id = this.sp()?.id;
     const needle = this.q().trim().toLowerCase();
     let list = this.all();
     if (this.show() === 'active') list = list.filter((p) => p.status !== 'found');

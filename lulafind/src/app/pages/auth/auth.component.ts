@@ -1,10 +1,6 @@
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { Router, ActivatedRoute } from '@angular/router';
 import { IonContent } from '@ionic/angular/ion-content';
-import { IonInput } from '@ionic/angular/ion-input';
-import { IonItem } from '@ionic/angular/ion-item';
-import { IonLabel } from '@ionic/angular/ion-label';
-import { IonProgressBar } from '@ionic/angular/ion-progress-bar';
 import { ToastController } from '@ionic/angular/toast-controller';
 import { IconComponent } from '../../shared/components/icon.component';
 import { AvatarComponent } from '../../shared/components/avatar.component';

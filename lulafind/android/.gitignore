@@ -89,8 +89,12 @@ lint/tmp/
 # Android Profiling
 *.hprof
 
-# Cordova plugins for Capacitor
-capacitor-cordova-android-plugins
+# Cordova plugins for Capacitor - ignore the build output only. The two Gradle
+# glue files (build.gradle, cordova.variables.gradle) and the manifest ARE
+# committed: settings.gradle includes this project and capacitor.build.gradle
+# applies cordova.variables.gradle, so a fresh clone without them fails
+# Gradle configuration before any build can start.
+capacitor-cordova-android-plugins/build
 
 # Copied web assets
 app/src/main/assets/public

@@ -44,6 +44,77 @@ dependencies {
 
 apply from: 'capacitor.build.gradle'
 
+/**
+ * Keep the native shell in step with the web app - automatically.
+ *
+ * The web bundle (www/ -> android/app/src/main/assets/public) and the plugin
+ * registry (android/app/src/main/assets/capacitor.plugins.json) are generated
+ * by `npx cap sync` and stay out of Git. Without this task, opening Android
+ * Studio from a fresh clone (or after pulling new web code) builds whatever
+ * stale assets a previous sync left behind: an old UI on the phone and calls
+ * like "FirebaseAuthentication plugin is not implemented on android" for any
+ * plugin the stale registry does not list.
+ *
+ * `preBuild` depends on this task, so pressing Run in Android Studio or
+ * running ./gradlew assembleDebug always packages the current web app with
+ * every plugin registered. It runs `npm run android:prepare`
+ * (ng build --configuration production && cap sync android) in the project
+ * root, and is skipped when nothing on the web side changed.
+ *
+ * Opt out for a native-only build:  ./gradlew assembleDebug -PcapSync.skip=true
+ */
+def capSyncSkipped = providers.gradleProperty('capSync.skip').getOrElse('false').toBoolean() || System.getenv('CAP_SYNC_SKIP') == '1'
+
+if (!capSyncSkipped) {
+    tasks.register('capSync') {
+        group = 'capacitor'
+        description = 'Build the web app and sync it + the Capacitor plugins into this Android shell.'
+        def projectRoot = file('../../').canonicalFile          // lulafind/
+        def webSources = files(
+            fileTree(dir: new File(projectRoot, 'src'), include: ['**/*']),
+            new File(projectRoot, 'package.json'),
+            new File(projectRoot, 'package-lock.json'),
+            new File(projectRoot, 'angular.json'),
+            new File(projectRoot, 'capacitor.config.ts'),
+            new File(projectRoot, 'tsconfig.json'),
+            new File(projectRoot, 'tsconfig.app.json')
+        )
+        inputs.files(webSources)
+        outputs.files(
+            file('src/main/assets/capacitor.plugins.json'),
+            file('src/main/assets/capacitor.config.json')
+        )
+        outputs.dir(file('src/main/assets/public'))
+        doLast {
+            def isWindows = System.getProperty('os.name', '').toLowerCase().contains('windows')
+            def npm = isWindows ? 'npm.cmd' : 'npm'
+            logger.lifecycle('capSync: building the web app and syncing it into the Android shell (npm run android:prepare)...')
+            try {
+                project.exec {
+                    workingDir = projectRoot
+                    executable = npm
+                    args = ['run', 'android:prepare']
+                    standardOutput = System.out
+                    errorOutput = System.err
+                }
+            } catch (org.gradle.process.ExecException e) {
+                throw new GradleException(
+                    'capSync could not run "npm run android:prepare", so this APK would be packaged with stale ' +
+                    'web assets and without the Capacitor plugin registry (which is what causes ' +
+                    '"plugin is not implemented on android"). If npm is missing: install Node.js 22+ ' +
+                    '(https://nodejs.org) and run "npm install" once in ' + projectRoot + '. If the web build ' +
+                    'itself failed, fix the error printed above. To skip the sync entirely (not recommended: ' +
+                    'the APK will not contain the latest web app), build with -PcapSync.skip=true.',
+                    e)
+            }
+        }
+    }
+    tasks.matching { it.name == 'preBuild' }.configureEach { dependsOn tasks.named('capSync') }
+} else {
+    logger.lifecycle('capSync skipped (-PcapSync.skip=true): the packaged web app may be out of date.')
+}
+
+
 try {
     def servicesJSON = file('google-services.json')
     if (servicesJSON.text) {

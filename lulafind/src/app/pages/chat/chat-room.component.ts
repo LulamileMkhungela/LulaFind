@@ -1,5 +1,5 @@
 import { Component, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
-import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 import { IonContent } from '@ionic/angular/ion-content';
 import { IonHeader } from '@ionic/angular/ion-header';
 import { IonToolbar } from '@ionic/angular/ion-toolbar';
@@ -11,7 +11,7 @@ import { AvatarComponent } from '../../shared/components/avatar.component';
 import { ChatService } from '../../core/services/chat.service';
 import { DataService } from '../../core/services/data.service';
 import { AuthService } from '../../core/services/auth.service';
-import { ChatMessage, MediaItem } from '../../core/models/types';
+import { MediaItem } from '../../core/models/types';
 import { clockTime } from '../../core/utils/format';
 import { MediaService } from '../../core/services/media.service';
 

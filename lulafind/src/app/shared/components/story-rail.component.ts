@@ -1,6 +1,6 @@
-import { Component, EventEmitter, Input, Output, computed, inject } from '@angular/core';
+import { Component, EventEmitter, Output, computed, inject } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import { Story, UserProfile } from '../../core/models/types';
+import { Story } from '../../core/models/types';
 import { timeAgo } from '../../core/utils/format';
 import { storyBg } from '../../core/data/seed';
 import { IconComponent } from './icon.component';

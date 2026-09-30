@@ -4,6 +4,7 @@ import { IonRouterOutlet } from '@ionic/angular/ion-router-outlet';
 import { Router } from '@angular/router';
 import { AuthService } from './core/services/auth.service';
 import { PlatformService } from './core/services/platform.service';
+import { PushService } from './core/services/push.service';
 import { PrefetchService } from './core/services/prefetch.service';
 import { BACKGROUNDS, SettingsService } from './core/services/settings.service';
 import { RepostSheetComponent } from './shared/components/repost-sheet.component';
@@ -117,6 +118,7 @@ import { demoMode, localMode } from './core/data/demo';
 export class AppComponent implements OnInit {
   private auth = inject(AuthService);
   private platform = inject(PlatformService);
+  private push = inject(PushService);
   private router = inject(Router);
   private prefetch = inject(PrefetchService);
   private settings = inject(SettingsService);
@@ -200,6 +202,9 @@ export class AppComponent implements OnInit {
 
   private async configureNative(): Promise<void> {
     if (!this.platform.isNative) return;
+    // Already-permitted devices register for pushes now; first-time asks
+    // happen in Settings -> Phone permissions (PushService.requestAndRegister).
+    void this.push.init();
     try {
       const [{ StatusBar, Style }, { SplashScreen }] = await Promise.all([
         import('@capacitor/status-bar'),

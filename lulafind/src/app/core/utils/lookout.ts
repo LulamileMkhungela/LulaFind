@@ -73,7 +73,7 @@ export function isDue(lookout: Lookout, now = Date.now()): boolean {
  * answer is what flags or clears them. This runs on the phone and on the
  * server, so a stale copy of the app cannot let a stranger flag someone.
  */
-export function answerBlocker(lookout: Lookout, userId: string | null, now = Date.now()): string | null {
+export function answerBlocker(lookout: Lookout, userId: string | null, _now = Date.now()): string | null {
   if (!userId) return 'Sign in to answer';
   if (lookout.userId === userId) return 'Only the people following you can answer this';
   if (hasAnswered(lookout, userId)) return null; // already answered: no second answer, and no error

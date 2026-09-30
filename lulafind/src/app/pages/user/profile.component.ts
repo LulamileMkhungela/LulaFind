@@ -22,7 +22,7 @@ import { ModerationService } from '../../core/services/moderation.service';
 import { LookoutService } from '../../core/services/lookout.service';
 import { SafetyService, CHECK_IN_COPY } from '../../core/services/safety.service';
 import { lastSeenOf } from '../../core/utils/lookout';
-import { CheckIn, CheckInStatus, Post, UserProfile, provinceName } from '../../core/models/types';
+import { CheckInStatus, Post, UserProfile, provinceName } from '../../core/models/types';
 import { compact, contributorLabel, dayMonth, timeAgo } from '../../core/utils/format';
 import { cover } from '../../core/data/seed';
 

@@ -188,6 +188,12 @@ export class FirebaseAuthBridge {
       if (input.provider !== 'google') throw new Error('Only Google sign-in is available.');
       let user: User;
       if (Capacitor.isNativePlatform()) {
+        if (!Capacitor.isPluginAvailable('FirebaseAuthentication')) {
+          throw new Error(
+            'This build of the app is missing the Google sign-in module. ' +
+            'Rebuild it with: npm run build && npx cap sync android (the Gradle build now runs this for you), then reinstall.'
+          );
+        }
         const { FirebaseAuthentication } = await import('@capacitor-firebase/authentication');
         const res = await FirebaseAuthentication.signInWithGoogle({ skipNativeAuth: true });
         const idToken = res.credential?.idToken;
@@ -316,6 +322,25 @@ export class FirebaseAuthBridge {
 
   private friendly(e: unknown): Error {
     const code = String((e as { code?: string })?.code ?? '');
+    const raw = String((e as { message?: string })?.message ?? e ?? '');
+    // Capacitor reports a plugin that is missing from the native build as
+    // UNIMPLEMENTED / "not implemented". That is a build problem - name the fix.
+    if (code === 'UNIMPLEMENTED' || /not implemented|unimplemented/i.test(raw)) {
+      return new Error(
+        'This build of the app is missing the Google sign-in module. ' +
+        'Rebuild it with: npm run build && npx cap sync android (the Gradle build now runs this for you), then reinstall.'
+      );
+    }
+    // The native Google sheet refuses to open when this app's SHA-1 fingerprint
+    // is not registered in the Firebase console (GoogleSignIn codes 10 / 12500,
+    // surfaced as DEVELOPER_ERROR or an ApiException message).
+    if (code === 'DEVELOPER_ERROR' || code === '12500' || code === '10' || /developer error|apiexception/i.test(raw)) {
+      return new Error(
+        'Google sign-in is not set up for this device yet. In the Firebase console open Project settings → ' +
+        'Your apps → the Android app → Add fingerprint (SHA-1), download the new google-services.json into ' +
+        'lulafind/android/app/ and rebuild. Try Google sign-in again after reinstalling.'
+      );
+    }
     const map: Record<string, string> = {
       'auth/email-already-in-use': 'An account already exists with that email. Try logging in.',
       'auth/invalid-email': 'Enter a valid email address.',
