@@ -130,6 +130,22 @@ export interface PrivacyPrefs {
    * decline. When off - the default - follows go straight through.
    */
   requireFollowApproval: boolean;
+  /**
+   * Everyone can see when this person last checked in - that is the trail that
+   * says "something happened here". When this is on the place is shown too;
+   * when it is off the person still appears as "last seen 3 hours ago".
+   */
+  showLastSeen: boolean;
+  /**
+   * May LulaFind itself publish a case about this person? Turned off, a failed
+   * safety check still reaches their followers, but the app will not post that
+   * they may be missing - and it says so rather than doing it quietly.
+   */
+  allowSafetyAlertPosts: boolean;
+  /** Who may see the case LulaFind publishes on this person's behalf. */
+  safetyAlertAudience: Audience;
+  /** Required when safetyAlertAudience is 'surname'. */
+  safetyAlertSpotlightId: string | null;
 }
 
 export const defaultPrivacy = (): PrivacyPrefs => ({
@@ -139,8 +155,86 @@ export const defaultPrivacy = (): PrivacyPrefs => ({
   allowMessages: true,
   autoShareLocation: false,
   notifyFollowersOnExpiry: true,
-  requireFollowApproval: false
+  requireFollowApproval: false,
+  // Last seen is a safety trail: the time is shown to everyone by default and
+  // the place follows the "show my location" choice.
+  showLastSeen: true,
+  // The app never publishes a missing-person case about someone who has not
+  // allowed it - even when a check fails.
+  allowSafetyAlertPosts: false,
+  safetyAlertAudience: 'followers',
+  safetyAlertSpotlightId: null
 });
+
+/**
+ * A "be on the lookout".
+ *
+ * Someone who is about to travel somewhere they do not feel safe, or who is
+ * somewhere that worries them, tells their followers. While it is running their
+ * followers can see where they last checked in. Twenty-four hours later the app
+ * asks those followers, one by one, whether the person is okay:
+ *
+ *  - every follower says yes -> the lookout closes itself;
+ *  - one follower says no   -> LulaFind flags the person as a possible missing
+ *                             person, but only if that person allowed the app
+ *                             to publish a case on their behalf.
+ *
+ * The person it is about can end it at any point by saying "I'm here", and any
+ * case the app published is deleted with it.
+ */
+export type LookoutStatus = 'active' | 'checking' | 'cleared' | 'escalated';
+
+export const LOOKOUT_HOURS = 24;
+export const LOOKOUT_WINDOW_MS = LOOKOUT_HOURS * 60 * 60 * 1000;
+
+/** One follower's answer to "is this person okay?" */
+export interface LookoutAnswer {
+  /** the follower who answered */
+  byUserId: string;
+  /** true = "they are fine", false = "something is wrong" */
+  ok: boolean;
+  at: number;
+}
+
+export interface Lookout {
+  id: string;
+  /** whose safety this is about */
+  userId: string;
+  /** the area they may not be safe in, or where they are going */
+  area: string;
+  note: string;
+  startedAt: number;
+  /** when the app asks the followers - startedAt + 24 hours */
+  checkAt: number;
+  /**
+   * When the question actually went out. Set once, so a lookout is never asked
+   * twice - not even when there was nobody following at the time to ask.
+   */
+  askedAt: number | null;
+  /** followers can see the last shared location while this is running */
+  shareLocation: boolean;
+  /** last point shared during the lookout */
+  location: GeoPoint | null;
+  locationAt: number | null;
+  status: LookoutStatus;
+  /** the followers asked, frozen when the question goes out */
+  askedIds: string[];
+  answers: LookoutAnswer[];
+  /** the case LulaFind published, when a follower said no */
+  escalatedPostId: string | null;
+  closedAt: number | null;
+  closedReason: '' | 'all_ok' | 'im_here' | 'owner_cancelled' | 'escalated';
+}
+
+/** One line for the people who were asked, and for the profile banner. */
+export function lookoutOutcome(l: Lookout): string {
+  const yes = l.answers.filter((a) => a.ok).length;
+  const no = l.answers.filter((a) => !a.ok).length;
+  if (l.status === 'cleared') return `Everyone who answered said ${l.closedReason === 'im_here' ? 'they are safe' : 'they are okay'}. Closed.`;
+  if (l.status === 'escalated') return `${no} said something was wrong. LulaFind flagged them as a possible missing person.`;
+  if (l.status === 'checking') return `Asked ${l.askedIds.length} followers: ${yes} say okay, ${no} say something is wrong.`;
+  return 'Running. Followers will be asked to confirm at the end of the 24 hours.';
+}
 
 export type CheckInStatus = 'safe' | 'unfamiliar' | 'need_help';
 
@@ -529,6 +623,15 @@ export interface Post {
   flags: { reason: string; byUserId: string; at: number; resolved: boolean }[];
   /** nudges already shown to the poster ("did you get help?") */
   outcomeNudgeAt: number | null;
+
+  /**
+   * True when LulaFind published this case itself, on the subject's behalf,
+   * after a safety check failed. The subject can end it with "I'm here", which
+   * deletes the post.
+   */
+  appPosted?: boolean;
+  /** The lookout this case came from, when appPosted. */
+  lookoutId?: string | null;
 }
 
 export interface Spotlight {
@@ -624,7 +727,8 @@ export interface Notification {
   kind:
     | 'vote' | 'comment' | 'follow' | 'chat' | 'system'
     | 'escalation' | 'location_consent' | 'claim' | 'outcome' | 'spotlight'
-    | 'checkin' | 'moderation' | 'danger' | 'story_reply' | 'repost' | 'missing';
+    | 'checkin' | 'moderation' | 'danger' | 'story_reply' | 'repost' | 'missing'
+    | 'lookout';
   title: string;
   body: string;
   at: number;

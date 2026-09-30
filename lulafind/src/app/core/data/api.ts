@@ -1,7 +1,7 @@
 import { InjectionToken } from '@angular/core';
 import { Observable, Subject } from 'rxjs';
 import {
-  ChatMessage, ChatThread, Comment, FeedFilter, FollowEdge, MediaItem, Notification, Post, Spotlight, Story, StoryReply, StoryView, Tip, UserProfile
+  ChatMessage, ChatThread, Comment, FeedFilter, FollowEdge, Lookout, MediaItem, Notification, Post, Spotlight, Story, StoryReply, StoryView, Tip, UserProfile
 } from '../models/types';
 import { LocalDb } from './local-db';
 
@@ -57,6 +57,28 @@ export abstract class LulaApi {
    * at the same moment. A field patch has nothing to wipe.
    */
   abstract patchPost(id: string, patch: Partial<Post>): Promise<Post | undefined>;
+
+  /* be on the lookout */
+
+  /**
+   * Every lookout the caller is allowed to see: their own, and those of the
+   * people they follow. Reading is scoped by the backend, not by the caller.
+   */
+  abstract lookouts(): Promise<Lookout[]>;
+  abstract saveLookout(l: Lookout): Promise<void>;
+  /** Field-level patch, same reasoning as patchPost: two writers, one record. */
+  abstract patchLookout(id: string, patch: Partial<Lookout>): Promise<Lookout | undefined>;
+  /**
+   * A follower answers "are they okay?".
+   *
+   * The decision (close it, or flag the person) belongs to the rules in
+   * core/utils/lookout.ts, and every backend applies them - so a follower
+   * answering on a phone with no signal and a follower answering through
+   * Postgres get the same outcome.
+   */
+  abstract answerLookout(id: string, byUserId: string, ok: boolean): Promise<Lookout | undefined>;
+  /** Delete the case LulaFind published for a lookout. Used by "I'm here". */
+  abstract deleteLookoutCase(lookoutId: string): Promise<void>;
   abstract deletePost(id: string): Promise<void>;
 
   /* comments */
@@ -152,6 +174,13 @@ export class MockApi implements LulaApi {
   }
   async savePost(p: Post, options?: SavePostOptions) { return this.db.upsertPost(p, options); }
   async patchPost(id: string, patch: Partial<Post>) { return this.db.patchPost(id, patch); }
+  async lookouts() { return this.db.lookouts(); }
+  async saveLookout(l: Lookout) { this.db.saveLookout(l); }
+  async patchLookout(id: string, patch: Partial<Lookout>) { return this.db.patchLookout(id, patch); }
+  async answerLookout(id: string, byUserId: string, ok: boolean) {
+    return this.db.answerLookout(id, byUserId, ok);
+  }
+  async deleteLookoutCase(lookoutId: string) { this.db.deleteLookoutCase(lookoutId); }
   async deletePost(id: string) { this.db.deletePost(id); }
 
   async commentsFor(postId: string) { return this.db.commentsFor(postId); }

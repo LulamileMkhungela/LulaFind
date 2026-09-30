@@ -262,3 +262,21 @@ the default.
 sources, the competitor matrix and the features mined but not built yet
 (search-party zones, first-72-hours checklist, post-quality guard, scam
 shortcut, cross-border flag, NGO/SAPS verification).
+
+**Every journey, gated and finished.** `tools/e2e-journeys.mjs` drives a real browser through
+sign-up (five steps, each one refusing to advance without its own data), the composer, comments,
+the action row, editing, reporting, following, search, the poster maker, the story composer and
+sign-in - 40 verdicts, read back from the app's own store. It found and fixed:
+
+- the composer lost everything typed if the phone rang mid-post: it now keeps the text and says so,
+  with **Start fresh** to throw it away (the story composer does the same);
+- the story **Share** button was disabled with no reason - now it always answers a tap and names
+  what is missing;
+- a removed post rendered as an empty screen - now "This post is no longer available" with the way
+  back home;
+- `/admin` bounced a signed-in non-admin home with no explanation - now it says why;
+- the action row clipped the longest label ("Have …"). It is now measured at 390 / 360 / 320 px:
+  every word stays whole, and nothing overlaps.
+
+The results table and the honest list of what a browser run cannot click (camera, share sheet,
+push, the admin actions, the cron) are in `docs/JOURNEYS.md`.

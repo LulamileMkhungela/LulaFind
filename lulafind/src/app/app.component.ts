@@ -8,7 +8,7 @@ import { PrefetchService } from './core/services/prefetch.service';
 import { BACKGROUNDS, SettingsService } from './core/services/settings.service';
 import { RepostSheetComponent } from './shared/components/repost-sheet.component';
 import { supabaseNotice } from './core/data/supabase-client';
-import { demoMode } from './core/data/demo';
+import { demoMode, localMode } from './core/data/demo';
 
 @Component({
   selector: 'lf-root',
@@ -19,6 +19,12 @@ import { demoMode } from './core/data/demo';
       @if (demoMode()) {
         <p class="lf-notice lf-notice--demo" role="status">
           Demo data - sample cases, not real people. Turn it off in the URL with ?demo=0
+        </p>
+      }
+
+      @if (localMode()) {
+        <p class="lf-notice lf-notice--demo" role="status">
+          Local data mode - this device is the database. Nothing here is shared.
         </p>
       }
 
@@ -115,6 +121,7 @@ export class AppComponent implements OnInit {
   private settings = inject(SettingsService);
   readonly notice = supabaseNotice;
   readonly demoMode = demoMode;
+  readonly localMode = localMode;
 
   /** Splash overlay state — visible until auth.ready(), then fades for .55s and removes. */
   readonly splashVisible = signal(true);

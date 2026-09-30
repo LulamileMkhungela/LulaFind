@@ -374,12 +374,15 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
     .fb-actions-row {
       display: flex;
       align-items: center;
-      margin: 0 12px;
+      gap: 2px;
+      margin: 0 6px;
       padding: 4px 0;
       border-top: 1px solid var(--lf-line-soft);
     }
+    /* The reaction label is the longest in the row: it takes the slack, these
+       three take exactly what they need. Nothing is squeezed, nothing overlaps. */
     .fb-action-btn {
-      flex: 1;
+      flex: 0 0 auto;
       min-width: 0;
       height: 36px;
       border: 0;
@@ -395,12 +398,27 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
       cursor: pointer;
       border-radius: 4px;
       white-space: nowrap;
+      min-width: 0;
     }
     .fb-action-btn:hover, .fb-action-btn:active { background: var(--lf-hover); }
     .fb-action-btn.active { color: var(--lf-primary); }
     .fb-action-btn.active-down { color: var(--lf-signal); }
-    @media (max-width: 370px) {
-      .fb-action-btn span { font-size: 13px; }
+    /* Four labels on a 390 px screen: the longest one ("Have an idea") must fit,
+       so the row tightens before anything can overlap. */
+    /* Four labels on a 390 px screen - "Have an idea" is the longest. The row
+       keeps every word rather than clipping it, so the type and the gaps tighten
+       before anything can overlap or lose a letter. */
+    @media (max-width: 430px) {
+      .fb-actions-row { margin: 0 2px; gap: 0; }
+      .fb-action-btn { padding: 0 3px; gap: 4px; }
+      .fb-action-btn span { font-size: 12.5px; }
+    }
+    @media (max-width: 360px) {
+      .fb-action-btn span { font-size: 11.5px; }
+    }
+    @media (max-width: 340px) {
+      .fb-action-btn span { font-size: 11px; }
+      .fb-action-btn lf-icon svg { width: 18px; height: 18px; }
     }
 
     .fb-chat-cta {

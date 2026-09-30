@@ -3,7 +3,7 @@ import { Subscription } from 'rxjs';
 import { toObservable } from '@angular/core/rxjs-interop';
 import { LULA_API, LulaApi } from '../data/api';
 import {
-  AlertPrefs, Audience, CasePlan, CaseStepId, Comment, DangerAlert, GeoPoint, FeedFilter, FollowEdge, Notification, Post, PostType, Spotlight, Story, StoryReply, StoryView, Tip, UserProfile,
+  AlertPrefs, Audience, CasePlan, CaseStepId, Comment, DangerAlert, GeoPoint, FeedFilter, FollowEdge, Lookout, Notification, Post, PostType, Spotlight, Story, StoryReply, StoryView, Tip, UserProfile,
   VoteValue, ReactionKind, REACTIONS, RETIRED_POST_TYPES, isReaction, VehicleDetails, dangerLabel, emptyFilter, provinceName
 } from '../models/types';
 import { avatar, cover, hueOf, scene } from '../data/seed';
@@ -96,7 +96,18 @@ export class DataService {
   readonly feed = signal<Post[]>([]);
   /** Found cases matching the current type and province. Shown on the newsfeed, not only behind the Found filter. */
   readonly broughtHome = signal<Post[]>([]);
+  /**
+   * Live "be on the lookout" records the viewer may see - their own and those
+   * of the people they follow.
+   */
+  readonly lookouts = signal<Lookout[]>([]);
   readonly loading = signal(false);
+  /**
+   * Bumped on every sync. Time-based rules (a 24-hour lookout coming due) hang
+   * off this instead of their own timer, so they run exactly when the app next
+   * talks to the network.
+   */
+  readonly syncTick = signal(0);
   /**
    * The last read never came back. Set when a load times out or the network
    * refuses the request, so a screen can say so and offer a retry instead of
@@ -192,6 +203,7 @@ export class DataService {
     if (this.poll) return;
     this.poll = setInterval(() => {
       if (typeof document !== 'undefined' && document.hidden) return;
+      this.syncTick.update((n) => n + 1);
       void this.loadFeed();
       void this.loadStatic();
     }, everyMs);
@@ -207,6 +219,52 @@ export class DataService {
     this.changeSub?.unsubscribe();
     this.changeSub = null;
     this.stopAutoSync();
+  }
+
+  /* ------------------------ be on the lookout ----------------------- */
+
+  /**
+   * Readers that must run when lookouts arrive - the 24-hour check hangs off
+   * this, so it can never run against a list that has not loaded yet.
+   */
+  private lookoutListeners: (() => void | Promise<void>)[] = [];
+
+  onLookoutsLoaded(fn: () => void | Promise<void>): void {
+    this.lookoutListeners.push(fn);
+  }
+
+  /** Read every lookout this viewer is allowed to see. */
+  async loadLookouts(): Promise<Lookout[]> {
+    try {
+      const list = (await this.api.lookouts()).sort((a, b) => b.startedAt - a.startedAt);
+      this.lookouts.set(list);
+      /* A safety check must name the person it is about, not "someone". */
+      void this.cacheAuthors(list.map((l) => l.userId));
+      for (const fn of this.lookoutListeners) {
+        try { await fn(); } catch (err) { console.warn('lookout listener failed:', err); }
+      }
+      return list;
+    } catch (err) {
+      console.warn('Lookouts could not be loaded:', err instanceof Error ? err.message : err);
+      return this.lookouts();
+    }
+  }
+
+  /** The open lookout of one person, if any. */
+  openLookout(userId: string): Lookout | null {
+    return this.lookouts().find((l) => l.userId === userId && (l.status === 'active' || l.status === 'checking')) ?? null;
+  }
+
+  /** Every lookout about one person, newest first - their safety history. */
+  lookoutsFor(userId: string): Lookout[] {
+    return this.lookouts().filter((l) => l.userId === userId);
+  }
+
+  /** Keep the local copy in step after a write. */
+  mergeLookout(next: Lookout): void {
+    const list = this.lookouts();
+    const i = list.findIndex((l) => l.id === next.id);
+    this.lookouts.set(i >= 0 ? list.map((l) => (l.id === next.id ? next : l)) : [next, ...list]);
   }
 
   /* --------------------------- feed ---------------------------- */
@@ -319,6 +377,8 @@ export class DataService {
 
   async loadStatic(): Promise<void> {
     const [spots, rawStories, tips] = await Promise.all([this.api.spotlights(), this.api.stories(), this.api.tips()]);
+    this.syncTick.update((n) => n + 1);
+    void this.loadLookouts();
     this.spotlights.set(spots);
     const me = this.auth.viewerId;
     // The story rail only ever shows the first handful, and each story costs an

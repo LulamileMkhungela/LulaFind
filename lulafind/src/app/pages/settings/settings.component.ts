@@ -19,7 +19,7 @@ import { TopNavComponent } from '../../shared/components/top-nav.component';
 import { BACKGROUNDS, BackgroundKey, SettingsService, ThemeMode } from '../../core/services/settings.service';
 import { AuthService } from '../../core/services/auth.service';
 import { DataService } from '../../core/services/data.service';
-import { AlertPrefs } from '../../core/models/types';
+import { AlertPrefs, Audience, defaultPrivacy } from '../../core/models/types';
 import { ModerationService } from '../../core/services/moderation.service';
 import { PlatformService } from '../../core/services/platform.service';
 import { PermissionsService, PermKind } from '../../core/services/permissions.service';
@@ -110,6 +110,24 @@ import { SUPPORT_EMAIL, SUPPORT_NAME } from '../../core/config';
         }
         <a class="row" routerLink="/faqs"><lf-icon name="info" [size]="18" /><span>FAQs</span><lf-icon name="chevronRight" [size]="16" /></a>
         <p class="lf-small lf-muted" style="margin-top:10px">Who sees your profile is set in <strong>Me → Edit profile</strong>.</p>
+        <!-- The safety-post choice. Off until the person turns it on, and the
+             audience is theirs to pick - exactly what the lookout rules read. -->
+        <ion-item>
+          <ion-label><strong>Let LulaFind post a case about me</strong><br />
+            <span class="lf-muted lf-small">Only after a follower says something is wrong on a lookout</span></ion-label>
+          <ion-toggle [checked]="allowAlerts()" (ionChange)="setAllowAlerts($any($event.detail).checked)"></ion-toggle>
+        </ion-item>
+        @if (allowAlerts()) {
+          <ion-item>
+            <ion-label><strong>Who may see that post</strong></ion-label>
+            <ion-select [value]="alertAudience()" (ionChange)="setAlertAudience($any($event.detail).value)"
+                        interface="popover" aria-label="Who may see the case LulaFind posts">
+              <ion-select-option value="public">Everyone</ion-select-option>
+              <ion-select-option value="followers">Followers</ion-select-option>
+              <ion-select-option value="surname">My spotlight</ion-select-option>
+            </ion-select>
+          </ion-item>
+        }
         <ion-item>
           <ion-label><strong>Let LulaFind match me to cases</strong><br />
             <span class="lf-muted lf-small">If a KhumbulEkhaya post matches your name we will ask you first</span></ion-label>
@@ -233,6 +251,35 @@ export class SettingsComponent {
     this.settings.update({ background, theme: this.s().theme === 'light' ? 'dark' : this.s().theme });
   }
   readonly findable = computed(() => this.auth.user()?.findableProfile ?? false);
+  readonly allowAlerts = computed(() => this.auth.user()?.privacy?.allowSafetyAlertPosts === true);
+  readonly alertAudience = computed(() => this.auth.user()?.privacy?.safetyAlertAudience ?? 'followers');
+
+  /**
+   * The same setting the Safety centre writes. It lives in both places on
+   * purpose: this is where someone looks for a setting, and the Safety centre is
+   * where they are when they start a lookout.
+   */
+  async setAllowAlerts(on: boolean): Promise<void> {
+    const me = this.auth.user();
+    if (!me) return;
+    const saved = await this.auth.updateProfile({
+      privacy: { ...defaultPrivacy(), ...(me.privacy ?? {}), allowSafetyAlertPosts: on }
+    });
+    this.data.touchAuthor(saved);
+    await this.say(on
+      ? 'LulaFind may post a case about you - only after a follower says something is wrong.'
+      : 'LulaFind will never post a case about you.');
+  }
+
+  async setAlertAudience(audience: Audience): Promise<void> {
+    const me = this.auth.user();
+    if (!me) return;
+    const saved = await this.auth.updateProfile({
+      privacy: { ...defaultPrivacy(), ...(me.privacy ?? {}), safetyAlertAudience: audience }
+    });
+    this.data.touchAuthor(saved);
+    await this.say('Saved. That is who would see the case.');
+  }
   readonly platformLabel = computed(() =>
     this.platform.isNative ? (this.platform.kind === 'ios' ? 'iOS' : 'Android') : 'Web preview'
   );
@@ -282,6 +329,11 @@ export class SettingsComponent {
       this.settings.update({ pushEnabled: ok });
       await this.saveAlertPrefs();
     }
+  }
+
+  private async say(message: string): Promise<void> {
+    const t = await this.toast.create({ message, duration: 2600, position: 'bottom' });
+    await t.present();
   }
 
   async openPermSettings(): Promise<void> {

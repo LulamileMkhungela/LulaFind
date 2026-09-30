@@ -53,14 +53,27 @@ import { ReactionIconComponent } from './reaction-icon.component';
     </button>
   `,
   styles: [`
-    :host { position: relative; display: block; flex: 1; min-width: 0; }
+    /* The reaction label is the longest in the row, so this button takes the
+       slack and the short labels beside it take only what they need. */
+    :host { position: relative; display: block; flex: 1 1 auto; min-width: 0; }
     .btn {
       width: 100%; height: 40px; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
       border: 0; border-radius: 4px; background: transparent; color: var(--lf-muted);
       font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap;
+      min-width: 0; padding: 0 2px;
       -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; touch-action: manipulation;
     }
     .btn:hover, .btn:active { background: var(--lf-hover); }
+    /* "Have an idea" is the longest label in the row: it may shrink, never overlap. */
+    .btn .label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+    /* The label in this button is the longest in the action row. On phones it
+       steps down so the words stay whole next to Comment / Repost / Send. */
+    @media (max-width: 430px) { .btn { font-size: 13px; gap: 4px; } }
+    @media (max-width: 360px) { .btn { font-size: 11.5px; gap: 3px; } }
+    @media (max-width: 340px) {
+      .btn { font-size: 10.5px; gap: 2px; padding: 0; }
+      .btn lf-icon svg { width: 19px; height: 19px; }
+    }
     .btn.on { color: var(--tone); }
     .scrim { position: fixed; inset: 0; z-index: 40; }
     .tray {

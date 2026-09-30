@@ -19,7 +19,9 @@ import { AuthService } from '../../core/services/auth.service';
 import { ChatService } from '../../core/services/chat.service';
 import { PlatformService } from '../../core/services/platform.service';
 import { ModerationService } from '../../core/services/moderation.service';
+import { LookoutService } from '../../core/services/lookout.service';
 import { SafetyService, CHECK_IN_COPY } from '../../core/services/safety.service';
+import { lastSeenOf } from '../../core/utils/lookout';
 import { CheckIn, CheckInStatus, Post, UserProfile, provinceName } from '../../core/models/types';
 import { compact, contributorLabel, dayMonth, timeAgo } from '../../core/utils/format';
 import { cover } from '../../core/data/seed';
@@ -83,6 +85,33 @@ import { cover } from '../../core/data/seed';
               </div>
             }
 
+            <!-- last seen: the same for everyone who looks at this profile -->
+            @if (lastSeen()) {
+              <div class="lastseen" [class.bad]="lastSeen()!.status === 'need_help'">
+                <lf-icon name="target" [size]="18" />
+                <div class="lf-grow">
+                  <strong>Last seen {{ timeAgo(lastSeen()!.at) }}</strong>
+                  <span class="lf-small">
+                    @if (lastSeen()!.place) { {{ lastSeen()!.place }} · }
+                    @else { Place not shared · }
+                    last check-in said "{{ statusWord(lastSeen()!.status) }}"
+                  </span>
+                </div>
+              </div>
+            }
+
+            <!-- an open lookout about this person -->
+            @if (openLookout()) {
+              <a class="lookout" [class.bad]="openLookout()!.status === 'escalated'" [routerLink]="'/lookout/' + openLookout()!.id">
+                <lf-icon name="shield" [size]="18" />
+                <div class="lf-grow">
+                  <strong>{{ lookoutHeadline() }}</strong>
+                  <span class="lf-small">{{ lookoutSub() }}</span>
+                </div>
+                <lf-icon name="chevronRight" [size]="16" />
+              </a>
+            }
+
             <div class="acts">
               @if (!isMe()) {
                 <button class="lf-btn lf-btn--sm" [class.lf-btn--ghost]="following() || followRequested()" (click)="toggleFollow()">
@@ -95,6 +124,15 @@ import { cover } from '../../core/data/seed';
                 }
               } @else {
                 <button class="lf-btn lf-btn--sm lf-btn--ghost" routerLink="/me"><lf-icon name="edit" [size]="15" /> Edit profile</button>
+                @if (openLookout()) {
+                  <a class="lf-btn lf-btn--sm lf-btn--primary" [routerLink]="'/lookout/' + openLookout()!.id">
+                    <lf-icon name="shield" [size]="15" /> I'm here
+                  </a>
+                } @else {
+                  <a class="lf-btn lf-btn--sm lf-btn--primary" routerLink="/safety">
+                    <lf-icon name="shield" [size]="15" /> Be on the lookout
+                  </a>
+                }
                 <button class="lf-btn lf-btn--sm lf-btn--ghost" (click)="checkInSheet()">
                   <lf-icon name="target" [size]="15" /> More options
                 </button>
@@ -215,6 +253,12 @@ import { cover } from '../../core/data/seed';
     .checkin.bad { background: color-mix(in srgb, var(--lf-signal) 18%, transparent); }
     .checkin .live { display: inline-flex; align-items: center; gap: 5px; color: var(--lf-ubuntu); font-weight: 700; }
     .acts { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+    .lastseen, .lookout { display: flex; align-items: center; gap: 10px; padding: 11px 13px; border-radius: 12px;
+      background: var(--lf-card-2); color: inherit; text-decoration: none; }
+    .lastseen div, .lookout div { display: flex; flex-direction: column; gap: 1px; }
+    .lastseen.bad { background: color-mix(in srgb, var(--lf-signal) 16%, transparent); }
+    .lookout { box-shadow: 0 0 0 1px var(--lf-line) inset; }
+    .lookout.bad { box-shadow: 0 0 0 2px var(--lf-signal) inset; }
     .section { padding: 16px var(--lf-gap) 6px; font-size: 15px; font-weight: 700; }
     .sp { display: flex; flex-direction: column; gap: 2px; padding: 12px 16px; border-radius: var(--lf-radius);
       border: 0; box-shadow: var(--lf-shadow); background: var(--lf-card); color: inherit; text-decoration: none; min-width: 140px; }
@@ -244,6 +288,7 @@ export class ProfileComponent implements OnInit {
   private platform = inject(PlatformService);
   private mod = inject(ModerationService);
   private safety = inject(SafetyService);
+  private lookouts = inject(LookoutService);
   private router = inject(Router);
   private route = inject(ActivatedRoute);
   private toast = inject(ToastController);
@@ -255,6 +300,24 @@ export class ProfileComponent implements OnInit {
   protected readonly contributorLabel = contributorLabel;
   readonly mostNamed = signal(false);
   protected readonly provinceName = provinceName;
+  protected statusWord(status: string): string {
+    return status === 'need_help' ? 'I need help' : status === 'unfamiliar' ? 'unfamiliar place' : 'safe';
+  }
+  protected lookoutHeadline(): string {
+    const l = this.openLookout();
+    if (!l) return '';
+    if (l.status === 'escalated') return 'Flagged as a possible missing person';
+    if (this.isMe()) return `Your lookout: ${l.area}`;
+    if (this.waitingOnMe()) return `Are they okay?`;
+    return `Be on the lookout: ${l.area}`;
+  }
+  protected lookoutSub(): string {
+    const l = this.openLookout();
+    if (!l) return '';
+    if (l.status === 'escalated') return l.escalatedPostId ? 'A case has been opened. Open it to help look.' : 'Followers said something is wrong.';
+    if (l.status === 'checking') return `${l.answers.length} of ${l.askedIds.length} followers answered`;
+    return `Followers are asked in ${Math.max(0, Math.round((l.checkAt - Date.now()) / 3600000))} h`;
+  }
 
   readonly checkInOptions = [
     { key: 'safe' as CheckInStatus, icon: 'check', label: CHECK_IN_COPY.safe.label, detail: CHECK_IN_COPY.safe.detail },
@@ -300,6 +363,31 @@ export class ProfileComponent implements OnInit {
 
   /** Local to the quick buttons so they react the instant you tap. */
   readonly saving = signal(false);
+
+  /** The open lookout about this person, if there is one. */
+  readonly openLookout = computed(() => {
+    const id = this.u()?.id;
+    return id ? this.lookouts.openLookoutFor(id) : null;
+  });
+  readonly waitingOnMe = computed(() => {
+    const me = this.auth.viewerId;
+    return !!me && this.openLookout()?.askedIds.includes(me) && !this.lookouts.hasAnswered(this.openLookout()!, me);
+  });
+
+  /**
+   * Last seen, shown to every viewer.
+   *
+   * If this person has ever checked in, everyone can see when, and whether the
+   * check-in said they were safe or needed help. The place follows the
+   * person's own setting; the time never hides.
+   */
+  readonly lastSeen = computed(() => {
+    void this.tick();
+    const u = this.u();
+    if (!u) return null;
+    const canSeePlace = this.isMe() || u.privacy?.showLastSeen !== false;
+    return lastSeenOf(u, this.openLookout(), { canSeePlace });
+  });
 
   readonly safetyBusy = computed(() => this.safety.busy());
   readonly checkInError = computed(() => this.safety.error());

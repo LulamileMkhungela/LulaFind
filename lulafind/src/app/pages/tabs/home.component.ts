@@ -1,5 +1,5 @@
 import { Component, computed, effect, inject, signal } from '@angular/core';
-import { Router } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { IonContent } from '@ionic/angular/ion-content';
 import { IonRefresher } from '@ionic/angular/ion-refresher';
 import { IonRefresherContent } from '@ionic/angular/ion-refresher-content';
@@ -22,6 +22,8 @@ import { ChatService } from '../../core/services/chat.service';
 import { PlatformService } from '../../core/services/platform.service';
 import { POST_TYPE_META, Post, ReactionKind } from '../../core/models/types';
 import { feedWithRails } from '../../core/utils/feed';
+import { LookoutService } from '../../core/services/lookout.service';
+import { timeAgo } from '../../core/utils/format';
 
 @Component({
   selector: 'lf-home',
@@ -29,7 +31,8 @@ import { feedWithRails } from '../../core/utils/feed';
   imports: [
     IonContent, IonRefresher, IonRefresherContent,
     IonInfiniteScroll, IonInfiniteScrollContent, IonSkeletonText,
-    TopNavComponent, IconComponent, EmptyComponent, PostCardComponent, StoryRailComponent, PeopleRailComponent, FilterBarComponent
+    TopNavComponent, IconComponent, EmptyComponent, PostCardComponent, StoryRailComponent, PeopleRailComponent, FilterBarComponent,
+    RouterLink
   ],
   template: `
     <lf-top-nav />
@@ -38,6 +41,18 @@ import { feedWithRails } from '../../core/utils/feed';
       <ion-refresher slot="fixed" (ionRefresh)="onRefresh($event)">
         <ion-refresher-content pullingText="Pull to refresh"></ion-refresher-content>
       </ion-refresher>
+
+      <!-- A safety check waiting on you: nothing else on this screen matters more. -->
+      @if (duePrompts().length) {
+        <a class="checkprompt" [routerLink]="'/lookout/' + duePrompts()[0].lookout.id">
+          <lf-icon name="shield" [size]="20" />
+          <div class="lf-grow">
+            <strong>{{ duePrompts()[0].headline }}</strong>
+            <span class="lf-small">{{ duePrompts()[0].sub }}</span>
+          </div>
+          <lf-icon name="chevronRight" [size]="16" />
+        </a>
+      }
 
       <!-- Facebook Feed Filter Chips -->
       <lf-filter-bar
@@ -123,6 +138,11 @@ import { feedWithRails } from '../../core/utils/feed';
     </ion-content>
   `,
   styles: [`
+    .checkprompt { display: flex; align-items: center; gap: 12px; margin: 10px var(--lf-gap); padding: 13px 14px;
+      border-radius: var(--lf-radius); background: color-mix(in srgb, var(--lf-beacon) 16%, var(--lf-card));
+      color: inherit; text-decoration: none; box-shadow: var(--lf-shadow); }
+    .checkprompt div { display: flex; flex-direction: column; gap: 2px; }
+    .checkprompt span { color: var(--lf-muted); }
     .offline { display: flex; flex-direction: column; align-items: center; gap: 6px; margin: 28px 16px;
       padding: 22px 18px; border: 1px solid var(--lf-line); border-radius: 14px; background: var(--lf-card); text-align: center; }
     .offline strong { font-size: 16px; }
@@ -163,10 +183,31 @@ import { feedWithRails } from '../../core/utils/feed';
 export class HomeComponent {
   protected data = inject(DataService);
   protected auth = inject(AuthService);
+  protected lookouts = inject(LookoutService);
   protected chat = inject(ChatService);
   private platform = inject(PlatformService);
   private router = inject(Router);
   private toast = inject(ToastController);
+
+  /**
+   * Safety checks waiting on the viewer, newest first. This is the one thing
+   * that outranks the feed: someone they follow has been out of contact for 24
+   * hours and only they can answer.
+   */
+  readonly duePrompts = computed(() => {
+    const me = this.auth.user();
+    if (!me) return [];
+    return this.lookouts.waitingOnMe()
+      .map((lookout) => {
+        const who = this.data.authorOf(lookout.userId)?.displayName ?? 'Someone you follow';
+        return {
+          lookout,
+          headline: `Is ${who} okay?`,
+          sub: `They set a lookout ${timeAgo(lookout.startedAt)} - answer to close it or flag them.`
+        };
+      })
+      .filter((p) => !!p.lookout);
+  });
 
   readonly missingPip = computed(() =>
     this.data.feed().filter((p) => p.type === 'missing' && p.status === 'active').length

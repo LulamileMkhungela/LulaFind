@@ -530,6 +530,9 @@ export class MeComponent {
         findableProfile: this.form.findableProfile,
         safetyBeacon: this.form.safetyBeacon,
         privacy: {
+          /* keep every choice this form does not show - the safety-post
+             settings live in the Safety centre and must survive an edit here. */
+          ...defaultPrivacy(), ...(this.me()?.privacy ?? {}),
           showLocation, showStats, showSpotlights, allowMessages,
           autoShareLocation: false, notifyFollowersOnExpiry, requireFollowApproval
         }

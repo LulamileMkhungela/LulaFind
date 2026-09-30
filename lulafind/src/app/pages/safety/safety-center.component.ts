@@ -15,8 +15,9 @@ import { TopNavComponent } from '../../shared/components/top-nav.component';
 import { LocationService } from '../../core/services/location.service';
 import { AuthService } from '../../core/services/auth.service';
 import { DataService } from '../../core/services/data.service';
-import { provinceName } from '../../core/models/types';
-import { fullDate } from '../../core/utils/format';
+import { LookoutService } from '../../core/services/lookout.service';
+import { Audience, PrivacyPrefs, provinceName, defaultPrivacy } from '../../core/models/types';
+import { fullDate, timeAgo } from '../../core/utils/format';
 
 @Component({
   selector: 'lf-safety-center',
@@ -84,6 +85,95 @@ import { fullDate } from '../../core/utils/format';
         </button>
       </section>
 
+      <!-- be on the lookout -->
+      <section class="card">
+        <div class="lf-row" style="gap:8px">
+          <lf-icon name="shield" [size]="20" />
+          <h2 class="lf-h2" style="margin:0">Be on the lookout</h2>
+        </div>
+
+        @if (mine()) {
+          <div class="mine" [class.bad]="mine()!.status === 'escalated'">
+            <strong>{{ mineHeadline() }}</strong>
+            <span class="lf-small lf-muted">{{ mineSub() }}</span>
+          </div>
+          @if (mine()!.escalatedPostId) {
+            <a class="lf-btn lf-btn--ghost lf-btn--block" [routerLink]="'/post/' + mine()!.escalatedPostId">
+              <lf-icon name="flag" [size]="16" /> Open the case about me
+            </a>
+          }
+          <button class="lf-btn lf-btn--primary lf-btn--block" [disabled]="lookouts.busy()" (click)="imHere()">
+            <lf-icon name="hand" [size]="16" /> I'm here - close it
+          </button>
+          <button class="lf-btn lf-btn--ghost lf-btn--block" [disabled]="lookouts.busy()" (click)="cancelLookout()">
+            Cancel the lookout without checking out
+          </button>
+        } @else {
+          <p class="lf-small lf-muted">
+            Tell your followers you may not feel safe where you are going. They see the area, and 24 hours
+            later we ask them to check on you.
+          </p>
+          <label class="field">
+            <span>Where are you going, or which area worries you?</span>
+            <input class="inp" [value]="area()" (input)="area.set($any($event.target).value)"
+                   placeholder="e.g. walking to the Polokwane taxi rank" />
+          </label>
+          <label class="field">
+            <span>Anything your followers should know? (optional)</span>
+            <input class="inp" [value]="note()" (input)="note.set($any($event.target).value)"
+                   placeholder="e.g. I finish at 19:00" />
+          </label>
+          <label class="row-check">
+            <input type="checkbox" [checked]="shareLocation()" (change)="shareLocation.set($any($event.target).checked)" />
+            <span>Attach where I am now, so my followers see it</span>
+          </label>
+          <button class="lf-btn lf-btn--primary lf-btn--block" [disabled]="lookouts.busy() || !area().trim()" (click)="start()">
+            <lf-icon name="shield" [size]="16" /> {{ lookouts.busy() ? 'Starting…' : 'Start the lookout' }}
+          </button>
+          @if (lookouts.error()) { <p class="err">{{ lookouts.error() }}</p> }
+        }
+      </section>
+
+      <!-- publishing a case about me -->
+      <section class="card">
+        <div class="lf-row" style="gap:8px">
+          <lf-icon name="flag" [size]="20" />
+          <h2 class="lf-h2" style="margin:0">If I go missing</h2>
+        </div>
+        <p class="lf-small lf-muted">
+          A lookout only becomes a case if a follower says something is wrong. This decides whether LulaFind may
+          post that case, and who sees it.
+        </p>
+        <ion-item>
+          <ion-label><strong>Let LulaFind post a case about me</strong><br />
+            <span class="lf-small lf-muted">Off by default. Without it, a "no" answer never becomes a post.</span>
+          </ion-label>
+          <ion-toggle [checked]="allowAlerts()" (ionChange)="setAllowAlerts($any($event.detail).checked)"></ion-toggle>
+        </ion-item>
+
+        @if (allowAlerts()) {
+          <label class="field">
+            <span>Who may see that post</span>
+            <select class="inp" [value]="audience()" (change)="setAudience($any($event.target).value)">
+              <option value="public">Everyone on LulaFind</option>
+              <option value="followers">Only my followers</option>
+              <option value="surname">Only my spotlight community</option>
+            </select>
+          </label>
+          @if (audience() === 'surname') {
+            <label class="field">
+              <span>Which spotlight</span>
+              <select class="inp" [value]="spotlightId()" (change)="setSpotlight($any($event.target).value)">
+                <option value="">Choose a spotlight</option>
+                @for (s of mySpotlights(); track s.id) {
+                  <option [value]="s.id">{{ s.surname }}</option>
+                }
+              </select>
+            </label>
+          }
+        }
+      </section>
+
       <!-- findability -->
       <section class="card">
         <div class="lf-row" style="gap:8px">
@@ -136,11 +226,21 @@ import { fullDate } from '../../core/utils/format';
     .consent { display: flex; gap: 10px; align-items: center; padding: 11px 12px; border-radius: 11px;
       background: var(--lf-card-2); color: var(--lf-ubuntu); }
     .consent.off { color: var(--lf-signal); }
+    .mine { display: flex; flex-direction: column; gap: 2px; padding: 11px 12px; border-radius: 11px;
+      background: color-mix(in srgb, var(--lf-ubuntu) 14%, transparent); }
+    .mine.bad { background: color-mix(in srgb, var(--lf-signal) 16%, transparent); }
+    .field { display: flex; flex-direction: column; gap: 5px; font-size: 12.5px; color: var(--lf-muted); }
+    .inp { min-height: 42px; padding: 9px 11px; border-radius: 11px; border: 1px solid var(--lf-line);
+      background: var(--lf-card-2); color: inherit; font-size: 14px; }
+    .row-check { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--lf-muted); }
+    .row-check input { width: 19px; height: 19px; accent-color: var(--lf-beacon); }
+    .err { color: var(--lf-signal); font-size: 12.5px; margin: 0; }
     .consent div { display: flex; flex-direction: column; gap: 2px; }
   `]
 })
 export class SafetyCenterComponent {
   protected location = inject(LocationService);
+  protected lookouts = inject(LookoutService);
   protected auth = inject(AuthService);
   protected data = inject(DataService);
   private toast = inject(ToastController);
@@ -149,6 +249,38 @@ export class SafetyCenterComponent {
   protected readonly fullDate = fullDate;
 
   readonly findable = computed(() => this.auth.user()?.findableProfile ?? false);
+
+  /* be on the lookout */
+  readonly mine = computed(() => this.lookouts.mine());
+  readonly area = signal('');
+  readonly note = signal('');
+  readonly shareLocation = signal(true);
+
+  readonly mineHeadline = computed(() => {
+    const l = this.mine();
+    if (!l) return '';
+    if (l.status === 'escalated') return 'You are flagged as a possible missing person';
+    if (l.status === 'checking') return 'Your followers are being asked if you are okay';
+    return `Be on the lookout: ${l.area}`;
+  });
+
+  readonly mineSub = computed(() => {
+    const l = this.mine();
+    if (!l) return '';
+    if (l.status === 'checking') return `${l.answers.length} of ${l.askedIds.length} followers answered`;
+    const hrs = Math.max(0, Math.round((l.checkAt - Date.now()) / 3600000));
+    return `Started ${timeAgo(l.startedAt)} · followers asked in ${hrs} h`;
+  });
+
+  /* publishing a case about me */
+  readonly allowAlerts = computed(() => this.auth.user()?.privacy?.allowSafetyAlertPosts === true);
+  readonly audience = computed(() => this.auth.user()?.privacy?.safetyAlertAudience ?? 'followers');
+  readonly spotlightId = computed(() => this.auth.user()?.privacy?.safetyAlertSpotlightId ?? '');
+  readonly mySpotlights = computed(() => {
+    const me = this.auth.viewerId;
+    if (!me) return [];
+    return this.data.spotlights().filter((s) => s.memberIds.includes(me));
+  });
 
   readonly myConsents = computed(() => {
     const me = this.auth.viewerId;
@@ -186,6 +318,54 @@ export class SafetyCenterComponent {
   async checkIn(): Promise<void> {
     const rec = await this.location.checkIn([]);
     await this.say(rec ? 'Check-in recorded. Your people will see "safe".' : 'Location permission needed for a check-in.');
+  }
+
+  async start(): Promise<void> {
+    try {
+      const l = await this.lookouts.start({ area: this.area(), note: this.note(), shareLocation: this.shareLocation() });
+      this.area.set('');
+      this.note.set('');
+      await this.say(`Lookout started around ${l.area}. Your followers have been told.`);
+    } catch {
+      /* the service already holds the message on screen */
+    }
+  }
+
+  async imHere(): Promise<void> {
+    const closed = await this.lookouts.imHere();
+    await this.say(closed ? 'You are marked safe. Anything LulaFind posted about you was deleted.' : 'No lookout to close.');
+  }
+
+  async cancelLookout(): Promise<void> {
+    await this.lookouts.cancel();
+    await this.say('Lookout cancelled.');
+  }
+
+  private async savePrivacy(patch: Partial<PrivacyPrefs>, message: string): Promise<void> {
+    const me = this.auth.user();
+    if (!me) return;
+    this.data.touchAuthor(await this.auth.updateProfile({ privacy: { ...defaultPrivacy(), ...(me.privacy ?? {}), ...patch } }));
+    await this.say(message);
+  }
+
+  async setAllowAlerts(on: boolean): Promise<void> {
+    await this.savePrivacy(
+      { allowSafetyAlertPosts: on, ...(on ? {} : { safetyAlertAudience: 'followers' as const }) },
+      on ? 'LulaFind may post a case about you - only after a follower says something is wrong.' : 'LulaFind will never post a case about you.'
+    );
+  }
+
+  async setAudience(audience: Audience): Promise<void> {
+    await this.savePrivacy(
+      { safetyAlertAudience: audience },
+      audience === 'public' ? 'The case would be visible to everyone on LulaFind.' :
+        audience === 'followers' ? 'The case would be visible to your followers only.' :
+          'The case would go to your spotlight community only.'
+    );
+  }
+
+  async setSpotlight(id: string): Promise<void> {
+    await this.savePrivacy({ safetyAlertSpotlightId: id || null }, id ? 'Case goes to that spotlight only.' : 'No spotlight chosen yet.');
   }
 
   async setFindable(v: boolean): Promise<void> {

@@ -15,6 +15,14 @@ import {
   Audience, MediaItem, Post, PostType, PROVINCES, ProvinceCode
 } from '../../core/models/types';
 
+/** A brand-new composer. Also what "Start fresh" returns to. */
+const blankForm = (): ComposerForm => ({
+  title: '', body: '', media: [], province: null, town: '', lastSeenAt: '', lastSeenWhere: '',
+  caseNumber: '', audience: 'public', spotlightId: null, chatEnabled: true, allowComments: true,
+  anonymous: false, askWanted: false, contactLabel: 'Family contact', contactValue: '', contactVisibleTo: 'verified',
+  guardianConsent: false
+});
+
 const CATEGORIES: { key: PostType; label: string; icon: string }[] = [
   { key: 'missing', label: 'Missing person', icon: 'search' },
   { key: 'khumbulekhaya', label: 'Left home', icon: 'home' },
@@ -115,6 +123,14 @@ interface MissingField { key: string; label: string; }
           </div>
           @if (editing()) { <p class="inline-note">The category can’t change after posting. Saving marks it edited.</p> }
         </section>
+
+        @if (draftKept()) {
+          <div class="draft-note" role="status">
+            <lf-icon name="info" [size]="16" />
+            <span>We kept what you typed. Carry on where you left off.</span>
+            <button type="button" (click)="discardDraft()">Start fresh</button>
+          </div>
+        }
 
         @if (showFieldErrors() && missing().length) {
           <div class="missing" role="alert">
@@ -234,7 +250,7 @@ interface MissingField { key: string; label: string; }
                   <label class="field full"><span>Last seen near</span><input placeholder="Neighbourhood or public place" [value]="f().lastSeenWhere" (input)="patch({ lastSeenWhere: $any($event.target).value })" /></label>
                 }
                 @if (type() === 'khumbulekhaya') {
-                  <label class="field full"><span>What might the family want them to know?</span><input placeholder="Optional — don't assume they want to come home" [value]="khumbuReason()" (input)="khumbuReason.set($any($event.target).value)" /></label>
+                  <label class="field full"><span>What might the family want them to know?</span><input placeholder="Optional — don't assume they want to come home" [value]="khumbuReason()" (input)="setKhumbu($any($event.target).value)" /></label>
                   <label class="switch-row"><input type="checkbox" [checked]="f().askWanted" (change)="patch({ askWanted: $any($event.target).checked })" /><span><strong>Ask the community if they are being looked for</strong><small>People can answer yes or no.</small></span></label>
                 }
 
@@ -345,6 +361,8 @@ interface MissingField { key: string; label: string; }
     .field-error { margin: 1px 0 0; color: var(--lf-signal); font-size: 13px; font-weight: 600; }
     .field.invalid input, .field.invalid select, .field.invalid textarea,
     .body-input.field-error { border-color: var(--lf-signal); box-shadow: 0 0 0 2px color-mix(in srgb, var(--lf-signal) 18%, transparent); }
+    .draft-note { display: flex; align-items: center; gap: 8px; margin: 10px 0 0; padding: 9px 11px; border-radius: 6px; background: var(--lf-primary-soft); color: var(--lf-primary-soft-text); font-size: 13.5px; }
+    .draft-note button { margin-left: auto; border: 0; background: transparent; color: inherit; font: inherit; font-weight: 700; text-decoration: underline; cursor: pointer; }
     .missing { margin: 12px 0 0; padding: 11px 13px; border-radius: 8px; background: color-mix(in srgb, var(--lf-signal) 9%, transparent); color: var(--fb-text); }
     .missing strong { display: flex; align-items: center; gap: 6px; color: var(--lf-signal); font-size: 14px; }
     .missing ul { margin: 7px 0 0; padding-left: 20px; }
@@ -384,12 +402,7 @@ export class CreatePostComponent implements OnInit {
    * every binding, and the validation below, update the moment something is
    * typed.
    */
-  readonly f = signal<ComposerForm>({
-    title: '', body: '', media: [], province: null, town: '', lastSeenAt: '', lastSeenWhere: '',
-    caseNumber: '', audience: 'public', spotlightId: null, chatEnabled: true, allowComments: true,
-    anonymous: false, askWanted: false, contactLabel: 'Family contact', contactValue: '', contactVisibleTo: 'verified',
-    guardianConsent: false
-  });
+  readonly f = signal<ComposerForm>(blankForm());
   readonly s = signal(blankSubject());
   readonly khumbuReason = signal('');
 
@@ -400,10 +413,86 @@ export class CreatePostComponent implements OnInit {
   patch(p: Partial<ComposerForm>): void {
     this.f.update((f) => ({ ...f, ...p }));
     if (this.error()) this.error.set('');
+    this.persistDraft();
   }
 
   patchSubject(p: Partial<ReturnType<typeof blankSubject>>): void {
     this.s.update((s) => ({ ...s, ...p }));
+    this.persistDraft();
+  }
+
+  setKhumbu(value: string): void {
+    this.khumbuReason.set(value);
+    this.persistDraft();
+  }
+
+  /* ------------------------------------------------------------------ *
+   * Finish later.
+   *
+   * A long case takes minutes to write, and a phone call interrupts it. The
+   * composer keeps what was typed (text fields - photos are device-local and
+   * cannot come back), and says so when the screen is opened again, with one
+   * tap to start fresh instead. Nothing is silently kept and nothing is
+   * silently lost.
+   * ------------------------------------------------------------------ */
+
+  /** Set when the post is published, so a finished composer stops saving. */
+  private draftClosed = false;
+  /** The composer put back something typed earlier. */
+  readonly draftKept = signal(false);
+  private static readonly DRAFT_KEY = 'lulafind.composer.draft';
+
+  private persistDraft(): void {
+    if (this.editing() || this.draftClosed) return;
+    const f = this.f();
+    const s = this.s();
+    const empty = !this.type() && !f.body.trim() && !f.title.trim() && !f.town.trim()
+      && !f.lastSeenWhere.trim() && !s.name.trim() && !this.khumbuReason().trim();
+    try {
+      if (empty) { localStorage.removeItem(CreatePostComponent.DRAFT_KEY); return; }
+      localStorage.setItem(CreatePostComponent.DRAFT_KEY, JSON.stringify({
+        type: this.type(), f: { ...f, media: [] }, s, khumbu: this.khumbuReason(), at: Date.now()
+      }));
+    } catch { /* storage blocked (private mode) - then nothing is kept, and nothing pretends to be */ }
+  }
+
+  private restoreDraft(): void {
+    let raw: string | null = null;
+    try { raw = localStorage.getItem(CreatePostComponent.DRAFT_KEY); } catch { return; }
+    if (!raw) return;
+    try {
+      const d = JSON.parse(raw) as {
+        type?: PostType | null; f?: Partial<ComposerForm>;
+        s?: Partial<ReturnType<typeof blankSubject>>; khumbu?: string;
+      };
+      const hasStory = !!d.f?.body?.trim() || !!d.f?.title?.trim();
+      if (!hasStory) { localStorage.removeItem(CreatePostComponent.DRAFT_KEY); return; }
+      if (d.type) this.type.set(d.type);
+      if (d.f) this.f.update((f) => ({ ...f, ...d.f, media: [] }));
+      if (d.s) this.s.update((s) => ({ ...s, ...d.s }));
+      if (d.khumbu) this.khumbuReason.set(d.khumbu);
+      this.showFieldErrors.set(false);
+      this.draftKept.set(true);
+    } catch {
+      try { localStorage.removeItem(CreatePostComponent.DRAFT_KEY); } catch { /* ignore */ }
+    }
+  }
+
+  /** Throw the kept draft away and start with a blank composer. */
+  discardDraft(): void {
+    try { localStorage.removeItem(CreatePostComponent.DRAFT_KEY); } catch { /* ignore */ }
+    this.draftKept.set(false);
+    this.type.set(null);
+    this.f.set(blankForm());
+    this.s.set(blankSubject());
+    this.khumbuReason.set('');
+    this.error.set('');
+    this.showFieldErrors.set(false);
+  }
+
+  private clearDraft(): void {
+    this.draftClosed = true;
+    try { localStorage.removeItem(CreatePostComponent.DRAFT_KEY); } catch { /* ignore */ }
   }
 
   /**
@@ -437,6 +526,7 @@ export class CreatePostComponent implements OnInit {
     if (routeType && CATEGORIES.some((category) => category.key === routeType)) this.setType(routeType as PostType);
 
     const editId = this.route.snapshot.paramMap.get('id');
+    if (!editId) this.restoreDraft();
     if (editId) {
       const post = await this.data.loadPost(editId);
       if (!post || !this.data.canEdit(post)) {
@@ -634,6 +724,7 @@ export class CreatePostComponent implements OnInit {
         created = made;
       }
       this.showFieldErrors.set(false);
+      this.clearDraft();
       if (this.editing()) {
         await this.toastMsg('Post updated. It now shows as edited.');
         await this.router.navigate(['/post', this.postId]);

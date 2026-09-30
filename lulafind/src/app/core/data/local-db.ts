@@ -1,8 +1,10 @@
 import {
-  ChatMessage, ChatThread, Comment, FeedFilter, FollowEdge, Notification, Post, Spotlight, Story, Tip,
+  ChatMessage, ChatThread, Comment, FeedFilter, FollowEdge, Lookout, Notification, Post, Spotlight, Story, Tip,
   UserProfile, defaultPrivacy
 } from '../models/types';
 import { seedComments, seedPosts, seedSpotlights, seedStories, seedTips, seedUsers } from './seed';
+import { answerBlocker, hasAnswered, withAnswer } from '../utils/lookout';
+import { lookoutCasePost } from '../utils/lookout-case';
 
 /**
  * Durable key/value store used by the mock data layer.
@@ -86,6 +88,7 @@ export interface DbSnapshot {
   follows: FollowEdge[];
   notifications: Notification[];
   tips: Tip[];
+  lookouts: Lookout[];
 }
 
 const VERSION_KEY = 'seedVersion';
@@ -103,7 +106,8 @@ export const emptyDb = (): DbSnapshot => ({
   messages: [],
   follows: [],
   notifications: [],
-  tips: []
+  tips: [],
+  lookouts: []
 });
 
 /**
@@ -184,12 +188,21 @@ export class LocalDb {
       if (u.privacy && u.privacy.requireFollowApproval === undefined) {
         u.privacy.requireFollowApproval = false; touched = true;
       }
+      /* The safety-post choice: off by default, and only ever the person's to make. */
+      if (u.privacy && u.privacy.showLastSeen === undefined) { u.privacy.showLastSeen = true; touched = true; }
+      if (u.privacy && u.privacy.allowSafetyAlertPosts === undefined) { u.privacy.allowSafetyAlertPosts = false; touched = true; }
+      if (u.privacy && u.privacy.safetyAlertAudience === undefined) { u.privacy.safetyAlertAudience = 'followers'; touched = true; }
+      if (u.privacy && u.privacy.safetyAlertSpotlightId === undefined) { u.privacy.safetyAlertSpotlightId = null; touched = true; }
     }
     for (const e of this.db.follows) {
       if (!e.status) { e.status = 'accepted'; touched = true; }
     }
     for (const st of this.db.stories) {
       if (!st.audience) { st.audience = 'public'; st.spotlightId = null; touched = true; }
+    }
+    if (!Array.isArray((this.db as Partial<DbSnapshot>).lookouts)) { this.db.lookouts = []; touched = true; }
+    for (const l of this.db.lookouts ?? []) {
+      if (l.askedAt === undefined) { l.askedAt = null; touched = true; }
     }
     if (touched) this.persist();
   }
@@ -411,6 +424,77 @@ export class LocalDb {
     this.db.posts[i] = next;
     this.persist();
     return clone(next);
+  }
+
+  /* --------------------------- be on the lookout --------------------------- */
+
+  lookouts(): Lookout[] {
+    return ((this.db as unknown as { lookouts?: Lookout[] }).lookouts ?? []).map((l) => clone(l));
+  }
+
+  saveLookout(l: Lookout): void {
+    const dbAny = this.db as unknown as { lookouts?: Lookout[] };
+    if (!dbAny.lookouts) dbAny.lookouts = [];
+    const i = dbAny.lookouts.findIndex((x) => x.id === l.id);
+    if (i >= 0) dbAny.lookouts[i] = clone(l);
+    else dbAny.lookouts.unshift(clone(l));
+    this.persist();
+  }
+
+  patchLookout(id: string, patch: Partial<Lookout>): Lookout | undefined {
+    const dbAny = this.db as unknown as { lookouts?: Lookout[] };
+    const list = dbAny.lookouts ?? [];
+    const i = list.findIndex((l) => l.id === id);
+    if (i < 0) return undefined;
+    list[i] = { ...list[i], ...patch, id } as Lookout;
+    this.persist();
+    return clone(list[i]);
+  }
+
+  /**
+   * A follower's answer. The rules live in core/utils/lookout.ts so the same
+   * decision runs here, in Firestore and in Postgres.
+   */
+  answerLookout(id: string, byUserId: string, ok: boolean): Lookout | undefined {
+    const current = this.lookouts().find((l) => l.id === id);
+    if (!current) return undefined;
+    if (hasAnswered(current, byUserId)) return current;
+    const blocked = answerBlocker(current, byUserId);
+    if (blocked) throw new Error(blocked);
+    if (!this.db.follows.some((f) => f.followerId === byUserId && f.followingId === current.userId
+      && (f.status ?? 'accepted') === 'accepted')) {
+      throw new Error('Only the people who follow them can answer this');
+    }
+    let next = withAnswer(current, byUserId, ok);
+    if (next.status === 'escalated' && !next.escalatedPostId) {
+      next = { ...next, escalatedPostId: this.publishLookoutCase(next) };
+    }
+    this.saveLookout(next);
+    return next;
+  }
+
+  /**
+   * LulaFind publishes the case itself, on the person's behalf, only when they
+   * allowed it. Returns the new post id, or null when they did not.
+   */
+  publishLookoutCase(lookout: Lookout): string | null {
+    const owner = this.db.users.find((u) => u.id === lookout.userId);
+    if (!owner || owner.privacy?.allowSafetyAlertPosts !== true) return null;
+    const post = lookoutCasePost(lookout, owner, this.db.posts);
+    this.db.posts.unshift(post);
+    this.persist();
+    return post.id;
+  }
+
+  /** "I'm here": the case the app published is removed with the lookout. */
+  deleteLookoutCase(lookoutId: string): void {
+    const doomed = this.db.posts.filter((p) => p.lookoutId === lookoutId);
+    if (!doomed.length) return;
+    this.db.posts = this.db.posts.filter((p) => p.lookoutId !== lookoutId);
+    const ids = new Set(doomed.map((p) => p.id));
+    this.db.comments = this.db.comments.filter((c) => !ids.has(c.postId));
+    for (const s of this.db.spotlights) s.postIds = s.postIds.filter((x) => !ids.has(x));
+    this.persist();
   }
 
   deletePost(id: string): void {

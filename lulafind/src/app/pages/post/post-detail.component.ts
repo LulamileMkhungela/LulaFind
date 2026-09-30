@@ -18,6 +18,7 @@ import { AuthService } from '../../core/services/auth.service';
 import { ChatService, ChatGate } from '../../core/services/chat.service';
 import { ModerationService } from '../../core/services/moderation.service';
 import { PostActionsService } from '../../core/services/post-actions.service';
+import { LookoutService } from '../../core/services/lookout.service';
 import { KvStore } from '../../core/data/local-db';
 import {
   Comment, Post, REACTIONS, ReactionKind, UserProfile, isReaction, provinceName
@@ -52,8 +53,19 @@ import { leadMarkView } from '../../core/utils/mark-check';
     <lf-top-nav title="Post" backTo="/home" />
 
     <ion-content class="lf-page">
-      @if (!p()) {
+      @if (!p() && !loaded()) {
         <div class="lf-card"><ion-skeleton-text style="height:220px"></ion-skeleton-text></div>
+      } @else if (!p()) {
+        <!--
+          The store answered and there is no such post: either the person it was
+          about said "I'm here" (the case is deleted), or a moderator removed it.
+          Say so, and give the way out - never leave the screen loading forever.
+        -->
+        <section class="lf-card gone" aria-label="Post not available">
+          <lf-icon name="info" [size]="20" />
+          <p>This post is no longer available. It may have been deleted by the person it was about, or removed.</p>
+          <button class="big big--go" type="button" (click)="goHome()">Back to home</button>
+        </section>
       } @else {
         <article class="post">
           @if (p()!.repostOf) {
@@ -190,10 +202,23 @@ import { leadMarkView } from '../../core/utils/mark-check';
         <lf-case-plan [post]="p()!" [editable]="isMine()" [admin]="isAdmin()" (updated)="p.set($event)" />
 
         <!-- the two questions this page asks -->
-        @if (isMine() && (p()!.status === 'active' || p()!.status === 'under_review') && !p()!.repostOf) {
+        @if (isMine() && !p()!.appPosted && (p()!.status === 'active' || p()!.status === 'under_review') && !p()!.repostOf) {
           <section class="ask" aria-label="Case status">
             <button class="big big--go" type="button" (click)="markFound()"><lf-icon name="check" [size]="18" /> Mark as found</button>
             <button class="big" type="button" (click)="stillSearching()"><lf-icon name="search" [size]="18" /> Still searching</button>
+          </section>
+        } @else if (appPostedCase()) {
+          <!--
+            LulaFind published this case itself after a failed safety check. The
+            person it is about does not claim it and answer questions - they say
+            they are here, and the case is deleted with the lookout.
+          -->
+          <section class="ask ask--col" aria-label="This case is about you">
+            <p class="ask__q">This case is about you</p>
+            <p class="note">If you are safe, say so. The case is deleted and your followers are told.</p>
+            <button class="big big--go" type="button" [disabled]="clearing()" (click)="imHere()">
+              <lf-icon name="hand" [size]="18" /> I'm here
+            </button>
           </section>
         } @else if (showSubjectAsk()) {
           @if (childCase()) {
@@ -437,6 +462,8 @@ import { leadMarkView } from '../../core/utils/mark-check';
     .embed p { margin: 0; font-size: 15px; line-height: 1.4; white-space: pre-line; }
     .embed img { display: block; width: calc(100% + 24px); margin: 10px -12px -12px; max-height: 300px; object-fit: cover; }
     .embed.gone { display: flex; gap: 8px; align-items: center; color: var(--lf-muted); }
+    section.gone { display: flex; flex-direction: column; gap: 12px; align-items: flex-start; color: var(--lf-text); }
+    section.gone p { margin: 0; color: var(--lf-muted); line-height: 1.5; }
 
     /* LinkedIn's stats line + action bar */
     .stats { display: flex; align-items: center; justify-content: space-between; padding: 8px var(--edge) 6px; font-size: 13px; color: var(--lf-muted); }
@@ -446,10 +473,12 @@ import { leadMarkView } from '../../core/utils/mark-check';
     .stack { display: inline-flex; }
     .stack lf-reaction-icon + lf-reaction-icon { margin-left: -6px; }
     .stats__right { display: inline-flex; align-items: center; gap: 12px; }
-    .actions { display: flex; align-items: center; margin: 0 12px; padding: 4px 0; border-top: 1px solid var(--lf-line-soft); }
-    .act { flex: 1; min-width: 0; height: 40px; border: 0; background: transparent; color: var(--lf-muted); font-family: inherit;
+    .actions { display: flex; align-items: center; gap: 2px; margin: 0 6px; padding: 4px 0; border-top: 1px solid var(--lf-line-soft); }
+    .act { flex: 0 0 auto; min-width: 0; height: 40px; border: 0; background: transparent; color: var(--lf-muted); font-family: inherit;
       font-size: 14px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; gap: 5px; cursor: pointer; border-radius: 4px; }
     .act:hover, .act:active { background: var(--lf-hover); }
+    @media (max-width: 430px) { .actions { margin: 0 2px; gap: 0; } .act { font-size: 12.5px; gap: 4px; padding: 0 2px; } }
+    @media (max-width: 360px) { .act { font-size: 11.5px; } }
     .chatline { display: flex; align-items: center; justify-content: center; gap: 8px; width: calc(100% - 24px); margin: 4px 12px 12px;
       height: 38px; border: 1px solid var(--lf-line); border-radius: 6px; background: transparent; color: var(--ion-text-color);
       font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
@@ -539,6 +568,7 @@ export class PostDetailComponent implements OnInit {
   protected auth = inject(AuthService);
   private chat = inject(ChatService);
   private router = inject(Router);
+  private lookouts = inject(LookoutService);
   private route = inject(ActivatedRoute);
   private toast = inject(ToastController);
   private alert = inject(AlertController);
@@ -627,9 +657,14 @@ export class PostDetailComponent implements OnInit {
   readonly verified = computed(() => this.p()?.sightingVerified ?? null);
   private dismissed = signal<string[]>(this.prefs.get<string[]>('notMe', []));
 
+  /** False until the store has answered for this id - keeps "gone" honest. */
+  readonly loaded = signal(false);
+
+  goHome(): void { void this.router.navigate(['/home']); }
+
   async ngOnInit(): Promise<void> {
     const id = this.route.snapshot.paramMap.get('id');
-    if (!id) return;
+    if (!id) { this.loaded.set(true); return; }
     const cached = this.data.post(id);
     if (cached) this.p.set(cached);
     const fresh = await this.data.loadPost(id);
@@ -640,6 +675,7 @@ export class PostDetailComponent implements OnInit {
         this.original.set((await this.data.loadPost(fresh.repostOf)) ?? null);
       }
     }
+    this.loaded.set(true);
     this.comments.set(await this.data.comments(id));
     await this.refreshGate();
     const followState = this.p() ? await this.data.followStatus(this.p()!.authorId) : null;
@@ -907,6 +943,29 @@ export class PostDetailComponent implements OnInit {
     const p = this.p();
     const age = p?.subject?.age;
     return p?.type === 'missing' && age != null && age < 18 && !p.repostOf;
+  }
+
+  /** A case LulaFind published on someone's behalf, seen by that person. */
+  appPostedCase(): boolean {
+    const p = this.p();
+    return !!p?.appPosted && !!p.lookoutId && (this.isMine() || this.auth.user()?.isAdmin === true);
+  }
+
+  readonly clearing = signal(false);
+
+  async imHere(): Promise<void> {
+    const p = this.p();
+    if (!p?.lookoutId) return;
+    this.clearing.set(true);
+    try {
+      await this.lookouts.imHere(p.lookoutId);
+      await this.say('You are marked safe. This case was deleted.');
+      await this.router.navigate(['/me']);
+    } catch (e) {
+      await this.say(e instanceof Error ? e.message : 'Could not close the lookout');
+    } finally {
+      this.clearing.set(false);
+    }
   }
 
   showSubjectAsk(): boolean {

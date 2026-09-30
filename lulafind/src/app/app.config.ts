@@ -8,7 +8,7 @@ import { LocalDb } from './core/data/local-db';
 import { FirebaseApi } from './core/data/firebase-api';
 import { SupabaseApi } from './core/data/supabase-api';
 import { liveSupabaseEnabled } from './core/data/supabase-client';
-import { demoRequested } from './core/data/demo';
+import { demoRequested, localRequested } from './core/data/demo';
 import { routes } from './app.routes';
 import { SettingsService } from './core/services/settings.service';
 import { LocationService } from './core/services/location.service';
@@ -20,6 +20,13 @@ function apiFactory(): LulaApi {
   // builds never take this branch (see core/data/demo.ts).
   if (demoRequested()) {
     const api = new MockApi(new LocalDb(true));
+    void api.init();
+    return api;
+  }
+  // ?data=local keeps the real screens and the real services, and puts the
+  // database on this device - no sample data, no backend needed.
+  if (localRequested()) {
+    const api = new MockApi(new LocalDb());
     void api.init();
     return api;
   }

@@ -38,7 +38,11 @@ import { STORY_BLACK, storyBg } from '../../core/data/seed';
           <lf-icon name="x" [size]="22" />
         </button>
         <span class="grow"></span>
-        <button class="send" type="button" (click)="publish()" [disabled]="busy() || !canPublish()">
+        <!--
+          Share always answers a tap: a disabled button leaves a person guessing,
+          so an unfinished story explains itself instead (same rule as New post).
+        -->
+        <button class="send" type="button" (click)="publish()" [disabled]="busy()" [class.ready]="canPublish()">
           @if (busy()) { Sharing… } @else { <lf-icon name="send" [size]="17" [filled]="true" /> Share }
         </button>
       </header>
@@ -154,6 +158,12 @@ import { STORY_BLACK, storyBg } from '../../core/data/seed';
         }
 
         @if (notice()) { <p class="notice"><lf-icon name="info" [size]="14" /> {{ notice() }}</p> }
+        @if (draftKept()) {
+          <p class="notice" role="status">
+            <lf-icon name="info" [size]="14" /> We kept what you typed.
+            <button type="button" class="draft-x" (click)="discardDraft()">Start fresh</button>
+          </p>
+        }
         @if (error()) { <p class="error" role="alert"><lf-icon name="alert" [size]="14" /> {{ error() }}</p> }
       </footer>
     </div>
@@ -178,6 +188,7 @@ import { STORY_BLACK, storyBg } from '../../core/data/seed';
     .send { display: inline-flex; align-items: center; gap: 7px; height: 40px; padding: 0 16px; border: 0; border-radius: 20px;
       background: var(--lf-primary); color: #fff; font: inherit; font-size: 15px; font-weight: 700; cursor: pointer; }
     .send:disabled { opacity: .45; }
+    .send.ready { background: var(--lf-blue); color: #fff; }
 
     /* the canvas IS the story: words typed straight onto it, centred like WhatsApp */
     .canvas { position: relative; z-index: 1; flex: 1; display: flex; flex-direction: column; align-items: center;
@@ -240,6 +251,7 @@ import { STORY_BLACK, storyBg } from '../../core/data/seed';
 
     .notice, .error { display: flex; align-items: center; gap: 6px; margin: 0; font-size: 12.5px; line-height: 1.35; }
     .notice { color: rgba(255,255,255,.78); }
+    .draft-x { border: 0; background: transparent; color: #fff; font: inherit; font-weight: 700; text-decoration: underline; cursor: pointer; }
     .error { color: #ffb4ad; }
     @media (min-width: 720px) {
       .caption { font-size: 34px; }
@@ -254,6 +266,8 @@ export class CreateStoryComponent {
   private router = inject(Router);
 
   @ViewChild('caption') caption?: ElementRef<HTMLTextAreaElement>;
+
+  constructor() { this.restoreDraft(); }
 
   readonly text = signal('');
   readonly hue = signal(STORY_BLACK);
@@ -313,6 +327,54 @@ export class CreateStoryComponent {
   onType(ev: Event): void {
     const el = ev.target as HTMLTextAreaElement;
     this.text.set(el.value);
+    this.persistDraft();
+  }
+
+  /* ------------------------------------------------------------------ *
+   * Finish later - the same rule as the post composer. A story is short,
+   * so only the words (and the colours picked so far) are kept; photos are
+   * device files and cannot come back.
+   * ------------------------------------------------------------------ */
+
+  private draftClosed = false;
+  readonly draftKept = signal(false);
+  private static readonly DRAFT_KEY = 'lulafind.story.draft';
+
+  private persistDraft(): void {
+    if (this.draftClosed) return;
+    try {
+      if (!this.text().trim()) { localStorage.removeItem(CreateStoryComponent.DRAFT_KEY); return; }
+      localStorage.setItem(CreateStoryComponent.DRAFT_KEY, JSON.stringify({
+        text: this.text(), hue: this.hue(), ink: this.ink(), size: this.size(), at: Date.now()
+      }));
+    } catch { /* storage blocked - nothing is kept, and nothing pretends to be */ }
+  }
+
+  private restoreDraft(): void {
+    try {
+      const raw = localStorage.getItem(CreateStoryComponent.DRAFT_KEY);
+      if (!raw) return;
+      const d = JSON.parse(raw) as { text?: string; hue?: number; ink?: string; size?: number };
+      if (!d.text?.trim()) { localStorage.removeItem(CreateStoryComponent.DRAFT_KEY); return; }
+      this.text.set(d.text);
+      if (typeof d.hue === 'number') this.hue.set(d.hue);
+      if (d.ink) this.ink.set(d.ink);
+      if (d.size) this.size.set(d.size);
+      this.draftKept.set(true);
+    } catch {
+      try { localStorage.removeItem(CreateStoryComponent.DRAFT_KEY); } catch { /* ignore */ }
+    }
+  }
+
+  /** Throw the kept story away and start blank. */
+  discardDraft(): void {
+    try { localStorage.removeItem(CreateStoryComponent.DRAFT_KEY); } catch { /* ignore */ }
+    this.draftKept.set(false);
+    this.text.set('');
+    this.hue.set(STORY_BLACK);
+    this.ink.set('#ffffff');
+    this.size.set(14);
+    this.error.set('');
   }
 
   focusText(): void {
@@ -352,8 +414,13 @@ export class CreateStoryComponent {
   }
 
   async publish(): Promise<void> {
-    if (!this.canPublish() || this.busy()) {
+    if (this.busy()) return;
+    if (!this.text().trim() && !this.media().length) {
       this.error.set('Type something or add a photo first.');
+      return;
+    }
+    if (this.audience() === 'surname' && !this.mySpotlights().some((sp) => sp.id === this.spotlightId())) {
+      this.error.set('Choose which Spotlight community can see this story.');
       return;
     }
     this.busy.set(true);
@@ -366,6 +433,8 @@ export class CreateStoryComponent {
         audience: this.audience(),
         spotlightId: this.audience() === 'surname' ? this.spotlightId() : null
       });
+      this.draftClosed = true;
+      try { localStorage.removeItem(CreateStoryComponent.DRAFT_KEY); } catch { /* ignore */ }
       await this.router.navigate(['/story', story.id]);
     } catch (e: unknown) {
       this.error.set(e instanceof Error ? e.message : 'Could not post the story');

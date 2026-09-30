@@ -14,7 +14,7 @@ No screen may show a block of its *own* copy longer than 30 words. Text written 
 | Home / feed | 958 words | 0 | none | 122w |
 | Spotlight | 34 words | 0 | none | none |
 | Chats (list) | 26 words | 0 | none | none |
-| Ask Lula | 73 words | 1 | 28w | none |
+| Ask Lula | 79 words | 1 | 29w | none |
 | Me | 45 words | 0 | none | none |
 | Notifications | 100 words | 2 | 18w | none |
 | Found (reunions) | 103 words | 1 | 20w | none |
@@ -26,8 +26,8 @@ No screen may show a block of its *own* copy longer than 30 words. Text written 
 | Search | 15 words | 0 | none | none |
 | Saved | 39 words | 0 | none | none |
 | Connections | 47 words | 0 | none | none |
-| Settings | 228 words | 1 | 30w | none |
-| Safety centre | 152 words | 1 | 25w | none |
+| Settings | 244 words | 1 | 30w | none |
+| Safety centre | 255 words | 3 | 27w | none |
 | Help | 470 words | 3 | 26w | none |
 | Tips | 21 words | 0 | none | none |
 | Terms | 399 words | 6 | 30w | none |
@@ -77,15 +77,15 @@ No app paragraphs - labels and values only.
 ### Ask Lula
 
 ```text
-LulaAsk LulaHelp with LulaFind Lula gives written guidance, not a live person. In an emergency call 10111.LulaHi, I'm Lula. I can help with reporting someone missing, what to do in the first 72 hours, posters, privacy and how LulaFind works. What do you need?How do I report a missing person?What should I do in the first 72 hours?How do I make a poster?I think I saw someoneWhat is KhumbulEkhaya?How does private chat work?
+LulaAsk LulaHelp with LulaFind Lula gives written guidance, not a live person. In an emergency call 10111.LulaHi, I'm Lula. I can help with reporting someone missing, what to do in the first 72 hours, posters, lookouts, privacy and how LulaFind works. What do you need?How do I report a missing person?What should I do in the first 72 hours?How do I make a poster?I think I saw someoneWhat is KhumbulEkhaya?How does private chat work?What is "be on the lookout"?
 ```
-- 28 words of app copy: "Hi, I'm Lula. I can help with reporting someone missing, what to do in the first 72 hours, posters, privacy and how LulaFind works. What do you need?"
+- 29 words of app copy: "Hi, I'm Lula. I can help with reporting someone missing, what to do in the first 72 hours, posters, lookouts, privacy and how LulaFind works. What do you need?"
 
 
 ### Me
 
 ```text
-Search5Menu Thandi Mokoena @thandi.m · Soweto, Johannesburg · GautengCommunity organiser. If you see something, say something. Ubuntu.6followers4following2.3khelp pointsGreen ring: safe. Orange ring: unfamiliar place. Red ring: check on me. Check in  Edit profile  Joined 01 Jun 2026 All shortcuts  Posts  Saved FriendsSafetyTipsAdminPeople foundFAQsGet helpSign out
+Search5Menu Thandi Mokoena @thandi.m · Soweto, Johannesburg · GautengCommunity organiser. If you see something, say something. Ubuntu.6followers4following2.3khelp pointsGreen ring: safe. Orange ring: unfamiliar place. Red ring: check on me. Check in  Edit profile  Joined 02 Jun 2026 All shortcuts  Posts  Saved FriendsSafetyTipsAdminPeople foundFAQsGet helpSign out
 ```
 No app paragraphs - labels and values only.
 
@@ -147,7 +147,7 @@ Poster5SignalBold and urgentAuroraSoft glass on a glowing gradientEditorialClean
 ### Profile
 
 ```text
-Search5Profile Lerato Mahlangu @lerato.mSocial worker. GBV advocate.754followers253following347help points1posts Following  Share MessageJoined 01 Jun 2026PostsLerato Mahlangu· Following Social worker. GBV advocate.3d·Gauteng· Found - home safe FOUND: Rex the boerboel is back in MamelodiLost pet: PetRex slipped his collar at the taxi rank on Sunday. A neighbour recognised him from the photo and walked him home the next morning.9622 repostsHave an ideaCommentRepostSend Message the poster
+Search5Profile Lerato Mahlangu @lerato.mSocial worker. GBV advocate.754followers253following347help points1posts Following  Share MessageJoined 02 Jun 2026PostsLerato Mahlangu· Following Social worker. GBV advocate.3d·Gauteng· Found - home safe FOUND: Rex the boerboel is back in MamelodiLost pet: PetRex slipped his collar at the taxi rank on Sunday. A neighbour recognised him from the photo and walked him home the next morning.9622 repostsHave an ideaCommentRepostSend Message the poster
 ```
 No app paragraphs - labels and values only.
 
@@ -181,7 +181,7 @@ No app paragraphs - labels and values only.
 ### Settings
 
 ```text
-Settings5AppearanceThemeDark (default)LightMatch my phoneBackgroundPick the colour behind the appBlackReduce motionAutoplay media in the feedData saver (smaller images)AlertsPush notificationsMissing children onlySilence everything except urgent child casesAlert provinceAll provincesGautengKwaZulu-NatalWestern CapeEastern CapeFree StateLimpopoMpumalangaNorth WestNorthern CapeAlert radius · 50 kmHow far from your last location you still want case alertsPrivacy & dataSafety & consent centreTerms, privacy and community rulesAdmin - reports and moderationFAQsWho sees your profile is set in Me → Edit profile.Let LulaFind match me to casesIf a KhumbulEkhaya post matches your name we will ask you firstHaptic feedbackPhone permissionsOff until you tap Enable. Nothing is read in the background.NotificationsGet alerts when someone comments on your post or a new case appears near you.Unknown Enable CameraTake photos directly when posting a missing person or sighting.Unknown Enable Photos / GalleryUpload photos from your gallery to posts and your profile.Unknown Enable LocationAttach an accurate map pin to sightings. Never used in the background.Unknown Enable  Open phone settings Your dataYour data lives in your account, not in this app's code. Clear cases on this phone About LulaFind 1.0.0 · Web preview · Angular + Ionic + Capacitor. LulaFind is a community tool. It does not replace the South African Police Service. In an emergency call 10111.  Support: support@mkhungela.l@gmail.com · Lulamile at LulaFind. LulaFind is for people 18 and older. Terms and privacyEmail support Change email  Change password  Sign out  Delete my account and data
+Settings5AppearanceThemeDark (default)LightMatch my phoneBackgroundPick the colour behind the appBlackReduce motionAutoplay media in the feedData saver (smaller images)AlertsPush notificationsMissing children onlySilence everything except urgent child casesAlert provinceAll provincesGautengKwaZulu-NatalWestern CapeEastern CapeFree StateLimpopoMpumalangaNorth WestNorthern CapeAlert radius · 50 kmHow far from your last location you still want case alertsPrivacy & dataSafety & consent centreTerms, privacy and community rulesAdmin - reports and moderationFAQsWho sees your profile is set in Me → Edit profile.Let LulaFind post a case about meOnly after a follower says something is wrong on a lookoutLet LulaFind match me to casesIf a KhumbulEkhaya post matches your name we will ask you firstHaptic feedbackPhone permissionsOff until you tap Enable. Nothing is read in the background.NotificationsGet alerts when someone comments on your post or a new case appears near you.Unknown Enable CameraTake photos directly when posting a missing person or sighting.Unknown Enable Photos / GalleryUpload photos from your gallery to posts and your profile.Unknown Enable LocationAttach an accurate map pin to sightings. Never used in the background.Unknown Enable  Open phone settings Your dataYour data lives in your account, not in this app's code. Clear cases on this phone About LulaFind 1.0.0 · Web preview · Angular + Ionic + Capacitor. LulaFind is a community tool. It does not replace the South African Police Service. In an emergency call 10111.  Support: support@mkhungela.l@gmail.com · Lulamile at LulaFind. LulaFind is for people 18 and older. Terms and privacyEmail support Change email  Change password  Sign out  Delete my account and data
 ```
 - 30 words of app copy: "LulaFind 1.0.0 · Web preview · Angular + Ionic + Capacitor. LulaFind is a community tool. It does not replace the South African Police Service. In an emergency call ."
 
@@ -189,9 +189,11 @@ Settings5AppearanceThemeDark (default)LightMatch my phoneBackgroundPick the colo
 ### Safety centre
 
 ```text
-Safety & consent centre5 LulaFind never reads anyone's location without that person's own consent, and never sends a case to the police or an NGO. Get help has the real numbers. My locationPermission: unknownNo location has been read yet. Read my location  Forget my location Safety beaconSend "I am safe" check-ins with your location to people you choose. Off by default.Beacon enabled Send an "I am safe" check-in now Being foundWe can ask you if a case is about you. Your account is never handed to the family.Allow name matchingConsent log on my casesFamily reported at the station and messaged Pink Ladies. LulaFind did not send the caseHelp find Thato Mokoena, 14 - last · 26 Sept 2026, 18:33expires 26 Oct 2026, 18:03Photos stay on this case unless the family shares the linkHelp find Thato Mokoena, 14 - last · 26 Sept 2026, 18:33expires 26 Oct 2026, 18:03 Privacy & data settings
+Safety & consent centre5 LulaFind never reads anyone's location without that person's own consent, and never sends a case to the police or an NGO. Get help has the real numbers. My locationPermission: unknownNo location has been read yet. Read my location  Forget my location Safety beaconSend "I am safe" check-ins with your location to people you choose. Off by default.Beacon enabled Send an "I am safe" check-in now Be on the lookout Tell your followers you may not feel safe where you are going. They see the area, and 24 hours later we ask them to check on you. Where are you going, or which area worries you?Anything your followers should know? (optional)Attach where I am now, so my followers see it Start the lookout If I go missing A lookout only becomes a case if a follower says something is wrong. This decides whether LulaFind may post that case, and who sees it. Let LulaFind post a case about meOff by default. Without it, a "no" answer never becomes a post.Being foundWe can ask you if a case is about you. Your account is never handed to the family.Allow name matchingConsent log on my casesFamily reported at the station and messaged Pink Ladies. LulaFind did not send the caseHelp find Thato Mokoena, 14 - last · 27 Sept 2026, 02:06expires 27 Oct 2026, 01:36Photos stay on this case unless the family shares the linkHelp find Thato Mokoena, 14 - last · 27 Sept 2026, 02:06expires 27 Oct 2026, 01:36 Privacy & data settings
 ```
+- 27 words of app copy: "Tell your followers you may not feel safe where you are going. They see the area, and 24 hours later we ask them to check on you."
 - 25 words of app copy: "LulaFind never reads anyone's location without that person's own consent, and never sends a case to the police or an NGO. has the real numbers."
+- 25 words of app copy: "A lookout only becomes a case if a follower says something is wrong. This decides whether LulaFind may post that case, and who sees it."
 
 
 ### Help

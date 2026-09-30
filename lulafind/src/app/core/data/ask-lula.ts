@@ -24,7 +24,7 @@ export interface Topic {
 }
 
 export const LULA_GREETING: LulaAnswer = {
-  text: 'Hi, I\'m Lula. I can help with reporting someone missing, what to do in the first 72 hours, posters, privacy and how LulaFind works. What do you need?'
+  text: 'Hi, I\'m Lula. I can help with reporting someone missing, what to do in the first 72 hours, posters, lookouts, privacy and how LulaFind works. What do you need?'
 };
 
 export const LULA_SUGGESTIONS = [
@@ -33,10 +33,20 @@ export const LULA_SUGGESTIONS = [
   'How do I make a poster?',
   'I think I saw someone',
   'What is KhumbulEkhaya?',
-  'How does private chat work?'
+  'How does private chat work?',
+  'What is "be on the lookout"?'
 ];
 
 export const LULA_TOPICS: Topic[] = [
+  {
+    id: 'lookout',
+    question: 'What is "be on the lookout"?',
+    match: ['lookout', 'last seen', 'lastseen', 'check on me', 'safety check', 'am i safe', 'going missing', 'possible missing', 'im here', "i'm here"],
+    answer: {
+      text: 'A lookout tells the people who follow you that you may not be safe where you are going. They see the area and where you last checked in, and after 24 hours LulaFind asks them whether you are okay. Every yes closes it. One no flags you as a possible missing person, but only if you allowed LulaFind to post about you in the Safety centre. If you are safe, open the lookout and tap "I\'m here" - it closes and any post about you is deleted.',
+      links: [{ label: 'Open the Safety centre', route: '/safety' }]
+    }
+  },
   {
     id: 'emergency',
     question: 'Someone is in danger right now - what do I do?',
