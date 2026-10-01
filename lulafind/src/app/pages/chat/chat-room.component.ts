@@ -15,10 +15,12 @@ import { MediaItem } from '../../core/models/types';
 import { clockTime } from '../../core/utils/format';
 import { MediaService } from '../../core/services/media.service';
 
+import { KeyboardDirective } from '../../shared/keyboard.directive';
+
 @Component({
   selector: 'lf-chat-room',
   standalone: true,
-  imports: [IonContent, IonHeader, IonToolbar, IonButtons, IonBackButton, IonTextarea, RouterLink, IconComponent, AvatarComponent],
+  imports: [IonContent, IonHeader, IonToolbar, IonButtons, IonBackButton, IonTextarea, RouterLink, IconComponent, AvatarComponent, KeyboardDirective],
   template: `
     <ion-header [translucent]="false">
       <ion-toolbar>
@@ -106,7 +108,7 @@ import { MediaService } from '../../core/services/media.service';
           attributes ask for them explicitly - without them a webview can put up
           a bare keyboard with no suggestions and no emoji key at all.
         -->
-        <ion-textarea rows="1" autoGrow placeholder="Message…" [value]="draft"
+        <ion-textarea lfKeyboard rows="1" autoGrow placeholder="Message…" [value]="draft"
                       inputmode="text" enterkeyhint="send"
                       autocorrect="on" autocomplete="on" autocapitalize="sentences" spellcheck="true"
                       aria-label="Message"

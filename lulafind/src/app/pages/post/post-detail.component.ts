@@ -41,13 +41,14 @@ import { leadMarkView } from '../../core/utils/mark-check';
  * reads as a post, not a file. Poster and safety tools stay one tap away in the
  * "..." menu and on the pages built for them.
  */
+import { KeyboardDirective } from '../../shared/keyboard.directive';
+
 @Component({
   selector: 'lf-post-detail',
   standalone: true,
   imports: [
     IonContent, IonTextarea, IonSkeletonText, RouterLink, IconComponent, AvatarComponent,
-    TopNavComponent, ReactionButtonComponent, ReactionIconComponent, ReactionsSheetComponent
-  ],
+    TopNavComponent, ReactionButtonComponent, ReactionIconComponent, ReactionsSheetComponent, KeyboardDirective],
   template: `
     <lf-top-nav title="Post" backTo="/home" />
 
@@ -231,7 +232,7 @@ import { leadMarkView } from '../../core/utils/mark-check';
               <button class="big big--go" type="button" (click)="respond('going_home')">I am coming home</button>
               <button class="big" type="button" (click)="respond('not_going_home')">I am safe, not coming home</button>
               <button class="big" type="button" (click)="respond('contact_me')">Let us chat first</button>
-              <ion-textarea rows="2" placeholder="Add a message (optional)" [value]="khumbuNote" (ionInput)="khumbuNote = $any($event.target).value"></ion-textarea>
+              <ion-textarea lfKeyboard rows="2" placeholder="Add a message (optional)" [value]="khumbuNote" (ionInput)="khumbuNote = $any($event.target).value"></ion-textarea>
             </section>
           }
           @if (openAnswer()) {
