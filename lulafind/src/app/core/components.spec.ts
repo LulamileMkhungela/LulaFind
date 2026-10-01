@@ -219,7 +219,10 @@ describe('Components render', () => {
     expect(html).toContain('Repost');
     expect(html).toContain('Send');
     expect(html).toContain('Most relevant');
-    expect(html).toContain('ccard__time');
+    // LinkedIn's comment keeps the time in the action row with Like and Reply,
+    // not in the header, and the comment itself is not drawn as a chat bubble.
+    expect(html).toContain('ctime2');
+    expect(html).not.toContain('ccard__time');
     expect(html).toContain('Reply');
     // the things that were taken off this page must stay off it
     expect(html).not.toContain('Case details');

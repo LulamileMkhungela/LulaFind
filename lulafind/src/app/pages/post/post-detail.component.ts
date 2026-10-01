@@ -322,7 +322,6 @@ import { leadMarkView } from '../../core/utils/mark-check';
                       <div class="ccard__top">
                         <a [routerLink]="'/user/' + c.authorId" class="ccard__name">{{ nameOf(c.authorId) }}</a>
                         @if (c.authorId === p()!.authorId) { <span class="tag">Author</span> }
-                        <time class="ccard__time">{{ timeAgo(c.createdAt) }}@if (c.editedAt) { · Edited }</time>
                       </div>
                       @if (headlineOf(c.authorId)) { <span class="ccard__headline">{{ headlineOf(c.authorId) }}</span> }
                       @if (c.body) { <p class="ccard__text">{{ c.body }}</p> }
@@ -370,6 +369,7 @@ import { leadMarkView } from '../../core/utils/mark-check';
                         </button>
                         <button type="button" (click)="startReply(c, c)"><lf-icon name="comment" [size]="15" /> Reply</button>
                         @if (c.upvotes > 0) { <span class="clikes"><lf-reaction-icon kind="like" [size]="15" /> {{ c.upvotes }}</span> }
+                        <time class="ctime2">{{ timeAgo(c.createdAt) }}@if (c.editedAt) { · Edited }</time>
                         <button type="button" class="dots" (click)="commentMenu(c)" aria-label="Comment options"><lf-icon name="more" [size]="16" /></button>
                       </div>
                     </div>
@@ -399,7 +399,6 @@ import { leadMarkView } from '../../core/utils/mark-check';
                                   <div class="ccard__top">
                                     <a [routerLink]="'/user/' + r.authorId" class="ccard__name">{{ nameOf(r.authorId) }}</a>
                                     @if (r.authorId === p()!.authorId) { <span class="tag">Author</span> }
-                                    <time class="ccard__time">{{ timeAgo(r.createdAt) }}@if (r.editedAt) { · Edited }</time>
                                   </div>
                                   @if (headlineOf(r.authorId)) { <span class="ccard__headline">{{ headlineOf(r.authorId) }}</span> }
                                   @if (r.body) { <p class="ccard__text">{{ r.body }}</p> }
@@ -420,6 +419,7 @@ import { leadMarkView } from '../../core/utils/mark-check';
                                     </button>
                                     <button type="button" (click)="startReply(c, r)"><lf-icon name="comment" [size]="15" /> Reply</button>
                                     @if (r.upvotes > 0) { <span class="clikes"><lf-reaction-icon kind="like" [size]="15" /> {{ r.upvotes }}</span> }
+                                    <time class="ctime2">{{ timeAgo(r.createdAt) }}@if (r.editedAt) { · Edited }</time>
                                     <button type="button" class="dots" (click)="commentMenu(r)" aria-label="Reply options"><lf-icon name="more" [size]="16" /></button>
                                   </div>
                                 </div>
@@ -561,6 +561,8 @@ import { leadMarkView } from '../../core/utils/mark-check';
     .replying button { border: 0; background: transparent; color: inherit; cursor: pointer; }
     .leadrow { margin: 0 0 8px 48px; font-size: 13px; color: var(--lf-muted); display: flex; flex-direction: column; gap: 6px; }
     .markin { padding: 8px 10px; border: 1px solid var(--lf-line); border-radius: 8px; background: transparent; color: inherit; font: inherit; }
+    /* LinkedIn's comment box is a rounded pill that grows with the text. */
+    .composer textarea, .composer .fld { border-radius: 999px !important; }
     .sort { display: flex; justify-content: flex-end; margin: 12px 0 2px; }
     .sort button { display: inline-flex; align-items: center; gap: 5px; border: 0; background: transparent; color: var(--lf-muted); font: inherit; font-size: 13px; cursor: pointer; }
     .empty { margin: 12px 0 0; color: var(--lf-muted); font-size: 14px; }
@@ -568,9 +570,12 @@ import { leadMarkView } from '../../core/utils/mark-check';
     .cmsg__body { flex: 1; min-width: 0; }
     .cmsg--reply { margin-top: 9px; }
     .replies { margin: 7px 0 0 15px; padding-left: 15px; border-left: 2px solid var(--lf-line-soft); }
-    .ccard { border: 0; border-radius: 12px 12px 12px 4px; background: var(--lf-bg); padding: 9px 12px 6px; }
+    /* LinkedIn does not put a comment in a speech bubble - the text sits on the
+       card, under the name, and the time lives in the action row with the
+       buttons. A bubble read as a private message, which this is not. */
+    .ccard { border: 0; border-radius: 0; background: transparent; padding: 0; }
     .ccard__top { display: flex; align-items: center; gap: 6px; min-width: 0; }
-    .ccard__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; font-weight: 700; color: var(--ion-text-color); text-decoration: none; }
+    .ccard__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; font-weight: 600; color: var(--ion-text-color); text-decoration: none; }
     .ccard__time { margin-left: auto; flex: none; color: var(--lf-muted); font-size: 11px; }
     .ccard__headline { display: block; margin-top: 1px; font-size: 12px; color: var(--lf-muted); }
     .tag { padding: 1px 6px; border-radius: 10px; background: var(--lf-primary-soft); color: var(--lf-primary-soft-text); font-size: 11px; font-weight: 700; }
@@ -594,8 +599,9 @@ import { leadMarkView } from '../../core/utils/mark-check';
     .leads__tick { display: inline-flex; align-items: center; gap: 3px; padding: 2px 7px; border-radius: 999px;
       background: var(--lf-ubuntu); color: #fff; font-size: 12px; font-weight: 700; }
     .mark { margin: 0 0 6px; font-size: 13px; color: var(--lf-muted); }
-    .ccard__acts { display: flex; align-items: center; gap: 12px; padding: 6px 0 2px; border-top: 1px solid var(--lf-line-soft); }
-    .ccard__acts button { display: inline-flex; align-items: center; gap: 5px; border: 0; background: transparent; color: var(--lf-muted); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; padding: 0; }
+    .ccard__acts { display: flex; align-items: center; gap: 14px; padding: 4px 0 2px 0; border-top: 0; }
+    .ccard__acts button { display: inline-flex; align-items: center; gap: 5px; border: 0; background: transparent; color: var(--lf-muted); font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; padding: 0; }
+    .ccard__acts .ctime2 { color: var(--lf-muted); font-size: 12px; }
     .ccard__acts button.on { color: var(--lf-primary); }
     .clikes { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; color: var(--lf-muted); }
     .ctime { font-size: 12px; color: var(--lf-muted); }
