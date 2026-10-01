@@ -150,11 +150,13 @@ type Tab = 'following' | 'followers' | 'requests' | 'statuses';
     </ion-content>
   `,
   styles: [`
-    .seg { display: flex; gap: 8px; padding: 4px var(--lf-gap) 10px; overflow-x: auto; scrollbar-width: none; }
+    .seg { display: flex; gap: 6px; padding: 4px var(--lf-gap) 10px; overflow-x: auto; scrollbar-width: none; }
     .seg::-webkit-scrollbar { display: none; }
-    .pill { flex: none; height: 34px; padding: 0 14px; border: 0; border-radius: 999px; cursor: pointer; font: inherit;
-      font-size: 14px; font-weight: 600; background: var(--lf-card-2); color: var(--ion-text-color);
-      display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+    /* Four tabs have to fit a 390px screen without scrolling - the default tab
+       is Statuses, and a tab you cannot see is a tab you will not find. */
+    .pill { flex: 0 1 auto; min-width: 0; height: 32px; padding: 0 10px; border: 0; border-radius: 999px;
+      cursor: pointer; font: inherit; font-size: 12.5px; font-weight: 600; background: var(--lf-card-2);
+      color: var(--ion-text-color); display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
     .pill.on { background: var(--lf-primary-soft); color: var(--lf-link); }
     .pill .lf-badge { font-style: normal; }
 

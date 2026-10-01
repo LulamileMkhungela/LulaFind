@@ -188,18 +188,25 @@ export class SafetyService {
   }
 
   private async notifyFollowers(me: UserProfile, record: CheckIn): Promise<void> {
-    // only "check on me" and live sharing are worth telling people about
+    // "I'm safe" on its own is not worth a notification. "I Need Help" and
+    // "Watch Me" both are - that is the whole point of setting them.
     if (record.status === 'safe' && !record.liveShareOn) return;
     const followers = await this.followersOf(me.id);
     const body = record.liveShareOn
       ? `${me.displayName} is sharing their live location for the next hour.`
-      : `${me.displayName} asked people to check on them.`;
+      : record.status === 'need_help'
+        ? `${me.displayName} asked for help. Check they are okay.`
+        : record.status === 'watch_me'
+          ? `${me.displayName} asked to be watched over. Keep an eye out for them.`
+          : `${me.displayName} asked people to check on them.`;
     for (const f of followers) {
       await this.api.pushNotification({
         id: uid('n'),
         userId: f.id,
         kind: 'checkin',
-        title: record.status === 'need_help' ? `Check on ${me.displayName}` : `${me.displayName} checked in`,
+        title: record.status === 'need_help' ? `Check on ${me.displayName}`
+          : record.status === 'watch_me' ? `Keep an eye on ${me.displayName}`
+          : `${me.displayName} checked in`,
         body,
         at: Date.now(),
         read: false,
