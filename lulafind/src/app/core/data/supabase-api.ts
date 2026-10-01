@@ -984,6 +984,53 @@ export class SupabaseApi implements LulaApi {
     );
   }
 
+  // ─── push device tokens ─────────────────────────────────────────────────
+  // The row-level security on public.push_tokens keys user_id off lula_uid(),
+  // exactly like every other write here. There is no way to file a token
+  // against another account even by asking nicely.
+
+  /**
+   * File this device's FCM token against the signed-in account.
+   *
+   * Upsert on the token, not on the user: FCM reissues tokens on reinstall and
+   * on restore to a new phone, and a reissued token belongs to whoever is
+   * signed in when it arrives. Overwriting by token moves it to the right
+   * person and refreshes last_seen_at, instead of leaving a second row that
+   * would deliver someone else's notifications.
+   */
+  async savePushToken(token: string, platform: string, appVersion: string): Promise<void> {
+    const owner = await this.currentUid();
+    // No identity means the insert policy would refuse it anyway. Say so
+    // rather than letting the caller think the device is registered.
+    if (!owner) throw new Error('Sign in before registering this device for notifications.');
+    const { error } = await this.client
+      .from('push_tokens')
+      .upsert(
+        {
+          token,
+          user_id: owner,
+          platform,
+          app_version: appVersion,
+          last_seen_at: new Date().toISOString()
+        },
+        { onConflict: 'token' }
+      );
+    if (error) throw new Error(`Could not register this device: ${error.message}`);
+  }
+
+  /** Drop just this device's token - signing out must not silence the tablet. */
+  async forgetPushToken(token: string): Promise<void> {
+    const owner = await this.currentUid();
+    if (!owner) return;
+    const { error } = await this.client
+      .from('push_tokens')
+      .delete()
+      .eq('token', token)
+      .eq('user_id', owner);
+    // A token that is already gone is the desired end state, not a failure.
+    if (error) throw new Error(`Could not remove this device: ${error.message}`);
+  }
+
   // ─── tips ────────────────────────────────────────────────────────────────
 
   async tips(): Promise<Tip[]> {

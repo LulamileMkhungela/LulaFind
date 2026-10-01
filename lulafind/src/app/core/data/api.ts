@@ -134,6 +134,10 @@ export abstract class LulaApi {
   abstract pushNotification(n: Notification): Promise<void>;
   abstract markNotificationsRead(userId: string): Promise<void>;
 
+  /* push device tokens - see supabase/push-tokens.sql */
+  abstract savePushToken(token: string, platform: string, appVersion: string): Promise<void>;
+  abstract forgetPushToken(token: string): Promise<void>;
+
   /* tips */
   abstract tips(): Promise<Tip[]>;
 
@@ -266,6 +270,10 @@ export class MockApi implements LulaApi {
   }
   async pushNotification(n: Notification) { this.db.pushNotification(n); }
   async markNotificationsRead(userId: string) { this.db.markNotificationsRead(userId); }
+
+  /* No device tokens in mock mode - there is no FCM in a browser tab. */
+  async savePushToken(_token: string, _platform: string, _appVersion: string): Promise<void> {}
+  async forgetPushToken(_token: string): Promise<void> {}
 
   async tips() { return this.db.tips(); }
 
