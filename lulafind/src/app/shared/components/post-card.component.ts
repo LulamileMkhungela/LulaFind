@@ -1,6 +1,6 @@
 import { Component, EventEmitter, Input, OnChanges, OnInit, Output, computed, inject, signal } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
-import { Post, POST_TYPE_META, REACTIONS, ReactionKind, UserProfile, isReaction, provinceName } from '../../core/models/types';
+import { DEFAULT_REACTION, Post, POST_TYPE_META, REACTIONS, ReactionKind, UserProfile, isReaction, provinceName } from '../../core/models/types';
 import { alreadySaid, compact, headingIsNew, timeAgo } from '../../core/utils/format';
 import { AvatarComponent } from './avatar.component';
 import { IconComponent } from './icon.component';
@@ -493,7 +493,12 @@ export class PostCardComponent implements OnInit, OnChanges {
     }
     const order = REACTIONS.map((r) => r.key);
     const kinds = [...counts.entries()].sort((a, b) => b[1] - a[1] || order.indexOf(a[0]) - order.indexOf(b[0])).map(([k]) => k);
-    return (kinds.length ? kinds : ['up' as ReactionKind]).slice(0, 3);
+    /*
+     * A card with reactions shows the kinds people actually chose. A card with
+     * none shows the site default (Like), not a stray "Have an idea" bulb - the
+     * fallback must not invent a reaction nobody gave.
+     */
+    return (kinds.length ? kinds : [DEFAULT_REACTION]).slice(0, 3);
   });
   readonly authorAvatar = computed(() => this.data.avatarFor(this.post?.anonymous && !this.isMine() ? null : this.author));
   readonly authorStatus = computed(() =>

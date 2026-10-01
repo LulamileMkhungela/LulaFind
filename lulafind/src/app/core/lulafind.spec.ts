@@ -1391,8 +1391,12 @@ describe('Saved posts, watch alerts and followers', () => {
     expect(db.user('u_kabelo')!.savedPostIds).toContain(target.id);
     expect((await data.loadSaved()).map((p) => p.id)).toContain(target.id);
 
-    // someone else has an idea
-    signInAs('u_bongani');
+    // someone else has an idea. Seeded posts already carry reactions from the
+    // demo community, so pick a person who has not reacted to this one yet -
+    // a repeat reaction is not a new event and does not notify anyone.
+    const voter = db.users().find((u) => u.id !== 'u_kabelo' && u.id !== target.authorId && !target.voterIds[u.id])!;
+    expect(voter).toBeTruthy();
+    signInAs(voter.id);
     await data.vote(target.id, 'up');
     signInAs('u_kabelo');
     await data.loadUserScoped();

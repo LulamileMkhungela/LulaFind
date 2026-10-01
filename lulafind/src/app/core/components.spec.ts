@@ -26,6 +26,7 @@ import { PostDetailComponent } from '../pages/post/post-detail.component';
 import { ChatRoomComponent } from '../pages/chat/chat-room.component';
 import { HomeComponent } from '../pages/tabs/home.component';
 import { TabsComponent } from '../pages/tabs/tabs.component';
+import { ReactionsSheetComponent } from '../shared/components/reactions-sheet.component';
 import { AdminComponent } from '../pages/admin/admin.component';
 import { SpotlightDetailComponent } from '../pages/spotlight/spotlight-detail.component';
 import { SUPPORT_EMAIL } from './config';
@@ -227,6 +228,38 @@ describe('Components render', () => {
     // the things that were taken off this page must stay off it
     expect(html).not.toContain('Case details');
     expect(html).not.toContain('Make a poster');
+  });
+
+  it('lists the people behind a reaction count when the Reactions sheet opens', async () => {
+    const data = TestBed.inject(DataService);
+    await data.loadFeed();
+    const post = data.post('p_thato')!;
+    expect(post.upvotes).toBeGreaterThan(0);
+    const voters = Object.keys(post.voterIds);
+    expect(voters.length, 'seeded posts must have faces behind the number').toBeGreaterThan(0);
+
+    const f = TestBed.createComponent(ReactionsSheetComponent);
+    f.componentRef.setInput('post', post);
+    f.componentRef.setInput('open', false);
+    f.detectChanges();
+    expect((f.nativeElement as HTMLElement).textContent).not.toContain('Reactions');
+
+    // Opening is the event that loads the list. The loader is an effect(), so
+    // the inputs have to be signals for this to fire at all - with plain
+    // @Input() fields the sheet opened with tab counts and an empty list.
+    f.componentRef.setInput('open', true);
+    await settle(f);
+
+    const el = f.nativeElement as HTMLElement;
+    const rows = el.querySelectorAll('.row');
+    expect(el.textContent).toContain('Reactions');
+    expect(el.textContent).not.toContain('No reactions yet.');
+    expect(rows.length).toBe(voters.length);
+    // Each row is a real person with the reaction they gave, plus a Follow button.
+    for (const id of voters) expect(el.textContent).toContain(data.authorOf(id)?.displayName ?? '');
+    expect(el.textContent).toContain('Follow');
+    // The card's bigger number is reconciled, never quietly contradicted.
+    if (post.upvotes > voters.length) expect(el.textContent).toContain('reacted from outside this network');
   });
 
   it('does not insert a story rail before the feed reaches post eight', async () => {

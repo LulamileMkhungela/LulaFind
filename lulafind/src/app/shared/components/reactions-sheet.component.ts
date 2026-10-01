@@ -1,4 +1,4 @@
-import { Component, EventEmitter, Input, Output, computed, effect, inject, signal } from '@angular/core';
+import { Component, EventEmitter, Output, computed, effect, inject, input, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { Post, REACTIONS, ReactionKind, UserProfile, isReaction } from '../../core/models/types';
 import { AvatarComponent } from './avatar.component';
@@ -19,7 +19,7 @@ type Tab = 'all' | ReactionKind;
   standalone: true,
   imports: [RouterLink, AvatarComponent, ReactionIconComponent],
   template: `
-    @if (open) {
+    @if (open()) {
       <div class="sheetwrap" (click)="close.emit()">
         <div class="sheet" role="dialog" aria-label="People who reacted" (click)="$event.stopPropagation()">
           <div class="sheet__head">
@@ -37,6 +37,13 @@ type Tab = 'all' | ReactionKind;
               </button>
             }
           </div>
+
+          @if (others()) {
+            <p class="more">
+              Showing {{ voters().length }} of {{ post().upvotes }}. The other {{ others() }}
+              {{ others() === 1 ? 'person' : 'people' }} reacted from outside this network.
+            </p>
+          }
 
           <div class="rows">
             @if (loading()) {
@@ -107,6 +114,12 @@ No reactions yet.
       cursor: pointer;
     }
     .tabs button.on { background: var(--lf-primary-soft); color: var(--lf-primary-soft-text); }
+    .more {
+      margin: 0 0 6px;
+      font-size: 12.5px;
+      line-height: 1.45;
+      color: var(--lf-muted);
+    }
     .rows { overflow-y: auto; display: flex; flex-direction: column; }
     .muted { color: var(--lf-muted); font-size: 14px; text-align: center; padding: 18px 0; }
     .row {
@@ -132,8 +145,18 @@ No reactions yet.
   `]
 })
 export class ReactionsSheetComponent {
-  @Input({ required: true }) post!: Post;
-  @Input() open = false;
+  /**
+   * Signal inputs, not plain ones.
+   *
+   * The loader below is an `effect()`, and an effect only re-runs when the
+   * signals it reads change. With plain `@Input()` fields the effect read
+   * nothing reactive: it ran once while the sheet was closed and never again, so
+   * the sheet opened with the right tab counts and an empty list underneath
+   * them. Declaring the inputs as signals makes "the sheet opened" and "load the
+   * people" the same event.
+   */
+  readonly post = input.required<Post>();
+  readonly open = input(false);
   @Output() close = new EventEmitter<void>();
 
   protected data = inject(DataService);
@@ -149,28 +172,36 @@ export class ReactionsSheetComponent {
 
   /** Everyone who reacted, with the reaction they chose. */
   readonly voters = computed(() =>
-    Object.entries(this.post?.voterIds ?? {}).filter(([, v]) => isReaction(v)).map(([id, v]) => ({ id, kind: v as ReactionKind })));
+    Object.entries(this.post()?.voterIds ?? {}).filter(([, v]) => isReaction(v)).map(([id, v]) => ({ id, kind: v as ReactionKind })));
 
   /** One tab per reaction that someone actually chose. */
   readonly kinds = computed(() =>
     REACTIONS.map((r) => ({ key: r.key, count: this.voters().filter((v) => v.kind === r.key).length })).filter((r) => r.count > 0));
 
+  /**
+   * The card's number can be bigger than the faces this sheet can list: a case
+   * gets shared beyond the people LulaFind knows. The gap is stated here rather
+   * than hidden, so "412 reactions" and a list of nine names never contradict
+   * each other.
+   */
+  readonly others = computed(() => Math.max(0, (this.post()?.upvotes ?? 0) - this.voters().length));
+
   readonly rows = computed(() => {
     const t = this.tab();
     const list = this.people();
-    const kindOf = (id: string) => this.post.voterIds[id];
+    const kindOf = (id: string) => this.post().voterIds[id];
     const shown = t === 'all' ? list : list.filter((u) => kindOf(u.id) === t);
     return [...shown].sort((a, b) => a.displayName.localeCompare(b.displayName));
   });
 
   constructor() {
     effect(() => {
-      if (this.open && this.post) void this.load();
+      if (this.open() && this.post()) void this.load();
     });
   }
 
   voteLabel(id: string): string {
-    const k = this.post?.voterIds[id];
+    const k = this.post()?.voterIds[id];
     return REACTIONS.find((r) => r.key === k)?.label ?? 'Reacted';
   }
 
