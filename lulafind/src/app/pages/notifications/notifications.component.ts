@@ -17,9 +17,11 @@ import { distanceKm, timeAgo } from '../../core/utils/format';
     <lf-top-nav title="Notifications" backTo="/home" />
 
     <ion-content class="lf-page lf-plain">
+      <!-- The title lives in the top bar; repeating it here printed "Notifications" twice. -->
       <div class="page-title">
-        <h1>Notifications</h1>
-        <button class="lf-round-btn" (click)="readAll()" aria-label="Mark all as read"><lf-icon name="check" [size]="20" [weight]="2.4" /></button>
+        <button class="lf-btn lf-btn--sm" type="button" (click)="readAll()">
+          <lf-icon name="check" [size]="16" [weight]="2.4" /> Mark all as read
+        </button>
       </div>
       @if (!items().length) {
         <lf-empty icon="bell" title="No alerts yet"

@@ -15,7 +15,7 @@ No screen may show a block of its *own* copy longer than 30 words. Text written 
 | Spotlight | 34 words | 0 | none | none |
 | Chats (list) | 31 words | 0 | none | none |
 | Me | 46 words | 0 | none | none |
-| Notifications | 101 words | 2 | 19w | none |
+| Notifications | 103 words | 1 | 19w | none |
 | Found (reunions) | 103 words | 1 | 20w | none |
 | Review queue | 34 words | 1 | 23w | none |
 | Post detail (my case) | 309 words | 0 | none | 122w |
@@ -84,10 +84,9 @@ No app paragraphs - labels and values only.
 ### Notifications
 
 ```text
-Notifications5NotificationsDid you get help finding Thato Mokoena?412 people have an idea and 3 commented. If Thato Mokoena is home, tap to mark them found.nowViolence nearbyBree taxi rank, north entrance, Johannesburg CBD. Stay away and do not approach.12mDid you get help?Hendrik Botha’s case is still open. Let us know if he is home so we can stop the search.1hYour case is trending in GautengHelp find Thato Mokoena has 412 reactions and 187 reposts.2hStation case number savedORL/441/09/2026. LulaFind did not send this case.9hKabelo Nkosi added a leadWhite Quantum heading towards Roodepoort around 10:00 on Tuesday.20hNaledi Dlamini started following youNurse. Missing-persons volunteer since 2019.1d
+Notifications5 Mark all as read Did you get help finding Thato Mokoena?412 reactions and 3 comments. If Thato Mokoena is home, tap to mark them found.nowViolence nearbyBree taxi rank, north entrance, Johannesburg CBD. Stay away and do not approach.12mDid you get help?Hendrik Botha’s case is still open. Let us know if he is home so we can stop the search.1hYour case is trending in GautengHelp find Thato Mokoena has 412 reactions and 187 reposts.2hStation case number savedORL/441/09/2026. LulaFind did not send this case.9hKabelo Nkosi added a leadWhite Quantum heading towards Roodepoort around 10:00 on Tuesday.20hNaledi Dlamini started following youNurse. Missing-persons volunteer since 2019.1d
 ```
 - 19 words of app copy: "Hendrik Botha’s case is still open. Let us know if he is home so we can stop the search."
-- 18 words of app copy: "412 people have an idea and 3 commented. If Thato Mokoena is home, tap to mark them found."
 
 
 ### Found (reunions)
@@ -181,7 +180,7 @@ Settings5AppearanceThemeDark (default)LightMatch my phoneBackgroundPick the colo
 ### Safety centre
 
 ```text
-Safety & consent centre5 LulaFind never reads anyone's location without that person's own consent, and never sends a case to the police or an NGO. Get help has the real numbers. My locationPermission: unknownNo location has been read yet. Read my location  Forget my location Safety beaconSend "I am safe" check-ins with your location to people you choose. Off by default.Beacon enabled Send an "I am safe" check-in now Be on the lookout Tell your followers you may not feel safe where you are going. They see the area, and 24 hours later we ask them to check on you. Where are you going, or which area worries you?Anything your followers should know? (optional)Attach where I am now, so my followers see it Start the lookout If I go missing A lookout only becomes a case if a follower says something is wrong. This decides whether LulaFind may post that case, and who sees it. Let LulaFind post a case about meOff by default. Without it, a "no" answer never becomes a post.Being foundWe can ask you if a case is about you. Your account is never handed to the family.Allow name matchingConsent log on my casesFamily reported at the station and messaged Pink Ladies. LulaFind did not send the caseHelp find Thato Mokoena, 14 - last · 28 Sept 2026, 09:01expires 28 Oct 2026, 08:31Photos stay on this case unless the family shares the linkHelp find Thato Mokoena, 14 - last · 28 Sept 2026, 09:01expires 28 Oct 2026, 08:31 Privacy & data settings
+Safety & consent centre5 LulaFind never reads anyone's location without that person's own consent, and never sends a case to the police or an NGO. Get help has the real numbers. My locationPermission: unknownNo location has been read yet. Read my location  Forget my location Safety beaconSend "I am safe" check-ins with your location to people you choose. Off by default.Beacon enabled Send an "I am safe" check-in now Be on the lookout Tell your followers you may not feel safe where you are going. They see the area, and 24 hours later we ask them to check on you. Where are you going, or which area worries you?Anything your followers should know? (optional)Attach where I am now, so my followers see it Start the lookout If I go missing A lookout only becomes a case if a follower says something is wrong. This decides whether LulaFind may post that case, and who sees it. Let LulaFind post a case about meOff by default. Without it, a "no" answer never becomes a post.Being foundWe can ask you if a case is about you. Your account is never handed to the family.Allow name matchingConsent log on my casesFamily reported at the station and messaged Pink Ladies. LulaFind did not send the caseHelp find Thato Mokoena, 14 - last · 28 Sept 2026, 09:04expires 28 Oct 2026, 08:34Photos stay on this case unless the family shares the linkHelp find Thato Mokoena, 14 - last · 28 Sept 2026, 09:04expires 28 Oct 2026, 08:34 Privacy & data settings
 ```
 - 27 words of app copy: "Tell your followers you may not feel safe where you are going. They see the area, and 24 hours later we ask them to check on you."
 - 25 words of app copy: "LulaFind never reads anyone's location without that person's own consent, and never sends a case to the police or an NGO. has the real numbers."

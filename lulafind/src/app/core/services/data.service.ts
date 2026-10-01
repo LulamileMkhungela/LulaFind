@@ -1046,7 +1046,7 @@ export class DataService {
         await this.api.pushNotification({
           id: uid('n'), userId: me, kind: 'outcome',
           title: `Did you get help finding ${who}?`,
-          body: `${p.upvotes} people have an idea and ${p.commentCount} commented. If ${who} is home, tap to mark them found.`,
+          body: `${p.upvotes} reactions and ${p.commentCount} comments. If ${who} is home, tap to mark them found.`,
           at: Date.now(), read: false, route: `/post/${p.id}`, postId: p.id
         });
         await this.setOutcomeNudged(p.id).catch(() => undefined);
@@ -1078,8 +1078,8 @@ export class DataService {
           const n = p.upvotes - was.up;
           await this.api.pushNotification({
             id: uid('n'), userId: me, kind: 'vote',
-            title: n === 1 ? `Someone has an idea about ${who}` : `${n} people have an idea about ${who}`,
-            body: `Someone has an idea on ${where}. Open it to read the leads.`,
+            title: n === 1 ? `Someone reacted to ${who}` : `${n} people reacted to ${who}`,
+            body: `Someone reacted on ${where}. Open it to read the leads.`,
             at: Date.now(), read: false, route: `/post/${p.id}`, postId: p.id
           });
           sent++;

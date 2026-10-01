@@ -12,7 +12,7 @@ alerts sent: (none yet - see below)
 ### 2. What another Gauteng member sees in Notifications now
 
 ```text
-NotificationsNotificationsNo alerts yetCase alerts for your area land here, along with comments, follows and chat replies.
+Notifications Mark all as read No alerts yetCase alerts for your area land here, along with comments, follows and chat replies.
 ```
 
 ### 3. The moderator’s Review tab
@@ -30,13 +30,13 @@ Admin1 You are signed in as an admin. You can remove posts, suspend people and d
 ### 5. The same member’s Notifications after publishing
 
 ```text
-Notifications1NotificationsA child is missing nearbyThandi Mokoena · Soweto, Gauteng. Open the case for the poster.now · 13 km from you
+Notifications1 Mark all as read A child is missing nearbyThandi Mokoena · Soweto, Gauteng. Open the case for the poster.now · 13 km from you
 ```
 
 ### 6. The mother’s own Notifications (never her own case)
 
 ```text
-Notifications
+Mark all as read
 ```
 
 ### 7. The focused case page with the status actions
