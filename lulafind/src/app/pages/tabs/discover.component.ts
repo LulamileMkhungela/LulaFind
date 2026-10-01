@@ -1,5 +1,5 @@
 import { Component, ElementRef, afterNextRender, computed, effect, inject, signal, viewChild } from '@angular/core';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { IonContent } from '@ionic/angular/ion-content';
 import { AlertController } from '@ionic/angular/alert-controller';
 import { ToastController } from '@ionic/angular/toast-controller';
@@ -8,6 +8,7 @@ import { TopNavComponent } from '../../shared/components/top-nav.component';
 import { AvatarComponent } from '../../shared/components/avatar.component';
 import { EmptyComponent } from '../../shared/components/empty.component';
 import { IconComponent } from '../../shared/components/icon.component';
+import { StoryRailComponent } from '../../shared/components/story-rail.component';
 import { DataService } from '../../core/services/data.service';
 import { AuthService } from '../../core/services/auth.service';
 import { CHECK_IN_COPY, SafetyService } from '../../core/services/safety.service';
@@ -29,11 +30,15 @@ type Tab = 'following' | 'followers' | 'requests' | 'statuses';
 @Component({
   selector: 'lf-discover',
   standalone: true,
-  imports: [IonContent, TopNavComponent, RouterLink, AvatarComponent, EmptyComponent, IconComponent],
+  imports: [IonContent, TopNavComponent, RouterLink, AvatarComponent, EmptyComponent, IconComponent, StoryRailComponent],
   template: `
     <lf-top-nav heading="Discover" />
 
     <ion-content class="lf-page lf-plain">
+      <!-- Stories live here too: "Create story" opens the camera/upload step and
+           every story card opens the viewer, so Discover is not a dead end. -->
+      <lf-story-rail (addStory)="onAddStory()" />
+
       <div #tabRow class="seg" role="tablist" aria-label="Discover">
         <button class="pill" role="tab" [class.on]="tab() === 'following'" (click)="tab.set('following')">
           Following
@@ -206,6 +211,7 @@ export class DiscoverComponent {
   private auth = inject(AuthService);
   private safety = inject(SafetyService);
   private route = inject(ActivatedRoute);
+  private router = inject(Router);
   private alert = inject(AlertController);
   private toast = inject(ToastController);
   protected readonly timeAgo = timeAgo;
@@ -256,6 +262,8 @@ export class DiscoverComponent {
   constructor() {
     void this.data.loadFollowRequests();
     void this.data.loadUserScoped();
+    // The story rail needs the stories even if Home was never visited.
+    void this.data.loadStatic();
     // A tab you cannot see is a tab you will not find: when the row is wider
     // than the screen, the pill that is in use stays visible.
     afterNextRender(() => this.showActiveTab());
@@ -274,6 +282,15 @@ export class DiscoverComponent {
         this.people.set(next);
       });
     });
+  }
+
+  /** "Create story" on the rail. Signing in is the only prerequisite. */
+  async onAddStory(): Promise<void> {
+    if (!this.auth.signedIn()) {
+      await this.router.navigate(['/auth'], { queryParams: { mode: 'signin', next: '/discover' } });
+      return;
+    }
+    await this.router.navigate(['/create-story']);
   }
 
   /** Bring the pill in use into view when the row overflows a narrow screen. */

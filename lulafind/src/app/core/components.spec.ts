@@ -127,24 +127,27 @@ describe('Components render', () => {
     await f.whenStable();
     const html: string = (f.nativeElement as HTMLElement).innerHTML;
     expect(html).toContain('Follow');
-    // LinkedIn's default reaction is "Like", and the button reads as its own
-    // name rather than a yes/no vote.
-    expect(html).toContain('Like');
-    expect(html).not.toContain('No idea');
-    // LinkedIn's card anatomy: the poster's headline under their name, the
-    // three-line clamp with a muted ellipsis, a stats line and the four
-    // action buttons.
+    // Card anatomy: headline under the name, three-line clamp with a muted
+    // ellipsis, then the meta lines and the stats line.
     expect(html).toContain('Community organiser');
     expect(html).toContain('fb-clamp');
     expect(html).toContain('see more');
     expect(html).toContain('fb-stats-bar');
-    expect(html).toContain('Comment');
-    expect(html).toContain('Repost');
-    expect(html).toContain('Send');
+    // Line 1 is where it is, then what kind of post it is; line 2 is when, then
+    // the audience icon. The old standalone chip under the avatar is gone.
+    expect(html).toContain('fb-kind');
+    expect(html).toContain('Missing person');
+    expect(html).toContain('Gauteng');
+    expect(html).not.toContain('fb-chips');
+    // The card carries no Like / Comment / Repost / Send row: those four live on
+    // the post page. Follow and … share one right-hand column.
+    expect(html).not.toContain('fb-actions-row');
+    expect(html).not.toContain('fb-action-btn');
+    expect(html).toContain('fb-head-actions');
+    expect(html).toContain('fb-more-btn');
     // the seeded latest activity shows above the post, LinkedIn-style
     expect(html).toContain('Lerato Mahlangu');
     expect(html).toContain('commented on this');
-    expect(html).toContain('Comment');
   });
 
   it('shows a selected generated poster in the feed card', async () => {
@@ -184,7 +187,7 @@ describe('Components render', () => {
     const html: string = (f.nativeElement as HTMLElement).innerHTML;
     expect(html).toContain('reposted this');
     expect(html).toContain('fb-embed');
-    expect(html).toContain('Repost');
+    expect(html).not.toContain('fb-actions-row');
   });
 
   /** Lets the component's own async work land, without waiting on app-wide timers. */

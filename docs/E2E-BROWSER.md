@@ -44,11 +44,11 @@ Reset
 Lerato Mahlangu commented on this
 Thandi Mokoena
 Community organiser. If you see something, say something. Ubuntu.
-3d
-·
 Gauteng
 ·
 Missing person
+3d
+·
 Help find Thato Mokoena, 14 - last seen Orlando West, Soweto
 Last seen: Orlando taxi rank, Soweto
 Thato left home on Tuesday morning for school at Orlando High and never arrived. She was wearing her full school uniform with a grey cardigan and black takkies.
@@ -76,11 +76,11 @@ Reset
 Lerato Mahlangu commented on this
 Thandi Mokoena
 Community organiser. If you see something, say something. Ubuntu.
-3d
-·
 Gauteng
 ·
 Missing person
+3d
+·
 Help find Thato Mokoena, 14 - last seen Orlando West, Soweto
 Last seen: Orlando taxi rank, Soweto
 Thato left home on Tuesday morning for school at Orlando High and never arrived. She was wearing her full school uniform with a grey cardigan and black takkies.
@@ -486,6 +486,13 @@ Menu
 Demo data - sample cases, not real people. Turn it off in the URL with ?demo=0
 Discover
 5
+Create story
+Thandi
+Ayanda
+Pieter
+Lerato
+Naledi
+Kabelo
 Following
 Followers
 Requests
@@ -518,6 +525,13 @@ Menu
 Demo data - sample cases, not real people. Turn it off in the URL with ?demo=0
 Discover
 5
+Create story
+Thandi
+Ayanda
+Pieter
+Lerato
+Naledi
+Kabelo
 Following
 Followers
 Requests
@@ -550,6 +564,13 @@ Menu
 Demo data - sample cases, not real people. Turn it off in the URL with ?demo=0
 Discover
 5
+Create story
+Thandi
+Ayanda
+Pieter
+Lerato
+Naledi
+Kabelo
 Following
 Followers
 Requests
@@ -773,11 +794,11 @@ Orlando
 Ndlela
 Thandi Mokoena
 Community organiser. If you see something, say something. Ubuntu.
-3d
-·
 Gauteng
 ·
 Missing person
+3d
+·
 Help find Thato Mokoena, 14 - last seen Orlando West, Soweto
 Last seen: Orlando taxi rank, Soweto
 Thato left home on Tuesday morning for school at Orlando High and never arrived. She was wearing her full school uniform with a grey cardigan and black takkies.

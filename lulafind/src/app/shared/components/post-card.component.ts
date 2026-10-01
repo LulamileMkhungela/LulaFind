@@ -5,7 +5,6 @@ import { alreadySaid, compact, headingIsNew, timeAgo } from '../../core/utils/fo
 import { AvatarComponent } from './avatar.component';
 import { IconComponent } from './icon.component';
 import { ReactionsSheetComponent } from './reactions-sheet.component';
-import { ReactionButtonComponent } from './reaction-button.component';
 import { ReactionIconComponent } from './reaction-icon.component';
 import { DataService } from '../../core/services/data.service';
 import { AuthService } from '../../core/services/auth.service';
@@ -32,7 +31,7 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
 @Component({
   selector: 'lf-post-card',
   standalone: true,
-  imports: [RouterLink, IconComponent, AvatarComponent, ReactionButtonComponent, ReactionIconComponent, ReactionsSheetComponent],
+  imports: [RouterLink, IconComponent, AvatarComponent, ReactionIconComponent, ReactionsSheetComponent],
   template: `
     @if (!gone()) {
     <article class="fb-card lf-fade-in"
@@ -54,14 +53,17 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
         <div class="fb-author-meta">
           <div class="fb-author-row">
             <span class="fb-author-name">{{ authorName() }}</span>
-            @if (showFollow()) {
-              <button class="fb-follow-link" [class.on]="followingAuthor()" [class.requested]="followRequested()"
-                      [attr.aria-pressed]="followingAuthor() || followRequested()" (click)="onFollow($event)">
-                {{ followingAuthor() ? 'Following' : followRequested() ? 'Requested' : '+ Follow' }}
-              </button>
-            }
           </div>
           @if (authorHeadline()) { <span class="fb-headline">{{ authorHeadline() }}</span> }
+          <!-- Line 1: where it is, then what kind of post it is. -->
+          <div class="fb-sub-meta">
+            <span>{{ provinceName(post.province) }}</span>
+            <span class="fb-dot">·</span>
+            <span class="fb-kind" [class.fb-kind--success]="post.status === 'found'">
+              <lf-icon [name]="meta().icon" [size]="12" /> {{ statusLabel() }}
+            </span>
+          </div>
+          <!-- Line 2: when, then who can see it. -->
           <div class="fb-sub-meta">
             <span>{{ timeAgo(post.createdAt) }}</span>
             @if (post.editedAt) {
@@ -69,14 +71,22 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
               <span class="fb-edited" [attr.title]="'Edited ' + timeAgo(post.editedAt)">Edited</span>
             }
             <span class="fb-dot">·</span>
-            <span>{{ provinceName(post.province) }}</span>
-            <span class="fb-dot">·</span>
-            <lf-icon name="globe" [size]="12" />
+            <lf-icon [name]="audienceIcon()" [size]="12" [attr.title]="audienceTitle()" [attr.aria-label]="audienceTitle()" />
           </div>
         </div>
-        <button class="fb-more-btn" (click)="onMore($event)" aria-label="More options">
-          <lf-icon name="more" [size]="20" />
-        </button>
+        <!-- Follow and the … sit in one right-hand column so they share a line
+             with the name instead of the Follow floating mid-card. -->
+        <div class="fb-head-actions">
+          @if (showFollow()) {
+            <button class="fb-follow-link" [class.on]="followingAuthor()" [class.requested]="followRequested()"
+                    [attr.aria-pressed]="followingAuthor() || followRequested()" (click)="onFollow($event)">
+              {{ followingAuthor() ? 'Following' : followRequested() ? 'Requested' : '+ Follow' }}
+            </button>
+          }
+          <button class="fb-more-btn" (click)="onMore($event)" aria-label="More options">
+            <lf-icon name="more" [size]="20" />
+          </button>
+        </div>
       </header>
 
       @if (post.repostOf) {
@@ -112,13 +122,6 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
           </div>
         }
       } @else {
-      <div class="fb-chips">
-        <span class="fb-chip"
-              [class.fb-chip--success]="post.status === 'found'">
-          <lf-icon [name]="meta().icon" [size]="12" /> {{ statusLabel() }}
-        </span>
-      </div>
-
       <div class="fb-card-body" [routerLink]="'/post/' + post.id">
         @if (showHeading()) { <h3 class="fb-post-title">{{ post.title }}</h3> }
         @if (post.type === 'pet') {
@@ -189,26 +192,6 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
         </div>
       }
 
-      <!-- LinkedIn action bar: react (hold for more), Comment, Repost, Send -->
-      <div class="fb-actions-row">
-        <lf-reaction-button [value]="myVote()" (react)="onReact($event)" />
-
-        <button class="fb-action-btn" (click)="comment.emit()">
-          <lf-icon name="comment" [size]="20" />
-          <span>Comment</span>
-        </button>
-
-        <button class="fb-action-btn" (click)="onRepost()">
-          <lf-icon name="repost" [size]="20" />
-          <span>Repost</span>
-        </button>
-
-        <button class="fb-action-btn" (click)="onSend()">
-          <lf-icon name="send" [size]="19" />
-          <span>Send</span>
-        </button>
-      </div>
-
       @if (post.chatEnabled && !isMine() && !post.repostOf) {
         <button class="fb-chat-cta" [class.open]="chatState === 'open'" (click)="chat.emit()">
           <lf-icon [name]="chatState === 'open' ? 'unlock' : 'lock'" [size]="15" />
@@ -249,7 +232,7 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
       cursor: pointer;
     }
     .fb-author-meta { flex: 1; min-width: 0; }
-    .fb-author-row { display: flex; align-items: center; gap: 4px; min-width: 0; }
+    .fb-author-row { display: flex; align-items: center; gap: 4px; min-width: 0; min-height: 24px; }
     .fb-author-name { font-weight: 600; font-size: 14px; color: var(--ion-text-color);
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     /* LinkedIn's second header line: who the person is, one line, muted. */
@@ -273,20 +256,40 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
       cursor: pointer;
       padding: 0;
       flex-shrink: 0;
-      margin-left: auto;
+      white-space: nowrap;
     }
     .fb-follow-link.on,
     .fb-follow-link.requested { color: var(--lf-muted); }
+    /*
+     * One line, never broken mid-word. The row itself clips instead: the first
+     * item (province on line 1, time on line 2) ellipsizes and the rest hold
+     * their width, so "KwaZulu-Natal · Missing person" reads as
+     * "KwaZulu-Nata… · Missing person" rather than "Missing / person".
+     */
     .fb-sub-meta {
       display: flex;
       align-items: center;
-      gap: 3px;
-      font-size: 13px;
+      gap: 2px;
+      font-size: 12.5px;
       color: var(--lf-muted);
-      margin-top: 1px;
+      margin-top: 2px;
+      white-space: nowrap;
+      overflow: hidden;
+    }
+    .fb-sub-meta > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+    .fb-sub-meta .fb-dot, .fb-sub-meta > lf-icon { flex: 0 0 auto; }
+    /*
+     * Follow and … share this column, centred on the name's line. The column is
+     * the height of one line of text; the … keeps a 32px tap target by bleeding
+     * 4px above and below it, so the glyph lines up with the name without
+     * shrinking the thing fingers have to hit.
+     */
+    .fb-head-actions {
+      display: flex; align-items: center; gap: 6px;
+      height: 24px; flex-shrink: 0;
     }
     .fb-more-btn {
-      width: 36px; height: 36px;
+      width: 32px; height: 32px; margin: -4px 0;
       display: inline-flex; align-items: center; justify-content: center;
       background: none;
       border: 0;
@@ -296,15 +299,10 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
       align-self: flex-start;
     }
     .fb-more-btn:hover { background: var(--lf-hover); }
+    /* The post kind now rides in the meta line, not in a chip under the avatar. */
+    .fb-kind { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 3px; font-weight: 600; }
+    .fb-kind--success { color: var(--lf-ubuntu); }
 
-    .fb-chips { display: flex; gap: 6px; flex-wrap: wrap; padding: 8px 16px 0; }
-    .fb-chip {
-      display: inline-flex; align-items: center; gap: 4px;
-      padding: 3px 8px; border-radius: 6px; font-size: 12px; font-weight: 600;
-      background: var(--lf-card-2); color: var(--ion-text-color);
-    }
-    .fb-chip--success { background: color-mix(in srgb, var(--lf-ubuntu) 14%, transparent); color: var(--lf-ubuntu); }
-    .fb-chip--beacon { background: var(--lf-primary-soft); color: var(--lf-primary-soft-text); }
 
     .fb-card-body { padding: 8px 16px 12px; cursor: pointer; }
     .fb-post-title { font-size: 17px; font-weight: 700; color: var(--ion-text-color); margin: 0 0 4px; line-height: 1.3; }
@@ -378,55 +376,6 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
       box-shadow: 0 0 0 2px var(--lf-card);
     }
     .fb-stats-right { display: flex; align-items: center; gap: 12px; }
-
-    .fb-actions-row {
-      display: flex;
-      align-items: center;
-      gap: 2px;
-      margin: 0 6px;
-      padding: 4px 0;
-      border-top: 1px solid var(--lf-line-soft);
-    }
-    /* The reaction button takes the slack; these three take exactly what they
-       need. Nothing is squeezed, nothing overlaps. */
-    .fb-action-btn {
-      flex: 0 0 auto;
-      min-width: 0;
-      height: 36px;
-      border: 0;
-      background: transparent;
-      color: var(--lf-muted);
-      font-family: inherit;
-      font-size: 14px;
-      font-weight: 600;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 5px;
-      cursor: pointer;
-      border-radius: 4px;
-      white-space: nowrap;
-      min-width: 0;
-    }
-    .fb-action-btn:hover, .fb-action-btn:active { background: var(--lf-hover); }
-    .fb-action-btn.active { color: var(--lf-primary); }
-    .fb-action-btn.active-down { color: var(--lf-signal); }
-    /* Four labels on a 390 px screen: Like, Comment, Repost, Send. The row
-       keeps every word rather than clipping it, so the type and the gaps
-       tighten before anything can overlap or lose a letter. */
-    @media (max-width: 430px) {
-      .fb-actions-row { margin: 0 2px; gap: 0; }
-      .fb-action-btn { padding: 0 3px; gap: 4px; }
-      .fb-action-btn span { font-size: 12.5px; }
-    }
-    @media (max-width: 360px) {
-      .fb-action-btn span { font-size: 11.5px; }
-    }
-    @media (max-width: 340px) {
-      .fb-action-btn span { font-size: 10.5px; }
-      .fb-action-btn { padding: 0 1px; }
-      .fb-action-btn lf-icon svg { width: 17px; height: 17px; }
-    }
 
     .fb-chat-cta {
       display: flex; align-items: center; justify-content: center; gap: 8px;
@@ -597,6 +546,21 @@ export class PostCardComponent implements OnInit, OnChanges {
       this.followRequested.set(status === 'pending');
       this.follow.emit(this.post);
     } catch { /* the profile has a full follow control with feedback */ }
+  }
+
+  /**
+   * Who can see this post, drawn with the same three glyphs the composer uses
+   * for the same choice: globe for public, people for followers, ribbon for a
+   * Spotlight (surname) audience.
+   */
+  audienceIcon(): string {
+    const a = this.post?.audience;
+    return a === 'followers' ? 'users' : a === 'surname' ? 'award' : 'globe';
+  }
+
+  audienceTitle(): string {
+    const a = this.post?.audience;
+    return a === 'followers' ? 'Visible to followers' : a === 'surname' ? 'Visible in a Spotlight community' : 'Visible to anyone';
   }
 
   statusLabel(): string {
