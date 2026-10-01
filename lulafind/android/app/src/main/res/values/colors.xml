@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  LulaFind brand colours for the Android theme.
+
+  styles.xml references @color/colorPrimary, @color/colorPrimaryDark and
+  @color/colorAccent. Without this file those names resolve to the defaults
+  Capacitor ships in its own library - indigo #3F51B5 and pink #FF4081 - so the
+  status bar and accent were never actually on brand. App resources override
+  library resources, so defining them here is what makes the theme LulaFind blue.
+-->
+<resources>
+    <color name="colorPrimary">#2196F3</color>
+    <color name="colorPrimaryDark">#1976D2</color>
+    <color name="colorAccent">#64B5F6</color>
+</resources>
