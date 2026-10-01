@@ -1034,7 +1034,7 @@ export const seedTips = () => [
     id: 't7', category: 'support' as const,
     title: 'Home Sweet Home: the person may not want to come home',
     body: 'Not everyone who leaves is in danger. Some are escaping. LulaFind lets the person themselves answer - "I am coming", "I am safe but not coming home", or "let us chat" - without being forced back. Your job is to let them know they are not in trouble.',
-    cta: { label: 'Post a Home Sweet Home', route: '/create/khumbulekhaya' }
+    cta: { label: 'Post a Home Sweet Home', route: '/create/home-sweet-home' }
   },
   {
     id: 't8', category: 'support' as const,

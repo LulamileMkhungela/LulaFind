@@ -82,7 +82,7 @@ export const FAQ_TOPICS: Topic[] = [
     match: ['khumbu', 'ekhaya', 'left home', 'ran away', 'not been home'],
     answer: {
       text: 'Home Sweet Home is for someone who has left home and may not want to be forced back. The person can answer for themselves: "I am coming", "I am safe but not coming home", or "let us chat". Nobody is pressured to return.',
-      links: [{ label: 'Post a Home Sweet Home', route: '/create/khumbulekhaya' }]
+      links: [{ label: 'Post a Home Sweet Home', route: '/create/home-sweet-home' }]
     }
   },
   {

@@ -1,4 +1,4 @@
-import { Component, computed, effect, inject, signal } from '@angular/core';
+import { Component, ElementRef, afterNextRender, computed, effect, inject, signal, viewChild } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { IonContent } from '@ionic/angular/ion-content';
 import { AlertController } from '@ionic/angular/alert-controller';
@@ -34,12 +34,12 @@ type Tab = 'following' | 'followers' | 'requests' | 'statuses';
     <lf-top-nav heading="Discover" />
 
     <ion-content class="lf-page lf-plain">
-      <div class="seg" role="tablist" aria-label="Discover">
+      <div #tabRow class="seg" role="tablist" aria-label="Discover">
         <button class="pill" role="tab" [class.on]="tab() === 'following'" (click)="tab.set('following')">
-          Following · {{ data.followingIds().length }}
+          Following
         </button>
         <button class="pill" role="tab" [class.on]="tab() === 'followers'" (click)="tab.set('followers')">
-          Followers · {{ data.followerIds().length }}
+          Followers
         </button>
         <button class="pill" role="tab" [class.on]="tab() === 'requests'" (click)="tab.set('requests')">
           Requests @if (data.followRequests().length) { <em class="lf-badge">{{ data.followRequests().length }}</em> }
@@ -129,8 +129,8 @@ type Tab = 'following' | 'followers' | 'requests' | 'statuses';
               <div class="acts">
                 @switch (tab()) {
                   @case ('requests') {
-                    <button class="lf-btn lf-btn--primary lf-btn--sm" [disabled]="busy() === r.id" (click)="respond(r.id, true)">Confirm</button>
-                    <button class="lf-btn lf-btn--sm" [disabled]="busy() === r.id" (click)="respond(r.id, false)">Delete</button>
+                    <button class="lf-btn lf-btn--primary lf-btn--sm" [disabled]="busy() === r.id" (click)="respond(r.id, true)">Accept</button>
+                    <button class="lf-btn lf-btn--sm" [disabled]="busy() === r.id" (click)="respond(r.id, false)">Ignore</button>
                   }
                   @case ('following') {
                     <button class="lf-btn lf-btn--sm" [disabled]="busy() === r.id" (click)="unfollow(r)">Unfollow</button>
@@ -150,13 +150,22 @@ type Tab = 'following' | 'followers' | 'requests' | 'statuses';
     </ion-content>
   `,
   styles: [`
-    .seg { display: flex; gap: 6px; padding: 4px var(--lf-gap) 10px; overflow-x: auto; scrollbar-width: none; }
+    .seg { display: flex; gap: 5px; padding: 4px 12px 10px; overflow-x: auto; scrollbar-width: none; }
     .seg::-webkit-scrollbar { display: none; }
-    /* Four tabs have to fit a 390px screen without scrolling - the default tab
-       is Statuses, and a tab you cannot see is a tab you will not find. */
-    .pill { flex: 0 1 auto; min-width: 0; height: 32px; padding: 0 10px; border: 0; border-radius: 999px;
-      cursor: pointer; font: inherit; font-size: 12.5px; font-weight: 600; background: var(--lf-card-2);
-      color: var(--ion-text-color); display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+    /*
+     * Four tabs have to fit a 390px screen. The measured labels at 12px/600 are
+     * Following 65, Followers 65, Requests 63, Statuses 59 - the inline counts on
+     * the first two pushed the row to 427px and squeezed every label into a clip,
+     * so those two show their number inside the tab instead. Requests and
+     * Statuses keep a badge because there the number is a call to action.
+     * flex: 0 0 auto is deliberate: a pill that is allowed to shrink squeezes
+     * its own label instead of the row scrolling, which is how "Following · 4"
+     * turned into "Following ·". If the counts ever outgrow the width, the row
+     * scrolls and the active pill scrolls itself into view instead of clipping.
+     */
+    .pill { flex: 0 0 auto; min-width: 0; height: 32px; padding: 0 9px; border: 0; border-radius: 999px;
+      cursor: pointer; font: inherit; font-size: 12px; font-weight: 600; background: var(--lf-card-2);
+      color: var(--ion-text-color); display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
     .pill.on { background: var(--lf-primary-soft); color: var(--lf-link); }
     .pill .lf-badge { font-style: normal; }
 
@@ -202,6 +211,8 @@ export class DiscoverComponent {
   protected readonly timeAgo = timeAgo;
 
   readonly tab = signal<Tab>((this.route.snapshot.queryParamMap.get('tab') as Tab) || 'statuses');
+  /** The tab row, so the pill in use can be scrolled into view on a narrow screen. */
+  private readonly tabRow = viewChild<ElementRef<HTMLElement>>('tabRow');
   readonly busy = signal<string | null>(null);
   readonly saving = signal(false);
   private readonly people = signal<Record<string, UserProfile>>({});
@@ -245,6 +256,14 @@ export class DiscoverComponent {
   constructor() {
     void this.data.loadFollowRequests();
     void this.data.loadUserScoped();
+    // A tab you cannot see is a tab you will not find: when the row is wider
+    // than the screen, the pill that is in use stays visible.
+    afterNextRender(() => this.showActiveTab());
+    effect(() => {
+      const active = this.tab();
+      queueMicrotask(() => this.showActiveTab());
+      void active;
+    });
     effect(() => {
       const ids = [...this.statusPeople().map((r) => r.id), ...this.ids()];
       const missing = ids.filter((id) => !this.asked.has(id));
@@ -255,6 +274,15 @@ export class DiscoverComponent {
         this.people.set(next);
       });
     });
+  }
+
+  /** Bring the pill in use into view when the row overflows a narrow screen. */
+  private showActiveTab(): void {
+    const row = this.tabRow()?.nativeElement;
+    const active = row?.querySelector<HTMLElement>('.pill.on');
+    if (row && active && (row.scrollWidth > row.clientWidth)) {
+      row.scrollLeft = Math.max(0, active.offsetLeft - (row.clientWidth - active.offsetWidth) / 2);
+    }
   }
 
   iFollow(id: string): boolean { return this.data.followingIds().includes(id); }
@@ -305,7 +333,7 @@ export class DiscoverComponent {
   }
 
   respond(id: string, accept: boolean): Promise<void> {
-    return this.run(id, () => this.data.respondToFollowRequest(id, accept), accept ? 'Request confirmed' : 'Request deleted');
+    return this.run(id, () => this.data.respondToFollowRequest(id, accept), accept ? 'Accepted' : 'Request ignored');
   }
 
   follow(r: { id: string; u: UserProfile | null }): Promise<void> {
