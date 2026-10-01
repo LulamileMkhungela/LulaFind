@@ -1599,7 +1599,7 @@ export class DataService {
     return updated;
   }
 
-  /* --------------------- KhumbulEkhaya flow -------------------- */
+  /* --------------------- Home Sweet Home flow -------------------- */
   /** The subject claims the post: "this is me". */
   async claimKhumbuPost(postId: string): Promise<Post | undefined> {
     const me = this.auth.viewerId;
@@ -1650,7 +1650,7 @@ export class DataService {
         id: uid('n'),
         userId: p.authorId,
         kind: 'claim',
-        title: response === 'not_going_home' ? 'They are safe but not coming home' : 'They answered your KhumbulEkhaya',
+        title: response === 'not_going_home' ? 'They are safe but not coming home' : 'They answered your Home Sweet Home',
         body: note.trim() || (response === 'not_going_home' ? 'They asked that you respect this.' : 'They are coming home.'),
         at: Date.now(),
         read: false,

@@ -155,8 +155,6 @@ import { cover } from '../../core/data/seed';
                 @if (checkInError() && !saving()) { <p class="err">{{ checkInError() }}</p> }
               </div>
             }
-
-            <div class="lf-meta" style="margin-top:10px">Joined {{ dayMonth(u()!.createdAt) }}</div>
           </div>
         </div>
 

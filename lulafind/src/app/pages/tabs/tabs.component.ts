@@ -11,7 +11,7 @@ import { ChatService } from '../../core/services/chat.service';
 import { MediaService } from '../../core/services/media.service';
 
 /**
- * Bottom navigation: Home, Spotlight, Create, Chats, Photo.
+ * Bottom navigation: Home, Spotlight, Create, Discover, Menu.
  *
  * The photo action opens the camera/photo chooser and carries the selection
  * into the post composer. Menu/profile remains available from the top photo.
@@ -146,7 +146,7 @@ export class TabsComponent {
 
   private static tabOf(url: string): string {
     const first = url.split(/[?#]/)[0].split('/').filter(Boolean)[0] ?? 'home';
-    if (first === 'chat' || first === 'ask-lula') return 'chats';
+    if (first === 'chat') return 'chats';
     return ['home', 'spotlight', 'chats', 'me'].includes(first) ? first : 'home';
   }
 

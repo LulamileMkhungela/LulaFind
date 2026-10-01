@@ -45,7 +45,7 @@ const STEPS = [
             </p>
             <div class="rows">
               <div class="r"><lf-icon name="search" [size]="18" /><span>Post a missing person with a full case file</span></div>
-              <div class="r"><lf-icon name="home" [size]="18" /><span>KhumbulEkhaya for people who left and may not want to return</span></div>
+              <div class="r"><lf-icon name="home" [size]="18" /><span>Home Sweet Home for people who left and may not want to return</span></div>
               <div class="r"><lf-icon name="users" [size]="18" /><span>Spotlight pages that group every post by surname</span></div>
               <div class="r"><lf-icon name="phone" [size]="18" /><span>Call SAPS, Missing Children SA and Pink Ladies yourself. LulaFind does not send the case</span></div>
             </div>
@@ -83,7 +83,7 @@ const STEPS = [
             <p class="lf-muted">You control how visible you are. Everything here can be changed later.</p>
             <ion-item>
               <ion-label><strong>Let LulaFind match me to cases</strong><br />
-                <span class="lf-muted lf-small">If a KhumbulEkhaya post matches your name we will ask if it is you - never expose you automatically.</span></ion-label>
+                <span class="lf-muted lf-small">If a Home Sweet Home post matches your name we will ask if it is you - never expose you automatically.</span></ion-label>
               <ion-toggle [checked]="findable" (ionChange)="findable = $any($event.detail).checked"></ion-toggle>
             </ion-item>
             <ion-item>

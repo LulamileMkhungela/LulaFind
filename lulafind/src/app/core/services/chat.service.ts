@@ -19,7 +19,7 @@ export type ChatGate =
  *
  * Two exceptions, both intentional:
  *  - the poster themself, who can always be messaged about their own post;
- *  - someone who claimed a KhumbulEkhaya post as "this is me", because the whole
+ *  - someone who claimed a Home Sweet Home post as "this is me", because the whole
  *    point is that they can reach the family without being exposed.
  */
 @Injectable({ providedIn: 'root' })

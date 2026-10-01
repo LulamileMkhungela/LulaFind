@@ -203,7 +203,7 @@ export const seedUsers = (): UserProfile[] => {
       anonymous: false,
       isAdmin: true
     }),
-    /* the person who is "missing" in the demo case and who later claims a KhumbulEkhaya post */
+    /* the person who is "missing" in the demo case and who later claims a Home Sweet Home post */
     mk('u_lindiwe', 'Lindiwe Ndlela', 'lindiwe.n', 'Ndlela', 'KZN', 'Umlazi, Durban', 'I am okay. I needed time.', {
       findableProfile: true
     })
@@ -387,7 +387,7 @@ export const seedPosts = (): Post[] => {
       id: 'p_lindiwe',
       type: 'khumbulekhaya',
       authorId: 'u_sipho',
-      title: 'KhumbulEkhaya: Lindiwe Ndlela has not been home for 11 days',
+      title: 'Home Sweet Home: Lindiwe Ndlela has not been home for 11 days',
       body:
         'Our sister Lindiwe left the family home in Umlazi after an argument and has not come back. We are not sure whether she is missing or whether she simply does not want to come home right now - and that is the hardest part, not knowing.\n\n' +
         'She is 23, works part-time at a salon in Isipingo and her phone rings but is not answered. We are not angry. We just want to know she is alive and eating.\n\n' +
@@ -550,7 +550,7 @@ export const seedPosts = (): Post[] => {
       id: 'p_khumalo',
       type: 'khumbulekhaya',
       authorId: 'u_ayanda',
-      title: 'KhumbulEkhaya: Sibusiso Khumalo, 19, left Pietermaritzburg after matric results',
+      title: 'Home Sweet Home: Sibusiso Khumalo, 19, left Pietermaritzburg after matric results',
       body:
         'Sibusiso failed two subjects and told his mother he was going to Johannesburg to find work. That was nine days ago. He has R300 and no jacket.\n\n' +
         'We are not looking to drag him back. We want to know he is alive. If you are Sibusiso, follow me and I will follow back, so we can chat privately - you can stay anonymous.',
@@ -900,7 +900,7 @@ export const seedComments = (): Comment[] => [
   },
   {
     id: 'c4', postId: 'p_lindiwe', parentId: null, authorId: 'u_zanele', createdAt: now - 3 * DAY,
-    body: 'Sending love to the Ndlela family. The hardest part of KhumbulEkhaya is the not knowing. Lindiwe, your family is not angry. They miss you.',
+    body: 'Sending love to the Ndlela family. The hardest part of Home Sweet Home is the not knowing. Lindiwe, your family is not angry. They miss you.',
     upvotes: 88, isLead: false
   },
   {
@@ -1032,9 +1032,9 @@ export const seedTips = () => [
   },
   {
     id: 't7', category: 'support' as const,
-    title: 'KhumbulEkhaya: the person may not want to come home',
+    title: 'Home Sweet Home: the person may not want to come home',
     body: 'Not everyone who leaves is in danger. Some are escaping. LulaFind lets the person themselves answer - "I am coming", "I am safe but not coming home", or "let us chat" - without being forced back. Your job is to let them know they are not in trouble.',
-    cta: { label: 'Post a KhumbulEkhaya', route: '/create/khumbulekhaya' }
+    cta: { label: 'Post a Home Sweet Home', route: '/create/khumbulekhaya' }
   },
   {
     id: 't8', category: 'support' as const,

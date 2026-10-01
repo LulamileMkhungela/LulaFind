@@ -62,9 +62,10 @@ export interface DangerAlert {
 }
 export type Audience = 'public' | 'followers' | 'surname';
 /**
- * A reaction to a post, as on LinkedIn. `up` is "Have an idea" - the default
- * when you tap the button - and keeps its old stored name so every post that
- * already has ideas on it, and the server's vote rules, still make sense.
+ * A reaction to a post, as on LinkedIn. LinkedIn leads with "Like" and so do
+ * we; `up` is LulaFind's own "Have an idea", offered in the tray. It keeps its
+ * stored name so every post that already carries one, and the server's vote
+ * rules, still make sense.
  */
 export type ReactionKind = 'up' | 'like' | 'support' | 'sad';
 export type VoteValue = ReactionKind | null;
@@ -78,11 +79,13 @@ export const REACTIONS: { key: ReactionKind; label: string; color: string }[] = 
 
 /**
  * The default reaction, exactly like LinkedIn's default "Like".
- * A quick tap on the reaction button gives this one, and only this one opens
- * private chat with the poster. Holding the button opens the tray with the rest.
+ * A quick tap on the action button gives this one; holding it opens the tray
+ * with the rest. No reaction unlocks private chat - `ChatService.gate` opens a
+ * thread on a mutual follow alone, so a tap here never changes who can message
+ * whom.
  */
-export const DEFAULT_REACTION: ReactionKind = 'up';
-export const DEFAULT_REACTION_LABEL = 'Have an idea';
+export const DEFAULT_REACTION: ReactionKind = 'like';
+export const DEFAULT_REACTION_LABEL = 'Like';
 
 /** Anything except the retired `down` is a reaction that counts. */
 export const isReaction = (v: VoteValue | string | undefined): v is ReactionKind =>
@@ -607,7 +610,7 @@ export interface Post {
     note: string;
   };
 
-  /* ---- KhumbulEkhaya flow ---- */
+  /* ---- Home Sweet Home flow ---- */
   khumbu: {
     daysOut: number | null;
     leftHomeAt: number | null;
@@ -781,14 +784,14 @@ export const emptyFilter = (): FeedFilter => ({
 export const FEED_TABS: { key: FeedFilter['type']; label: string; icon: string }[] = [
   { key: 'all', label: 'All', icon: 'grid' },
   { key: 'missing', label: 'Missing people', icon: 'search' },
-  { key: 'khumbulekhaya', label: 'Left home', icon: 'home' },
+  { key: 'khumbulekhaya', label: 'Home Sweet Home', icon: 'home' },
   { key: 'sighting', label: 'Sightings', icon: 'pin' },
   { key: 'pet', label: 'Lost pets', icon: 'paw' }
 ];
 
 export const POST_TYPE_META: Record<PostType, { label: string; tone: string; icon: string; verb: string }> = {
   missing: { label: 'Missing person', tone: 'danger', icon: 'search', verb: 'Report missing' },
-  khumbulekhaya: { label: 'KhumbulEkhaya', tone: 'warm', icon: 'home', verb: 'Remember home' },
+  khumbulekhaya: { label: 'Home Sweet Home', tone: 'warm', icon: 'home', verb: 'Remember home' },
   sighting: { label: 'Sighting', tone: 'info', icon: 'pin', verb: 'Report sighting' },
   vehicle: { label: 'Hijacked or stolen vehicle', tone: 'warn', icon: 'car', verb: 'Report a vehicle' },
   pet: { label: 'Lost pet', tone: 'neutral', icon: 'paw', verb: 'Report a lost pet' },

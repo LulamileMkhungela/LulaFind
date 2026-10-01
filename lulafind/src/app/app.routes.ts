@@ -13,7 +13,6 @@ export const routes: Routes = [
         path: 'chats',
         children: [
           { path: '', pathMatch: 'full', loadComponent: () => import('./pages/tabs/chats.component').then((m) => m.ChatsComponent) },
-          { path: 'ask-lula', canActivate: [authGuard], loadComponent: () => import('./pages/chat/ask-lula.component').then((m) => m.AskLulaComponent) },
           { path: 'thread/:threadId', canActivate: [authGuard], loadComponent: () => import('./pages/chat/chat-room.component').then((m) => m.ChatRoomComponent) }
         ]
       },
@@ -35,7 +34,6 @@ export const routes: Routes = [
     canActivate: [authGuard],
     loadComponent: () => import('./pages/onboarding/onboarding.component').then((m) => m.OnboardingComponent)
   },
-  { path: 'ask-lula', pathMatch: 'full', redirectTo: '/chats/ask-lula' },
   { path: 'chat/:threadId', pathMatch: 'full', redirectTo: '/chats/thread/:threadId' },
   { path: 'repost/:id', canActivate: [authGuard], loadComponent: () => import('./pages/post/repost.component').then((m) => m.RepostComponent) },
   { path: 'post/:id/poster', loadComponent: () => import('./pages/post/poster.component').then((m) => m.PosterComponent) },

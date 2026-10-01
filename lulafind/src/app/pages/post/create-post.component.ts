@@ -28,7 +28,7 @@ const blankForm = (): ComposerForm => ({
 
 const CATEGORIES: { key: PostType; label: string; icon: string }[] = [
   { key: 'missing', label: 'Missing person', icon: 'search' },
-  { key: 'khumbulekhaya', label: 'Left home', icon: 'home' },
+  { key: 'khumbulekhaya', label: 'Home Sweet Home', icon: 'home' },
   { key: 'pet', label: 'Lost pet', icon: 'paw' },
   { key: 'sighting', label: 'Sighting', icon: 'pin' }
 ];

@@ -116,7 +116,7 @@ export class SearchComponent {
   query = signal('');
   users = signal<UserProfile[]>([]);
 
-  quick = ['missing in Gauteng', 'SAPS case', 'KhumbulEkhaya', 'found', 'Orlando', 'Ndlela'];
+  quick = ['missing in Gauteng', 'SAPS case', 'Home Sweet Home', 'found', 'Orlando', 'Ndlela'];
 
   readonly results = computed(() => {
     const q = this.query();

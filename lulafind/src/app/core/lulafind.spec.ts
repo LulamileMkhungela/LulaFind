@@ -19,7 +19,7 @@ import { drawPoster, posterContent, publicPoster, POSTER_TEMPLATES } from './uti
 import { leadMarkView } from './utils/mark-check';
 import { GBV_CHANNEL_NOTE, HELP_LINES } from './data/sa-help';
 import { avatar, STORY_BLACK, storyBg } from './data/seed';
-import { askLula } from './data/ask-lula';
+import { FAQ_TOPICS } from './data/faq-topics';
 import { feedWithRails } from './utils/feed';
 
 
@@ -38,7 +38,7 @@ function jestSpyOnElementFromPoint(key: string | null): void {
 /**
  * End-to-end tests for the rules that make LulaFind LulaFind:
  * feed filtering, the Quora-style vote, the three-rule private-chat gate,
- * consent-gated escalation, consent-gated location, and the KhumbulEkhaya loop.
+ * consent-gated escalation, consent-gated location, and the Home Sweet Home loop.
  */
 
 let db: LocalDb;
@@ -393,7 +393,7 @@ describe('ChatService - private chat is mutual follow only', () => {
     expect((gate as any).step).toBe('disabled');
   });
 
-  it('lets the person a KhumbulEkhaya post is about reach the family', async () => {
+  it('lets the person a Home Sweet Home post is about reach the family', async () => {
     const data = svc<DataService>(DataService);
     const chat = svc<ChatService>(ChatService);
     await svc<AuthService>(AuthService).signInDemo();
@@ -555,7 +555,7 @@ describe('EscalationService - a note is not a dispatch', () => {
   });
 });
 
-describe('KhumbulEkhaya flow', () => {
+describe('Home Sweet Home flow', () => {
   beforeEach(bed);
 
   it('lets the subject claim the post and answer', async () => {
@@ -2011,21 +2011,13 @@ describe('Bugs the browser found', () => {
     localStorage.clear();
   });
 
-  it('answers the most natural phrasing of the first-hours question', () => {
-    // "what do I do in the first hour" used to fall through to "I don't have a
-    // good answer" because the keyword was stored as "first hours".
-    for (const q of [
-      'what do I do in the first hour',
-      'what do I do in the first 72 hours',
-      'first hour',
-      'What should I do first?',
-      'there is no 24 hour waiting period right?'
-    ]) {
-      const a = askLula(q);
-      expect(a.text, `"${q}" should get the first-hours answer`).toMatch(/first 72 hours/i);
-    }
-    // and it still says so honestly when it genuinely does not know
-    expect(askLula('what is the weather in Durban tomorrow').text).toMatch(/rather say so than guess/i);
+  it('keeps the first-72-hours guidance in the FAQs', () => {
+    // The "Ask Lula" assistant was removed, but this answer is the one piece of
+    // safety-critical content it held: a family in the first hours must still
+    // find it. It now lives in the FAQ data.
+    const topic = FAQ_TOPICS.find((t) => t.id === '72');
+    expect(topic, 'the first-72-hours topic must exist').toBeTruthy();
+    expect(topic!.answer.text).toMatch(/first 72 hours/i);
   });
 
   it('keeps the reaction tray open when a hold is released on the button, and supports sliding to a choice', async () => {

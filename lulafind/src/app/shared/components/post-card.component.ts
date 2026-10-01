@@ -1,7 +1,7 @@
 import { Component, EventEmitter, Input, OnChanges, OnInit, Output, computed, inject, signal } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import { Post, POST_TYPE_META, REACTIONS, ReactionKind, UserProfile, isReaction, provinceName } from '../../core/models/types';
-import { alreadySaid, compact, headingIsNew, timeAgo, urgency } from '../../core/utils/format';
+import { alreadySaid, compact, headingIsNew, timeAgo } from '../../core/utils/format';
 import { AvatarComponent } from './avatar.component';
 import { IconComponent } from './icon.component';
 import { ReactionsSheetComponent } from './reactions-sheet.component';
@@ -36,7 +36,6 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
   template: `
     @if (!gone()) {
     <article class="fb-card lf-fade-in"
-             [class.fb-card--critical]="isCritical()"
              [class.fb-card--found]="post.status === 'found'">
       @if (activity(); as act) {
         <a class="fb-activity" [routerLink]="['/user', act.userId]"><strong>{{ act.name }}</strong> {{ act.verb }}</a>
@@ -232,7 +231,9 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
       position: relative;
       /* visible, so the reaction tray can open above the action bar */
     }
-    .fb-card--critical { box-shadow: var(--lf-shadow), inset 0 3px 0 var(--lf-signal); }
+    /* No coloured bar across the top of a case card. A missing-person post is
+       identifiable by its chip, not by a red rule that reads as an error state.
+       "Found" keeps its green rule, which is an outcome, not a hazard. */
     .fb-card--found { box-shadow: var(--lf-shadow), inset 0 3px 0 var(--lf-ubuntu); }
     @media (min-width: 700px) {
       .fb-card { border-radius: var(--lf-radius); max-width: var(--lf-maxw); margin: 0 auto 12px; }
@@ -388,8 +389,8 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
       padding: 4px 0;
       border-top: 1px solid var(--lf-line-soft);
     }
-    /* The reaction label is the longest in the row: it takes the slack, these
-       three take exactly what they need. Nothing is squeezed, nothing overlaps. */
+    /* The reaction button takes the slack; these three take exactly what they
+       need. Nothing is squeezed, nothing overlaps. */
     .fb-action-btn {
       flex: 0 0 auto;
       min-width: 0;
@@ -412,11 +413,9 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
     .fb-action-btn:hover, .fb-action-btn:active { background: var(--lf-hover); }
     .fb-action-btn.active { color: var(--lf-primary); }
     .fb-action-btn.active-down { color: var(--lf-signal); }
-    /* Four labels on a 390 px screen: the longest one ("Have an idea") must fit,
-       so the row tightens before anything can overlap. */
-    /* Four labels on a 390 px screen - "Have an idea" is the longest. The row
-       keeps every word rather than clipping it, so the type and the gaps tighten
-       before anything can overlap or lose a letter. */
+    /* Four labels on a 390 px screen: Like, Comment, Repost, Send. The row
+       keeps every word rather than clipping it, so the type and the gaps
+       tighten before anything can overlap or lose a letter. */
     @media (max-width: 430px) {
       .fb-actions-row { margin: 0 2px; gap: 0; }
       .fb-action-btn { padding: 0 3px; gap: 4px; }
@@ -474,7 +473,6 @@ export class PostCardComponent implements OnInit, OnChanges {
   protected readonly provinceName = provinceName;
 
   readonly meta = computed(() => POST_TYPE_META[this.post?.type ?? 'missing']);
-  readonly isCritical = computed(() => urgency(this.post) === 'critical');
   readonly isMine = computed(() => this.post?.authorId === this.auth.viewerId);
   readonly myVote = computed(() => (this.post ? this.data.myVote(this.post) : null));
   readonly authorName = computed(() =>

@@ -5,7 +5,6 @@ import { IconComponent } from '../../shared/components/icon.component';
 import { TopNavComponent } from '../../shared/components/top-nav.component';
 import { AvatarComponent } from '../../shared/components/avatar.component';
 import { EmptyComponent } from '../../shared/components/empty.component';
-import { LogoComponent } from '../../shared/components/logo.component';
 import { ChatService } from '../../core/services/chat.service';
 import { DataService } from '../../core/services/data.service';
 import { AuthService } from '../../core/services/auth.service';
@@ -15,22 +14,11 @@ import { timeAgo } from '../../core/utils/format';
 @Component({
   selector: 'lf-chats',
   standalone: true,
-  imports: [IonContent, TopNavComponent, IconComponent, AvatarComponent, EmptyComponent, LogoComponent],
+  imports: [IonContent, TopNavComponent, IconComponent, AvatarComponent, EmptyComponent],
   template: `
     <lf-top-nav heading="Chats" />
 
     <ion-content class="lf-page lf-plain">
-      <!-- Ask Lula lives here and nowhere else in the app. -->
-      <button class="thread lula" type="button" (click)="askLula()" aria-label="Ask Lula, the help assistant">
-        <span class="lula-badge"><lf-logo [size]="30" label="Lula" /></span>
-        <div class="grow">
-          <div class="lf-row-between">
-            <strong>Ask Lula</strong>
-            <span class="pin"><lf-icon name="pin" [size]="11" /> Pinned</span>
-          </div>
-          <span class="lf-small lf-muted">Reporting, posters, safety and how LulaFind works</span>
-        </div>
-      </button>
       <div class="gate-note">
         <lf-icon name="lock" [size]="16" />
         <span>You can message someone once <strong>you follow each other</strong>.</span>
@@ -137,9 +125,6 @@ export class ChatsComponent {
     void this.router.navigate(['/chats/thread', id]);
   }
 
-  askLula(): void {
-    void this.router.navigate([this.auth.signedIn() ? '/chats/ask-lula' : '/auth'], this.auth.signedIn() ? {} : { queryParams: { next: '/chats/ask-lula' } });
-  }
 
   goAuth(): void {
     void this.router.navigate(['/auth']);

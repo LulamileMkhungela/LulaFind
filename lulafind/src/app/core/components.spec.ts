@@ -123,8 +123,9 @@ describe('Components render', () => {
     await f.whenStable();
     const html: string = (f.nativeElement as HTMLElement).innerHTML;
     expect(html).toContain('Follow');
-    // LinkedIn's default reaction reads as its own name, never a yes/no vote.
-    expect(html).toContain('Have an idea');
+    // LinkedIn's default reaction is "Like", and the button reads as its own
+    // name rather than a yes/no vote.
+    expect(html).toContain('Like');
     expect(html).not.toContain('No idea');
     // LinkedIn's card anatomy: the poster's headline under their name, the
     // three-line clamp with a muted "Read more", a stats line and the four

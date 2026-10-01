@@ -626,7 +626,7 @@ export class SupabaseApi implements LulaApi {
 
   /**
    * Authors save their own post directly. Everyone else (voting, sharing,
-   * "I'm looking", search zones, danger updates, KhumbulEkhaya answers,
+   * "I'm looking", search zones, danger updates, Home Sweet Home answers,
    * reports) goes through lula_post_interact, which accepts only those
    * narrow changes - see supabase/post-interactions.sql.
    */
