@@ -1,13 +1,30 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="LulaFind">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="LulaFind">
+  <title>LulaFind</title>
   <defs>
-    <linearGradient id="lf" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#3d97ff"/>
-      <stop offset=".55" stop-color="#1877f2"/>
-      <stop offset="1" stop-color="#0a4fc4"/>
+    <linearGradient id="lfTile" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#64b5f6"/>
+      <stop offset=".5" stop-color="#2196f3"/>
+      <stop offset="1" stop-color="#1976d2"/>
+    </linearGradient>
+    <linearGradient id="lfLens" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity=".30"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity=".08"/>
     </linearGradient>
   </defs>
-  <rect width="64" height="64" rx="14.5" ry="14.5" fill="url(#lf)"/>
-  <circle cx="26.5" cy="25.75" r="13" fill="none" stroke="#fff" stroke-width="3.75"/>
-  <path transform="translate(26.5 26.5) scale(.82)" fill="#fff" d="M0 62C-54 28-70 2-70-22c0-22 17-36 38-36 16 0 26 10 32 22 6-12 16-22 32-22 21 0 38 14 38 36 0 24-16 50-70 84z"/>
-  <path d="M36.1 35.4 49.75 49" fill="none" stroke="#fff" stroke-width="4.25" stroke-linecap="round"/>
+
+  <!-- squircle app tile -->
+  <rect width="512" height="512" rx="116" ry="116" fill="url(#lfTile)"/>
+  <!-- soft highlight so the tile is not flat -->
+  <path d="M116 0h280c-38 62-96 104-174 126-70 20-140 22-198 10C34 96 62 34 116 0z" fill="#ffffff" opacity=".08"/>
+
+  <!-- the search: one lens, filling the tile -->
+  <circle cx="206" cy="200" r="112" fill="url(#lfLens)"/>
+  <circle cx="206" cy="200" r="112" fill="none" stroke="#ffffff" stroke-width="30"/>
+  <!-- search handle -->
+  <path d="M288 282 398 392" fill="none" stroke="#ffffff" stroke-width="34" stroke-linecap="round"/>
+
+  <!-- inside the lens: where they were last seen -->
+  <path transform="translate(206 186) scale(8) translate(-12 -9)" fill="#ffffff"
+        d="M12 2a7 7 0 0 0-7 7c0 5.25 7 13 7 13s7-7.75 7-13a7 7 0 0 0-7-7z"/>
+  <circle cx="206" cy="186" r="21" fill="url(#lfTile)"/>
 </svg>

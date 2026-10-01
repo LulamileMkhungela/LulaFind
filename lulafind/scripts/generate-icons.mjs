@@ -48,6 +48,12 @@ const targets = [
   ['android/app/src/main/res/mipmap-xxxhdpi/ic_launcher_foreground.png', 432],
   // iOS App Store / home-screen icon.
   ['ios/App/App/Assets.xcassets/AppIcon.appiconset/AppIcon-512@2x.png', 1024],
+  // PWA / browser icons. These are the ones link previews and "Add to home
+  // screen" use, so they have to be regenerated with everything else - they sat
+  // on the old artwork for a while precisely because they were not in this list.
+  ['src/assets/icon-192.png', 192],
+  ['src/assets/icon-512.png', 512],
+  ['src/assets/icon-maskable-512.png', 512],
 ];
 
 if (!existsSync(markPath)) {
@@ -58,6 +64,7 @@ if (!existsSync(markPath)) {
 for (const [file, size] of targets) {
   const out = join(root, file);
   if (!existsSync(dirname(out))) continue; // density bucket not present in this checkout
+  // foreground = artwork only (Android masks it); maskable = full-bleed tile.
   render(file.includes('foreground') ? adaptive : mark, size, out);
 }
 

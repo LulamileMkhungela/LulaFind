@@ -4,7 +4,7 @@ import { ChangeDetectionStrategy, Component, Input } from '@angular/core';
  * The LulaFind mark.
  *
  * A magnifier with a location pin inside the lens: the app finds where a
- * missing person was last seen. Drawn in the LulaFind indigo (#232F72) so the
+ * missing person was last seen. Drawn in the LulaFind blue (#2196F3) so the
  * mark and the product colour are the same thing.
  *
  * One inline SVG so it renders identically on web, in the Android webview and in
@@ -28,9 +28,9 @@ import { ChangeDetectionStrategy, Component, Input } from '@angular/core';
       <title>{{ label }}</title>
       <defs>
         <linearGradient [attr.id]="tile" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stop-color="#33417f" />
-          <stop offset=".5" stop-color="#232f72" />
-          <stop offset="1" stop-color="#161e4d" />
+          <stop offset="0" stop-color="#64b5f6" />
+          <stop offset=".5" stop-color="#2196f3" />
+          <stop offset="1" stop-color="#1976d2" />
         </linearGradient>
         <linearGradient [attr.id]="lens" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0" stop-color="#ffffff" stop-opacity=".30" />

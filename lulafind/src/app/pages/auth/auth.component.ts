@@ -4,6 +4,7 @@ import { IonContent } from '@ionic/angular/ion-content';
 import { ToastController } from '@ionic/angular/toast-controller';
 import { IconComponent } from '../../shared/components/icon.component';
 import { AvatarComponent } from '../../shared/components/avatar.component';
+import { LogoComponent } from '../../shared/components/logo.component';
 import { AuthService, AuthProvider } from '../../core/services/auth.service';
 import { DataService } from '../../core/services/data.service';
 import { ProvinceCode, PROVINCES } from '../../core/models/types';
@@ -21,20 +22,15 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 @Component({
   selector: 'lf-auth',
   standalone: true,
-  imports: [IonContent, IconComponent, AvatarComponent],
+  imports: [IonContent, IconComponent, AvatarComponent, LogoComponent],
   template: `
     <ion-content class="lf-page auth" [class.welcome-bg]="mode() === 'welcome'">
       @if (mode() === 'welcome') {
         <section class="lf-fade-in snap-welcome">
           <div class="snap-logo-wrap">
             <div class="ghost-logo">
-              <span class="logo-disc" aria-hidden="true">
-                <svg width="40" height="40" viewBox="0 0 64 64" fill="none">
-                  <circle cx="29" cy="28" r="13" stroke="#fff" stroke-width="5"/>
-                  <line x1="39" y1="38" x2="50" y2="49" stroke="#fff" stroke-width="5" stroke-linecap="round"/>
-                  <path d="M29 23.5c0-2.2 3.3-3.2 3.3 0 0-3.2 3.3-2.2 3.3 0 0 3.3-3.3 5.4-3.3 5.4s-3.3-2.1-3.3-5.4z" fill="#fff" transform="translate(-3.3 1)"/>
-                </svg>
-              </span>
+              <!-- the shared mark, so this screen cannot drift from the app icon -->
+              <lf-logo [size]="72" [label]="''" />
               <span class="wordmark">lulafind</span>
               <span class="tagline">Bring them home.</span>
             </div>
@@ -386,11 +382,6 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
     }
     .snap-logo-wrap { flex: 1; display: flex; align-items: center; justify-content: center; }
     .ghost-logo { display: flex; flex-direction: column; align-items: center; gap: 12px; }
-    .logo-disc {
-      width: 72px; height: 72px; border-radius: 50%;
-      background: var(--lf-primary);
-      display: flex; align-items: center; justify-content: center;
-    }
     .wordmark {
       font-size: 40px; font-weight: 800; letter-spacing: -1.6px; line-height: 1;
       color: var(--lf-primary);
@@ -418,8 +409,14 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
     .snap-btn:active { transform: scale(.98); }
     .snap-btn:hover { filter: brightness(.97); }
     .snap-btn[disabled] { opacity: .5; pointer-events: none; }
-    .snap-btn--blue { background: var(--lf-primary-fill); color: #fff; }
-    :host-context(.lf-dark) .snap-btn--blue { background: #2374e1; }
+    /*
+     * The Log in button is the one asked for by name: #64B5F6, Material blue
+     * 300. White on that is only 2.2:1 and washes out, so the label is the deep
+     * navy #0a2540 (7:1). Every other filled button in the app stays on
+     * --lf-primary-fill (#2196F3) with white text.
+     */
+    .snap-btn--blue { background: #64b5f6; color: #0a2540; }
+    :host-context(.lf-dark) .snap-btn--blue { background: #64b5f6; color: #0a2540; }
     .snap-btn--google, .snap-btn--black {
       background: transparent;
       color: var(--ion-text-color);
