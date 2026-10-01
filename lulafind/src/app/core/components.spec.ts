@@ -9,6 +9,7 @@ import { LocalDb } from './data/local-db';
 import { LULA_API, MockApi } from './data/api';
 import { AuthService } from './services/auth.service';
 import { DataService } from './services/data.service';
+import { feedWithRails } from './utils/feed';
 import { ChatService } from './services/chat.service';
 import { emptyFilter } from './models/types';
 import { FilterBarComponent } from '../shared/components/filter-bar.component';
@@ -268,12 +269,19 @@ describe('Components render', () => {
   it('does not insert a story rail before the feed reaches post eight', async () => {
     const data = TestBed.inject(DataService);
     await data.loadFeed();
+    const feed = data.feed();
+
+    // The threshold is a pure rule, so test it directly. This used to lean on
+    // the guest feed being cut to four posts, which is why removing guest
+    // browsing made it fail - the rule never changed.
+    expect(feedWithRails(feed.slice(0, 7)).some((s) => s.kind === 'stories')).toBe(false);
+    expect(feedWithRails(feed.slice(0, 8)).some((s) => s.kind === 'stories')).toBe(true);
+
     const f = TestBed.createComponent(HomeComponent);
     await settle(f);
     const html: string = (f.nativeElement as HTMLElement).innerHTML;
-    expect(html).not.toContain('lf-story-rail');
-    expect(html).not.toContain('Create story');
     expect(html).toContain('lf-post-card');
+    if (feed.length >= 8) expect(html).toContain('lf-story-rail');
   });
 
   it('renders the LulaFind welcome and login screens', async () => {
@@ -285,7 +293,9 @@ describe('Components render', () => {
 
     expect(html).toContain('Continue with Google');
     expect(html).toContain('Create new account');
-    expect(html).toContain('Log in');
+    expect(html).toContain('Log In with email');
+    // Guest browsing was removed: everyone signs in or signs up.
+    expect(html).not.toContain('Browse as guest');
 
     // switch to signin mode
     f.componentInstance.mode.set('signin');

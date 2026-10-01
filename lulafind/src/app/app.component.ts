@@ -40,7 +40,7 @@ import { demoMode, localMode } from './core/data/demo';
           <div class="lf-splash__logo">
             <lf-logo [size]="76" />
           </div>
-          <p class="lf-splash__tagline">Bring them home.</p>
+          <p class="lf-splash__tagline">Spot me, help me and bring me home.</p>
           <div class="lf-splash__dots" role="status" aria-label="Loading">
             <span></span><span></span><span></span>
           </div>
@@ -135,7 +135,7 @@ export class AppComponent implements OnInit {
       // Remove from DOM after the CSS transition finishes (580ms) and redirect if needed.
       setTimeout(() => {
         this.splashVisible.set(false);
-        if (!this.auth.signedIn() && !this.auth.guestBrowsing()) {
+        if (!this.auth.signedIn()) {
           void this.router.navigate(['/auth']);
         }
       }, 580);

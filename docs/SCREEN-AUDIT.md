@@ -30,7 +30,7 @@ No screen may show a block of its *own* copy longer than 30 words. Text written 
 | Help | 470 words | 3 | 26w | none |
 | Tips | 21 words | 0 | none | none |
 | Terms | 401 words | 6 | 30w | none |
-| Sign in | 12 words | 0 | none | none |
+| Sign in | 16 words | 0 | none | none |
 | FAQs (the long answers live here) | 254 words | 0 | none | none |
 
 
@@ -180,7 +180,7 @@ Settings5AppearanceThemeDark (default)LightMatch my phoneBackgroundPick the colo
 ### Safety centre
 
 ```text
-Safety & consent centre5 LulaFind never reads anyone's location without that person's own consent, and never sends a case to the police or an NGO. Get help has the real numbers. My locationPermission: unknownNo location has been read yet. Read my location  Forget my location Safety beaconSend "I am safe" check-ins with your location to people you choose. Off by default.Beacon enabled Send an "I am safe" check-in now Be on the lookout Tell your followers you may not feel safe where you are going. They see the area, and 24 hours later we ask them to check on you. Where are you going, or which area worries you?Anything your followers should know? (optional)Attach where I am now, so my followers see it Start the lookout If I go missing A lookout only becomes a case if a follower says something is wrong. This decides whether LulaFind may post that case, and who sees it. Let LulaFind post a case about meOff by default. Without it, a "no" answer never becomes a post.Being foundWe can ask you if a case is about you. Your account is never handed to the family.Allow name matchingConsent log on my casesFamily reported at the station and messaged Pink Ladies. LulaFind did not send the caseHelp find Thato Mokoena, 14 - last · 28 Sept 2026, 11:08expires 28 Oct 2026, 10:38Photos stay on this case unless the family shares the linkHelp find Thato Mokoena, 14 - last · 28 Sept 2026, 11:08expires 28 Oct 2026, 10:38 Privacy & data settings
+Safety & consent centre5 LulaFind never reads anyone's location without that person's own consent, and never sends a case to the police or an NGO. Get help has the real numbers. My locationPermission: unknownNo location has been read yet. Read my location  Forget my location Safety beaconSend "I am safe" check-ins with your location to people you choose. Off by default.Beacon enabled Send an "I am safe" check-in now Be on the lookout Tell your followers you may not feel safe where you are going. They see the area, and 24 hours later we ask them to check on you. Where are you going, or which area worries you?Anything your followers should know? (optional)Attach where I am now, so my followers see it Start the lookout If I go missing A lookout only becomes a case if a follower says something is wrong. This decides whether LulaFind may post that case, and who sees it. Let LulaFind post a case about meOff by default. Without it, a "no" answer never becomes a post.Being foundWe can ask you if a case is about you. Your account is never handed to the family.Allow name matchingConsent log on my casesFamily reported at the station and messaged Pink Ladies. LulaFind did not send the caseHelp find Thato Mokoena, 14 - last · 28 Sept 2026, 11:56expires 28 Oct 2026, 11:26Photos stay on this case unless the family shares the linkHelp find Thato Mokoena, 14 - last · 28 Sept 2026, 11:56expires 28 Oct 2026, 11:26 Privacy & data settings
 ```
 - 27 words of app copy: "Tell your followers you may not feel safe where you are going. They see the area, and 24 hours later we ask them to check on you."
 - 25 words of app copy: "LulaFind never reads anyone's location without that person's own consent, and never sends a case to the police or an NGO. has the real numbers."
@@ -219,7 +219,7 @@ Terms & privacy5LulaFind 1.0.0 · last updated 24 September 2026In one paragraph
 ### Sign in
 
 ```text
-lulafindBring them home.Log inContinue with Googleor Create new account Browse as guest
+LulaFindSpot me, help me and bring me home.Log In with emailContinue with Googleor Create new account
 ```
 No app paragraphs - labels and values only.
 

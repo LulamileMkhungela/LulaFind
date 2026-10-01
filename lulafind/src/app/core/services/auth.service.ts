@@ -52,13 +52,8 @@ export class AuthService {
 
   readonly user = signal<UserProfile | null>(null);
   readonly ready = signal(false);
-  readonly guestBrowsing = signal(false);
   readonly signedIn = computed(() => !!this.user());
   readonly needsOnboarding = computed(() => !!this.user() && !this.user()!.onboarded);
-
-  setGuestBrowsing(val: boolean): void {
-    this.guestBrowsing.set(val);
-  }
   readonly userAvatar = computed(() => {
     const u = this.user();
     if (!u) return avatar('Guest');
