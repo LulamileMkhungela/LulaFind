@@ -29,7 +29,6 @@ Next
 
 ```text
 Demo data - sample cases, not real people. Turn it off in the URL with ?demo=0
-Search
 1
 5
 All
@@ -52,7 +51,7 @@ Missing person
 Help find Thato Mokoena, 14 - last seen Orlando West, Soweto
 Last seen: Orlando taxi rank, Soweto
 Thato left home on Tuesday morning for school at Orlando High and never arrived. She was wearing her full school uniform with a grey cardigan and black takkies.
-Her phone went off at 09:40 near the Orlando taxi rank. She was with her cousin Nokuthula, who says Thato said she wa
+Her phone went off at 09:40 near the Orlando taxi rank. She was with her cousin Nokuthula, who says Thato said she was going
 ```
 
 ### 03-feed-signed-in - LulaFind
@@ -61,7 +60,6 @@ Her phone went off at 09:40 near the Orlando taxi rank. She was with her cousin 
 
 ```text
 Demo data - sample cases, not real people. Turn it off in the URL with ?demo=0
-Search
 1
 5
 All
@@ -84,7 +82,7 @@ Missing person
 Help find Thato Mokoena, 14 - last seen Orlando West, Soweto
 Last seen: Orlando taxi rank, Soweto
 Thato left home on Tuesday morning for school at Orlando High and never arrived. She was wearing her full school uniform with a grey cardigan and black takkies.
-Her phone went off at 09:40 near the Orlando taxi rank. She was with her cousin Nokuthula, who says Thato said she wa
+Her phone went off at 09:40 near the Orlando taxi rank. She was with her cousin Nokuthula, who says Thato said she was going
 ```
 
 ### 04-case-opened - /post/p_thato?demo=1
@@ -354,7 +352,6 @@ Share only information you are allowed to post. In an emergency, call 10111.
 
 ```text
 Demo data - sample cases, not real people. Turn it off in the URL with ?demo=0
-Search
 5
 Spotlight
 View
@@ -443,7 +440,6 @@ Menu
 
 ```text
 Demo data - sample cases, not real people. Turn it off in the URL with ?demo=0
-Search
 5
 Menu
 Thandi Mokoena
@@ -458,7 +454,6 @@ help points
 Green ring: safe. Amber ring: watch me. Red ring: needs help.
 Check in
 Edit profile
-Joined 03 Jun 2026
 All shortcuts
 Posts
 Saved
@@ -807,7 +802,6 @@ An
 
 ```text
 Demo data - sample cases, not real people. Turn it off in the URL with ?demo=0
-Search
 5
 Search
 missing in Gauteng
@@ -826,7 +820,7 @@ Missing person
 Help find Thato Mokoena, 14 - last seen Orlando West, Soweto
 Last seen: Orlando taxi rank, Soweto
 Thato left home on Tuesday morning for school at Orlando High and never arrived. She was wearing her full school uniform with a grey cardigan and black takkies.
-Her phone went off at 09:40 near the Orlando taxi rank. She was with her cousin Nokuthula, who says Thato said she was going to the clinic and would be back by 14:00. Sh
+Her phone went off at 09:40 near the Orlando taxi rank. She was with her cousin Nokuthula, who says Thato said she was going to the clinic and would be back by 14:00. She never
 ```
 
 ## Console errors

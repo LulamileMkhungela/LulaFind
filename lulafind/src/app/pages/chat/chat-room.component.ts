@@ -97,19 +97,19 @@ import { MediaService } from '../../core/services/media.service';
           <button class="rm" (click)="clearPending()" aria-label="Remove photo"><lf-icon name="x" [size]="14" /></button>
         </div>
       }
-      @if (emojiOpen()) {
-        <div class="picker" role="group" aria-label="Emoji">
-          @for (e of EMOJIS; track e) {
-            <button type="button" class="em" (click)="addEmoji(e)" [attr.aria-label]="'Insert ' + e">{{ e }}</button>
-          }
-        </div>
-      }
       <div class="bar">
-        <button type="button" class="ico em-btn" [class.on]="emojiOpen()" (click)="emojiOpen.set(!emojiOpen())"
-                aria-label="Emoji" [attr.aria-expanded]="emojiOpen()"><lf-icon name="smile" [size]="22" /></button>
         <button type="button" class="ico" (click)="attach()" aria-label="Attach a photo"><lf-icon name="image" [size]="22" /></button>
         <button type="button" class="ico" (click)="attach(true)" aria-label="Take a photo"><lf-icon name="camera" [size]="22" /></button>
+        <!--
+          No custom emoji keypad: the phone keyboard already has emoji,
+          autocorrect and word suggestions, and it is the one people know. These
+          attributes ask for them explicitly - without them a webview can put up
+          a bare keyboard with no suggestions and no emoji key at all.
+        -->
         <ion-textarea rows="1" autoGrow placeholder="Message…" [value]="draft"
+                      inputmode="text" enterkeyhint="send"
+                      autocorrect="on" autocomplete="on" autocapitalize="sentences" spellcheck="true"
+                      aria-label="Message"
                       (ionInput)="draft = $any($event.target).value"
                       (keydown.enter)="$event.preventDefault(); send()"></ion-textarea>
         <button class="lf-icon-btn send" (click)="send()" [disabled]="chat.sending() || (!draft.trim() && !pending())">
@@ -166,10 +166,6 @@ import { MediaService } from '../../core/services/media.service';
       background: transparent; color: var(--lf-primary); display: grid; place-items: center; }
     .ico:hover { background: var(--lf-hover); }
     .ico.on { background: var(--lf-primary-soft); }
-    .em-btn { font-size: 19px; line-height: 1; }
-    .picker { display: grid; grid-template-columns: repeat(8, 1fr); gap: 2px; width: 100%;
-      padding: 6px 2px 8px; border-bottom: 1px solid var(--lf-line); }
-    .em { border: none; background: none; font-size: 21px; line-height: 1; padding: 5px 0; cursor: pointer; border-radius: 8px; }
     .em:active { background: var(--lf-card-2); }
     .pending { display: flex; align-items: center; gap: 9px; width: 100%; padding-bottom: 8px;
       border-bottom: 1px solid var(--lf-line); margin-bottom: 8px; }
@@ -206,18 +202,7 @@ export class ChatRoomComponent implements OnInit, OnDestroy {
   draft = '';
   private timer: any;
 
-  protected emojiOpen = signal(false);
   protected pending = signal<MediaItem | null>(null);
-
-  /**
-   * Real phone emojis. No image pack to ship and nothing to download, so they
-   * work offline and render in whatever style the device already uses.
-   */
-  protected readonly EMOJIS = [
-    '\ud83d\udc4d', '\ud83d\ude4f', '\u2764\ufe0f', '\ud83d\ude22', '\ud83d\ude2e', '\ud83e\udd7a',
-    '\u2705', '\u274c', '\ud83d\udea8', '\ud83d\ude97', '\ud83d\udc15', '\ud83c\udfe0',
-    '\ud83d\udccd', '\ud83d\udcde', '\ud83d\dd52', '\u2b50'
-  ];
 
   readonly me = computed(() => this.auth.viewerId);
   readonly thread = computed(() => this.chat.threads().find((t) => t.id === this.route.snapshot.paramMap.get('threadId')));
@@ -289,13 +274,8 @@ export class ChatRoomComponent implements OnInit, OnDestroy {
     }).format(day);
   }
 
-  protected addEmoji(e: string): void {
-    this.draft = `${this.draft}${e}`;
-  }
-
   /** Attach a photo from the gallery, or straight from the camera. */
   protected async attach(camera = false): Promise<void> {
-    this.emojiOpen.set(false);
     try {
       const m = await this.media.pickImage({ source: camera ? 'camera' : 'gallery', quality: 78 });
       if (m) this.pending.set({ ...m, src: await this.media.compress(m.src, 1200) });
@@ -312,7 +292,6 @@ export class ChatRoomComponent implements OnInit, OnDestroy {
     const text = this.draft.trim();
     const photo = this.pending();
     if (!text && !photo) return;
-    this.emojiOpen.set(false);
     this.sendError.set('');
     try {
       await this.chat.send(text, photo);

@@ -161,23 +161,38 @@ export class PostActionsService {
         { text: 'Cancel', role: 'cancel' },
         {
           text: 'Delete', role: 'destructive',
-          handler: async () => {
-            try {
-              const gone = await this.data.deletePost(p.id);
-              if (gone) {
-                await this.toast(p.repostOf ? 'Repost deleted' : 'Post deleted');
-                onGone?.();
-              } else {
-                await this.toast('The post was not deleted. Check your connection and try again.');
-              }
-            } catch (e: unknown) {
-              await this.toast(e instanceof Error ? `Post not deleted: ${e.message}` : 'The post was not deleted. Try again.');
-            }
-          }
+          /*
+           * Deliberately not `async`.
+           *
+           * Ionic keeps a dialog on screen until its button handler settles, so
+           * an async handler meant "Delete" left the popup sitting there for the
+           * whole write. This returns nothing, so the dialog is gone on the tap;
+           * the removal itself runs in the background.
+           */
+          handler: () => { void this.runDelete(p, onGone); }
         }
       ]
     });
     await alert.present();
+  }
+
+  /**
+   * Delete a post the person has already confirmed.
+   *
+   * Order matters: the caller (a list, or the post's own page) drops the post
+   * first so it disappears the instant Delete is tapped, and the toast is fired
+   * without being awaited - nothing here blocks the screen.
+   */
+  private async runDelete(p: Post, onGone?: () => void): Promise<void> {
+    onGone?.();
+    try {
+      const gone = await this.data.deletePost(p.id);
+      void this.toast(gone
+        ? (p.repostOf ? 'Repost deleted' : 'Post deleted')
+        : 'The post was not deleted. Check your connection and try again.');
+    } catch (e: unknown) {
+      void this.toast(e instanceof Error ? `Post not deleted: ${e.message}` : 'The post was not deleted. Try again.');
+    }
   }
 
   async report(p: Post): Promise<void> {

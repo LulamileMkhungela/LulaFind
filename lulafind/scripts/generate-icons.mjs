@@ -18,11 +18,11 @@ const mark = readFileSync(markPath, 'utf8');
 
 /** The mark with the tile removed, for the Android adaptive-icon foreground. */
 const adaptive = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
-  <g transform="translate(256 256) scale(.62) translate(-212 -212)">
-    <circle cx="212" cy="206" r="104" fill="none" stroke="#ffffff" stroke-width="30"/>
-    <path transform="translate(212 212) scale(.82)" fill="#ffffff"
-      d="M0 62C-54 28-70 2-70-22c0-22 17-36 38-36 16 0 26 10 32 22 6-12 16-22 32-22 21 0 38 14 38 36 0 24-16 50-70 84z"/>
-    <path d="M289 283 398 392" fill="none" stroke="#ffffff" stroke-width="34" stroke-linecap="round"/>
+  <g transform="translate(256 256) scale(.62) translate(-206 -200)">
+    <circle cx="206" cy="200" r="112" fill="none" stroke="#ffffff" stroke-width="30"/>
+    <path d="M288 282 398 392" fill="none" stroke="#ffffff" stroke-width="34" stroke-linecap="round"/>
+    <path transform="translate(206 186) scale(8) translate(-12 -9)" fill="#ffffff"
+      d="M12 2a7 7 0 0 0-7 7c0 5.25 7 13 7 13s7-7.75 7-13a7 7 0 0 0-7-7z"/>
   </g>
 </svg>`;
 

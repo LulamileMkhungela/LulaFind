@@ -294,6 +294,7 @@ interface MissingField { key: string; label: string; }
               <p class="template-instruction">Fill in the prompts. Your post will stay as readable text unless you choose Generate.</p>
             }
             <textarea class="body-input" [class.body-input--template]="!editing()" [rows]="editing() ? 5 : 13"
+                      inputmode="text" autocorrect="on" autocomplete="on" autocapitalize="sentences" spellcheck="true"
                       maxlength="5000" data-field="body" [placeholder]="editing() ? bodyPlaceholder() : ''"
                       [value]="f().body" (input)="patch({ body: $any($event.target).value })"
                       aria-label="Post text template"></textarea>

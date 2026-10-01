@@ -14,7 +14,7 @@ No screen may show a block of its *own* copy longer than 30 words. Text written 
 | Home / feed | 935 words | 0 | none | 122w |
 | Spotlight | 34 words | 0 | none | none |
 | Chats (list) | 31 words | 0 | none | none |
-| Me | 46 words | 0 | none | none |
+| Me | 42 words | 0 | none | none |
 | Notifications | 103 words | 1 | 19w | none |
 | Found (reunions) | 103 words | 1 | 20w | none |
 | Review queue | 34 words | 1 | 23w | none |
@@ -37,7 +37,7 @@ No screen may show a block of its *own* copy longer than 30 words. Text written 
 ### Home / feed
 
 ```text
-Search15Pull to refresh All  Missing people 4 Home Sweet Home  Sightings  Lost pets All provincesGautengKwaZulu-NatalWestern CapeEastern CapeFree StateLimpopoMpumalangaNorth WestNorthern Cape Most recent  Still missing  Reset Johan BothaFarm community watch.Free State· Missing person 9h· + Follow Hendrik Botha, 78, walked out of the house at 05:30 - WesselbronLast seen: Farm Weltevrede, R30My father Hendrik has early-stage dementia. He walked out of the farmhouse at 05:30 in his pyjamas and slippers. He believes it is 1974 and that he is walking to school.
+15Pull to refresh All  Missing people 4 Home Sweet Home  Sightings  Lost pets All provincesGautengKwaZulu-NatalWestern CapeEastern CapeFree StateLimpopoMpumalangaNorth WestNorthern Cape Most recent  Still missing  Reset Johan BothaFarm community watch.Free State· Missing person 9h· + Follow Hendrik Botha, 78, walked out of the house at 05:30 - WesselbronLast seen: Farm Weltevrede, R30My father Hendrik has early-stage dementia. He walked out of the farmhouse at 05:30 in his pyjamas and slippers. He believes it is 1974 and that he is walking to school.
 He answers to "Hennie". He is 1.78 m, thin, grey hair, and will be very confused and cold. The veld around the farm is open and there are two farm dams.
 We have searchers on the ground from 06:00. If you are on the R30 between Wesselbron and Bothaville, please slow down and look at the verges.…see more1892 comments76 reposts Follow each other to message Lerato Mahlangu commented on thisThandi MokoenaCommunity organiser. If you see something, say something. Ubuntu.Gauteng· Missing person 3d·Help find Thato Mokoena, 14 - last seen Orlando West, SowetoLast seen: Orlando taxi rank, SowetoThato left home on Tuesday morning for school at Orlando High and never arrived. She was wearing her full school uniform with a grey cardigan and black takkies.
 Her phone went off at 09:40 near the Orlando taxi rank. She was with her cousin Nokuthula, who says Thato said she was going to the clinic and would be back by 14:00. She never came home.
@@ -60,7 +60,7 @@ No app paragraphs - labels and values only.
 ### Spotlight
 
 ```text
-Search5Spotlight View  Create AllABCDEFGHIJKLMNOPQRSTUVWXYZNo spotlight for your surname yetStart the Mokoena spotlight All spotlights 0No spotlight for that letter yetCreate it and it becomes the home for every post with that surname.Create a spotlight
+5Spotlight View  Create AllABCDEFGHIJKLMNOPQRSTUVWXYZNo spotlight for your surname yetStart the Mokoena spotlight All spotlights 0No spotlight for that letter yetCreate it and it becomes the home for every post with that surname.Create a spotlight
 ```
 No app paragraphs - labels and values only.
 
@@ -76,7 +76,7 @@ No app paragraphs - labels and values only.
 ### Me
 
 ```text
-Search5Menu Thandi Mokoena @thandi.m · Soweto, Johannesburg · GautengCommunity organiser. If you see something, say something. Ubuntu.6followers4following2.3khelp pointsGreen ring: safe. Amber ring: watch me. Red ring: needs help. Check in  Edit profile  Joined 03 Jun 2026 All shortcuts  Posts  Saved FriendsAdd a StorySafetyTipsAdminPeople foundFAQsGet helpSign out
+5Menu Thandi Mokoena @thandi.m · Soweto, Johannesburg · GautengCommunity organiser. If you see something, say something. Ubuntu.6followers4following2.3khelp pointsGreen ring: safe. Amber ring: watch me. Red ring: needs help. Check in  Edit profile  All shortcuts  Posts  Saved FriendsAdd a StorySafetyTipsAdminPeople foundFAQsGet helpSign out
 ```
 No app paragraphs - labels and values only.
 
@@ -138,7 +138,7 @@ Poster5SignalBold and urgentAuroraSoft glass on a glowing gradientEditorialClean
 ### Profile
 
 ```text
-Search5Profile Lerato Mahlangu @lerato.mSocial worker. GBV advocate.754followers253following347help points1posts Following  Share MessagePostsLerato MahlanguSocial worker. GBV advocate.Gauteng· Found - home safe 3d· Following FOUND: Rex the boerboel is back in MamelodiLost pet: PetLast seen: Mamelodi, PretoriaRex slipped his collar at the taxi rank on Sunday. A neighbour recognised him from the photo and walked him home the next morning.…see more9622 reposts Message the poster
+5Profile Lerato Mahlangu @lerato.mSocial worker. GBV advocate.754followers253following347help points1posts Following  Share MessagePostsLerato MahlanguSocial worker. GBV advocate.Gauteng· Found - home safe 3d· Following FOUND: Rex the boerboel is back in MamelodiLost pet: PetLast seen: Mamelodi, PretoriaRex slipped his collar at the taxi rank on Sunday. A neighbour recognised him from the photo and walked him home the next morning.…see more9622 reposts Message the poster
 ```
 No app paragraphs - labels and values only.
 
@@ -148,7 +148,7 @@ No app paragraphs - labels and values only.
 ### Search
 
 ```text
-Search5Searchmissing in GautengSAPS caseHome Sweet HomefoundOrlandoNdlelaStart with a surnameJump to a provinceGautengKwaZulu-NatalWestern CapeEastern CapeFree StateLimpopoMpumalangaNorth WestNorthern CapePeople
+5Searchmissing in GautengSAPS caseHome Sweet HomefoundOrlandoNdlelaStart with a surnameJump to a provinceGautengKwaZulu-NatalWestern CapeEastern CapeFree StateLimpopoMpumalangaNorth WestNorthern CapePeople
 ```
 No app paragraphs - labels and values only.
 
@@ -180,7 +180,7 @@ Settings5AppearanceThemeDark (default)LightMatch my phoneBackgroundPick the colo
 ### Safety centre
 
 ```text
-Safety & consent centre5 LulaFind never reads anyone's location without that person's own consent, and never sends a case to the police or an NGO. Get help has the real numbers. My locationPermission: unknownNo location has been read yet. Read my location  Forget my location Safety beaconSend "I am safe" check-ins with your location to people you choose. Off by default.Beacon enabled Send an "I am safe" check-in now Be on the lookout Tell your followers you may not feel safe where you are going. They see the area, and 24 hours later we ask them to check on you. Where are you going, or which area worries you?Anything your followers should know? (optional)Attach where I am now, so my followers see it Start the lookout If I go missing A lookout only becomes a case if a follower says something is wrong. This decides whether LulaFind may post that case, and who sees it. Let LulaFind post a case about meOff by default. Without it, a "no" answer never becomes a post.Being foundWe can ask you if a case is about you. Your account is never handed to the family.Allow name matchingConsent log on my casesFamily reported at the station and messaged Pink Ladies. LulaFind did not send the caseHelp find Thato Mokoena, 14 - last · 28 Sept 2026, 09:44expires 28 Oct 2026, 09:14Photos stay on this case unless the family shares the linkHelp find Thato Mokoena, 14 - last · 28 Sept 2026, 09:44expires 28 Oct 2026, 09:14 Privacy & data settings
+Safety & consent centre5 LulaFind never reads anyone's location without that person's own consent, and never sends a case to the police or an NGO. Get help has the real numbers. My locationPermission: unknownNo location has been read yet. Read my location  Forget my location Safety beaconSend "I am safe" check-ins with your location to people you choose. Off by default.Beacon enabled Send an "I am safe" check-in now Be on the lookout Tell your followers you may not feel safe where you are going. They see the area, and 24 hours later we ask them to check on you. Where are you going, or which area worries you?Anything your followers should know? (optional)Attach where I am now, so my followers see it Start the lookout If I go missing A lookout only becomes a case if a follower says something is wrong. This decides whether LulaFind may post that case, and who sees it. Let LulaFind post a case about meOff by default. Without it, a "no" answer never becomes a post.Being foundWe can ask you if a case is about you. Your account is never handed to the family.Allow name matchingConsent log on my casesFamily reported at the station and messaged Pink Ladies. LulaFind did not send the caseHelp find Thato Mokoena, 14 - last · 28 Sept 2026, 10:19expires 28 Oct 2026, 09:49Photos stay on this case unless the family shares the linkHelp find Thato Mokoena, 14 - last · 28 Sept 2026, 10:19expires 28 Oct 2026, 09:49 Privacy & data settings
 ```
 - 27 words of app copy: "Tell your followers you may not feel safe where you are going. They see the area, and 24 hours later we ask them to check on you."
 - 25 words of app copy: "LulaFind never reads anyone's location without that person's own consent, and never sends a case to the police or an NGO. has the real numbers."

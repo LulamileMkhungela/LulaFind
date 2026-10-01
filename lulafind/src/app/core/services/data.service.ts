@@ -835,8 +835,17 @@ export class DataService {
     const before = await this.loadPost(id);
     if (!before) return true;
     await this.api.deletePost(id);
-    this.feed.set(this.feed().filter((p) => p.id !== id));
-    this.savedPosts.set(this.savedPosts().filter((p) => p.id !== id));
+    /*
+     * Every list the deleted post could be sitting in, not just the feed. It
+     * used to clear the feed and saved posts only, so a post deleted from the
+     * Menu stayed on the Menu - the page was reading `myAuthored`, which nothing
+     * had touched.
+     */
+    const drop = (list: Post[]) => list.filter((p) => p.id !== id);
+    this.feed.set(drop(this.feed()));
+    this.savedPosts.set(drop(this.savedPosts()));
+    this.myAuthored.set(drop(this.myAuthored()));
+    this.broughtHome.set(drop(this.broughtHome()));
     this.cache.update((c) => { const rest = { ...c }; delete rest[id]; return rest; });
     await this.loadFeed();
     const still = await this.api.post(id).catch(() => null);

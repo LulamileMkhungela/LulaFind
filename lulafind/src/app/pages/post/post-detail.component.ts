@@ -264,7 +264,10 @@ import { leadMarkView } from '../../core/utils/mark-check';
                 <lf-avatar [src]="myAvatar()" [name]="myName()" [size]="40" />
                 <div class="compose">
                   <div class="field">
+                    <!-- autocorrect + suggestions + the keyboard's own emoji key -->
                     <textarea #box rows="1" [placeholder]="replyTo() ? 'Add a reply…' : 'Add a comment…'" [value]="draft()"
+                              inputmode="text" enterkeyhint="send"
+                              autocorrect="on" autocomplete="on" autocapitalize="sentences" spellcheck="true"
                               (input)="onType($event)" (keydown.enter)="onEnter($event)" aria-label="Write a comment"></textarea>
                     @if (draft().trim() || commentMedia().length) {
                       <button type="button" class="post" [disabled]="posting()" (click)="submitComment()">{{ replyTo() ? 'Reply' : 'Post' }}</button>

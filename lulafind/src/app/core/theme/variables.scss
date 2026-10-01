@@ -30,7 +30,7 @@
  *   --lf-card-2    secondary button, input, hover  #E4E6EB / #3A3B3C
  *   --lf-line      dividers               #CED0D4 / #3E4042
  *   --lf-muted     secondary text         #65676B / #B0B3B8
- *   --lf-primary   Facebook blue          #1877F2 / #2D88FF
+ *   --lf-primary   LulaFind indigo        #232F72 / #A9B6F2
  * ------------------------------------------------------------------ */
 :root {
   --lf-radius: 8px;
@@ -38,15 +38,20 @@
   --lf-gap: 12px;
 
   color-scheme: light;
-  --lf-primary: #1877f2;
-  --lf-primary-rgb: 24, 119, 242;
-  /* Filled surfaces (buttons, bubbles) carry white text: this shade holds
-     WCAG AA for that, while --lf-primary stays the link/icon blue. */
-  --lf-primary-fill: #166fe5;
+  /*
+   * The LulaFind indigo. One colour carries the whole app: every filled button,
+   * link, active tab and badge. #232F72 is dark enough that white text on it
+   * passes WCAG AA (12.4:1), so the fill and the ink are the same value here.
+   * Lighter tints are secondary surfaces only (--lf-primary-soft), never a
+   * second brand colour.
+   */
+  --lf-primary: #232f72;
+  --lf-primary-rgb: 35, 47, 114;
+  --lf-primary-fill: #232f72;
   --lf-primary-text: #ffffff;
-  --lf-primary-soft: #e7f3ff;
-  --lf-primary-soft-text: #1877f2;
-  --lf-link: #216fdb;
+  --lf-primary-soft: #e8eaf6;
+  --lf-primary-soft-text: #232f72;
+  --lf-link: #232f72;
   --lf-bg: #f0f2f5;
   --lf-card: #ffffff;
   --lf-card-2: #e4e6eb;
@@ -95,12 +100,12 @@
   --ion-color-step-600: #65676b;
   --ion-color-step-850: #1c1e21;
 
-  --ion-color-primary: #1877f2;
-  --ion-color-primary-rgb: 24, 119, 242;
+  --ion-color-primary: #232f72;
+  --ion-color-primary-rgb: 35, 47, 114;
   --ion-color-primary-contrast: #ffffff;
   --ion-color-primary-contrast-rgb: 255, 255, 255;
-  --ion-color-primary-shade: #166fe5;
-  --ion-color-primary-tint: #2d88ff;
+  --ion-color-primary-shade: #1d2760;
+  --ion-color-primary-tint: #39468c;
 
   --ion-color-secondary: #31a24c;
   --ion-color-secondary-rgb: 49, 162, 76;
@@ -125,14 +130,23 @@
 /* Facebook dark (Settings -> Appearance). */
 :root.lf-dark {
   color-scheme: dark;
-  --lf-primary: #4599ff;
-  --lf-primary-rgb: 69, 153, 255;
-  /* White text on the fill holds AA; the lighter --lf-primary stays for links. */
-  --lf-primary-fill: #1b6fe0;
+  /*
+   * The same indigo, split by job.
+   *
+   * #232F72 is still the brand: every filled surface (primary buttons, the
+   * Create tab, badges, the switch knob) is literally #232F72 with white on it,
+   * which passes AA at 12.4:1. What changes is indigo used as *ink* - the
+   * selected tab label, links, spinners, small icons. #232F72 on a black page
+   * would be unreadable, so those take a lighter tint of the same hue. Same
+   * colour, one step up in lightness: lighter only where legibility needs it.
+   */
+  --lf-primary: #a9b6f2;
+  --lf-primary-rgb: 169, 182, 242;
+  --lf-primary-fill: #232f72;
   --lf-primary-text: #ffffff;
-  --lf-primary-soft: #263951;
-  --lf-primary-soft-text: #6cb2ff;
-  --lf-link: #6cb2ff;
+  --lf-primary-soft: #232b52;
+  --lf-primary-soft-text: #b9c3f5;
+  --lf-link: #b9c3f5;
   /* --lf-signal fills buttons (white on it passes AA); --lf-signal-text is the
      lifted red used wherever red is the text itself. */
   --lf-signal-text: #ff5c72;
@@ -166,10 +180,10 @@
   --ion-color-step-600: #b0b3b8;
   --ion-color-step-850: #e4e6eb;
 
-  --ion-color-primary: #4599ff;
-  --ion-color-primary-rgb: 69, 153, 255;
+  --ion-color-primary: #a9b6f2;
+  --ion-color-primary-rgb: 169, 182, 242;
   --ion-color-primary-shade: #2374e1;
-  --ion-color-primary-tint: #4599ff;
+  --ion-color-primary-tint: #bcc6f5;
   --ion-color-medium: #b0b3b8;
   --ion-color-medium-rgb: 176, 179, 184;
   --ion-color-light: #3a3b3c;

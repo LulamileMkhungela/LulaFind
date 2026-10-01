@@ -190,7 +190,7 @@ ion-toast {
   --border-radius: 8px;
   font-weight: 600;
 }
-:root.lf-dark ion-toast { --background: #3a3b3c; --color: #e4e6eb; --button-color: #4599ff; }
+:root.lf-dark ion-toast { --background: #3a3b3c; --color: #e4e6eb; --button-color: var(--lf-primary); }
 
 ion-popover {
   --background: var(--lf-card);

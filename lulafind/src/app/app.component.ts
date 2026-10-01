@@ -38,11 +38,12 @@ import { demoMode, localMode } from './core/data/demo';
         <div class="lf-splash" [class.lf-splash--out]="splashFading()" aria-hidden="true">
           <div class="lf-splash__logo">
             <svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-              <circle cx="32" cy="32" r="32" fill="var(--lf-primary)"/>
-              <!-- Stylised magnifier with a heart inside -->
-              <circle cx="29" cy="28" r="12" stroke="#fff" stroke-width="4" fill="none"/>
-              <line x1="38" y1="37" x2="50" y2="49" stroke="#fff" stroke-width="4" stroke-linecap="round"/>
-              <path d="M29 24 c0-2 3-3 3 0 c0-3 3-2 3 0 c0 3-3 5-3 5 s-3-2-3-5z" fill="#fff"/>
+              <circle cx="32" cy="32" r="32" fill="var(--lf-primary)" />
+              <!-- the same mark as the app icon: a lens with a location pin inside -->
+              <circle cx="28" cy="27" r="13" stroke="#fff" stroke-width="4" fill="none" />
+              <path d="M26 19.5a7 7 0 0 0-7 7c0 5.2 7 12 7 12s7-6.8 7-12a7 7 0 0 0-7-7z" fill="#fff" />
+              <circle cx="26" cy="26.5" r="2.6" fill="var(--lf-primary)" />
+              <line x1="37" y1="36" x2="49" y2="48" stroke="#fff" stroke-width="4" stroke-linecap="round" />
             </svg>
           </div>
           <p class="lf-splash__tagline">Bring them home.</p>

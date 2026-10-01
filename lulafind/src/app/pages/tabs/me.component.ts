@@ -22,7 +22,7 @@ import { AuthService } from '../../core/services/auth.service';
 import { DataService } from '../../core/services/data.service';
 import { PlatformService } from '../../core/services/platform.service';
 import { ModerationService } from '../../core/services/moderation.service';
-import { compact, contributorLabel, dayMonth, parseFullName } from '../../core/utils/format';
+import { compact, contributorLabel, parseFullName } from '../../core/utils/format';
 import { PROVINCES, ProvinceCode, Post, UserProfile, defaultPrivacy, provinceName } from '../../core/models/types';
 import { CHECK_IN_COPY, RING_KEY, SafetyService } from '../../core/services/safety.service';
 import { MediaService } from '../../core/services/media.service';
@@ -113,7 +113,6 @@ import { MediaService } from '../../core/services/media.service';
               <lf-icon name="share" [size]="16" />
             </button>
           </div>
-          <div class="lf-meta"><lf-icon name="clock" [size]="14" /> Joined {{ dayMonth(me()!.createdAt) }}</div>
         </div>
 
         <div class="tabs menu-tabs" role="tablist" aria-label="Menu sections">
@@ -357,7 +356,6 @@ export class MeComponent {
   protected mod = inject(ModerationService);
 
   protected readonly compact = compact;
-  protected readonly dayMonth = dayMonth;
   protected readonly provinceName = provinceName;
   protected readonly provinces = PROVINCES;
   protected readonly contributorLabel = contributorLabel;
