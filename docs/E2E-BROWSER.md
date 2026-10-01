@@ -486,8 +486,8 @@ Menu
 Demo data - sample cases, not real people. Turn it off in the URL with ?demo=0
 Discover
 5
-Following · 4
-Followers · 6
+Following
+Followers
 Requests
 Statuses
 2
@@ -518,8 +518,8 @@ Menu
 Demo data - sample cases, not real people. Turn it off in the URL with ?demo=0
 Discover
 5
-Following · 4
-Followers · 6
+Following
+Followers
 Requests
 Statuses
 2
@@ -550,8 +550,8 @@ Menu
 Demo data - sample cases, not real people. Turn it off in the URL with ?demo=0
 Discover
 5
-Following · 4
-Followers · 6
+Following
+Followers
 Requests
 Statuses
 2
@@ -572,18 +572,18 @@ Menu
 Demo data - sample cases, not real people. Turn it off in the URL with ?demo=0
 Notifications
 5
-Notifications
+Mark all as read
 Did you get help finding Thato Mokoena?
-412 people have an idea and 3 commented. If Thato Mokoena is home, tap to mark them found.
+412 reactions and 3 comments. If Thato Mokoena is home, tap to mark them found.
 1m
 Violence nearby
 Bree taxi rank, north entrance, Johannesburg CBD. Stay away and do not approach.
 13m
 Did you get help?
-Hendrik Botha has 189 upvotes. Let us know if he is home so we can stop the search.
+Hendrik Botha’s case is still open. Let us know if he is home so we can stop the search.
 1h
 Your case is trending in Gauteng
-Help find Thato Mokoena has 412 upvotes and 187 shares.
+Help find Thato Mokoena has 412 reactions and 187 reposts.
 2h
 Station case number saved
 ORL/441/09/2026. LulaFind did not send this case.
