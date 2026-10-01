@@ -9,6 +9,7 @@ import { LogoComponent } from './logo.component';
 import { AvatarComponent } from './avatar.component';
 import { AuthService } from '../../core/services/auth.service';
 import { DataService } from '../../core/services/data.service';
+import { ChatService } from '../../core/services/chat.service';
 
 /**
  * The app's top navigation, laid out like LinkedIn's mobile header.
@@ -16,9 +17,8 @@ import { DataService } from '../../core/services/data.service';
  *   Root pages  [your photo]  [ search bar that fills the space ]  [bell]
  *   Inner pages [back]  Title  ............................  [page action] [bell]
  *
- * The photo opens your profile menu, the search bar opens Search, and the bell
- * is always the last thing on the right. Chats live in the bottom navigation,
- * so they are not repeated up here.
+ * The photo opens your profile menu, the search bar opens Search, Chats carries
+ * its unread badge, and the bell is always the last thing on the right.
  *
  * It is a real `ion-header` + `ion-toolbar`: that is what gives Ionic the
  * height it needs to push `ion-content` down. A page that needs its own action
@@ -62,6 +62,11 @@ import { DataService } from '../../core/services/data.service';
 
         <ion-buttons slot="end">
           <ng-content select="[lf-nav-end]" />
+          <!-- Chats left the bottom bar for the top one, so it keeps its badge here. -->
+          <a class="lf-round-btn" routerLink="/chats" aria-label="Chats">
+            <lf-icon name="messenger" [size]="22" [filled]="unread() > 0" />
+            @if (unread() > 0) { <span class="dot">{{ unread() > 99 ? '99+' : unread() }}</span> }
+          </a>
           <a class="lf-round-btn" routerLink="/notifications" aria-label="Notifications">
             <lf-icon name="bell" [size]="22" [filled]="alerts() > 0" />
             @if (alerts() > 0) { <span class="dot">{{ alerts() > 99 ? '99+' : alerts() }}</span> }
@@ -100,6 +105,7 @@ export class TopNavComponent {
   private router = inject(Router);
   private auth = inject(AuthService);
   private data = inject(DataService);
+  private chat = inject(ChatService);
 
   /** Set on inner pages: shows a back button and the title instead of the search bar. */
   readonly title = input('');
@@ -112,6 +118,7 @@ export class TopNavComponent {
   readonly avatar = computed(() => this.auth.userAvatar());
   readonly name = computed(() => this.auth.user()?.displayName ?? '');
   readonly alerts = computed(() => this.data.unreadNotifications());
+  readonly unread = computed(() => this.chat.unreadTotal());
 
   back(): void {
     const fallback = this.backTo() || '/home';

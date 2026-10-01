@@ -17,6 +17,7 @@ export const routes: Routes = [
         ]
       },
       { path: 'create', redirectTo: '/new', pathMatch: 'full' },
+      { path: 'discover', loadComponent: () => import('./pages/tabs/discover.component').then((m) => m.DiscoverComponent) },
       { path: 'me', loadComponent: () => import('./pages/tabs/me.component').then((m) => m.MeComponent) }
     ]
   },

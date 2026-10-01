@@ -86,14 +86,17 @@ function bed(): void {
 describe('Components render', () => {
   beforeEach(bed);
 
-  it('uses the bottom-right navigation action to create a photo post', async () => {
+  it('shows the five bottom tabs: Home, Spotlight, Create, Discover, Menu', async () => {
     const f = TestBed.createComponent(TabsComponent);
     f.detectChanges();
     await f.whenStable();
     const html = (f.nativeElement as HTMLElement).innerHTML;
-    expect(html).toContain('Create a post with a photo');
-    expect(html).toContain('Photo');
-    expect(html).not.toContain('menu-pip');
+    for (const label of ['Home', 'Spotlight', 'Create', 'Discover', 'Menu']) {
+      expect(html, label).toContain(label);
+    }
+    // Chats moved to the top navigation, and the Photo tab is gone.
+    expect(html).not.toContain('tab="chats"');
+    expect(html).not.toContain('Create a post with a photo');
   });
 
   it('renders the feed filter bar with a province dropdown', async () => {
@@ -128,11 +131,11 @@ describe('Components render', () => {
     expect(html).toContain('Like');
     expect(html).not.toContain('No idea');
     // LinkedIn's card anatomy: the poster's headline under their name, the
-    // three-line clamp with a muted "Read more", a stats line and the four
+    // three-line clamp with a muted ellipsis, a stats line and the four
     // action buttons.
     expect(html).toContain('Community organiser');
     expect(html).toContain('fb-clamp');
-    expect(html).toContain('Read more');
+    expect(html).toContain('see more');
     expect(html).toContain('fb-stats-bar');
     expect(html).toContain('Comment');
     expect(html).toContain('Repost');
@@ -441,7 +444,7 @@ describe('Components render', () => {
     card.componentInstance.post = post!;
     card.componentInstance.author = data.authorOf(post!.authorId) ?? null;
     card.detectChanges();
-    expect((card.nativeElement as HTMLElement).innerHTML).toContain('Read more');
+    expect((card.nativeElement as HTMLElement).innerHTML).toContain('see more');
   });
 
   it('organizes the Menu into shortcuts, posts, and saved sections', async () => {

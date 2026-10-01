@@ -15,22 +15,28 @@ export const CHECK_IN_COPY: Record<CheckInStatus, { label: string; short: string
     ring: 'Green ring',
     detail: 'A green ring means this person is safe.'
   },
+  need_help: {
+    label: 'I need help',
+    short: 'Needs help',
+    ring: 'Red ring',
+    detail: 'A red ring means this person asked for help. In a real emergency, call 10111.'
+  },
+  watch_me: {
+    label: 'Watch me',
+    short: 'Watch me',
+    ring: 'Amber ring',
+    detail: 'An amber ring means this person asked to be watched over - travelling alone, or somewhere they do not feel safe.'
+  },
   unfamiliar: {
     label: 'I am in an unfamiliar place',
     short: 'Unfamiliar place',
-    ring: 'Orange ring',
-    detail: 'An orange ring means this person is somewhere they do not know.'
-  },
-  need_help: {
-    label: 'I need someone to check on me',
-    short: 'Check on me',
-    ring: 'Red ring',
-    detail: 'A red ring means this person asked someone to check on them. In a real emergency, call 10111.'
+    ring: 'Amber ring',
+    detail: 'An amber ring means this person is somewhere they do not know.'
   }
 };
 
 /** One line, shown wherever a coloured ring can appear. Colour is never the only clue. */
-export const RING_KEY = 'Green ring: safe. Orange ring: unfamiliar place. Red ring: check on me.';
+export const RING_KEY = 'Green ring: safe. Amber ring: watch me. Red ring: needs help.';
 
 /**
  * "Am I safe?" check-ins and optional live location.

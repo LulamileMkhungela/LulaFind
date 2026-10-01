@@ -4,23 +4,25 @@ import { IonTabs } from '@ionic/angular/ion-tabs';
 import { IonLabel } from '@ionic/angular/ion-label';
 import { IonTabBar } from '@ionic/angular/ion-tab-bar';
 import { IonTabButton } from '@ionic/angular/ion-tab-button';
-import { ToastController } from '@ionic/angular/toast-controller';
 import { IconComponent } from '../../shared/components/icon.component';
+import { AvatarComponent } from '../../shared/components/avatar.component';
 import { AuthService } from '../../core/services/auth.service';
-import { ChatService } from '../../core/services/chat.service';
-import { MediaService } from '../../core/services/media.service';
+import { DataService } from '../../core/services/data.service';
 
 /**
  * Bottom navigation: Home, Spotlight, Create, Discover, Menu.
  *
- * The photo action opens the camera/photo chooser and carries the selection
- * into the post composer. Menu/profile remains available from the top photo.
- * Search and Notifications live in the top navigation, like LinkedIn.
+ * Chats used to sit here. It moved to the top navigation beside the bell, where
+ * it keeps its unread badge, and the Photo tab - which only duplicated Create -
+ * became Discover: the people you follow, your followers, the follow requests
+ * waiting on you, and members' statuses.
+ *
+ * Menu is your own profile, which is where Settings and everything else lives.
  */
 @Component({
   selector: 'lf-tabs',
   standalone: true,
-  imports: [IonTabs, IonTabBar, IonTabButton, IonLabel, IconComponent],
+  imports: [IonTabs, IonTabBar, IonTabButton, IonLabel, IconComponent, AvatarComponent],
   template: `
     <ion-tabs (ionTabsDidChange)="active.set($event.tab)">
       <ion-tab-bar slot="bottom">
@@ -39,18 +41,23 @@ import { MediaService } from '../../core/services/media.service';
           <ion-label>Create</ion-label>
         </button>
 
-        <ion-tab-button tab="chats">
+        <ion-tab-button tab="discover">
           <div class="wrap">
-            <lf-icon name="messenger" [size]="24" [filled]="active() === 'chats'" [weight]="active() === 'chats' ? 2.4 : 2" />
-            @if (unread() > 0) { <span class="tab-dot">{{ unread() > 99 ? '99+' : unread() }}</span> }
+            <lf-icon name="compass" [size]="24" [filled]="active() === 'discover'" />
+            @if (requests() > 0) { <span class="tab-dot">{{ requests() > 99 ? '99+' : requests() }}</span> }
           </div>
-          <ion-label>Chats</ion-label>
+          <ion-label>Discover</ion-label>
         </ion-tab-button>
 
-        <button class="bar-btn photo" type="button" (click)="addPhoto()" [disabled]="photoBusy()"
-                [attr.aria-busy]="photoBusy()" aria-label="Create a post with a photo">
-          <span class="wrap"><lf-icon name="image" [size]="24" [weight]="photoBusy() ? 2.6 : 2" /></span>
-          <ion-label>{{ photoBusy() ? 'Opening…' : 'Photo' }}</ion-label>
+        <button class="bar-btn menu" type="button" (click)="openMenu()" aria-label="Your profile and menu">
+          <span class="wrap">
+            @if (auth.signedIn()) {
+              <lf-avatar [src]="auth.userAvatar()" [name]="auth.user()?.displayName ?? ''" [size]="24" />
+            } @else {
+              <lf-icon name="menu" [size]="24" />
+            }
+          </span>
+          <ion-label>Menu</ion-label>
         </button>
       </ion-tab-bar>
     </ion-tabs>
@@ -85,7 +92,7 @@ import { MediaService } from '../../core/services/media.service';
     }
     ion-tab-button.tab-selected ion-label { font-weight: 600; }
 
-    /* Create and Search are plain buttons styled to sit in the same bar. */
+    /* Create and Menu are plain buttons styled to sit in the same bar. */
     .bar-btn {
       flex: 1 1 0;
       position: relative;
@@ -115,8 +122,7 @@ import { MediaService } from '../../core/services/media.service';
       box-shadow: 0 1px 3px rgba(0, 0, 0, .28);
     }
     .bar-btn:active .create-disc { transform: scale(.94); }
-    .bar-btn.create ion-label, .bar-btn.photo ion-label { color: var(--lf-muted); font-weight: 600; }
-    .bar-btn.photo:disabled { opacity: .65; cursor: wait; }
+    .bar-btn.create ion-label, .bar-btn.menu ion-label { color: var(--lf-muted); font-weight: 600; }
 
     .wrap { position: relative; display: inline-flex; }
     .tab-dot {
@@ -128,13 +134,10 @@ import { MediaService } from '../../core/services/media.service';
 })
 export class TabsComponent {
   private router = inject(Router);
+  private data = inject(DataService);
   protected auth = inject(AuthService);
-  private chat = inject(ChatService);
-  private media = inject(MediaService);
-  private toast = inject(ToastController);
 
-  readonly unread = computed(() => this.chat.unreadTotal());
-  readonly photoBusy = signal(false);
+  readonly requests = computed(() => this.data.followRequests().length);
   readonly active = signal(TabsComponent.tabOf(typeof location !== 'undefined' ? location.pathname : '/home'));
 
   constructor() {
@@ -146,8 +149,9 @@ export class TabsComponent {
 
   private static tabOf(url: string): string {
     const first = url.split(/[?#]/)[0].split('/').filter(Boolean)[0] ?? 'home';
-    if (first === 'chat') return 'chats';
-    return ['home', 'spotlight', 'chats', 'me'].includes(first) ? first : 'home';
+    // Chats is no longer a tab, so /chats lights nothing up - as on LinkedIn,
+    // where a pushed page leaves the bar unselected.
+    return ['home', 'spotlight', 'discover', 'me'].includes(first) ? first : '';
   }
 
   create(): void {
@@ -155,27 +159,8 @@ export class TabsComponent {
     void this.router.navigateByUrl(target);
   }
 
-  async addPhoto(): Promise<void> {
-    if (this.photoBusy()) return;
-    if (!this.auth.signedIn()) {
-      await this.router.navigateByUrl('/auth?next=/new');
-      return;
-    }
-
-    this.photoBusy.set(true);
-    try {
-      const picked = await this.media.pickImage({ quality: 76 });
-      if (!picked) {
-        const message = this.media.lastError() || this.media.notice();
-        if (message) await this.toast.create({ message, duration: 2600, position: 'bottom' }).then((x) => x.present());
-        return;
-      }
-      const src = await this.media.compress(picked.src, 1200);
-      await this.router.navigateByUrl('/new', {
-        state: { photoAttachment: { ...picked, src }, mediaNotice: this.media.notice() }
-      });
-    } finally {
-      this.photoBusy.set(false);
-    }
+  /** Menu is your own profile; Settings and the rest hang off it. */
+  openMenu(): void {
+    void this.router.navigateByUrl(this.auth.signedIn() ? '/me' : '/auth');
   }
 }

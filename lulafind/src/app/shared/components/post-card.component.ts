@@ -19,7 +19,7 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
  *
  *   optional "X reposted this" line
  *   avatar · name + Follow · headline · time · province · globe · "…"
- *   three lines of text with a muted "Read more"
+ *   three lines of text with a muted "…see more"
  *   media, or the original post in a frame when this is a reshare
  *   stats: reaction icons + count .......... comments / reposts
  *   action bar: react (hold for the tray) · Comment · Repost · Send
@@ -55,7 +55,6 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
           <div class="fb-author-row">
             <span class="fb-author-name">{{ authorName() }}</span>
             @if (showFollow()) {
-              <span class="fb-dot">·</span>
               <button class="fb-follow-link" [class.on]="followingAuthor()" [class.requested]="followRequested()"
                       [attr.aria-pressed]="followingAuthor() || followRequested()" (click)="onFollow($event)">
                 {{ followingAuthor() ? 'Following' : followRequested() ? 'Requested' : '+ Follow' }}
@@ -85,8 +84,8 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
         @if (post.body.trim()) {
           <div class="fb-card-body fb-card-body--thoughts" [routerLink]="'/post/' + post.id">
             <p class="fb-post-text" [class.fb-clamp]="!expanded()">{{ post.body }}</p>
-            @if (longBody()) {
-              <button class="fb-readmore" (click)="toggleExpand($event)">{{ expanded() ? 'See less' : 'Read more' }}</button>
+            @if (longBody() && !expanded()) {
+              <button class="fb-readmore" (click)="toggleExpand($event)">…see more</button>
             }
           </div>
         }
@@ -114,7 +113,7 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
         }
       } @else {
       <div class="fb-chips">
-        <span class="fb-chip" [class.fb-chip--danger]="post.type === 'missing'"
+        <span class="fb-chip"
               [class.fb-chip--success]="post.status === 'found'">
           <lf-icon [name]="meta().icon" [size]="12" /> {{ statusLabel() }}
         </span>
@@ -143,10 +142,8 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
           </div>
         }
         <p class="fb-post-text" [class.fb-clamp]="!expanded()">{{ post.body }}</p>
-        @if (longBody()) {
-          <button class="fb-readmore" (click)="toggleExpand($event)">
-            {{ expanded() ? 'See less' : 'Read more' }}
-          </button>
+        @if (longBody() && !expanded()) {
+          <button class="fb-readmore" (click)="toggleExpand($event)">…see more</button>
         }
       </div>
 
@@ -260,7 +257,7 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
       display: block; font-size: 12px; color: var(--lf-muted); line-height: 1.3;
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
-    /* LinkedIn clamps feed text to three lines and offers a clear Read more action. */
+    /* LinkedIn clamps feed text to three lines and ends it in a muted ellipsis. */
     .fb-clamp {
       display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
       overflow: hidden; white-space: normal;
@@ -272,10 +269,11 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
       color: var(--lf-link);
       font-family: inherit;
       font-weight: 600;
-      font-size: 15px;
+      font-size: 14px;
       cursor: pointer;
       padding: 0;
       flex-shrink: 0;
+      margin-left: auto;
     }
     .fb-follow-link.on,
     .fb-follow-link.requested { color: var(--lf-muted); }
@@ -305,7 +303,6 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
       padding: 3px 8px; border-radius: 6px; font-size: 12px; font-weight: 600;
       background: var(--lf-card-2); color: var(--ion-text-color);
     }
-    .fb-chip--danger { background: color-mix(in srgb, var(--lf-signal) 12%, transparent); color: var(--lf-signal-text); }
     .fb-chip--success { background: color-mix(in srgb, var(--lf-ubuntu) 14%, transparent); color: var(--lf-ubuntu); }
     .fb-chip--beacon { background: var(--lf-primary-soft); color: var(--lf-primary-soft-text); }
 
@@ -340,6 +337,7 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
       gap: 10px;
       margin: 0 16px;
       padding: 8px 0;
+      border-top: 0;
       font-size: 13px;
       color: var(--lf-muted);
       cursor: pointer;

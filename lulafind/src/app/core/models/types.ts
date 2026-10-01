@@ -239,7 +239,9 @@ export function lookoutOutcome(l: Lookout): string {
   return 'Running. Followers will be asked to confirm at the end of the 24 hours.';
 }
 
-export type CheckInStatus = 'safe' | 'unfamiliar' | 'need_help';
+/* `unfamiliar` is kept only so records already stored still render; it is no
+   longer offered anywhere in the UI. */
+export type CheckInStatus = 'safe' | 'need_help' | 'watch_me' | 'unfamiliar';
 
 /** A status a person sets about themselves - shown on their profile. */
 export interface CheckIn {
