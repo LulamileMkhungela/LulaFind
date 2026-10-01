@@ -584,9 +584,11 @@ import { leadMarkView } from '../../core/utils/mark-check';
       background: color-mix(in srgb, var(--lf-ubuntu) 12%, transparent); color: inherit; font-size: 13.5px; line-height: 1.35; }
     .still-status strong { color: var(--lf-ubuntu); font-weight: 700; }
     .big:disabled { opacity: .65; cursor: wait; }
+    /* A lead is useful information, not an error: this used to be drawn in the
+       red "signal" colour, which read as a warning banner on a case page. */
     .leads { display: flex; align-items: center; gap: 8px; width: 100%; margin: 2px 0 8px; padding: 10px 12px;
-      border: 1px solid color-mix(in srgb, var(--lf-signal) 40%, var(--lf-line)); border-radius: 8px;
-      background: color-mix(in srgb, var(--lf-signal) 8%, transparent); color: inherit; cursor: pointer;
+      border: 1px solid var(--lf-line); border-radius: 8px;
+      background: var(--lf-card-2); color: inherit; cursor: pointer;
       font-family: inherit; font-size: 14px; text-align: left; }
     .leads__text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .leads__tick { display: inline-flex; align-items: center; gap: 3px; padding: 2px 7px; border-radius: 999px;

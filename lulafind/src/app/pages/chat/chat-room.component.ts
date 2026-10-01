@@ -69,7 +69,7 @@ import { MediaService } from '../../core/services/media.service';
                 }
                 <div class="msg-stack">
                   @if (showMessageHeader(i)) {
-                    <div class="msg-meta"><strong>{{ m.fromUserId === me() ? 'You' : peerName() }}</strong><time>{{ clockTime(m.at) }}</time></div>
+                    <div class="msg-meta"><strong>{{ m.fromUserId === me() ? 'You' : peerName() }}</strong></div>
                   }
                   <div class="bubble">
                     @if (m.media?.kind === 'video') {
@@ -154,7 +154,6 @@ import { MediaService } from '../../core/services/media.service';
     .msg.mine .msg-stack { align-items: flex-end; }
     .msg-meta { display: flex; align-items: baseline; gap: 7px; padding: 0 4px; color: var(--lf-muted); font-size: 11px; }
     .msg-meta strong { color: var(--ion-text-color); font-size: 12px; font-weight: 700; }
-    .msg-meta time { font-size: 10px; }
     .bubble { max-width: 100%; box-sizing: border-box; padding: 9px 12px 6px; border: 1px solid var(--lf-line-soft);
       border-radius: 12px 12px 12px 4px; background: var(--lf-card); color: var(--ion-text-color); box-shadow: 0 1px 2px rgba(0,0,0,.04); }
     .msg.mine .bubble { border-color: color-mix(in srgb, var(--lf-primary) 22%, var(--lf-line-soft)); border-radius: 12px 12px 4px 12px;
