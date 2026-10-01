@@ -8,13 +8,14 @@ import { PushService } from './core/services/push.service';
 import { PrefetchService } from './core/services/prefetch.service';
 import { BACKGROUNDS, SettingsService } from './core/services/settings.service';
 import { RepostSheetComponent } from './shared/components/repost-sheet.component';
+import { LogoComponent } from './shared/components/logo.component';
 import { supabaseNotice } from './core/data/supabase-client';
 import { demoMode, localMode } from './core/data/demo';
 
 @Component({
   selector: 'lf-root',
   standalone: true,
-  imports: [IonApp, IonRouterOutlet, RepostSheetComponent],
+  imports: [IonApp, IonRouterOutlet, RepostSheetComponent, LogoComponent],
   template: `
     <ion-app>
       @if (demoMode()) {
@@ -37,14 +38,7 @@ import { demoMode, localMode } from './core/data/demo';
       @if (splashVisible()) {
         <div class="lf-splash" [class.lf-splash--out]="splashFading()" aria-hidden="true">
           <div class="lf-splash__logo">
-            <svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-              <circle cx="32" cy="32" r="32" fill="var(--lf-primary)" />
-              <!-- the same mark as the app icon: a lens with a location pin inside -->
-              <circle cx="28" cy="27" r="13" stroke="#fff" stroke-width="4" fill="none" />
-              <path d="M26 19.5a7 7 0 0 0-7 7c0 5.2 7 12 7 12s7-6.8 7-12a7 7 0 0 0-7-7z" fill="#fff" />
-              <circle cx="26" cy="26.5" r="2.6" fill="var(--lf-primary)" />
-              <line x1="37" y1="36" x2="49" y2="48" stroke="#fff" stroke-width="4" stroke-linecap="round" />
-            </svg>
+            <lf-logo [size]="76" />
           </div>
           <p class="lf-splash__tagline">Bring them home.</p>
           <div class="lf-splash__dots" role="status" aria-label="Loading">
@@ -73,7 +67,7 @@ import { demoMode, localMode } from './core/data/demo';
     .lf-splash__logo {
       animation: splash-pop .7s cubic-bezier(.2,.8,.2,1) both;
     }
-    .lf-splash__logo svg { display: block; width: 76px; height: 76px; }
+    .lf-splash__logo lf-logo { display: flex; width: 76px; height: 76px; }
     .lf-splash__tagline {
       margin: 0;
       font-size: 15px;
