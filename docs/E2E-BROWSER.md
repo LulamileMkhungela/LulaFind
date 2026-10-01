@@ -494,8 +494,11 @@ Lerato
 Naledi
 Kabelo
 Following
+4
 Followers
+6
 Requests
+0
 Statuses
 2
 How are you right now?
@@ -533,10 +536,7 @@ Lerato
 Naledi
 Kabelo
 Following
-Followers
-Requests
-Statuses
-2
+4
 Lerato Mahlangu
 @lerato.m · Friends · you follow each other
 Unfollow
@@ -549,11 +549,20 @@ Unfollow
 Ayanda Khumalo
 @ayanda.k · Friends · you follow each other
 Unfollow
-Home
-Spotlight
-Create
-Discover
-Menu
+Followers
+6
+Requests
+0
+Statuses
+2
+How are you right now?
+I'm Safe
+I Need Help
+Watch Me
+I Need Help and Watch Me alert the people who follow you. Use I Need Help only when you are genuinely in danger - in an emergency call 10111.
+Ayanda Khumalo
+I need help
+Pietermaritzbu
 ```
 
 ### 16c-discover-requests
@@ -572,17 +581,32 @@ Lerato
 Naledi
 Kabelo
 Following
+4
+Lerato Mahlangu
+@lerato.m · Friends · you follow each other
+Unfollow
+Kabelo Nkosi
+@kabelo.n · Friends · you follow each other
+Unfollow
+Sipho Ndlela
+@sipho.ndlela · Friends · you follow each other
+Unfollow
+Ayanda Khumalo
+@ayanda.k · Friends · you follow each other
+Unfollow
 Followers
+6
 Requests
+0
+No follow requests
+When someone asks to follow you, you can accept or ignore it here.
 Statuses
 2
-No follow requests
-When someone asks to follow you, you can confirm or delete it here.
-Home
-Spotlight
-Create
-Discover
-Menu
+How are you right now?
+I'm Safe
+I Need Help
+Watch Me
+I Need Help and Watch Me alert the people who follow you. Use I Need Help only when you are genui
 ```
 
 ### 18-notifications - /notifications

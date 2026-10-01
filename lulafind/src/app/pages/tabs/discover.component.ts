@@ -39,142 +39,147 @@ type Tab = 'following' | 'followers' | 'requests' | 'statuses';
            every story card opens the viewer, so Discover is not a dead end. -->
       <lf-story-rail (addStory)="onAddStory()" />
 
-      <div #tabRow class="seg" role="tablist" aria-label="Discover">
-        <button class="pill" role="tab" [class.on]="tab() === 'following'" (click)="tab.set('following')">
-          Following
-        </button>
-        <button class="pill" role="tab" [class.on]="tab() === 'followers'" (click)="tab.set('followers')">
-          Followers
-        </button>
-        <button class="pill" role="tab" [class.on]="tab() === 'requests'" (click)="tab.set('requests')">
-          Requests @if (data.followRequests().length) { <em class="lf-badge">{{ data.followRequests().length }}</em> }
-        </button>
-        <button class="pill" role="tab" [class.on]="tab() === 'statuses'" (click)="tab.set('statuses')">
-          Statuses @if (statusPeople().length) { <em class="lf-badge">{{ statusPeople().length }}</em> }
-        </button>
-      </div>
-
-      @if (tab() === 'statuses') {
-        <!-- Your own status first: the three answers a person can give. -->
-        <section class="mine">
-          <h2 class="mine__q">How are you right now?</h2>
-          <div class="mine__row">
-            @for (s of choices; track s.key) {
-              <button class="choice" type="button" [attr.data-key]="s.key"
-                      [class.on]="myStatus() === s.key" [disabled]="saving()"
-                      (click)="setStatus(s.key)">
-                <lf-icon [name]="s.icon" [size]="20" [weight]="2.2" />
-                <span>{{ s.label }}</span>
-              </button>
+      <!--
+        Four collapsible sections, in one column under the stories. Each header
+        carries its own count and expands in place, so the page stays short and
+        every group is still one tap away. ?tab=following|followers|requests|
+        statuses opens straight onto one of them.
+      -->
+      @for (s of sections; track s.key) {
+        <section class="sect" [class.open]="isOpen(s.key)">
+          <button class="sect__head" type="button"
+                  [attr.aria-expanded]="isOpen(s.key)"
+                  [attr.aria-controls]="'sect-' + s.key"
+                  (click)="toggle(s.key)">
+            <span class="sect__title">{{ s.label }}</span>
+            <span class="sect__count">{{ countFor(s.key) }}</span>
+            <span class="lf-grow"></span>
+            @if (s.key === 'requests' && data.followRequests().length) {
+              <em class="lf-badge">{{ data.followRequests().length }}</em>
             }
-          </div>
-          @if (myStatus()) {
-            <button class="clear" type="button" [disabled]="saving()" (click)="setStatus(null)">Clear my status</button>
-          }
-          <p class="mine__note">
-            <lf-icon name="alert" [size]="14" />
-            <span>{{ helpNote }}</span>
-          </p>
-        </section>
+            <lf-icon class="sect__chev" name="chevronDown" [size]="20" [weight]="2.2" />
+          </button>
 
-        @if (!statusPeople().length) {
-          <lf-empty icon="users" title="No statuses right now"
-                    message="When people you follow set a status - I'm safe, I need help, or watch me - it shows here." />
-        } @else {
-          <div class="list lf-safe-bottom">
-            @for (r of statusPeople(); track r.id) {
-              <div class="row">
-                <a [routerLink]="['/user', r.id]" class="who">
-                  <lf-avatar [src]="data.avatarFor(r.u)" [name]="r.u?.displayName ?? '?'" [size]="56"
-                             [status]="r.status" />
-                  <div class="txt">
-                    <strong>{{ r.u?.displayName ?? 'A member' }}</strong>
-                    <span class="pillstatus" [attr.data-key]="r.status">
-                      <lf-icon [name]="iconFor(r.status)" [size]="13" [weight]="2.4" />
-                      {{ labelFor(r.status) }}
-                    </span>
-                    <span class="lf-tiny lf-muted">
-                      @if (r.u?.town) { {{ r.u!.town }} · }
-                      @if (r.at) { {{ timeAgo(r.at) }} }
-                    </span>
+          @if (isOpen(s.key)) {
+            <div class="sect__body" [id]="'sect-' + s.key">
+              @if (s.key === 'statuses') {
+                <!-- Your own status first: the three answers a person can give. -->
+                <section class="mine">
+                  <h2 class="mine__q">How are you right now?</h2>
+                  <div class="mine__row">
+                    @for (c of choices; track c.key) {
+                      <button class="choice" type="button" [attr.data-key]="c.key"
+                              [class.on]="myStatus() === c.key" [disabled]="saving()"
+                              (click)="setStatus(c.key)">
+                        <lf-icon [name]="c.icon" [size]="20" [weight]="2.2" />
+                        <span>{{ c.label }}</span>
+                      </button>
+                    }
                   </div>
-                </a>
-                <div class="acts">
-                  @if (!iFollow(r.id)) {
-                    <button class="lf-btn lf-btn--primary lf-btn--sm" [disabled]="busy() === r.id" (click)="follow(r)">Follow</button>
+                  @if (myStatus()) {
+                    <button class="clear" type="button" [disabled]="saving()" (click)="setStatus(null)">Clear my status</button>
                   }
-                  @if (r.status === 'need_help' || r.status === 'watch_me') {
-                    <button class="lf-btn lf-btn--sm" [disabled]="busy() === r.id" (click)="checkOn(r)">Check on them</button>
-                  }
-                </div>
-              </div>
-            }
-          </div>
-        }
-      } @else if (!rows().length) {
-        <lf-empty icon="users" [title]="emptyTitle()" [message]="emptyText()" />
-      } @else {
-        <div class="list lf-safe-bottom">
-          @for (r of rows(); track r.id) {
-            <div class="row">
-              <a [routerLink]="['/user', r.id]" class="who">
-                <lf-avatar [src]="data.avatarFor(r.u)" [name]="r.u?.displayName ?? '?'" [size]="56" />
-                <div class="txt">
-                  <strong>{{ r.u?.displayName ?? 'A member' }}</strong>
-                  <span class="lf-tiny lf-muted">
-                    @if (r.u?.handle) { &#64;{{ r.u!.handle }} · }
-                    @switch (tab()) {
-                      @case ('requests') { wants to follow you }
-                      @case ('following') { {{ followsBack(r.id) ? 'Friends · you follow each other' : 'You follow them' }} }
-                      @default { {{ iFollow(r.id) ? 'Friends · you follow each other' : 'Follows you' }} }
+                  <p class="mine__note">
+                    <lf-icon name="alert" [size]="14" />
+                    <span>{{ helpNote }}</span>
+                  </p>
+                </section>
+
+                @if (!statusPeople().length) {
+                  <lf-empty icon="users" title="No statuses right now"
+                            message="When people you follow set a status - I'm safe, I need help, or watch me - it shows here." />
+                } @else {
+                  <div class="list">
+                    @for (r of statusPeople(); track r.id) {
+                      <div class="row">
+                        <a [routerLink]="['/user', r.id]" class="who">
+                          <lf-avatar [src]="data.avatarFor(r.u)" [name]="r.u?.displayName ?? '?'" [size]="56"
+                                     [status]="r.status" />
+                          <div class="txt">
+                            <strong>{{ r.u?.displayName ?? 'A member' }}</strong>
+                            <span class="pillstatus" [attr.data-key]="r.status">
+                              <lf-icon [name]="iconFor(r.status)" [size]="13" [weight]="2.4" />
+                              {{ labelFor(r.status) }}
+                            </span>
+                            <span class="lf-tiny lf-muted">
+                              @if (r.u?.town) { {{ r.u!.town }} · }
+                              @if (r.at) { {{ timeAgo(r.at) }} }
+                            </span>
+                          </div>
+                        </a>
+                        <div class="acts">
+                          @if (!iFollow(r.id)) {
+                            <button class="lf-btn lf-btn--primary lf-btn--sm" [disabled]="busy() === r.id" (click)="follow(r)">Follow</button>
+                          }
+                          @if (r.status === 'need_help' || r.status === 'watch_me') {
+                            <button class="lf-btn lf-btn--sm" [disabled]="busy() === r.id" (click)="checkOn(r)">Check on them</button>
+                          }
+                        </div>
+                      </div>
                     }
-                  </span>
-                </div>
-              </a>
-              <div class="acts">
-                @switch (tab()) {
-                  @case ('requests') {
-                    <button class="lf-btn lf-btn--primary lf-btn--sm" [disabled]="busy() === r.id" (click)="respond(r.id, true)">Accept</button>
-                    <button class="lf-btn lf-btn--sm" [disabled]="busy() === r.id" (click)="respond(r.id, false)">Ignore</button>
-                  }
-                  @case ('following') {
-                    <button class="lf-btn lf-btn--sm" [disabled]="busy() === r.id" (click)="unfollow(r)">Unfollow</button>
-                  }
-                  @default {
-                    @if (!iFollow(r.id)) {
-                      <button class="lf-btn lf-btn--primary lf-btn--sm" [disabled]="busy() === r.id" (click)="follow(r)">Follow back</button>
-                    }
-                    <button class="lf-btn lf-btn--sm" [disabled]="busy() === r.id" (click)="remove(r)">Remove</button>
-                  }
+                  </div>
                 }
-              </div>
+              } @else if (!rowsFor(s.key).length) {
+                <lf-empty icon="users" [title]="emptyTitle(s.key)" [message]="emptyText(s.key)" />
+              } @else {
+                <div class="list">
+                  @for (r of rowsFor(s.key); track r.id) {
+                    <div class="row">
+                      <a [routerLink]="['/user', r.id]" class="who">
+                        <lf-avatar [src]="data.avatarFor(r.u)" [name]="r.u?.displayName ?? '?'" [size]="56" />
+                        <div class="txt">
+                          <strong>{{ r.u?.displayName ?? 'A member' }}</strong>
+                          <span class="lf-tiny lf-muted">
+                            @if (r.u?.handle) { &#64;{{ r.u!.handle }} · }
+                            @switch (s.key) {
+                              @case ('requests') { wants to follow you }
+                              @case ('following') { {{ followsBack(r.id) ? 'Friends · you follow each other' : 'You follow them' }} }
+                              @default { {{ iFollow(r.id) ? 'Friends · you follow each other' : 'Follows you' }} }
+                            }
+                          </span>
+                        </div>
+                      </a>
+                      <div class="acts">
+                        @switch (s.key) {
+                          @case ('requests') {
+                            <button class="lf-btn lf-btn--primary lf-btn--sm" [disabled]="busy() === r.id" (click)="respond(r.id, true)">Accept</button>
+                            <button class="lf-btn lf-btn--sm" [disabled]="busy() === r.id" (click)="respond(r.id, false)">Ignore</button>
+                          }
+                          @case ('following') {
+                            <button class="lf-btn lf-btn--sm" [disabled]="busy() === r.id" (click)="unfollow(r)">Unfollow</button>
+                          }
+                          @default {
+                            @if (!iFollow(r.id)) {
+                              <button class="lf-btn lf-btn--primary lf-btn--sm" [disabled]="busy() === r.id" (click)="follow(r)">Follow back</button>
+                            }
+                            <button class="lf-btn lf-btn--sm" [disabled]="busy() === r.id" (click)="remove(r)">Remove</button>
+                          }
+                        }
+                      </div>
+                    </div>
+                  }
+                </div>
+              }
             </div>
           }
-        </div>
+        </section>
       }
     </ion-content>
   `,
   styles: [`
-    .seg { display: flex; gap: 5px; padding: 4px 12px 10px; overflow-x: auto; scrollbar-width: none; }
-    .seg::-webkit-scrollbar { display: none; }
-    /*
-     * Four tabs have to fit a 390px screen. The measured labels at 12px/600 are
-     * Following 65, Followers 65, Requests 63, Statuses 59 - the inline counts on
-     * the first two pushed the row to 427px and squeezed every label into a clip,
-     * so those two show their number inside the tab instead. Requests and
-     * Statuses keep a badge because there the number is a call to action.
-     * flex: 0 0 auto is deliberate: a pill that is allowed to shrink squeezes
-     * its own label instead of the row scrolling, which is how "Following · 4"
-     * turned into "Following ·". If the counts ever outgrow the width, the row
-     * scrolls and the active pill scrolls itself into view instead of clipping.
-     */
-    .pill { flex: 0 0 auto; min-width: 0; height: 32px; padding: 0 9px; border: 0; border-radius: 999px;
-      cursor: pointer; font: inherit; font-size: 12px; font-weight: 600; background: var(--lf-card-2);
-      color: var(--ion-text-color); display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
-    .pill.on { background: var(--lf-primary-soft); color: var(--lf-link); }
-    .pill .lf-badge { font-style: normal; }
+    /* One card per section, header always visible, body only when open. */
+    .sect { background: var(--lf-card); box-shadow: var(--lf-shadow); margin-top: 8px; }
+    .sect__head { width: 100%; display: flex; align-items: center; gap: 8px;
+      padding: 14px var(--lf-gap); border: 0; background: transparent;
+      color: var(--ion-text-color); font: inherit; text-align: left; cursor: pointer; }
+    .sect__head:hover { background: var(--lf-hover); }
+    .sect__title { font-size: 16px; font-weight: 700; }
+    .sect__count { font-size: 13px; font-weight: 600; color: var(--lf-muted); }
+    .sect__chev { flex-shrink: 0; color: var(--lf-muted); transition: transform .18s ease; }
+    .sect.open .sect__chev { transform: rotate(180deg); }
+    .sect__body { padding-bottom: 8px; }
 
-    .mine { background: var(--lf-card); box-shadow: var(--lf-shadow); padding: 14px var(--lf-gap) 12px; margin-bottom: 8px; }
+    .mine { padding: 0 var(--lf-gap) 12px; }
     .mine__q { margin: 0 0 10px; font-size: 16px; font-weight: 700; }
     .mine__row { display: flex; gap: 8px; flex-wrap: wrap; }
     /* Each status keeps one colour everywhere it appears, so the colour alone
@@ -192,8 +197,10 @@ type Tab = 'following' | 'followers' | 'requests' | 'statuses';
       color: var(--lf-muted); line-height: 1.35; }
     .mine__note lf-icon { margin-top: 1px; flex-shrink: 0; }
 
-    .list { background: var(--lf-card); box-shadow: var(--lf-shadow); margin-top: 8px; }
-    @media (min-width: 768px) { .mine, .list { max-width: var(--lf-maxw); margin-left: auto; margin-right: auto; border-radius: var(--lf-radius); } }
+    .list { border-top: 1px solid var(--lf-line-soft); }
+    @media (min-width: 768px) {
+      .sect { max-width: var(--lf-maxw); margin-left: auto; margin-right: auto; border-radius: var(--lf-radius); overflow: hidden; }
+    }
     .row { display: flex; align-items: center; gap: 10px; padding: 10px var(--lf-gap); flex-wrap: wrap; }
     .who { flex: 1 1 200px; min-width: 0; display: flex; gap: 12px; align-items: center; color: inherit; text-decoration: none; }
     .txt { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
@@ -216,11 +223,25 @@ export class DiscoverComponent {
   private toast = inject(ToastController);
   protected readonly timeAgo = timeAgo;
 
-  readonly tab = signal<Tab>((this.route.snapshot.queryParamMap.get('tab') as Tab) || 'statuses');
-  /** The tab row, so the pill in use can be scrolled into view on a narrow screen. */
-  private readonly tabRow = viewChild<ElementRef<HTMLElement>>('tabRow');
+  /** The four groups, in the order they are stacked under the stories. */
+  readonly sections: { key: Tab; label: string }[] = [
+    { key: 'following', label: 'Following' },
+    { key: 'followers', label: 'Followers' },
+    { key: 'requests', label: 'Requests' },
+    { key: 'statuses', label: 'Statuses' }
+  ];
+  /**
+   * Which sections are open. Statuses starts open because it holds the question
+   * the whole page exists for ("How are you right now?"); everything else starts
+   * closed, except Requests, which opens itself as soon as somebody is waiting.
+   */
+  readonly open = signal<Record<Tab, boolean>>({
+    following: false, followers: false, requests: false, statuses: true
+  });
   readonly busy = signal<string | null>(null);
   readonly saving = signal(false);
+  /** Guards the one-time auto-open of a section with pending requests. */
+  private autoOpened = false;
   private readonly people = signal<Record<string, UserProfile>>({});
   private readonly asked = new Set<string>();
 
@@ -247,33 +268,57 @@ export class DiscoverComponent {
     return out.sort((a, b) => (b.at ?? 0) - (a.at ?? 0));
   });
 
-  readonly ids = computed(() => {
-    switch (this.tab()) {
-      case 'requests': return this.data.followRequests().map((r) => r.followerId);
-      case 'following': return this.data.followingIds();
-      case 'statuses': return this.statusPeople().map((r) => r.id);
-      default: return this.data.followerIds();
-    }
-  });
+  /** Everyone any section could show, so opening one never waits on a lookup. */
+  readonly allIds = computed(() => [
+    ...this.data.followingIds(),
+    ...this.data.followerIds(),
+    ...this.data.followRequests().map((r) => r.followerId),
+    ...this.statusPeople().map((r) => r.id)
+  ]);
 
-  readonly rows = computed(() => this.ids().map((id): { id: string; u: UserProfile | null } =>
-    ({ id, u: (this.people()[id] as UserProfile | undefined) ?? this.data.authorOf(id) ?? null })));
+  isOpen(key: Tab): boolean { return this.open()[key]; }
+
+  toggle(key: Tab): void { this.open.update((o) => ({ ...o, [key]: !o[key] })); }
+
+  countFor(key: Tab): number {
+    switch (key) {
+      case 'following': return this.data.followingIds().length;
+      case 'followers': return this.data.followerIds().length;
+      case 'requests': return this.data.followRequests().length;
+      default: return this.statusPeople().length;
+    }
+  }
+
+  /** The people in one section, in the order the service returns them. */
+  rowsFor(key: Tab): { id: string; u: UserProfile | null }[] {
+    const ids = key === 'following' ? this.data.followingIds()
+      : key === 'followers' ? this.data.followerIds()
+      : key === 'requests' ? this.data.followRequests().map((r) => r.followerId)
+      : this.statusPeople().map((r) => r.id);
+    return ids.map((id) => ({ id, u: this.people()[id] ?? this.data.authorOf(id) ?? null }));
+  }
 
   constructor() {
     void this.data.loadFollowRequests();
     void this.data.loadUserScoped();
     // The story rail needs the stories even if Home was never visited.
     void this.data.loadStatic();
-    // A tab you cannot see is a tab you will not find: when the row is wider
-    // than the screen, the pill that is in use stays visible.
-    afterNextRender(() => this.showActiveTab());
+    // ?tab= opens straight onto one section.
+    const wanted = this.route.snapshot.queryParamMap.get('tab') as Tab | null;
+    if (wanted && this.sections.some((x) => x.key === wanted)) {
+      this.open.set({ following: false, followers: false, requests: false, statuses: false, [wanted]: true } as Record<Tab, boolean>);
+    }
+    // A pending request needs an answer, so that section opens itself the first
+    // time one arrives - but never overrides an explicit ?tab= link.
     effect(() => {
-      const active = this.tab();
-      queueMicrotask(() => this.showActiveTab());
-      void active;
+      const pending = this.data.followRequests().length;
+      if (!this.autoOpened && pending > 0 && !wanted) {
+        this.autoOpened = true;
+        this.open.update((o) => ({ ...o, requests: true }));
+      }
     });
     effect(() => {
-      const ids = [...this.statusPeople().map((r) => r.id), ...this.ids()];
+      const ids = [...this.statusPeople().map((r) => r.id), ...this.allIds()];
       const missing = ids.filter((id) => !this.asked.has(id));
       missing.forEach((id) => this.asked.add(id));
       if (missing.length) void this.data.people(missing).then((list) => {
@@ -291,15 +336,6 @@ export class DiscoverComponent {
       return;
     }
     await this.router.navigate(['/create-story']);
-  }
-
-  /** Bring the pill in use into view when the row overflows a narrow screen. */
-  private showActiveTab(): void {
-    const row = this.tabRow()?.nativeElement;
-    const active = row?.querySelector<HTMLElement>('.pill.on');
-    if (row && active && (row.scrollWidth > row.clientWidth)) {
-      row.scrollLeft = Math.max(0, active.offsetLeft - (row.clientWidth - active.offsetWidth) / 2);
-    }
   }
 
   iFollow(id: string): boolean { return this.data.followingIds().includes(id); }
@@ -322,17 +358,19 @@ export class DiscoverComponent {
     }
   }
 
-  emptyTitle(): string {
-    switch (this.tab()) {
+  emptyTitle(key: Tab): string {
+    switch (key) {
       case 'requests': return 'No follow requests';
       case 'following': return 'You are not following anyone';
+      case 'statuses': return 'No statuses right now';
       default: return 'No followers yet';
     }
   }
-  emptyText(): string {
-    switch (this.tab()) {
-      case 'requests': return 'When someone asks to follow you, you can confirm or delete it here.';
+  emptyText(key: Tab): string {
+    switch (key) {
+      case 'requests': return 'When someone asks to follow you, you can accept or ignore it here.';
       case 'following': return 'Follow people from their profile or a post. Private chat opens when you follow each other.';
+      case 'statuses': return 'When people you follow set a status - I\u2019m safe, I need help, or watch me - it shows here.';
       default: return 'People who follow you show up here.';
     }
   }
