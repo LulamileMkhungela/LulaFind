@@ -3,7 +3,9 @@ import type { CapacitorConfig } from '@capacitor/cli';
 const config: CapacitorConfig = {
   appId: 'com.lulafind.app',
   appName: 'LulaFind',
-  webDir: 'www',
+  // The Angular build writes to www/browser (outputMode: static), so this has
+  // to point there - with plain 'www' cap sync finds no index.html and fails.
+  webDir: 'www/browser',
   server: { androidScheme: 'https', iosScheme: 'https' },
   android: {
     allowMixedContent: false,

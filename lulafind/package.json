@@ -18,7 +18,8 @@
     "android:prepare": "ng build --configuration production && cap sync android",
     "android:build": "cd android && ./gradlew assembleDebug",
     "setup:native": "node scripts/native-setup.mjs all",
-    "icons:pwa": "node scripts/generate-pwa-icons.mjs"
+    "icons:pwa": "node scripts/generate-pwa-icons.mjs",
+    "build:snapshot": "ng build --configuration development --output-path=www"
   },
   "dependencies": {
     "@angular/common": "^22.2.0",
