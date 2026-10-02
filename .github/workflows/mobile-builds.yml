@@ -99,15 +99,21 @@ jobs:
           npm run build
           npx cap sync ios
 
+      - name: Resolve Swift package dependencies
+        working-directory: lulafind/ios/App
+        run: xcodebuild -resolvePackageDependencies -project App.xcodeproj
+
+      # -target, not -scheme: Capacitor's iOS project ships without a shared
+      # scheme, and xcodebuild will not invent one on a fresh checkout.
       - name: Build the app for a device, without signing
         working-directory: lulafind/ios/App
         run: |
           xcodebuild \
             -project App.xcodeproj \
-            -scheme App \
+            -target App \
             -configuration Release \
             -sdk iphoneos \
-            -derivedDataPath build \
+            SYMROOT="$PWD/build" \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
