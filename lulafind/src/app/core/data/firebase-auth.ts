@@ -153,7 +153,14 @@ export class FirebaseAuthBridge {
       const name = String(input.options?.data?.['displayName'] ?? '').trim();
       if (name) await updateProfile(cred.user, { displayName: name });
       this.savePending(input.email, input.options?.data ?? {});
-      await sendEmailVerification(cred.user, this.continueUrl(input.options?.emailRedirectTo));
+      // The account exists from here on. A verification email that fails to
+      // send must not report the signup as failed - the person would think they
+      // have no account, try again with the same address, and be told it is
+      // taken. Send it best-effort and let them request another from /auth.
+      await sendEmailVerification(
+        cred.user,
+        this.continueUrl(input.options?.emailRedirectTo)
+      ).catch(() => undefined);
       await signOut(this.auth);
       return { data: { user: this.shape(cred.user), session: null }, error: null };
     } catch (e) {
@@ -286,13 +293,51 @@ export class FirebaseAuthBridge {
     };
   }
 
+  /**
+   * The URL Firebase sends the person back to after they act on an account
+   * email (verify address, reset password).
+   *
+   * Firebase refuses the WHOLE request - not just the email - when the continue
+   * URL's host is not on the project's Authorised domains list:
+   *
+   *     auth/unauthorized-continue-uri
+   *     Domain not allowlisted by project
+   *
+   * The host has to be one we can actually know is allowlisted. `localhost` and
+   * `127.0.0.1` are there by default, and so is the project's own authDomain
+   * (`lulafinds-app.firebaseapp.com`) because Firebase adds it when the project
+   * is created. Anything else - the Arena preview host, a custom domain nobody
+   * has added yet - is a guess, and a guess here does not degrade gracefully:
+   * it takes the signup down with it, after the account has already been
+   * created.
+   *
+   * So an unrecognised host is not sent at all. Omitting the continue URL makes
+   * Firebase fall back to its own action page on authDomain, which is always
+   * allowed. The person still verifies or resets; they just land on Firebase's
+   * page instead of ours.
+   */
   private continueUrl(url?: string) {
     // In the app, Firebase's own page confirms the step; the person then returns to LulaFind.
     if (Capacitor.isNativePlatform()) return undefined;
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
-    // Firebase only follows http(s) continue URLs on authorised domains.
     const target = url || `${origin}/auth`;
-    return /^https?:\/\//.test(target) ? { url: target, handleCodeInApp: false } : undefined;
+    if (!/^https?:\/\//.test(target)) return undefined;
+
+    let host: string;
+    try {
+      host = new URL(target).hostname;
+    } catch {
+      return undefined;
+    }
+
+    const authDomain = (environment.firebase as { authDomain?: string }).authDomain ?? '';
+    const allowed =
+      host === 'localhost' ||
+      host === '127.0.0.1' ||
+      host === '[::1]' ||
+      (!!authDomain && host === authDomain);
+
+    return allowed ? { url: target, handleCodeInApp: false } : undefined;
   }
 
   private savePending(email: string, data: Record<string, unknown>): void {
