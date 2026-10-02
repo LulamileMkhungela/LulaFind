@@ -23,7 +23,20 @@ export const environment = {
     messagingSenderId: '359295927708',
     appId: '1:359295927708:android:0c1ea47d7256c03e2cf459',
     // No Analytics in this project, so there is nothing to put here.
-    measurementId: ''
+    measurementId: '',
+    /*
+     * Web Push key pair (VAPID), from Cloud Messaging -> Web Push certificates.
+     *
+     * NOT used by the app as it stands. Push goes through the native
+     * @capacitor/push-notifications plugin, which authenticates with
+     * google-services.json and needs no VAPID key at all - that key is only for
+     * the browser's own Push API, via firebase/messaging getToken({ vapidKey }).
+     *
+     * It is kept here because it is a public key by design (safe to commit, it
+     * identifies the server rather than authorising it), and because adding a
+     * web build later should not mean digging it back out of the console.
+     */
+    vapidKey: 'BIvbbUoBiuH8WT2pvo3TmFzJA-78su9kbkr-Z8X09t8lAoF9Ag4CJvtRZSFrjy2Q8Ks6DnEZjhXBIUa5K-V-2xs'
   },
   escalationPartners: CASE_CONTACTS
 };
