@@ -140,7 +140,7 @@ export class FirebaseApi implements LulaApi {
   }
   /** Members whose name, surname or handle contains every word typed. */
   async searchUsers(q: string, limit = 20) {
-    const words = searchWords(q);
+    const words = searchWords(q, 1);
     if (!words.length) return [];
     return (await this.users())
       .filter((u) => !u.suspended && words.every((w) =>
@@ -431,6 +431,6 @@ export class FirebaseApi implements LulaApi {
  * forgiving as the search page: "Thabo Ndlela" finds a poster titled
  * "Ndlela, Thabo" and a handle pasted with its @ still matches.
  */
-function searchWords(q: string): string[] {
-  return q.trim().toLowerCase().replace(/^@/, '').split(/\s+/).filter((w) => w.length >= 2);
+function searchWords(q: string, minLength = 2): string[] {
+  return q.trim().toLowerCase().replace(/^@/, '').split(/\s+/).filter((w) => w.length >= minLength);
 }

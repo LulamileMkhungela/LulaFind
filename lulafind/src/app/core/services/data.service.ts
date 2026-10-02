@@ -1963,7 +1963,7 @@ export class DataService {
    */
   async searchUsers(q: string): Promise<UserProfile[]> {
     const needle = q.trim().toLowerCase().replace(/^@/, '');
-    if (needle.length < 2) return [];
+    if (!needle) return [];
     let hits: UserProfile[] = [];
     try {
       hits = await this.api.searchUsers(q);

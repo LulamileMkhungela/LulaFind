@@ -705,7 +705,7 @@ export class SupabaseApi implements LulaApi {
    */
   async searchUsers(q: string, limit = 20): Promise<UserProfile[]> {
     const needle = q.trim().replace(/^@/, '');
-    if (needle.length < 2) return [];
+    if (!needle) return [];
     const pattern = likePattern(needle);
     try {
       const { data, error } = await this.client

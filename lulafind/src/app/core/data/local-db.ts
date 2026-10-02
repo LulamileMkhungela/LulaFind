@@ -406,7 +406,7 @@ export class LocalDb {
   /** Free-text search over members by name, surname or handle. */
   searchUsers(q: string, limit = 20): UserProfile[] {
     const needle = q.trim().toLowerCase().replace(/^@/, '');
-    if (needle.length < 2) return [];
+    if (!needle) return [];
     return this.db.users
       .filter((u) => !u.suspended && `${u.displayName} ${u.surname} ${u.handle}`.toLowerCase().includes(needle))
       .slice(0, limit)

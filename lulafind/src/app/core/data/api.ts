@@ -35,7 +35,10 @@ export abstract class LulaApi {
   abstract searchPosts(q: string, limit?: number): Promise<Post[]>;
   /**
    * Free-text search over members: display name, surname and handle.
-   * Suspended accounts are never returned, on any backend.
+   *
+   * A single character is allowed here where posts are not: someone typing the
+   * first letter of a name into a location check must not be told "no match"
+   * when a match exists. Suspended accounts are never returned, on any backend.
    */
   abstract searchUsers(q: string, limit?: number): Promise<UserProfile[]>;
 

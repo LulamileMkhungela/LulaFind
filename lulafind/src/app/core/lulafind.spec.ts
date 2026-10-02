@@ -2092,10 +2092,13 @@ describe('Search is not limited to the page on screen', () => {
     expect((await api.searchUsers(target.displayName)).map((u) => u.id)).not.toContain(target.id);
   });
 
-  it('ignores a one-character query instead of matching the whole store', async () => {
+  it('ignores a one-character *post* query but still searches a name', async () => {
+    // Typing "a" must not pull the whole store for posts; a first letter of a
+    // name is a real question, and answering it with "no match" would be wrong.
     const api = TestBed.inject(LULA_API) as MockApi;
     expect(await api.searchPosts('a')).toEqual([]);
-    expect(await api.searchUsers('a')).toEqual([]);
+    expect((await api.searchUsers('l')).length).toBeGreaterThan(0);
+    expect(await api.searchUsers('')).toEqual([]);
   });
 
   it('treats wildcards and PostgREST punctuation as literal text', () => {
