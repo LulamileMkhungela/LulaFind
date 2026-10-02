@@ -353,6 +353,12 @@ export class FirebaseAuthBridge {
       'auth/popup-closed-by-user': 'Google sign-in was closed before it finished.',
       'auth/popup-blocked': 'Your browser blocked the Google window. Allow pop-ups and try again.',
       'auth/unauthorized-domain': 'This web address is not allowed for sign-in yet. Add it in Firebase → Authentication → Settings → Authorised domains.',
+      // Same cause as auth/unauthorized-domain, different code path: Firebase
+      // rejects the *continue URL* rather than the page origin. Both mean the
+      // host in the address bar is not on the Authorised domains list, and both
+      // are fixed the same way - so they must not fall through to the raw
+      // "Domain not allowlisted by project", which names no place to go.
+      'auth/unauthorized-continue-uri': 'This web address is not allowed for sign-in yet. Add it in Firebase → Authentication → Settings → Authorised domains.',
       'auth/expired-action-code': 'This link has expired. Request a new one.',
       'auth/invalid-action-code': 'This link was already used or is not valid. Request a new one.',
       'auth/requires-recent-login': 'For your safety, log out and log in again, then retry.',
