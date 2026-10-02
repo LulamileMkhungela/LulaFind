@@ -33,7 +33,6 @@ import { ReactionsSheetComponent } from '../shared/components/reactions-sheet.co
 import { AdminComponent } from '../pages/admin/admin.component';
 import { SearchComponent } from '../pages/search/search.component';
 import { ConnectionsComponent } from '../pages/connections/connections.component';
-import { AppComponent } from '../app.component';
 import { SpotlightDetailComponent } from '../pages/spotlight/spotlight-detail.component';
 import { SUPPORT_EMAIL } from './config';
 import { ActivatedRoute, convertToParamMap } from '@angular/router';
@@ -289,52 +288,34 @@ describe('Components render', () => {
     if (feed.length >= 8) expect(html).toContain('lf-story-rail');
   });
 
-  it('lets a guest stay on Home instead of bouncing them to login', async () => {
+  it('sends a visitor who is not signed in to the login screen, not to Home', async () => {
     const auth = TestBed.inject(AuthService);
     expect(auth.signedIn()).toBe(false);
-    // The boot sequence used to send every signed-out visitor to /auth half a
-    // second after the splash. A guest must be able to read the feed - and the
-    // public routes carry no guard, while the private ones still do.
-    const tabs = APP_ROUTES.find((r) => r.path === '')!;
-    const home = (tabs.children ?? []).find((c) => c.path === 'home')!;
-    expect(home.canActivate ?? [], 'Home must be open to a guest').toEqual([]);
-    const saved = APP_ROUTES.find((r) => r.path === 'saved')!;
-    expect(saved.canActivate, 'Saved still needs an account').toContain(authGuard);
-    const f = TestBed.createComponent(HomeComponent);
-    await settle(f);
-    const html = (f.nativeElement as HTMLElement).innerHTML;
-    expect(html).toContain('lf-post-card');
-    expect(html).toContain('Browsing as a guest');
-    // and dismissing the invitation is remembered
-    expect(f.componentInstance.guestTip()).toBe(true);
-    f.componentInstance.dismissGuestTip();
-    expect(f.componentInstance.guestTip()).toBe(false);
+    // The whole app shell is guarded: Home, Spotlight, Chats, Discover and the
+    // menu live under it, so none of them can paint for a visitor without an
+    // account. Only the auth screen itself stays open.
+    const shell = APP_ROUTES.find((r) => r.path === '')!;
+    expect(shell.canActivate, 'the app shell must require an account').toContain(authGuard);
+    expect(APP_ROUTES.find((r) => r.path === 'auth')!.canActivate ?? []).toEqual([]);
+
+    const decision = await TestBed.runInInjectionContext(() =>
+      authGuard({} as never, { url: '/home' } as never));
+    // A UrlTree, not a boolean: the router sends them to the login screen and
+    // remembers where they were going.
+    expect(String(decision)).toContain('/auth');
+    expect(String(decision)).toContain('next');
   });
 
-  it('does not navigate a booted guest away from the page they opened', async () => {
+  it('waits for the session check before deciding, so a reload never throws a member out', async () => {
     const auth = TestBed.inject(AuthService);
-    const router = TestBed.inject(Router);
-    // Boot exactly as the app does: the session check finishes, nobody is signed in.
-    auth.attachApi();
-    for (let i = 0; i < 50 && !auth.ready(); i++) await new Promise((r) => setTimeout(r, 10));
-    expect(auth.ready()).toBe(true);
-    expect(auth.signedIn()).toBe(false);
-
-    const f = TestBed.createComponent(AppComponent);
-    f.detectChanges();
-    await settle(f);
-    // The splash clears on a timer; the old bug navigated to /auth in that same
-    // callback. Give it longer than the transition and check where we are.
-    await new Promise((r) => setTimeout(r, 700));
-    expect(router.url, 'a guest must not be pushed to the login screen').not.toContain('/auth');
-  });
-
-  it('hides the guest invitation once someone is signed in', async () => {
-    await TestBed.inject(AuthService).signInDemo();
-    const f = TestBed.createComponent(HomeComponent);
-    await settle(f);
-    expect(f.componentInstance.guestTip()).toBe(false);
-    expect((f.nativeElement as HTMLElement).innerHTML).not.toContain('Browsing as a guest');
+    await auth.signInDemo(); // a real stored session, as after signing in yesterday
+    // Enter a guarded route during a cold start, before the check has landed:
+    // signedIn() is false at this instant even though the member is signed in.
+    expect(auth.ready()).toBe(false);
+    const decision = await TestBed.runInInjectionContext(() =>
+      authGuard({} as never, { url: '/home' } as never));
+    expect(auth.ready(), 'the guard waited for the real answer').toBe(true);
+    expect(decision, 'a signed-in member goes straight in').toBe(true);
   });
 
   it('renders the LulaFind welcome and login screens', async () => {
@@ -1268,5 +1249,52 @@ describe('Email and Google sign-in', () => {
     expect(u.email).toBe('google.user@gmail.com');
     expect(auth.viewerId).toBe('u_demo');
     expect(auth.pendingProvider()).toBe(null);
+  });
+});
+
+/**
+ * The wiring, not just the unit: these navigate with the app's real route table,
+ * so they fail if the guard is ever dropped from the shell again.
+ */
+describe('Route protection', () => {
+  const realBed = (): void => {
+    try {
+      Object.keys(localStorage)
+        .filter((k) => k.startsWith('lulafind.'))
+        .forEach((k) => localStorage.removeItem(k));
+    } catch { /* node */ }
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter(APP_ROUTES),
+        provideIonicAngular(),
+        { provide: LULA_API, useValue: new MockApi(new LocalDb(true)) }
+      ]
+    });
+  };
+
+  beforeEach(realBed);
+
+  it('a guest who opens Home lands on the login screen instead', async () => {
+    const router = TestBed.inject(Router);
+    await router.navigateByUrl('/home');
+    // Sign in and you are returned to where you were going.
+    expect(router.url).toContain('/auth');
+    expect(router.url).toContain('next=%2Fhome');
+  });
+
+  it('a guest who opens the app at the root also lands on login', async () => {
+    const router = TestBed.inject(Router);
+    await router.navigateByUrl('/');
+    expect(router.url).toContain('/auth');
+  });
+
+  it('a signed-in member reloading straight onto Home stays there', async () => {
+    const auth = TestBed.inject(AuthService);
+    await auth.signInDemo(); // stored session, checked before the route resolves
+    const router = TestBed.inject(Router);
+    await router.navigateByUrl('/home');
+    expect(auth.signedIn()).toBe(true);
+    expect(router.url).toBe('/home');
   });
 });

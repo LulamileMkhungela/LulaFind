@@ -83,22 +83,6 @@ import { timeAgo } from '../../core/utils/format';
         </section>
       }
 
-      <!-- A guest can read everything here; this is where they are invited in,
-           once, rather than being bounced to a login screen they did not ask for. -->
-      @if (guestTip()) {
-        <section class="guestbar" aria-label="Browsing as a guest">
-          <lf-icon name="eye" [size]="18" />
-          <div class="guestbar__text">
-            <strong>Browsing as a guest</strong>
-            <span>Read any case or Spotlight. Sign in to post, follow a case and chat.</span>
-          </div>
-          <button class="lf-btn lf-btn--primary lf-btn--sm" type="button" (click)="goSignIn()">Sign in</button>
-          <button class="guestbar__x" type="button" (click)="dismissGuestTip()" aria-label="Dismiss">
-            <lf-icon name="x" [size]="15" />
-          </button>
-        </section>
-      }
-
       <!-- Facebook Feed Filter Chips -->
       <lf-filter-bar
         [filter]="data.filter()"
@@ -154,12 +138,6 @@ import { timeAgo } from '../../core/utils/format';
     </ion-content>
   `,
   styles: [`
-    .guestbar { display: flex; align-items: center; gap: 10px; margin: 10px var(--lf-gap) 0; padding: 10px 12px;
-      border-radius: var(--lf-radius); background: var(--lf-card); box-shadow: var(--lf-shadow); }
-    .guestbar__text { flex: 1; display: flex; flex-direction: column; gap: 1px; min-width: 0; }
-    .guestbar__text strong { font-size: 14px; }
-    .guestbar__text span { font-size: 12.5px; color: var(--lf-muted); line-height: 1.35; }
-    .guestbar__x { border: 0; background: transparent; color: var(--lf-muted); cursor: pointer; padding: 2px; }
     .catchup { margin: 10px var(--lf-gap) 0; padding: 12px 14px; border-radius: var(--lf-radius);
       background: var(--lf-card); box-shadow: var(--lf-shadow); display: flex; flex-direction: column; gap: 8px; }
     .catchup__head { display: flex; align-items: center; gap: 8px; }
@@ -198,19 +176,6 @@ import { timeAgo } from '../../core/utils/format';
 export class HomeComponent {
   protected data = inject(DataService);
   protected auth = inject(AuthService);
-
-  /**
-   * The guest strip. Shown to a visitor without an account, once - dismissing it
-   * is remembered on the device. It disappears by itself the moment a session
-   * is restored, because `signedIn()` is part of the condition.
-   */
-  private readonly guestTipDismissed = signal(readGuestTipDismissed());
-  readonly guestTip = computed(() => !this.auth.signedIn() && !this.guestTipDismissed());
-
-  dismissGuestTip(): void {
-    this.guestTipDismissed.set(true);
-    try { if (typeof localStorage !== 'undefined') localStorage.setItem(GUEST_TIP_KEY, '1'); } catch { /* private mode */ }
-  }
 
   /**
    * "While you were away" - what is new since this account last looked.
@@ -372,11 +337,4 @@ export class HomeComponent {
     const t = await this.toast.create({ message, duration: 2200, position: 'bottom' });
     await t.present();
   }
-}
-
-/** Remembered per device: the guest strip is an invitation, not a nag. */
-const GUEST_TIP_KEY = 'lulafind.guest-tip-dismissed';
-
-function readGuestTipDismissed(): boolean {
-  try { return typeof localStorage !== 'undefined' && localStorage.getItem(GUEST_TIP_KEY) === '1'; } catch { return false; }
 }

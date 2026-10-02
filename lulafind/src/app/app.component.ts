@@ -128,15 +128,13 @@ export class AppComponent implements OnInit {
   constructor() {
     this.prefetch.start(0);
 
-    // Once auth is restored, fade the splash out - and stop there.
+    // Once auth is restored, fade the splash out.
     //
-    // This used to send every signed-out visitor to the login screen half a
-    // second in, which meant a guest saw the feed appear and then vanish. The
-    // app is browsable without an account on purpose: the feed, a shared case,
-    // a Spotlight and search are all public, and the screens that genuinely
-    // need an account carry their own guard, so a guest who opens one is sent
-    // to sign in with the place they were going remembered. Writing (posting,
-    // voting, chatting) is asked for in place, when it is actually needed.
+    // The splash is what covers the first moment of a cold start, when nobody
+    // knows yet whether there is a session. Nothing navigates from here: the
+    // route guard on the app shell waits for the same signal and makes the
+    // decision before the first page paints, so a visitor who is not signed in
+    // goes to the login screen without Home ever appearing behind it.
     effect(() => {
       if (!this.auth.ready()) return;
       this.splashFading.set(true);

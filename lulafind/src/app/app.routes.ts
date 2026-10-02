@@ -3,7 +3,12 @@ import { authGuard } from './core/guards/auth.guard';
 
 export const routes: Routes = [
   {
+    // The app itself needs an account: Home, Spotlight, Chats, Discover and the
+    // menu all live under this shell, so a visitor who is not signed in lands on
+    // the auth screen instead of a page that will be taken away from them.
+    // Shared links to a case or a Spotlight stay readable - see below.
     path: '',
+    canActivate: [authGuard],
     loadComponent: () => import('./pages/tabs/tabs.component').then((m) => m.TabsComponent),
     children: [
       { path: '', pathMatch: 'full', redirectTo: 'home' },
