@@ -2,9 +2,8 @@
 # release, so they can be downloaded (and passed on to testers) without anyone
 # needing Android Studio or Xcode.
 #
-#   Android -> LulaFind-<sha>-android.apk   (debug-signed: installs on any phone)
-#   iOS     -> LulaFind-<sha>-ios-unsigned.ipa (unsigned: see the notes in the
-#              release body - it has to be sideloaded, see below)
+#   Android -> LulaFind-<sha>-android.apk      (debug-signed: installs on any phone)
+#   iOS     -> LulaFind-<sha>-ios-unsigned.ipa (unsigned: sideload to install)
 #
 # Run it by pushing to the test branch, or from the Actions tab ("Run workflow").
 name: Mobile test builds
@@ -43,10 +42,17 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-      - uses: android-actions/setup-android@v3
-
+      # The ubuntu runner image already has the Android SDK; only the packages
+      # this app targets (compileSdk 36) need adding. The setup-android action
+      # used to do this and failed, so the SDK is used where the image puts it.
       - name: Install the SDK packages the app targets
-        run: sdkmanager --install "platforms;android-36" "build-tools;36.0.0" "platform-tools"
+        run: |
+          SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
+          SDKMGR="$SDK/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKMGR" --licenses > /dev/null 2>&1 || true
+          "$SDKMGR" --install "platforms;android-36" "build-tools;36.0.0" "platform-tools"
 
       - name: Install web dependencies
         working-directory: lulafind
@@ -55,14 +61,16 @@ jobs:
       - name: Build the web app and copy it into the Android project
         working-directory: lulafind
         run: |
-          npm run build
-          npx cap sync android
+          set -o pipefail
+          npm run build 2>&1 | tee /tmp/ci-android.log
+          npx cap sync android 2>&1 | tee -a /tmp/ci-android.log
 
       - name: Build the APK
         working-directory: lulafind/android
         run: |
+          set -o pipefail
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon --stacktrace
+          ./gradlew assembleDebug --no-daemon 2>&1 | tee -a /tmp/ci-android.log
 
       - name: Collect the APK
         run: |
@@ -71,7 +79,20 @@ jobs:
              "dist-mobile/LulaFind-${GITHUB_SHA::7}-android.apk"
           ls -lh dist-mobile
 
+      # CI logs cannot be read from the build agent's sandbox, so a failure is
+      # posted to the commit where it can be picked up.
+      - name: Report a failure on the commit
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tail -c 3000 /tmp/ci-android.log > /tmp/tail.txt 2>/dev/null || echo "no log" > /tmp/tail.txt
+          gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/comments" \
+            -f body="$(printf '**Android build failed**\n\n```\n%s\n```' "$(cat /tmp/tail.txt)")" \
+            > /dev/null 2>&1 || true
+
       - uses: actions/upload-artifact@v4
+        if: success()
         with:
           name: android-apk
           path: dist-mobile/*.apk
@@ -96,18 +117,22 @@ jobs:
       - name: Build the web app and copy it into the iOS project
         working-directory: lulafind
         run: |
-          npm run build
-          npx cap sync ios
+          set -o pipefail
+          npm run build 2>&1 | tee /tmp/ci-ios.log
+          npx cap sync ios 2>&1 | tee -a /tmp/ci-ios.log
 
       - name: Resolve Swift package dependencies
         working-directory: lulafind/ios/App
-        run: xcodebuild -resolvePackageDependencies -project App.xcodeproj
+        run: |
+          set -o pipefail
+          xcodebuild -resolvePackageDependencies -project App.xcodeproj 2>&1 | tee -a /tmp/ci-ios.log
 
       # -target, not -scheme: Capacitor's iOS project ships without a shared
       # scheme, and xcodebuild will not invent one on a fresh checkout.
       - name: Build the app for a device, without signing
         working-directory: lulafind/ios/App
         run: |
+          set -o pipefail
           xcodebuild \
             -project App.xcodeproj \
             -target App \
@@ -117,18 +142,29 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
-            build
+            build 2>&1 | tee -a /tmp/ci-ios.log
 
       - name: Package the unsigned IPA
         run: |
           mkdir -p dist-mobile Payload
-          APP=$(find lulafind/ios/App/build -name 'App.app' -type d -path '*iphoneos*' | head -1)
+          APP=$(find lulafind/ios/App/build -name 'App.app' -type d | head -1)
           echo "packaging $APP"
           cp -R "$APP" Payload/
           zip -qry "dist-mobile/LulaFind-${GITHUB_SHA::7}-ios-unsigned.ipa" Payload
           ls -lh dist-mobile
 
+      - name: Report a failure on the commit
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tail -c 3000 /tmp/ci-ios.log > /tmp/tail.txt 2>/dev/null || echo "no log" > /tmp/tail.txt
+          gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/comments" \
+            -f body="$(printf '**iOS build failed**\n\n```\n%s\n```' "$(cat /tmp/tail.txt)")" \
+            > /dev/null 2>&1 || true
+
       - uses: actions/upload-artifact@v4
+        if: success()
         with:
           name: ios-ipa
           path: dist-mobile/*.ipa
@@ -160,13 +196,13 @@ jobs:
             Android asks. It installs over any earlier test build of the same app.
 
             **iOS** - `LulaFind-*-ios-unsigned.ipa`
-            This one is not signed, because signing needs an Apple Developer
-            account. To put it on an iPhone it has to be sideloaded with a tool
-            that re-signs it using your own Apple ID - Sideloadly or AltStore on a
-            Mac or PC, connected to the phone. Free Apple IDs work (the app then
-            needs re-signing every 7 days). TestFlight is the alternative, but
-            that needs a paid Apple Developer account.
+            Unsigned, because signing needs an Apple Developer account. To put it on
+            an iPhone it has to be sideloaded with a tool that re-signs it with your
+            own Apple ID - Sideloadly or AltStore, from a Mac or PC with the phone
+            plugged in. A free Apple ID works (the app then needs re-signing every
+            seven days). TestFlight is the alternative, but that needs a paid
+            Apple Developer account.
 
-            Both builds talk to the same live data as the web app - they are not
-            a separate demo.
+            Both builds talk to the same live data as the web app - they are not a
+            separate demo.
           files: dist-mobile/*
