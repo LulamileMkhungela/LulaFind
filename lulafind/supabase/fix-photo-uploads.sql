@@ -1,12 +1,12 @@
--- Repair photo uploads. Idempotent: safe to run as many times as you like.
+-- Repair photo, video, story and comment uploads. Idempotent: run it as often
+-- as you like.
 --
 -- Supabase dashboard -> SQL editor -> New query -> paste -> Run.
 --
 -- WHY THIS EXISTS
 --
--- "Could not upload media: new row violates row-level security policy" on a
--- photo, story or comment means the database refused the *storage* write, not
--- the record. The storage policy is:
+-- "Photo upload was refused by the database" means the database refused the
+-- *storage* write, not the record. The rule is:
 --
 --     (storage.foldername(name))[1] = public.lula_uid()
 --
@@ -18,10 +18,20 @@
 --      -> Dashboard -> Authentication -> Third-party auth -> Firebase, and add
 --         project id `lulafinds-app`. This is the most common cause.
 --   2. The account's email is not verified, so lula_uid() refuses it on purpose.
---   3. The photos bucket or its policies were never created, or were dropped.
+--   3. The photos bucket or its policies were never created.
 --
--- This script repairs 3 and reports on 1 and 2. It cannot repair 1 for you,
--- because it is a project setting rather than a row in the database.
+-- An earlier version of this file created the policies but ALSO called
+-- public.lula_media_visible() in the read policy. Databases created before the
+-- helper refactor do not have that function (it arrived with the newer
+-- schema.sql), and Postgres validates a policy's expression when the policy is
+-- created - so the whole script failed, and because the SQL editor runs a
+-- script as one transaction, NOTHING was applied: not the bucket, not the write
+-- policy. Every upload was then refused. That is what this version fixes.
+--
+-- This file now depends on nothing but storage.objects, public.records and
+-- public.lula_uid(). It creates the visibility helper it needs, written out in
+-- full rather than calling helpers that may not exist. check-setup.sql check 1
+-- proves lula_uid() is there.
 
 -- ── 1. The bucket, recreated if missing ─────────────────────────────────────
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
@@ -29,15 +39,90 @@ values (
   'photos',
   'photos',
   false,
-  5242880,
-  array['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'video/mp4']
+  26214400,
+  array['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'video/mp4', 'video/quicktime']
 )
 on conflict (id) do update
 set public = false,
     file_size_limit = excluded.file_size_limit,
     allowed_mime_types = excluded.allowed_mime_types;
 
--- ── 2. The four policies, recreated if missing ──────────────────────────────
+-- ── 2. Who may read somebody else's photo ───────────────────────────────────
+-- True when this file is attached to a post, story or comment that `person` is
+-- allowed to read - so a photo shows to the people who can see the case it
+-- belongs to, and to nobody else. Written without helper calls on purpose.
+create or replace function public.lula_media_visible(file_path text, person text)
+returns boolean language sql stable security definer set search_path = pg_catalog as $$
+  select person is not null
+    and person = (select public.lula_uid())
+    and exists (
+      select 1
+      from public.records r
+      cross join lateral jsonb_array_elements(
+        (case when jsonb_typeof(r.payload->'media') = 'array' then r.payload->'media' else '[]'::jsonb end)
+        || (case when jsonb_typeof(r.payload #> '{poster,media}') = 'object'
+             then jsonb_build_array(r.payload #> '{poster,media}') else '[]'::jsonb end)
+      ) as item(value)
+      where r.collection in ('posts', 'stories', 'comments')
+        and (
+          item.value->>'src' = ('storage://photos/' || file_path)
+          or split_part(regexp_replace(
+            item.value->>'src',
+            '^https?://[^/]+/storage/v1/object/(public|sign|authenticated)/photos/',
+            ''
+          ), '?', 1) = file_path
+        )
+        and (
+          -- A photo on a case the viewer can read.
+          (r.collection = 'posts' and (
+            coalesce(r.payload->>'status', 'active') <> 'under_review'
+            or r.payload->>'authorId' = person
+            or coalesce((auth.jwt()->'app_metadata'->>'role') in ('admin', 'moderator'), false)
+          ) and (
+            coalesce((auth.jwt()->'app_metadata'->>'role') in ('admin', 'moderator'), false)
+            or coalesce(r.payload->>'audience', 'public') = 'public'
+            or r.payload->>'authorId' = person
+            or (r.payload->>'audience' = 'followers' and exists (
+                  select 1 from public.records f
+                   where f.collection = 'follows'
+                     and coalesce(f.payload->>'status', 'accepted') = 'accepted'
+                     and f.payload->>'followerId' = person
+                     and f.payload->>'followingId' = r.payload->>'authorId'))
+            -- A Spotlight post is public reading; joining is only what allows posting.
+            or (r.payload->>'audience' = 'surname'
+              and coalesce(r.payload->>'spotlightId', '') <> '')
+          ))
+          -- A photo on a story the viewer can read.
+          or (r.collection = 'stories' and (
+            coalesce(r.payload->>'audience', 'public') = 'public'
+            or r.payload->>'authorId' = person
+            or (r.payload->>'audience' = 'followers' and exists (
+                  select 1 from public.records f
+                   where f.collection = 'follows'
+                     and coalesce(f.payload->>'status', 'accepted') = 'accepted'
+                     and f.payload->>'followerId' = person
+                     and f.payload->>'followingId' = r.payload->>'authorId'))
+            or (r.payload->>'audience' = 'surname' and exists (
+                  select 1 from public.records s
+                   where s.collection = 'spotlights'
+                     and s.id = r.payload->>'spotlightId'
+                     and person in (select jsonb_array_elements_text(coalesce(s.payload->'memberIds', '[]'::jsonb)))))
+          ))
+          -- A photo on a comment is readable when the case it hangs off is.
+          or (r.collection = 'comments' and exists (
+                select 1 from public.records p2
+                 where p2.collection = 'posts'
+                   and p2.id = r.payload->>'postId'
+                   and coalesce(p2.payload->>'status', 'active') <> 'under_review'
+                   and (coalesce(p2.payload->>'audience', 'public') = 'public'
+                        or p2.payload->>'authorId' = person)))
+        )
+    );
+$$;
+revoke all on function public.lula_media_visible(text, text) from public;
+grant execute on function public.lula_media_visible(text, text) to anon, authenticated;
+
+-- ── 3. The four policies, recreated ─────────────────────────────────────────
 -- Every one of them keys off public.lula_uid(), the single source of identity.
 drop policy if exists "lula photos read" on storage.objects;
 create policy "lula photos read" on storage.objects
@@ -78,8 +163,9 @@ using (
   and (storage.foldername(name))[1] = (select public.lula_uid())
 );
 
--- ── 3. Diagnose exactly which of the three it is ────────────────────────────
--- Called from the app as `await window.__lulaDebugStorage()`. Read-only.
+-- ── 4. Diagnose exactly which of the three it is ────────────────────────────
+-- Read-only. The app calls this itself when an upload is refused, so the verdict
+-- appears on the screen rather than only in a console.
 create or replace function public.lula_debug_storage(app_uid text)
 returns jsonb language sql stable security definer set search_path = pg_catalog as $$
   with me as (
@@ -94,7 +180,7 @@ returns jsonb language sql stable security definer set search_path = pg_catalog 
     where schemaname = 'storage' and tablename = 'objects' and policyname like 'lula photos%'
   ), buck as (
     select coalesce(bool_or(public = false), false) as private_ok,
-           coalesce(bool_or(file_size_limit >= 5242880), false) as size_ok
+           coalesce(bool_or(file_size_limit > 0), false) as size_ok
     from storage.buckets where id = 'photos'
   )
   select jsonb_build_object(
@@ -114,7 +200,7 @@ returns jsonb language sql stable security definer set search_path = pg_catalog 
         when pol.n < 4
           then 'FAIL - the photos storage policies are missing. This script creates them.'
         when me.db_uid is null
-          then 'FAIL - the database cannot read an identity from the request token. In Supabase: Authentication -> Third-party auth -> Firebase, add project id lulafinds-app. Re-run this check.'
+          then 'FAIL - the database cannot read an identity from the request token. In Supabase: Authentication -> Third-party auth -> Firebase, add project id lulafinds-app. Then re-run this check.'
         when me.db_uid <> nullif(app_uid, '')
           then 'FAIL - the database reads a different UID than the app is using. Sign out and sign in again.'
         else 'PASS - uploads should work.'
@@ -124,16 +210,3 @@ returns jsonb language sql stable security definer set search_path = pg_catalog 
 $$;
 revoke all on function public.lula_debug_storage(text) from public;
 grant execute on function public.lula_debug_storage(text) to anon, authenticated;
-
--- ── 4. What this database sees right now ────────────────────────────────────
--- Run this bit on its own after the above, from the SQL editor. In the editor
--- there is no request token, so a NULL uid_here is expected; the real test is
--- the `verdict` above, called from the app.
-select
-  'lula_uid() right now' as check,
-  coalesce(public.lula_uid(), '(NULL - no request token in the SQL editor)') as uid_here;
-select
-  'photo storage policies' as check,
-  count(*) || ' installed' as result
-from pg_policies
-where schemaname = 'storage' and tablename = 'objects' and policyname like 'lula photos%';

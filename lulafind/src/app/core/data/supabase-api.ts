@@ -198,7 +198,7 @@ export class SupabaseApi implements LulaApi {
     }
     return {
       ok: false,
-      message: 'lula_debug_storage() is not installed. Run supabase/fix-photo-uploads.sql in the Supabase SQL editor.',
+      message: 'The database has no photo-upload policies installed. Run supabase/fix-photo-uploads.sql in the Supabase SQL editor, then try again.',
       details: { error: error?.message ?? 'no data returned', appUid }
     };
   }
@@ -955,11 +955,20 @@ export class SupabaseApi implements LulaApi {
       if (error) {
         // Row-level security here means the bucket policy refused the folder,
         // which is an identity or setup problem - not a problem with the photo.
-        // Say so, and point at the one command that names the exact cause.
+        //
+        // The old message told the person to run a console command, which is
+        // impossible on a phone: the installed app has no console (Android ships
+        // with webContentsDebuggingEnabled off, and iOS has none at all). So ask
+        // the database itself and put the verdict in the message the person
+        // already sees - it can be read, copied, and sent on.
         const rls = /row-level security|violates/i.test(error.message);
-        throw new Error(rls
-          ? 'Photo upload was refused by the database. In the app console run: await window.__lulaDebugStorage()'
-          : `Could not upload media: ${error.message}`);
+        if (!rls) throw new Error(`Could not upload media: ${error.message}`);
+        const report = await this.storageReport().catch(() => null);
+        throw new Error(
+          report?.message
+            ? `Photo upload was refused by the database. ${report.message}`
+            : 'Photo upload was refused by the database. Run supabase/fix-photo-uploads.sql in the Supabase SQL editor.'
+        );
       }
     }
     if (!path) return item;

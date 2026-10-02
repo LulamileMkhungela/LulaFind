@@ -346,6 +346,35 @@ describe('Components render', () => {
     expect(out?.id).toBe('p_1');
   });
 
+  it('explains a refused photo upload on the screen, not in a console', async () => {
+    // The old message told the person to run a console command - impossible on a
+    // phone, where the installed app has no console at all. The app now asks the
+    // database for the verdict and shows it.
+    const api = new SupabaseApi();
+    const verdict = 'FAIL - the photos storage policies are missing. This script creates them.';
+    (api as unknown as { client: unknown }).client = {
+      storage: { from: () => ({ upload: async () => ({ error: { message: 'new row violates row-level security policy' } }) }) },
+      rpc: async () => ({ data: { verdict, dbUid: null }, error: null })
+    };
+    (api as unknown as { currentUid: unknown }).currentUid = async () => 'u_1';
+    (api as unknown as { storageReport: unknown }).storageReport = async () => ({ ok: false, message: verdict, details: {} });
+
+    await expect(api.uploadMedia('u_1', { id: 'm_1', kind: 'image', src: 'data:image/png;base64,AAAA' } as never))
+      .rejects.toThrow(new RegExp(verdict.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  });
+
+  it('says which script to run when the database has no photo policies at all', async () => {
+    const api = new SupabaseApi();
+    (api as unknown as { client: unknown }).client = {
+      storage: { from: () => ({ upload: async () => ({ error: { message: 'new row violates row-level security policy' } }) }) },
+      rpc: async () => ({ data: null, error: { message: 'Could not find the function public.lula_debug_storage(app_uid) in the schema cache' } })
+    };
+    (api as unknown as { currentUid: unknown }).currentUid = async () => 'u_1';
+
+    await expect(api.uploadMedia('u_1', { id: 'm_1', kind: 'image', src: 'data:image/png;base64,AAAA' } as never))
+      .rejects.toThrow(/fix-photo-uploads\.sql/);
+  });
+
   it('writes a notification owned by the actor, never by the recipient', async () => {
     // The recipient can never own the row: the insert policy compares owner_id
     // with the caller. Falling back to them produced a write the database could
