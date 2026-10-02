@@ -128,17 +128,20 @@ export class AppComponent implements OnInit {
   constructor() {
     this.prefetch.start(0);
 
-    // Once auth is restored, start the fade-out sequence and route to login if not signed in.
+    // Once auth is restored, fade the splash out - and stop there.
+    //
+    // This used to send every signed-out visitor to the login screen half a
+    // second in, which meant a guest saw the feed appear and then vanish. The
+    // app is browsable without an account on purpose: the feed, a shared case,
+    // a Spotlight and search are all public, and the screens that genuinely
+    // need an account carry their own guard, so a guest who opens one is sent
+    // to sign in with the place they were going remembered. Writing (posting,
+    // voting, chatting) is asked for in place, when it is actually needed.
     effect(() => {
       if (!this.auth.ready()) return;
       this.splashFading.set(true);
-      // Remove from DOM after the CSS transition finishes (580ms) and redirect if needed.
-      setTimeout(() => {
-        this.splashVisible.set(false);
-        if (!this.auth.signedIn()) {
-          void this.router.navigate(['/auth']);
-        }
-      }, 580);
+      // Remove from DOM after the CSS transition finishes (580ms).
+      setTimeout(() => this.splashVisible.set(false), 580);
     });
 
     // Signed in but not onboarded -> straight into the Snapchat-style walkthrough.

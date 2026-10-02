@@ -1,7 +1,7 @@
 import { Component } from '@angular/core';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import { describe, expect, it, beforeEach } from 'vitest';
-import { provideRouter } from '@angular/router';
+import { provideRouter, Router } from '@angular/router';
 import { provideIonicAngular } from '@ionic/angular';
 import { ToastController } from '@ionic/angular/toast-controller';
 
@@ -26,11 +26,14 @@ import { TermsComponent } from '../pages/terms/terms.component';
 import { PostDetailComponent } from '../pages/post/post-detail.component';
 import { ChatRoomComponent } from '../pages/chat/chat-room.component';
 import { HomeComponent } from '../pages/tabs/home.component';
+import { routes as APP_ROUTES } from '../app.routes';
+import { authGuard } from './guards/auth.guard';
 import { TabsComponent } from '../pages/tabs/tabs.component';
 import { ReactionsSheetComponent } from '../shared/components/reactions-sheet.component';
 import { AdminComponent } from '../pages/admin/admin.component';
 import { SearchComponent } from '../pages/search/search.component';
 import { ConnectionsComponent } from '../pages/connections/connections.component';
+import { AppComponent } from '../app.component';
 import { SpotlightDetailComponent } from '../pages/spotlight/spotlight-detail.component';
 import { SUPPORT_EMAIL } from './config';
 import { ActivatedRoute, convertToParamMap } from '@angular/router';
@@ -284,6 +287,54 @@ describe('Components render', () => {
     const html: string = (f.nativeElement as HTMLElement).innerHTML;
     expect(html).toContain('lf-post-card');
     if (feed.length >= 8) expect(html).toContain('lf-story-rail');
+  });
+
+  it('lets a guest stay on Home instead of bouncing them to login', async () => {
+    const auth = TestBed.inject(AuthService);
+    expect(auth.signedIn()).toBe(false);
+    // The boot sequence used to send every signed-out visitor to /auth half a
+    // second after the splash. A guest must be able to read the feed - and the
+    // public routes carry no guard, while the private ones still do.
+    const tabs = APP_ROUTES.find((r) => r.path === '')!;
+    const home = (tabs.children ?? []).find((c) => c.path === 'home')!;
+    expect(home.canActivate ?? [], 'Home must be open to a guest').toEqual([]);
+    const saved = APP_ROUTES.find((r) => r.path === 'saved')!;
+    expect(saved.canActivate, 'Saved still needs an account').toContain(authGuard);
+    const f = TestBed.createComponent(HomeComponent);
+    await settle(f);
+    const html = (f.nativeElement as HTMLElement).innerHTML;
+    expect(html).toContain('lf-post-card');
+    expect(html).toContain('Browsing as a guest');
+    // and dismissing the invitation is remembered
+    expect(f.componentInstance.guestTip()).toBe(true);
+    f.componentInstance.dismissGuestTip();
+    expect(f.componentInstance.guestTip()).toBe(false);
+  });
+
+  it('does not navigate a booted guest away from the page they opened', async () => {
+    const auth = TestBed.inject(AuthService);
+    const router = TestBed.inject(Router);
+    // Boot exactly as the app does: the session check finishes, nobody is signed in.
+    auth.attachApi();
+    for (let i = 0; i < 50 && !auth.ready(); i++) await new Promise((r) => setTimeout(r, 10));
+    expect(auth.ready()).toBe(true);
+    expect(auth.signedIn()).toBe(false);
+
+    const f = TestBed.createComponent(AppComponent);
+    f.detectChanges();
+    await settle(f);
+    // The splash clears on a timer; the old bug navigated to /auth in that same
+    // callback. Give it longer than the transition and check where we are.
+    await new Promise((r) => setTimeout(r, 700));
+    expect(router.url, 'a guest must not be pushed to the login screen').not.toContain('/auth');
+  });
+
+  it('hides the guest invitation once someone is signed in', async () => {
+    await TestBed.inject(AuthService).signInDemo();
+    const f = TestBed.createComponent(HomeComponent);
+    await settle(f);
+    expect(f.componentInstance.guestTip()).toBe(false);
+    expect((f.nativeElement as HTMLElement).innerHTML).not.toContain('Browsing as a guest');
   });
 
   it('renders the LulaFind welcome and login screens', async () => {
