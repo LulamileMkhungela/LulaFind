@@ -31,23 +31,42 @@ create table if not exists public.push_tokens (
 );
 
 -- Sending looks up "every token for this user", never "every token".
-create index if not exists push_tokens_user_idx on public.push_tokens (user_id);
+create index if not exists push_tokens_user_idx
+  on public.push_tokens (user_id);
 
 -- An old project may have this table with a uuid user_id from Supabase Auth.
 -- Firebase UIDs are not UUIDs, so widen it before the policies compare against
 -- lula_uid(), exactly as schema.sql does for public.records.
+--
+-- `pol` is declared rather than left implicit. A FOR ... IN query loop does
+-- declare its own variable, so this is not strictly required, but an explicit
+-- declaration states the shape and survives a reader who assumes it is missing.
 do $$
+declare
+  pol record;
 begin
   if exists (
-    select 1 from information_schema.columns
-    where table_schema = 'public' and table_name = 'push_tokens'
-      and column_name = 'user_id' and data_type = 'uuid'
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'push_tokens'
+      and column_name = 'user_id'
+      and data_type = 'uuid'
   ) then
-    for pol in select policyname from pg_policies
-      where schemaname = 'public' and tablename = 'push_tokens' loop
-      execute format('drop policy if exists %I on public.push_tokens', pol.policyname);
+    for pol in
+      select policyname
+      from pg_policies
+      where schemaname = 'public'
+        and tablename = 'push_tokens'
+    loop
+      execute format(
+        'drop policy if exists %I on public.push_tokens',
+        pol.policyname
+      );
     end loop;
-    alter table public.push_tokens alter column user_id type text using user_id::text;
+
+    alter table public.push_tokens
+      alter column user_id type text using user_id::text;
   end if;
 end $$;
 
@@ -64,34 +83,48 @@ alter table public.push_tokens enable row level security;
 -- equals anything, so an unsigned caller is refused - the same safe failure
 -- every other write in this project relies on.
 drop policy if exists "lula push tokens read" on public.push_tokens;
-create policy "lula push tokens read" on public.push_tokens
-for select to anon, authenticated
-using (user_id = (select public.lula_uid()));
+create policy "lula push tokens read"
+  on public.push_tokens
+  for select
+  to anon, authenticated
+  using (user_id = (select public.lula_uid()));
 
 drop policy if exists "lula push tokens write" on public.push_tokens;
-create policy "lula push tokens write" on public.push_tokens
-for insert to anon, authenticated
-with check (user_id = (select public.lula_uid()));
+create policy "lula push tokens write"
+  on public.push_tokens
+  for insert
+  to anon, authenticated
+  with check (user_id = (select public.lula_uid()));
 
 drop policy if exists "lula push tokens update" on public.push_tokens;
-create policy "lula push tokens update" on public.push_tokens
-for update to anon, authenticated
-using (user_id = (select public.lula_uid()))
-with check (user_id = (select public.lula_uid()));
+create policy "lula push tokens update"
+  on public.push_tokens
+  for update
+  to anon, authenticated
+  using (user_id = (select public.lula_uid()))
+  with check (user_id = (select public.lula_uid()));
 
 drop policy if exists "lula push tokens delete" on public.push_tokens;
-create policy "lula push tokens delete" on public.push_tokens
-for delete to anon, authenticated
-using (user_id = (select public.lula_uid()));
+create policy "lula push tokens delete"
+  on public.push_tokens
+  for delete
+  to anon, authenticated
+  using (user_id = (select public.lula_uid()));
 
-grant select, insert, update, delete on public.push_tokens to anon, authenticated;
+grant select, insert, update, delete
+  on public.push_tokens
+  to anon, authenticated;
 
 -- ─── Sign-out hygiene ───────────────────────────────────────────────────────
 -- Called when an account signs out on a device. Deletes just this device's
 -- token, so signing out on a phone does not silence the tablet. Returns how
 -- many rows went, which is 0 if the token was already gone or never filed.
 create or replace function public.lula_forget_push_token(device_token text)
-returns integer language sql security definer set search_path = pg_catalog as $$
+returns integer
+language sql
+security definer
+set search_path = pg_catalog
+as $$
   with gone as (
     delete from public.push_tokens
     where token = device_token
@@ -100,8 +133,14 @@ returns integer language sql security definer set search_path = pg_catalog as $$
   )
   select count(*)::integer from gone;
 $$;
-revoke all on function public.lula_forget_push_token(text) from public;
-grant execute on function public.lula_forget_push_token(text) to anon, authenticated;
+
+revoke all
+  on function public.lula_forget_push_token(text)
+  from public;
+
+grant execute
+  on function public.lula_forget_push_token(text)
+  to anon, authenticated;
 
 -- ─── Is it wired up? ────────────────────────────────────────────────────────
 -- Read-only. Run after the above; a NULL uid here is expected in the SQL
@@ -110,4 +149,5 @@ select
   'push token policies' as check,
   count(*) || ' installed' as result
 from pg_policies
-where schemaname = 'public' and tablename = 'push_tokens';
+where schemaname = 'public'
+  and tablename = 'push_tokens';
