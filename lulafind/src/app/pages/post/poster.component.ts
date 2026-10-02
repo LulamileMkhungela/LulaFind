@@ -8,6 +8,7 @@ import { TopNavComponent } from '../../shared/components/top-nav.component';
 import { DataService } from '../../core/services/data.service';
 import { AuthService } from '../../core/services/auth.service';
 import { PlatformService } from '../../core/services/platform.service';
+import { MediaService } from '../../core/services/media.service';
 import { MediaItem, Post } from '../../core/models/types';
 import { uid } from '../../core/utils/format';
 import {
@@ -106,6 +107,7 @@ export class PosterComponent implements OnInit, AfterViewInit {
   private auth = inject(AuthService);
   private platform = inject(PlatformService);
   private toast = inject(ToastController);
+  private mediaSvc = inject(MediaService);
 
   @ViewChild('cv') cv?: ElementRef<HTMLCanvasElement>;
 
@@ -200,18 +202,24 @@ export class PosterComponent implements OnInit, AfterViewInit {
     }
   }
 
-  /** PNG blob of the poster; a generated poster is never exported without the person's photo. */
+  /**
+   * The poster as a blob inside the photo rule; a generated poster is never
+   * exported without the person's photo.
+   *
+   * It used to be a PNG, and a 1080x1350 PNG with a photo in it is routinely
+   * bigger than the 2 MB a photo may weigh - so the design was built, offered,
+   * and then refused by the very limit it had to obey. It is exported as JPEG,
+   * stepping the quality down until it fits.
+   */
   private async blob(): Promise<Blob | null> {
     const el = this.cv?.nativeElement;
     if (!el || !this.image || !this.photoReady() || !this.previewReady()) return null;
-    return new Promise<Blob | null>((resolve) => {
-      try { el.toBlob((b) => resolve(b), 'image/png'); } catch { resolve(null); }
-    });
+    return this.mediaSvc.exportCanvas(el);
   }
 
   private fileName(): string {
     const name = (this.p()?.subject?.name || this.p()?.title || 'poster').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-    return `lulafind-${name || 'poster'}-${this.tpl()}.png`;
+    return `lulafind-${name || 'poster'}-${this.tpl()}.jpg`;
   }
 
   async download(): Promise<void> {

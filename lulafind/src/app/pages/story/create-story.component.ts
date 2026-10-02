@@ -4,6 +4,7 @@ import { IconComponent } from '../../shared/components/icon.component';
 import { DataService } from '../../core/services/data.service';
 import { AuthService } from '../../core/services/auth.service';
 import { MediaService } from '../../core/services/media.service';
+import { STORY_MAX_PHOTOS } from '../../core/models/media-rules';
 import { Audience, MediaItem } from '../../core/models/types';
 import { STORY_BLACK, storyBg } from '../../core/data/seed';
 
@@ -134,9 +135,9 @@ import { STORY_BLACK, storyBg } from '../../core/data/seed';
             <span class="tool__ic"><lf-icon name="edit" [size]="20" /></span>
             <span>Text</span>
           </button>
-          <button class="tool" type="button" (click)="addPhoto()" [disabled]="media().length >= 3 || busy()">
+          <button class="tool" type="button" (click)="addPhoto()" [disabled]="media().length >= maxPhotos || busy()">
             <span class="tool__ic"><lf-icon name="image" [size]="20" /></span>
-            <span>{{ media().length ? media().length + ' of 3' : 'Photo' }}</span>
+            <span>{{ media().length ? media().length + ' of ' + maxPhotos : 'Photo' }}</span>
           </button>
           <button class="tool" type="button" [class.on]="panel() === 'privacy'" (click)="toggle('privacy')">
             <span class="tool__ic"><lf-icon [name]="audienceIcon()" [size]="20" /></span>
@@ -281,6 +282,9 @@ export class CreateStoryComponent {
   readonly typing = signal(false);
   busy = signal(false);
   error = signal('');
+  /** A story holds one photo. */
+  readonly maxPhotos = STORY_MAX_PHOTOS;
+
   /** Not an error: e.g. this build has no camera module, your photos were opened. */
   notice = signal('');
 
@@ -394,7 +398,7 @@ export class CreateStoryComponent {
   }
 
   async addPhoto(): Promise<void> {
-    if (this.media().length >= 3) return;
+    if (this.media().length >= STORY_MAX_PHOTOS) return;
     this.error.set('');
     const item = await this.mediaSvc.pickImage({ source: 'gallery', quality: 72 });
     if (this.mediaSvc.notice()) this.notice.set(this.mediaSvc.notice()!);

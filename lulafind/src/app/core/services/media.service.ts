@@ -1,6 +1,7 @@
 import { Injectable, inject, signal } from '@angular/core';
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 import { Capacitor } from '@capacitor/core';
+import { PHOTO_MAX_BYTES, PICK_MAX_BYTES, VIDEO_MAX_BYTES } from '../models/media-rules';
 import { MediaItem } from '../models/types';
 import { uid } from '../utils/format';
 import { PlatformService } from './platform.service';
@@ -19,14 +20,14 @@ import { PlatformService } from './platform.service';
  * Web: <input type=file>, which is the browser's own picker/camera sheet.
  */
 /**
- * A photo is downscaled to 1200px before it is uploaded, so the picker accepts
- * a generous original: a modern phone camera writes 5-12 MB files that compress
- * to well under the upload limit. A video cannot be re-encoded in the browser,
- * so it is capped where it stands - and at the same limit the upload enforces,
- * with an error the person can act on rather than a stall on a huge file.
+ * The numbers live in models/media-rules.ts; this service is where they are
+ * applied. A photo is downscaled and re-encoded before it is uploaded, so the
+ * picker accepts a generous original; a video cannot be re-encoded in a
+ * browser, so it is refused at the picker when it is too big, with a message
+ * the person can act on rather than a stall on a huge file.
  */
-const IMAGE_PICK_MAX_BYTES = 25 * 1024 * 1024;
-export const VIDEO_PICK_MAX_BYTES = 25 * 1024 * 1024;
+const IMAGE_PICK_MAX_BYTES = PICK_MAX_BYTES;
+const VIDEO_PICK_MAX_BYTES = VIDEO_MAX_BYTES;
 
 @Injectable({ providedIn: 'root' })
 export class MediaService {
@@ -190,23 +191,69 @@ export class MediaService {
     });
   }
 
-  /** Downscales a data-uri so localStorage / Firestore documents stay small. */
-  async compress(src: string, maxDim = 1200): Promise<string> {
+  /**
+   * Downscales a data-uri and keeps re-encoding until it fits `maxBytes`.
+   *
+   * The old version tried once - 1200px at quality 0.82 - and returned whatever
+   * that happened to weigh. Almost always that was far under the limit, but a
+   * dense or already-compressed photo could land over it and the person was then
+   * told to "choose a photo smaller than 2 MB" from a phone that cannot resize
+   * anything. Now the composer guarantees the size, so that message is only ever
+   * about a file the picker refused, never about a photo that was accepted.
+   */
+  async compress(src: string, maxDim = 1200, maxBytes = PHOTO_MAX_BYTES): Promise<string> {
     if (!src.startsWith('data:image')) return src;
-    return new Promise((resolve) => {
-      const img = new Image();
-      img.onload = () => {
-        const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
-        const canvas = document.createElement('canvas');
-        canvas.width = Math.round(img.width * scale);
-        canvas.height = Math.round(img.height * scale);
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return resolve(src);
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        resolve(canvas.toDataURL('image/jpeg', 0.82));
-      };
-      img.onerror = () => resolve(src);
-      img.src = src;
+    const img = await new Promise<HTMLImageElement | null>((resolve) => {
+      const el = new Image();
+      el.onload = () => resolve(el);
+      el.onerror = () => resolve(null);
+      el.src = src;
     });
+    if (!img) return src;
+    const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(img.width * scale));
+    canvas.height = Math.max(1, Math.round(img.height * scale));
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return src;
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+    let smallest = src;
+    let smallestBytes = MediaService.dataUrlBytes(src) || Number.MAX_SAFE_INTEGER;
+    for (const quality of [0.82, 0.7, 0.6, 0.5, 0.4]) {
+      const out = canvas.toDataURL('image/jpeg', quality);
+      const bytes = MediaService.dataUrlBytes(out);
+      if (bytes < smallestBytes) { smallest = out; smallestBytes = bytes; }
+      if (bytes <= maxBytes) break;
+    }
+    return smallest;
+  }
+
+  /**
+   * Exports a canvas within the photo limit, as JPEG.
+   *
+   * A generated poster is 1080x1350; as a PNG - which is what it used to be -
+   * one with a photo in it routinely weighs more than the 2 MB rule, so the
+   * poster was refused by the very limit it had to obey. Stepping the quality
+   * down keeps every design inside the rule instead of failing at upload.
+   */
+  async exportCanvas(canvas: HTMLCanvasElement, maxBytes = PHOTO_MAX_BYTES): Promise<Blob | null> {
+    let smallest: Blob | null = null;
+    for (const quality of [0.92, 0.85, 0.75, 0.62, 0.5]) {
+      const blob = await new Promise<Blob | null>((resolve) => {
+        try { canvas.toBlob((b) => resolve(b), 'image/jpeg', quality); } catch { resolve(null); }
+      });
+      if (!blob) return smallest;
+      if (!smallest || blob.size < smallest.size) smallest = blob;
+      if (blob.size <= maxBytes) return blob;
+    }
+    return smallest;
+  }
+
+  /** Bytes inside a data-uri - what the file will weigh once decoded. */
+  private static dataUrlBytes(dataUrl: string): number {
+    const comma = dataUrl.indexOf(',');
+    if (comma < 0) return 0;
+    return Math.floor((dataUrl.length - comma - 1) * 3 / 4);
   }
 }

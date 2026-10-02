@@ -5,6 +5,7 @@ import { LulaApi, SavePostOptions } from './api';
 import { answerBlocker } from '../utils/lookout';
 import { SUPABASE_URL, SUPABASE_KEY, supabaseNotice } from './supabase-client';
 import { LocalDb } from './local-db';
+import { PHOTO_MAX_BYTES, VIDEO_MAX_BYTES } from '../models/media-rules';
 import {
   ChatMessage, ChatThread, Lookout, Comment, FeedFilter, FollowEdge, MediaItem,
   Notification, Post, Spotlight, Story, StoryReply, StoryView, Tip, UserProfile
@@ -937,9 +938,9 @@ export class SupabaseApi implements LulaApi {
     if (item.src.startsWith('data:')) {
       if (!ownerId) throw new Error('Sign in before uploading media');
       const blob = await fetch(item.src).then((response) => response.blob());
-      // A video is allowed to be much larger than a photo: the composer
-      // downscales photos before they get here, but a phone clip is already
-      // compressed and cannot be re-encoded in the browser.
+      // The last line of defence for the size rules in models/media-rules.ts.
+      // A photo normally arrives here already compressed to fit; a video cannot
+      // be re-encoded in a browser, so it is checked where it stands.
       const limit = item.kind === 'video' ? VIDEO_MAX_BYTES : PHOTO_MAX_BYTES;
       if (blob.size > limit) {
         const mb = Math.round(limit / (1024 * 1024));
@@ -1223,11 +1224,6 @@ const SEARCH_POST_FIELDS = ['title', 'body', 'town', 'caseNumber', 'subject', 'l
 
 /** The fields a member search looks at. */
 const SEARCH_USER_FIELDS = ['displayName', 'surname', 'handle'] as const;
-
-/** Video files are the exception to the photo limit: a phone clip is bigger. */
-export const VIDEO_MAX_BYTES = 25 * 1024 * 1024;
-/** Photos are downscaled in the composer, so this is what arrives at the bucket. */
-export const PHOTO_MAX_BYTES = 5 * 1024 * 1024;
 
 /**
  * Escape a search needle for PostgREST and SQL LIKE.

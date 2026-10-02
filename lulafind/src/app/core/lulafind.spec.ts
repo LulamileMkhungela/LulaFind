@@ -6,6 +6,7 @@ import { provideRouter } from '@angular/router';
 import { LocalDb } from './data/local-db';
 import { LULA_API, MockApi } from './data/api';
 import { AuthService } from './services/auth.service';
+import { PHOTO_MAX_BYTES, PICK_MAX_BYTES, POST_MAX_PHOTOS, STORY_MAX_PHOTOS, VIDEO_MAX_BYTES, mb } from './models/media-rules';
 import { DataService } from './services/data.service';
 import { ChatService } from './services/chat.service';
 import { EscalationService } from './services/escalation.service';
@@ -1001,17 +1002,40 @@ describe('Posting rules', () => {
     await expect(data.updatePost(post.id, { title: 'Hijacked title here' })).rejects.toThrow(/Only the person/i);
   });
 
-  it('allows up to three story photos and rejects a fourth', async () => {
+  it('allows one story photo and rejects a second', async () => {
     const data = svc<DataService>(DataService);
     await svc<AuthService>(AuthService).signInDemo();
-    const photos = [1, 2, 3].map((n) => ({
-      id: `story-photo-${n}`, kind: 'image' as const, src: `data:image/jpeg;base64,photo${n}`
-    }));
-    const story = await data.createStory({ text: 'Three photos are allowed', media: photos, bgHue: 220 });
-    expect(story.media).toHaveLength(3);
+    const photo = { id: 'story-photo-1', kind: 'image' as const, src: 'data:image/jpeg;base64,photo1' };
+    const story = await data.createStory({ text: 'One photo is the story', media: [photo], bgHue: 220 });
+    expect(story.media).toHaveLength(1);
     await expect(data.createStory({
-      text: 'Four photos are not allowed', media: [...photos, { ...photos[0], id: 'story-photo-4' }], bgHue: 220
-    })).rejects.toThrow(/up to three photos/i);
+      text: 'Two photos are not allowed', media: [photo, { ...photo, id: 'story-photo-2' }], bgHue: 220
+    })).rejects.toThrow(/one photo/i);
+  });
+
+  it('rejects a fourth photo on a case, and accepts three', async () => {
+    const data = svc<DataService>(DataService);
+    await svc<AuthService>(AuthService).signInDemo();
+    const photos = [1, 2, 3, 4].map((n) => ({
+      id: `case-photo-${n}`, kind: 'image' as const, src: `data:image/jpeg;base64,photo${n}`
+    }));
+    const post = await data.createPost({ ...base, media: photos.slice(0, 3) });
+    expect(post.media).toHaveLength(3);
+    await expect(data.createPost({ ...base, media: photos })).rejects.toThrow(/up to 3 photos/i);
+  });
+
+  it('keeps the size rules in one place: 2 MB per photo, 3 MB per video, 3 photos, 1 story photo', () => {
+    // These numbers are enforced in the picker, the composer, the uploader and
+    // the storage bucket. This test is what stops one of those drifting.
+    expect(PHOTO_MAX_BYTES).toBe(2 * 1024 * 1024);
+    expect(VIDEO_MAX_BYTES).toBe(3 * 1024 * 1024);
+    expect(POST_MAX_PHOTOS).toBe(3);
+    expect(STORY_MAX_PHOTOS).toBe(1);
+    expect(mb(PHOTO_MAX_BYTES)).toBe(2);
+    expect(mb(VIDEO_MAX_BYTES)).toBe(3);
+    // A phone camera writes files larger than the upload rule, so the picker
+    // must still accept them: the composer re-encodes the photo down to size.
+    expect(PICK_MAX_BYTES).toBeGreaterThan(PHOTO_MAX_BYTES);
   });
 
   it('keeps story replies and the viewer list private to the author', async () => {

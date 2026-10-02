@@ -34,12 +34,17 @@
 -- proves lula_uid() is there.
 
 -- ── 1. The bucket, recreated if missing ─────────────────────────────────────
+-- 3 MB is the hard ceiling the app allows for any single attachment - a photo
+-- may weigh 2 MB and a video 3 MB (src/app/core/models/media-rules.ts), and the
+-- composer re-encodes photos down to their limit before they ever get here. An
+-- earlier version of this file allowed 25 MB, which quietly contradicted the
+-- rules the app enforces in the UI.
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values (
   'photos',
   'photos',
   false,
-  26214400,
+  3145728,
   array['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'video/mp4', 'video/quicktime']
 )
 on conflict (id) do update

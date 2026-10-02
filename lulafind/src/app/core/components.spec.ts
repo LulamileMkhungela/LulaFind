@@ -5,6 +5,7 @@ import { provideRouter, Router } from '@angular/router';
 import { provideIonicAngular } from '@ionic/angular';
 import { ToastController } from '@ionic/angular/toast-controller';
 
+import { PHOTO_MAX_BYTES, VIDEO_MAX_BYTES } from './models/media-rules';
 import { LocalDb } from './data/local-db';
 import { LULA_API, MockApi } from './data/api';
 import { SupabaseApi } from './data/supabase-api';
@@ -373,6 +374,33 @@ describe('Components render', () => {
 
     await expect(api.uploadMedia('u_1', { id: 'm_1', kind: 'image', src: 'data:image/png;base64,AAAA' } as never))
       .rejects.toThrow(/fix-photo-uploads\.sql/);
+  });
+
+  it('refuses a photo over 2 MB and a video over 3 MB, and accepts both at the limit', async () => {
+    // The size rule, end to end. A real blob is fetched from the data-uri, so
+    // the byte counts here are bytes, not a mocked number.
+    const api = new SupabaseApi();
+    const uploaded: { path: string }[] = [];
+    (api as unknown as { client: unknown }).client = {
+      storage: { from: () => ({
+        upload: async (path: string) => { uploaded.push({ path }); return { error: null }; }
+      }) },
+      rpc: async () => ({ data: { verdict: 'PASS - uploads should work.' }, error: null })
+    };
+    (api as unknown as { signedStorageUrl: unknown }).signedStorageUrl = async () => 'signed://photos/ok';
+
+    const fake = (kind: 'image' | 'video', bytes: number): string =>
+      `data:${kind === 'video' ? 'video/mp4' : 'image/jpeg'};base64,` + Buffer.alloc(bytes).toString('base64');
+
+    await expect(api.uploadMedia('u_1', { id: 'p_big', kind: 'image', src: fake('image', PHOTO_MAX_BYTES + 1) } as never))
+      .rejects.toThrow(/smaller than 2 MB/i);
+    await expect(api.uploadMedia('u_1', { id: 'v_big', kind: 'video', src: fake('video', VIDEO_MAX_BYTES + 1) } as never))
+      .rejects.toThrow(/smaller than 3 MB/i);
+
+    // Exactly at the limits: accepted, which is what "must not exceed" means.
+    await api.uploadMedia('u_1', { id: 'p_ok', kind: 'image', src: fake('image', PHOTO_MAX_BYTES) } as never);
+    await api.uploadMedia('u_1', { id: 'v_ok', kind: 'video', src: fake('video', VIDEO_MAX_BYTES) } as never);
+    expect(uploaded.map((u) => u.path)).toEqual(['u_1/p_ok.jpg', 'u_1/v_ok.mp4']);
   });
 
   it('writes a notification owned by the actor, never by the recipient', async () => {

@@ -2,6 +2,7 @@ import { Injectable, computed, effect, inject, signal, untracked } from '@angula
 import { Subscription } from 'rxjs';
 import { toObservable } from '@angular/core/rxjs-interop';
 import { LULA_API } from '../data/api';
+import { POST_MAX_PHOTOS, STORY_MAX_PHOTOS } from '../models/media-rules';
 import {
   AlertPrefs, Audience, CasePlan, CaseStepId, Comment, DangerAlert, GeoPoint, FeedFilter, FollowEdge, Lookout, MediaItem, Notification, Post, PostType, Spotlight, Story, StoryReply, StoryView, Tip, UserProfile,
   VoteValue, ReactionKind, REACTIONS, RETIRED_POST_TYPES, isReaction, VehicleDetails, dangerLabel, emptyFilter, provinceName
@@ -679,6 +680,9 @@ export class DataService {
     }
     if (input.media.length > 1 && input.media.some((m) => m.kind === 'video')) {
       throw new Error('Choose photos or one video - not both');
+    }
+    if (input.media.filter((m) => m.kind === 'image').length > POST_MAX_PHOTOS) {
+      throw new Error(`A case can show up to ${POST_MAX_PHOTOS} photos`);
     }
 
     const media = await Promise.all(input.media.map((item) => this.api.uploadMedia(me.id, item)));
@@ -1619,8 +1623,8 @@ export class DataService {
     if (audience === 'surname' && (!input.spotlightId || !this.isMember(input.spotlightId))) {
       throw new Error('Choose a Spotlight community you have joined.');
     }
-    if (input.media.length > 3 || input.media.some((item) => item.kind !== 'image')) {
-      throw new Error('A story can contain up to three photos. Video stories are not available yet.');
+    if (input.media.length > STORY_MAX_PHOTOS || input.media.some((item) => item.kind !== 'image')) {
+      throw new Error('A story can contain one photo. Video stories are not available yet.');
     }
     const media = await Promise.all(input.media.map((item) => this.api.uploadMedia(me.id, item)));
     const now = Date.now();
