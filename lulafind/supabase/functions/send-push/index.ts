@@ -30,11 +30,30 @@
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
+/**
+ * The row itself - the shape of a public.records entry.
+ */
 interface WebhookRow {
   collection?: string;
   id?: string;
   owner_id?: string | null;
   payload?: Record<string, unknown>;
+}
+
+/**
+ * The envelope a Supabase database webhook actually delivers.
+ *
+ * Supabase does NOT post the bare row. It wraps it, so the row lives under
+ * `record` and the envelope carries type/table/schema alongside. Reading
+ * `collection` or `payload` off the top level therefore finds nothing and the
+ * function silently skips every notification - which is exactly the bug this
+ * type documents.
+ */
+interface WebhookEnvelope {
+  type?: string;
+  table?: string;
+  schema?: string;
+  record?: WebhookRow;
 }
 
 interface ServiceAccount {
@@ -173,12 +192,18 @@ Deno.serve(async (req: Request): Promise<Response> => {
     return json({ error: 'FCM_SERVICE_ACCOUNT is not valid JSON' }, 500);
   }
 
-  let row: WebhookRow;
+  let event: WebhookEnvelope | WebhookRow;
   try {
-    row = await req.json();
+    event = await req.json();
   } catch {
     return json({ error: 'body is not JSON' }, 400);
   }
+
+  // Unwrap the envelope. A Supabase webhook nests the row under `record`; a
+  // hand-posted body for testing may be the bare row. Accepting both keeps the
+  // function testable with curl, but the webhook path is the one that matters.
+  const row: WebhookRow =
+    (event as WebhookEnvelope).record ?? (event as WebhookRow);
 
   // The webhook fires for every insert into public.records; only notifications
   // are ours.

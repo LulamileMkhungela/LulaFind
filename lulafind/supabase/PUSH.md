@@ -44,6 +44,8 @@ automatically, so there is nothing to set for those.
 
 ## 4. Hook the database to the function
 
+**Use the Dashboard webhook. It is the documented, supported route.**
+
 Supabase dashboard → **Database** → **Webhooks** → **Create a new hook**:
 
 | Field | Value |
@@ -56,6 +58,21 @@ Supabase dashboard → **Database** → **Webhooks** → **Create a new hook**:
 
 Every in-app notification now also buzzes the phone. Nothing else in the app
 changes — the bell still reads from the same rows.
+
+### Why not a SQL trigger
+
+An earlier revision of this repo shipped `supabase/push-webhook.sql`, a
+hand-written trigger calling `supabase_functions.http_request(...)`. It has been
+removed. `supabase_functions.http_request` is the helper Supabase's own webhook
+feature uses internally; it is not a documented public API, its signature is not
+guaranteed across project versions, and there is no way to confirm from here
+that a given project even provisions the `supabase_functions` schema. Shipping
+SQL that might fail, as the recommended path, is worse than pointing at the
+button that always works.
+
+The dashboard webhook creates an equivalent trigger behind the scenes and
+Supabase injects the service-role authorization header itself — which is also
+why no key appears anywhere in this repo.
 
 ## How a token gets there
 
@@ -88,9 +105,10 @@ select platform, app_version, created_at from public.push_tokens;
 Then trigger a notification — a follower posting, or a Home Sweet Home answer —
 and watch the function log:
 
-```bash
-npx supabase functions logs send-push
-```
+Dashboard → **Edge Functions** → **send-push** → **Logs**.
+
+(`npx supabase functions logs` was removed from recent CLI versions, which is
+why it reports as an unknown command.)
 
 ## Notes
 
