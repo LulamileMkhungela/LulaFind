@@ -1,7 +1,7 @@
 import { AfterViewChecked, Component, EventEmitter, Input, OnChanges, OnInit, Output, ViewChild, computed, inject, signal } from '@angular/core';
 import type { ElementRef } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
-import { DEFAULT_REACTION, DEFAULT_REACTION_LABEL, Post, POST_TYPE_META, REACTIONS, ReactionKind, UserProfile, isReaction, provinceName } from '../../core/models/types';
+import { DEFAULT_REACTION, DEFAULT_REACTION_LABEL, Comment, Post, POST_TYPE_META, REACTIONS, ReactionKind, UserProfile, isReaction, provinceName } from '../../core/models/types';
 import { alreadySaid, compact, headingIsNew, timeAgo } from '../../core/utils/format';
 import { AvatarComponent } from './avatar.component';
 import { IconComponent } from './icon.component';
@@ -205,6 +205,7 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
           </div>
           <div class="fb-stats-right">
             @if (post.commentCount > 0) { <span>{{ compact(post.commentCount) }} {{ post.commentCount === 1 ? 'comment' : 'comments' }}</span> }
+            @if (post.commentCount > 0 && post.shares > 0) { <span class="fb-dot">·</span> }
             @if (post.shares > 0) { <span>{{ compact(post.shares) }} {{ post.shares === 1 ? 'repost' : 'reposts' }}</span> }
           </div>
         </div>
@@ -231,6 +232,22 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
           <lf-icon name="send" [size]="19" /><span>Send</span>
         </button>
       </div>
+
+      <!-- LinkedIn's comment preview: the most-relevant comment sits under the
+           action bar, so the conversation is visible without opening the post. -->
+      @if (topComment(); as c) {
+        <a class="fb-comment" [routerLink]="'/post/' + post.id">
+          <lf-avatar [src]="commenterAvatar(c)" [name]="commenterName(c)" [size]="32" />
+          <div class="fb-comment__body">
+            <span class="fb-comment__who">{{ commenterName(c) }}</span>
+            <p class="fb-comment__text">{{ c.body }}</p>
+            <span class="fb-comment__meta">
+              {{ timeAgo(c.createdAt) }}
+              @if (c.upvotes > 0) { <span class="fb-dot">·</span> {{ compact(c.upvotes) }} {{ c.upvotes === 1 ? 'like' : 'likes' }} }
+            </span>
+          </div>
+        </a>
+      }
 
       @if (post.chatEnabled && !isMine() && !post.repostOf) {
         <button class="fb-chat-cta" [class.open]="chatState === 'open'" (click)="chat.emit()">
@@ -416,7 +433,21 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
       display: inline-flex; align-items: center; justify-content: center;
       box-shadow: 0 0 0 2px var(--lf-card);
     }
-    .fb-stats-right { display: flex; align-items: center; gap: 12px; }
+    .fb-stats-right { display: flex; align-items: center; gap: 6px; }
+    /* The comment preview under the action bar, LinkedIn's most-relevant comment. */
+    .fb-comment {
+      display: flex; gap: 8px; align-items: flex-start;
+      margin: 0 16px; padding: 10px 0 12px;
+      border-top: 1px solid var(--lf-line);
+      color: inherit; text-decoration: none;
+    }
+    .fb-comment__body { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 2px; }
+    .fb-comment__who { font-size: 13.5px; font-weight: 600; }
+    .fb-comment__text {
+      margin: 0; font-size: 13.5px; line-height: 1.4;
+      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    }
+    .fb-comment__meta { font-size: 12.5px; color: var(--lf-muted); display: flex; align-items: center; gap: 5px; }
 
     /* React - Comment - Repost - Send, the bar LinkedIn puts under every post. */
     .fb-actions {
@@ -556,12 +587,44 @@ export class PostCardComponent implements OnInit, OnChanges, AfterViewChecked {
   async ngOnInit(): Promise<void> {
     this.syncFollow();
     this.loadOriginal();
+    this.loadComment();
     this.saved.set(this.data.savedIds().includes(this.post?.id ?? ''));
   }
 
   ngOnChanges(): void {
     this.syncFollow();
     this.loadOriginal();
+    this.loadComment();
+  }
+
+  /**
+   * Ask for this post's comments once, for the preview under the card - but
+   * only when the post claims to have any. A card with no comments does no work.
+   */
+  private loadComment(): void {
+    if (this.post?.commentCount > 0) void this.data.loadCommentsFor(this.post.id);
+  }
+
+  /**
+   * The comment LinkedIn would show: the one the most people stood behind, and
+   * the oldest of those if there is a tie. Replies hang off a parent, so only
+   * top-level comments are candidates - a reply shown on its own reads as a
+   * sentence with its beginning cut off.
+   */
+  readonly topComment = computed<Comment | null>(() => {
+    const list = this.data.commentsFor(this.post?.id ?? '');
+    const top = list
+      .filter((c) => !c.parentId && c.body.trim())
+      .sort((a, b) => b.upvotes - a.upvotes || a.createdAt - b.createdAt);
+    return top[0] ?? null;
+  });
+
+  commenterName(c: Comment): string {
+    return this.data.authorOf(c.authorId)?.displayName ?? 'A neighbour';
+  }
+
+  commenterAvatar(c: Comment): string {
+    return this.data.avatarFor(this.data.authorOf(c.authorId));
   }
 
   /** LinkedIn's line above a post: who commented on it or reacted to it last. Not shown on your own activity or on reposts. */

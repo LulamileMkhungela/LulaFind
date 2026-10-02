@@ -966,6 +966,15 @@ describe('Posting rules', () => {
     expect(ok.media.length).toBe(1);
   });
 
+  it('allows one video on a case and refuses a second', async () => {
+    const data = svc<DataService>(DataService);
+    await svc<AuthService>(AuthService).signInDemo();
+    const video = { id: 'v1', kind: 'video' as const, src: 'data:video/mp4,' };
+    const post = await data.createPost({ ...base, media: [video] });
+    expect(post.media.length).toBe(1);
+    await expect(data.createPost({ ...base, media: [video, { ...video, id: 'v2' }] })).rejects.toThrow(/not both/i);
+  });
+
   it('lets the author edit a post but not its votes', async () => {
     const data = svc<DataService>(DataService);
     await svc<AuthService>(AuthService).signInDemo();

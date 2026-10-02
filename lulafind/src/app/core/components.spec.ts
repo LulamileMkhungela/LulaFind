@@ -7,6 +7,7 @@ import { ToastController } from '@ionic/angular/toast-controller';
 
 import { PHOTO_MAX_BYTES, VIDEO_MAX_BYTES } from './models/media-rules';
 import { LocalDb } from './data/local-db';
+import { compact } from './utils/format';
 import { LULA_API, MockApi } from './data/api';
 import { SupabaseApi } from './data/supabase-api';
 import { AuthService } from './services/auth.service';
@@ -150,15 +151,125 @@ describe('Components render', () => {
     expect(html).toContain('Missing person');
     expect(html).toContain('Gauteng');
     expect(html).not.toContain('fb-chips');
-    // The card carries no Like / Comment / Repost / Send row: those four live on
-    // the post page. Follow and … share one right-hand column.
+    // The card carries LinkedIn's action bar: react (with its label), Comment,
+    // Repost, Send - each with an icon and a word. Follow and … share one
+    // right-hand column above it.
+    expect(html).toContain('fb-actions');
+    expect(html).toContain('Comment');
+    expect(html).toContain('Repost');
+    expect(html).toContain('Send');
     expect(html).not.toContain('fb-actions-row');
-    expect(html).not.toContain('fb-action-btn');
     expect(html).toContain('fb-head-actions');
     expect(html).toContain('fb-more-btn');
     // the seeded latest activity shows above the post, LinkedIn-style
     expect(html).toContain('Lerato Mahlangu');
     expect(html).toContain('commented on this');
+  });
+
+  it('shows what a person sees on a LinkedIn card: reactions, comments, reposts, and the four actions', async () => {
+    const data = TestBed.inject(DataService);
+    await data.loadFeed();
+    // Real reactions from real people: the stack must reflect what they chose.
+    const post = { ...(await data.loadPost('p_thato'))! };
+    post.voterIds = { u_a: 'like', u_b: 'like', u_c: 'support' };
+    post.upvotes = 3;
+    post.commentCount = 2;
+    post.shares = 1;
+
+    const f = TestBed.createComponent(PostCardComponent);
+    f.componentInstance.post = post;
+    f.componentInstance.author = (await data.profile(post.authorId))!;
+    f.detectChanges();
+    await f.whenStable();
+    f.detectChanges();
+
+    const el = f.nativeElement as HTMLElement;
+    const text = (el.textContent ?? '').replace(/\s+/g, ' ').trim();
+
+    // The reaction stack shows the kinds people actually gave: two Likes, then Support.
+    expect(el.querySelectorAll('.fb-stack lf-reaction-icon').length).toBe(2);
+    // Counts, with LinkedIn's separator: "3 ... 2 comments · 1 repost".
+    expect(text).toContain('3');
+    expect(text).toContain('2 comments');
+    expect(text).toContain('1 repost');
+    expect(el.querySelector('.fb-stats-right .fb-dot')).toBeTruthy();
+    // The four actions, each with its word.
+    const actions = [...el.querySelectorAll('.fb-act')].map((b) => (b.textContent ?? '').trim());
+    expect(actions).toEqual(['Like', 'Comment', 'Repost', 'Send']);
+  });
+
+  it('lets a person see who reacted, with each reaction counted, from the card', async () => {
+    const data = TestBed.inject(DataService);
+    await data.loadFeed();
+    const post = { ...(await data.loadPost('p_thato'))! };
+    // Three real members, two Likes and one Support - the sheet must say so.
+    post.voterIds = { u_lerato: 'like', u_kabelo: 'like', u_sipho: 'support' };
+    post.upvotes = 3;
+
+    const f = TestBed.createComponent(PostCardComponent);
+    f.componentInstance.post = post;
+    f.componentInstance.author = (await data.profile(post.authorId))!;
+    f.detectChanges();
+    await f.whenStable();
+
+    const el = f.nativeElement as HTMLElement;
+    // The count opens the sheet, exactly as LinkedIn's does.
+    const opener = el.querySelector('.fb-stats-likes [role="button"]') as HTMLElement;
+    expect(opener).toBeTruthy();
+    opener.click();
+    f.detectChanges();
+    await f.whenStable();
+    f.detectChanges();
+
+    const text = (f.nativeElement as HTMLElement).textContent?.replace(/\s+/g, ' ') ?? '';
+    expect(text).toContain('Reactions');
+    expect(text).toContain('All 3');
+    expect(text).toContain('Lerato Mahlangu');
+    expect(text).toContain('Kabelo');
+    // The per-reaction tabs carry their own counts: two Likes, one Support.
+    const tabs = [...(f.nativeElement as HTMLElement).querySelectorAll('.tabs [role="tab"]')]
+      .map((t) => (t.textContent ?? '').replace(/\s+/g, ' ').trim());
+    expect(tabs).toContain('All 3');
+    expect(tabs.filter((t) => t.endsWith('2')).length).toBe(1);
+    expect(tabs.filter((t) => t.endsWith('1')).length).toBe(1);
+  });
+
+  it('shows the most-relevant comment on the card, as LinkedIn does, and nothing when there is none', async () => {
+    const data = TestBed.inject(DataService);
+    await TestBed.inject(AuthService).signInDemo();
+    await data.loadFeed();
+    const post = { ...(await data.loadPost('p_thato'))! };
+    const author = (await data.profile(post.authorId))!;
+    const api = TestBed.inject(LULA_API);
+
+    // The seeded post already carries real comments, so this is the real thing.
+    // Stand one comment above every other by likes, the way LinkedIn picks the
+    // one it shows, and check that the card shows that one.
+    const written = await data.addComment({ postId: post.id, body: 'A neighbour saw him at the clinic on Monday.' });
+    await api.saveComment({ ...written, upvotes: 9999, likedIds: ['u_a', 'u_b'] });
+
+    const withComments = TestBed.createComponent(PostCardComponent);
+    withComments.componentInstance.post = post;
+    withComments.componentInstance.author = author;
+    withComments.detectChanges();
+    await withComments.whenStable();
+    withComments.detectChanges();
+
+    const el = withComments.nativeElement as HTMLElement;
+    const text = (el.textContent ?? '').replace(/\s+/g, ' ').trim();
+    expect(el.querySelector('.fb-comment')).toBeTruthy();
+    expect(text).toContain('A neighbour saw him at the clinic on Monday.');
+    // Compacted the way LinkedIn writes big numbers ("10k"), not "9999".
+    expect(text).toContain(`${compact(9999)} likes`);
+
+    // With nothing written yet there is no preview - no empty frame, no title.
+    const empty = TestBed.createComponent(PostCardComponent);
+    empty.componentInstance.post = { ...post, id: 'p_no_comments', commentCount: 0, voterIds: {}, upvotes: 0, shares: 0 };
+    empty.componentInstance.author = author;
+    empty.detectChanges();
+    await empty.whenStable();
+    empty.detectChanges();
+    expect((empty.nativeElement as HTMLElement).querySelector('.fb-comment')).toBeNull();
   });
 
   it('shows a selected generated poster in the feed card', async () => {

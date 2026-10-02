@@ -382,6 +382,42 @@ export class DataService {
     return this.cache()[id] ?? this.feed().find((p) => p.id === id);
   }
 
+  /**
+   * Comments already fetched for a card's comment preview.
+   *
+   * LinkedIn shows the most relevant comment under a post; a card therefore
+   * needs the comments themselves, not just the count. They are fetched once per
+   * post and kept here, so a feed of twenty cards does not re-ask for the same
+   * post, and a card that has no comments never asks at all.
+   */
+  private readonly cardComments = signal<Record<string, Comment[]>>({});
+
+  commentsFor(postId: string): Comment[] {
+    return this.cardComments()[postId] ?? [];
+  }
+
+  async loadCommentsFor(postId: string): Promise<void> {
+    if (!postId || this.cardComments()[postId]) return;
+    try {
+      const list = await this.api.commentsFor(postId);
+      this.cardComments.update((all) => ({ ...all, [postId]: list }));
+    } catch {
+      // A preview under a card is not worth an error banner; the counts the
+      // card already has stay as they were and tapping still opens the post.
+    }
+  }
+
+  /** Forget a post's prefetched comments, e.g. after a comment is deleted. */
+  dropCommentsFor(postId: string): void {
+    this.cardComments.update((all) => {
+      if (!(postId in all)) return all;
+      const next = { ...all };
+      delete next[postId];
+      return next;
+    });
+  }
+
+
   async loadPost(id: string): Promise<Post | undefined> {
     const p = await this.api.post(id);
     if (p) {
