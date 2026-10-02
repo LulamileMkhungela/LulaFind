@@ -3,6 +3,7 @@ import { Preferences } from '@capacitor/preferences';
 import { PlatformService } from './platform.service';
 import { LULA_API } from '../data/api';
 import { AuthService } from './auth.service';
+import { Router } from '@angular/router';
 import { environment } from '../../../environments/environment';
 
 /**
@@ -41,6 +42,7 @@ export class PushService {
   private platform = inject(PlatformService);
   private api = inject(LULA_API);
   private auth = inject(AuthService);
+  private router = inject(Router);
 
   /**
    * Mirror of what Preferences holds, so the sign-in effect below can read the
@@ -55,6 +57,8 @@ export class PushService {
   readonly registrationError = signal<string | null>(null);
   /** True once this device holds a valid FCM registration. */
   readonly registered = signal(false);
+  /** Title of the last push that arrived while the app was in the foreground. */
+  readonly lastReceived = signal<string | null>(null);
 
   private listenersBound = false;
 
@@ -150,6 +154,48 @@ export class PushService {
       this.registered.set(false);
       this.registrationError.set(e?.error ?? 'The phone could not register this device for notifications.');
     });
+
+    // Tapping the tray notification. Until this existed the send side was
+    // carefully attaching a `route` to every message and nothing ever read it:
+    // a push about a new comment on a post opened the app on whatever screen it
+    // happened to be on, so the whole feature was decorative.
+    //
+    // Capacitor delivers this both when the app is cold-started from the tray
+    // and when it is already running in the background, so one listener covers
+    // both. `actionId` is 'tap' for a normal press; any other action is ignored
+    // rather than mis-navigated.
+    plugin.addListener('pushNotificationActionPerformed', (e) => {
+      // Capacitor reports the action as `actionId` ('tap' for a plain press)
+      // and the payload as `notification.data`. A reply action is a future
+      // addition; anything that is not a tap is ignored rather than
+      // mis-navigated.
+      if (e?.actionId && e.actionId !== 'tap') return;
+      this.openFromNotification(e?.notification?.data);
+    });
+
+    // Arrived while the app was in the foreground. The OS draws no tray entry
+    // in that case, so this is the only place the message is seen at all.
+    plugin.addListener('pushNotificationReceived', (n) => {
+      this.lastReceived.set(n?.title ?? n?.data?.title ?? null);
+    });
+  }
+
+  /**
+   * Navigate to wherever a tapped notification points.
+   *
+   * The route comes from the send side (supabase/functions/send-push), which
+   * forwards the `route` the app wrote onto the notification row - a post, a
+   * profile, a story, the notifications screen. It arrives over the network, so
+   * it is validated before it reaches the router: only a rooted path, and never
+   * a protocol-relative URL that could be steered at an external origin.
+   */
+  private openFromNotification(data: unknown): void {
+    const route = (data as { route?: unknown } | undefined)?.route;
+    if (typeof route !== 'string') return;
+    if (!route.startsWith('/') || route.startsWith('//')) return;
+    // Signed-out taps land on /auth via the route guards, which is correct:
+    // the person is asked to sign in and then arrives on the right screen.
+    void this.router.navigateByUrl(route).catch(() => undefined);
   }
 
   /**

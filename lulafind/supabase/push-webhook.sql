@@ -56,34 +56,48 @@ begin
     return new;
   end if;
 
-  select decrypted_secret into svc
-  from vault.decrypted_secrets
-  where name = 'service_role_key';
+  -- Everything below is wrapped, and that is not defensive padding.
+  --
+  -- An exception raised in an AFTER trigger aborts the whole transaction, so a
+  -- missing pg_net extension, a Vault secret that was never created, or a
+  -- network call that refuses to queue would each take the INSERT down with it
+  -- - and the notification is already saved by then. The person would see no
+  -- bell entry at all, over a push that was never going to work. A failed push
+  -- must cost a notification that did not buzz, never the notification itself.
+  begin
+    select decrypted_secret into svc
+    from vault.decrypted_secrets
+    where name = 'service_role_key';
 
-  if svc is null then
-    raise warning 'lula_send_push: vault secret "service_role_key" is missing - push not sent';
-    return new;
-  end if;
+    if svc is null then
+      raise warning 'lula_send_push: vault secret "service_role_key" is missing - push not sent';
+      return new;
+    end if;
 
-  -- pg_net is asynchronous: the request is queued and the insert returns
-  -- immediately. A slow or failing push therefore cannot slow down or roll back
-  -- the notification that triggered it.
-  perform net.http_post(
-    url := 'https://srwdtguxdjsjlkaydhet.supabase.co/functions/v1/send-push',
-    headers := jsonb_build_object(
-      'Content-Type', 'application/json',
-      'Authorization', 'Bearer ' || svc
-    ),
-    -- Shaped like a database webhook payload, which is what the function
-    -- parses: it unwraps `record` and reads collection and payload from there.
-    body := jsonb_build_object(
-      'type', 'INSERT',
-      'schema', 'public',
-      'table', 'records',
-      'record', to_jsonb(new)
-    ),
-    timeout_milliseconds := 5000
-  );
+    -- pg_net is asynchronous: the request is queued and the insert returns
+    -- immediately. A slow or failing push therefore cannot slow down or roll
+    -- back the notification that triggered it.
+    perform net.http_post(
+      url := 'https://srwdtguxdjsjlkaydhet.supabase.co/functions/v1/send-push',
+      headers := jsonb_build_object(
+        'Content-Type', 'application/json',
+        'Authorization', 'Bearer ' || svc
+      ),
+      -- Shaped like a database webhook payload, which is what the function
+      -- parses: it unwraps `record` and reads collection and payload from there.
+      body := jsonb_build_object(
+        'type', 'INSERT',
+        'schema', 'public',
+        'table', 'records',
+        'record', to_jsonb(new)
+      ),
+      timeout_milliseconds := 5000
+    );
+  exception
+    when others then
+      -- Name the cause in the log so it is findable, then let the insert stand.
+      raise warning 'lula_send_push: push not sent - % (%)', sqlerrm, sqlstate;
+  end;
 
   return new;
 end;

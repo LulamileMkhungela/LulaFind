@@ -74,6 +74,20 @@ The dashboard webhook creates an equivalent trigger behind the scenes and
 Supabase injects the service-role authorization header itself — which is also
 why no key appears anywhere in this repo.
 
+`supabase/push-webhook.sql` now exists again, rewritten on the documented
+`net.http_post` (pg_net) plus a Vault secret, and it is worth having in the repo
+because a Dashboard hook cannot be reviewed, diffed or replayed. **It is not the
+recommended route** and it has two hard prerequisites — pg_net enabled, and a
+Vault secret named `service_role_key` — neither of which can be checked from
+here. If you use it, the send is wrapped in an exception handler: a missing
+extension or secret logs a warning and lets the insert stand, rather than
+aborting the transaction and losing the in-app notification over a push that was
+never going to work.
+
+**Install the hook only after the function is deployed.** A hook pointed at a
+URL that 404s is not a harmless no-op — it fires on every notification and every
+response is a failure.
+
 ## How a token gets there
 
 1. App starts → `PushService.init()` → asks FCM for a token

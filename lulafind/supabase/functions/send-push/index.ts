@@ -135,11 +135,27 @@ async function accessToken(sa: ServiceAccount): Promise<string> {
   return data.access_token;
 }
 
+/**
+ * The data block attached to a push.
+ *
+ * FCM delivers `notification` to the system tray and `data` to the app, and it
+ * is `data` that survives a tap: PushService reads `route` off it and navigates
+ * there (see push.service.ts, openFromNotification). Everything here is a
+ * string because FCM's data payload is string-valued by definition - a number
+ * or a null is silently dropped by the transport.
+ */
+interface PushData {
+  route: string;
+  postId: string;
+  kind: string;
+}
+
 /** Send one message. Returns the FCM error code when Google refuses it. */
 async function send(
   token: string,
   title: string,
   body: string,
+  data: PushData,
   projectId: string,
   bearer: string
 ): Promise<string | null> {
@@ -155,9 +171,19 @@ async function send(
         message: {
           token,
           notification: { title, body },
-          // Tapping the notification opens the case rather than the launcher.
-          data: { route: '/notifications' },
-          android: { priority: 'HIGH' },
+          // Tapping the notification goes to the thing that caused it, not to
+          // the notification list. The app wrote a route onto the notification
+          // row (a post, a profile, a story); forwarding it here is the whole
+          // point of a push - a link that lands on the wrong screen is worse
+          // than no link, because it looks like it worked.
+          data,
+          android: {
+            priority: 'HIGH',
+            // The tray entry must survive a reboot until it is tapped or
+            // dismissed, so a notification about a missing person is not lost
+            // to a phone that was off when it arrived.
+            notification: { channel_id: 'lulafind_alerts' }
+          },
           apns: { headers: { 'apns-priority': '10' } }
         }
       })
@@ -216,6 +242,19 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
   if (!userId) return json({ skipped: 'no recipient' }, 200);
 
+  // Where the tap should land. The notification row carries a route written by
+  // the app; anything that is not a rooted path falls back to the notification
+  // list rather than being forwarded, because the router on the phone will
+  // reject a malformed one anyway.
+  const route = typeof payload['route'] === 'string' && payload['route'].startsWith('/')
+    ? payload['route']
+    : '/notifications';
+  const data: PushData = {
+    route,
+    postId: typeof payload['postId'] === 'string' ? payload['postId'] : '',
+    kind: typeof payload['kind'] === 'string' ? payload['kind'] : ''
+  };
+
   const url = Deno.env.get('SUPABASE_URL');
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
   if (!url || !serviceKey) {
@@ -248,7 +287,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
   // One message per token. A person with a phone and a tablet should get both,
   // and one dead token must not stop the other.
   await Promise.all(rows.map(async ({ token }) => {
-    const outcome = await send(token, title, body, sa.project_id, bearer);
+    const outcome = await send(token, title, body, data, sa.project_id, bearer);
     if (outcome === 'dead') dead.push(token);
     else if (outcome) failed.push(outcome);
   }));
