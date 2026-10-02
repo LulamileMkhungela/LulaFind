@@ -19,6 +19,17 @@ import {
  * also what an upsert of a brand-new story or post produces — that case is
  * avoided by inserting first (see `putRecord`), not by signing out.
  */
+/**
+ * What a person is told when the database cannot see who they are.
+ *
+ * Shown as the banner and thrown as the error - the same string, so the two can
+ * never tell them different things. It names what was tried (a fresh sign-in
+ * token, sent again) so the next step is a real next step, not a guess.
+ */
+export const IDENTITY_REFUSED_COPY =
+  'The database could not see who this account is, so that was not saved. ' +
+  'LulaFind refreshed your sign-in and sent it again — please try once more.';
+
 function isIdentityError(message: string): boolean {
   return /row-level security|invalid JWT|JWT expired|not authenticated|401|PGRST301/i.test(message ?? '');
 }
@@ -425,11 +436,23 @@ export class SupabaseApi implements LulaApi {
    */
   private explain(collection: string, message: string, owner: string | null): string {
     if (isIdentityError(message)) {
-      supabaseNotice.set(
-        'That save was refused by the database, so nothing was stored. Try again. ' +
-        'If it keeps happening, sign out and sign in so the database can see this account.'
-      );
-      return 'Nothing was saved. Try again — you do not need to sign out first.';
+      /*
+       * The banner and the error are the same sentence, on purpose.
+       *
+       * They used to disagree: the banner told the person to sign out and sign
+       * in, while the error told them they did not need to. Both were wrong in
+       * a different way - `write()` has already refreshed the ID token and sent
+       * the write once more before this runs, so signing out is not the fix, and
+       * telling someone to do it makes them lose their place for nothing.
+       *
+       * It also said "Nothing was saved" without qualification. That is true of
+       * this failure (the retry also came back refused), but a sentence that
+       * appears whether or not a change landed is how the app came to deny a
+       * save it had actually made. One sentence, used in both places, keeps them
+       * from drifting apart again.
+       */
+      supabaseNotice.set(IDENTITY_REFUSED_COPY);
+      return IDENTITY_REFUSED_COPY;
     }
     if (/row-level security/i.test(message)) {
       return `LulaFind could not save this because the database would not accept it. Please try again.`;

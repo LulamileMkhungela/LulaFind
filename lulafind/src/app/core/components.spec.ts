@@ -9,7 +9,8 @@ import { PHOTO_MAX_BYTES, VIDEO_MAX_BYTES } from './models/media-rules';
 import { LocalDb } from './data/local-db';
 import { compact } from './utils/format';
 import { LULA_API, MockApi } from './data/api';
-import { SupabaseApi } from './data/supabase-api';
+import { IDENTITY_REFUSED_COPY, SupabaseApi } from './data/supabase-api';
+import { supabaseNotice } from './data/supabase-client';
 import { AuthService } from './services/auth.service';
 import { DataService } from './services/data.service';
 import { feedWithRails } from './utils/feed';
@@ -26,6 +27,7 @@ import { SpotlightComponent } from '../pages/tabs/spotlight.component';
 import { MeComponent } from '../pages/tabs/me.component';
 import { CreatePostComponent } from '../pages/post/create-post.component';
 import { CreateStoryComponent } from '../pages/story/create-story.component';
+import { RepostComponent } from '../pages/post/repost.component';
 import { StoryViewerComponent } from '../pages/story/story-viewer.component';
 import { SettingsService } from './services/settings.service';
 import { ProfileComponent } from '../pages/user/profile.component';
@@ -196,6 +198,70 @@ describe('Components render', () => {
     // The four actions, each with its word.
     const actions = [...el.querySelectorAll('.fb-act')].map((b) => (b.textContent ?? '').trim());
     expect(actions).toEqual(['Like', 'Comment', 'Repost', 'Send']);
+  });
+
+  it('leaves the long text boxes uncapped and gives every one of them the phone keyboard features', async () => {
+    // Two standing rules, checked where a person would notice them breaking:
+    // captured content has no upper limit, and every text box must allow
+    // autocorrect, word suggestions, the keyboard's own emoji key and paste.
+    const longForm = async (component: unknown, selector: string, label: string, setup?: (f: ComponentFixture<unknown>) => void): Promise<void> => {
+      const f = TestBed.createComponent(component as never);
+      if (setup) setup(f);
+      f.detectChanges();
+      await f.whenStable();
+      f.detectChanges();
+      const box = (f.nativeElement as HTMLElement).querySelector(selector) as HTMLTextAreaElement | null;
+      expect(box, `${label}: ${selector} not found`).toBeTruthy();
+      expect(box!.getAttribute('maxlength'), `${label} must have no upper limit`).toBeNull();
+      expect(box!.getAttribute('inputmode'), label).toBe('text');
+      expect(box!.getAttribute('autocorrect'), label).toBe('on');
+      expect(box!.getAttribute('autocomplete'), label).toBe('on');
+      expect(box!.getAttribute('spellcheck'), label).toBe('true');
+      // Paste is a browser default and was never blocked; the attribute that
+      // switches autocorrect off is what would look like "paste is broken".
+      expect(box!.getAttribute('autocorrect')).not.toBe('off');
+    };
+
+    // The composer shows the body box once a category is chosen, as it does for
+    // anyone actually writing a post.
+    await longForm(CreatePostComponent, 'textarea[data-field="body"]', 'the case description',
+      (f) => (f.componentInstance as CreatePostComponent).setType('missing'));
+    await longForm(CreateStoryComponent, 'textarea.caption', 'the story caption');
+    await longForm(RepostComponent, 'textarea.thoughts', 'repost thoughts');
+  });
+
+  it('never caps attachments with a number written into a file: the rule lives in one place', async () => {
+    // The 3-photo cap was written as a literal 4 in four separate files, and in
+    // the composer the guard said 4 while the error message next to it said 3 -
+    // so a person could add a fourth photo and be told off about "its 3 photos".
+    // Every cap now reads POST_MAX_PHOTOS / STORY_MAX_PHOTOS from
+    // models/media-rules.ts, and this walks the source to keep it that way.
+    const { readdirSync, readFileSync, statSync } = await import('node:fs');
+    const { fileURLToPath } = await import('node:url');
+    const candidates: string[] = [`${process.cwd()}/src/app`, `${process.cwd()}/lulafind/src/app`];
+    // The runner may serve this file from memory, in which case import.meta.url
+    // is not a file: URL and only the working directory can be trusted.
+    try { candidates.unshift(fileURLToPath(new URL('..', import.meta.url))); } catch { /* use cwd */ }
+    const isDir = (p: string): boolean => { try { return statSync(p).isDirectory(); } catch { return false; } };
+    const root = candidates.find(isDir);
+    expect(root, 'the app source folder must be reachable from the test').toBeTruthy();
+
+    const walk = (dir: string): string[] => readdirSync(dir).flatMap((name) => {
+      const full = `${dir}/${name}`;
+      if (isDir(full)) return walk(full);
+      return full.endsWith('.ts') && !full.endsWith('.spec.ts') ? [full] : [];
+    });
+
+    // A cap looks like `something.media.length >= 4`. `x.length >= 2` on a search
+    // needle or a list of cleared cases is not a media cap and is left alone.
+    const literalCap = /(?:\bmedia\b|\bphotos?\b|\bimages?\b|\battachments?\b|commentMedia\(\)|existingMedia)(?:\([^)]*\))?(?:\.\w+)*\.length\s*>=\s*\d/;
+    const offenders: string[] = [];
+    for (const file of walk(root!)) {
+      readFileSync(file, 'utf8').split('\n').forEach((line, i) => {
+        if (literalCap.test(line)) offenders.push(`${file.split('/').slice(-2).join('/')}:${i + 1} ${line.trim()}`);
+      });
+    }
+    expect(offenders, 'use POST_MAX_PHOTOS / STORY_MAX_PHOTOS instead of a literal cap').toEqual([]);
   });
 
   it('lets a person see who reacted, with each reaction counted, from the card', async () => {
@@ -485,6 +551,35 @@ describe('Components render', () => {
 
     await expect(api.uploadMedia('u_1', { id: 'm_1', kind: 'image', src: 'data:image/png;base64,AAAA' } as never))
       .rejects.toThrow(/fix-photo-uploads\.sql/);
+  });
+
+  it('tells the person the same thing in the error and the banner when the database cannot see them', async () => {
+    // The banner used to say "sign out and sign in" while the error said "you do
+    // not need to sign out first" - two halves of the screen contradicting each
+    // other, and neither the fix. Now it is one sentence in both places.
+    const api = new SupabaseApi();
+    const refused = { message: 'new row violates row-level security policy for table "records"', code: '42501' };
+    (api as unknown as { client: unknown }).client = {
+      from: () => ({ insert: async () => ({ error: refused }), update: () => ({ eq: () => ({ eq: async () => ({ error: refused }) }) }) })
+    };
+    (api as unknown as { authBridge: unknown }).authBridge = null;
+    supabaseNotice.set('');
+
+    let thrown = '';
+    try {
+      await api.saveComment({
+        id: 'c_x', postId: 'p_thato', parentId: null, authorId: 'u_demo', body: 'A comment that the database refuses.',
+        createdAt: Date.now(), upvotes: 0, isLead: false
+      } as never);
+    } catch (e) {
+      thrown = (e as Error).message;
+    }
+
+    expect(thrown).toBe(IDENTITY_REFUSED_COPY);
+    expect(supabaseNotice()).toBe(IDENTITY_REFUSED_COPY);
+    // And the words that used to contradict each other are gone for good.
+    expect(thrown).not.toMatch(/sign out/i);
+    expect(thrown).not.toMatch(/nothing was saved/i);
   });
 
   it('refuses a photo over 2 MB and a video over 3 MB, and accepts both at the limit', async () => {

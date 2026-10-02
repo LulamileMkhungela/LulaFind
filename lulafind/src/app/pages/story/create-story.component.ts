@@ -50,7 +50,8 @@ import { STORY_BLACK, storyBg } from '../../core/data/seed';
 
       <!-- the canvas: tap and type, WhatsApp style -->
       <div class="canvas" (click)="focusText()">
-        <textarea #caption class="caption" rows="1" maxlength="600"
+        <textarea #caption class="caption" rows="1"
+                  inputmode="text" autocorrect="on" autocomplete="on" autocapitalize="sentences" spellcheck="true"
                   [style.color]="inkColour()"
                   [style.font-size.px]="captionSize()"
                   placeholder="Type a status"

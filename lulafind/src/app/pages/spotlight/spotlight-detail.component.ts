@@ -19,6 +19,7 @@ import { AvatarComponent } from '../../shared/components/avatar.component';
 import { DataService } from '../../core/services/data.service';
 import { AuthService } from '../../core/services/auth.service';
 import { PlatformService } from '../../core/services/platform.service';
+import { POST_MAX_PHOTOS } from '../../core/models/media-rules';
 import { MediaItem, POST_TYPE_META, Post, PostType, ReactionKind, Spotlight, UserProfile, provinceName } from '../../core/models/types';
 import { MediaService } from '../../core/services/media.service';
 import { compact } from '../../core/utils/format';
@@ -83,7 +84,7 @@ import { cover } from '../../core/data/seed';
             <input class="quick__headline" type="text" maxlength="120" placeholder="Headline (at least 8 characters)"
                    [value]="draft().title" (input)="setDraft('title', $any($event.target).value)"
                    aria-label="Headline" />
-            <textarea class="quick__text" rows="3" maxlength="5000" placeholder="What is happening? Add a photo or video if you have one."
+            <textarea class="quick__text" rows="3" placeholder="What is happening? Add a photo or video if you have one."
                       inputmode="text" autocorrect="on" autocomplete="on" autocapitalize="sentences" spellcheck="true"
                       [value]="draft().body" (input)="setDraft('body', $any($event.target).value)"
                       aria-label="Post text"></textarea>
@@ -115,7 +116,7 @@ import { cover } from '../../core/data/seed';
             </div>
 
             <div class="quick__actions">
-              <button type="button" class="attach" [disabled]="mediaBusy() || hasVideo() || draft().media.length >= 4"
+              <button type="button" class="attach" [disabled]="mediaBusy() || hasVideo() || draft().media.length >= maxPhotos"
                       (click)="attachImage()"><lf-icon name="image" [size]="17" /> Photo</button>
               <button type="button" class="attach" [disabled]="mediaBusy() || hasVideo() || draft().media.length > 0"
                       (click)="attachVideo()"><lf-icon name="video" [size]="17" /> Video</button>
@@ -250,6 +251,9 @@ export class SpotlightDetailComponent implements OnInit {
   });
   readonly posting = signal(false);
   readonly mediaBusy = computed(() => this.media.busy());
+
+  /** The attachment rule shared with the composer: three photos, one video. */
+  readonly maxPhotos = POST_MAX_PHOTOS;
   readonly notice = signal('');
   readonly composerError = signal('');
   /** Members matching the search, so you can find a person inside a community. */

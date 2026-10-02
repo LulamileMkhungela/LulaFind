@@ -296,7 +296,7 @@ interface MissingField { key: string; label: string; }
             }
             <textarea class="body-input" [class.body-input--template]="!editing()" [rows]="editing() ? 5 : 13"
                       inputmode="text" autocorrect="on" autocomplete="on" autocapitalize="sentences" spellcheck="true"
-                      maxlength="5000" data-field="body" [placeholder]="editing() ? bodyPlaceholder() : ''"
+                      data-field="body" [placeholder]="editing() ? bodyPlaceholder() : ''"
                       [value]="f().body" (input)="patch({ body: $any($event.target).value })"
                       aria-label="Post text template"></textarea>
             @if (fieldError('body')) { <p class="field-error">{{ fieldError('body') }}</p> }
@@ -382,7 +382,7 @@ interface MissingField { key: string; label: string; }
                         <option value="unknown">Not specified</option><option value="female">Female</option><option value="male">Male</option><option value="other">Other</option>
                       </select></label>
                     </div>
-                    <label class="field full"><span>Clothing or identifying details</span><textarea rows="2" placeholder="What were they wearing? Any details that could help identify them?" [value]="s().clothing" (input)="patchSubject({ clothing: $any($event.target).value })"></textarea></label>
+                    <label class="field full"><span>Clothing or identifying details</span><textarea rows="2" inputmode="text" autocorrect="on" autocomplete="on" autocapitalize="sentences" spellcheck="true" placeholder="What were they wearing? Any details that could help identify them?" [value]="s().clothing" (input)="patchSubject({ clothing: $any($event.target).value })"></textarea></label>
                     @if (type() === 'missing') {
                       <label class="field full"><span>Private identifying detail <small>(kept off the public poster)</small></span><input placeholder="A mark only the family knows" [value]="s().distinguishing" (input)="patchSubject({ distinguishing: $any($event.target).value })" /></label>
                     }
@@ -799,7 +799,7 @@ export class CreatePostComponent implements OnInit {
       if (photoAttachment?.kind === 'image' && photoAttachment.src) {
         const existingMedia = this.f().media;
         if (!existingMedia.some((item) => item.id === photoAttachment.id)) {
-          if (existingMedia.length >= 4 || existingMedia.some((item) => item.kind === 'video')) {
+          if (existingMedia.length >= POST_MAX_PHOTOS || existingMedia.some((item) => item.kind === 'video')) {
             this.error.set(`This draft already has a video or its ${POST_MAX_PHOTOS} photos. Remove one before adding this photo.`);
           } else {
             this.invalidateGenerated();

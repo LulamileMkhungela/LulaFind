@@ -12,6 +12,7 @@ import { AvatarComponent } from '../../shared/components/avatar.component';
 import { ReactionsSheetComponent } from '../../shared/components/reactions-sheet.component';
 import { ReactionButtonComponent } from '../../shared/components/reaction-button.component';
 import { ReactionIconComponent } from '../../shared/components/reaction-icon.component';
+import { PHOTO_MAX_BYTES, POST_MAX_PHOTOS, VIDEO_MAX_BYTES, mb } from '../../core/models/media-rules';
 import { DataService } from '../../core/services/data.service';
 import { AuthService } from '../../core/services/auth.service';
 import { ChatService, ChatGate } from '../../core/services/chat.service';
@@ -302,7 +303,7 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
                     </div>
                   }
                   <div class="attach-actions">
-                    <button type="button" (click)="addCommentPhoto()" [disabled]="posting() || media.busy() || commentMedia().length >= 4 || hasCommentVideo()">
+                    <button type="button" (click)="addCommentPhoto()" [disabled]="posting() || media.busy() || commentMedia().length >= maxPhotos || hasCommentVideo()">
                       <lf-icon name="image" [size]="17" /> Photo
                     </button>
                     <button type="button" (click)="addCommentVideo()" [disabled]="posting() || media.busy() || commentMedia().length > 0">
@@ -711,6 +712,11 @@ export class PostDetailComponent implements OnInit {
   readonly authorAvatar = computed(() => this.data.avatarFor(this.p()?.anonymous && !this.isMine() ? null : this.author()));
   readonly authorLink = computed(() => (this.p()?.anonymous && !this.isMine() ? ['/post', this.p()!.id] : ['/user', this.p()?.authorId ?? '']));
   readonly myAvatar = computed(() => this.data.avatarFor(this.auth.user()));
+
+  /** The attachment rule, shared with the composer: three photos, one video. */
+  readonly maxPhotos = POST_MAX_PHOTOS;
+  readonly photoMb = mb(PHOTO_MAX_BYTES);
+  readonly videoMb = mb(VIDEO_MAX_BYTES);
   readonly myName = computed(() => this.auth.user()?.displayName ?? 'Me');
   readonly latestStillSearching = computed(() => (this.p()?.events ?? [])
     .filter((event) => event.kind === 'still_searching')
@@ -906,7 +912,7 @@ export class PostDetailComponent implements OnInit {
   hasCommentVideo(): boolean { return this.commentMedia().some((item) => item.kind === 'video'); }
 
   async addCommentPhoto(): Promise<void> {
-    if (this.posting() || this.media.busy() || this.commentMedia().length >= 4 || this.hasCommentVideo()) return;
+    if (this.posting() || this.media.busy() || this.commentMedia().length >= this.maxPhotos || this.hasCommentVideo()) return;
     const item = await this.media.pickImage({ quality: 76 });
     const notice = this.media.notice();
     if (notice) await this.say(notice);
