@@ -10,7 +10,10 @@ const config: CapacitorConfig = {
   server: { androidScheme: 'https', iosScheme: 'https' },
   android: {
     allowMixedContent: false,
-    captureInput: true,
+    // `captureInput: true` used to sit here. It is not an option in Capacitor 8
+    // - nothing in @capacitor/* reads it - so it was silently doing nothing.
+    // The phone keyboard is handled by windowSoftInputMode in the manifest and
+    // by the Keyboard plugin below.
     webContentsDebuggingEnabled: false
   },
   ios: {

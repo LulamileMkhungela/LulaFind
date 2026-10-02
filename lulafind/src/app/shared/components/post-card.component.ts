@@ -1,4 +1,5 @@
-import { Component, EventEmitter, Input, OnChanges, OnInit, Output, computed, inject, signal } from '@angular/core';
+import { AfterViewChecked, Component, EventEmitter, Input, OnChanges, OnInit, Output, ViewChild, computed, inject, signal } from '@angular/core';
+import type { ElementRef } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import { DEFAULT_REACTION, Post, POST_TYPE_META, REACTIONS, ReactionKind, UserProfile, isReaction, provinceName } from '../../core/models/types';
 import { alreadySaid, compact, headingIsNew, timeAgo } from '../../core/utils/format';
@@ -93,9 +94,11 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
         <!-- A repost: the reposter's own words, then the original inside a frame. -->
         @if (post.body.trim()) {
           <div class="fb-card-body fb-card-body--thoughts" [routerLink]="'/post/' + post.id">
-            <p class="fb-post-text" [class.fb-clamp]="!expanded()">{{ post.body }}</p>
-            @if (longBody() && !expanded()) {
+            <p class="fb-post-text" #bodyEl [class.fb-clamp]="!expanded()">{{ post.body }}</p>
+            @if (!expanded() && textOverflows()) {
               <button class="fb-readmore" (click)="toggleExpand($event)">…see more</button>
+            } @else if (expanded() && textOverflows()) {
+              <button class="fb-readmore" (click)="toggleExpand($event)">see less</button>
             }
           </div>
         }
@@ -146,9 +149,11 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
             <span>Last seen: {{ post.lastSeenWhere || post.town }}</span>
           </div>
         }
-        <p class="fb-post-text" [class.fb-clamp]="!expanded()">{{ post.body }}</p>
-        @if (longBody() && !expanded()) {
+        <p class="fb-post-text" #bodyEl [class.fb-clamp]="!expanded()">{{ post.body }}</p>
+        @if (!expanded() && textOverflows()) {
           <button class="fb-readmore" (click)="toggleExpand($event)">…see more</button>
+        } @else if (expanded() && textOverflows()) {
+          <button class="fb-readmore" (click)="toggleExpand($event)">see less</button>
         }
       </div>
 
@@ -438,7 +443,10 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
 
   `]
 })
-export class PostCardComponent implements OnInit, OnChanges {
+export class PostCardComponent implements OnInit, OnChanges, AfterViewChecked {
+  /** The post text, measured to decide whether "…see more" is honest. */
+  @ViewChild('bodyEl') private bodyRef?: ElementRef<HTMLElement>;
+
   private router = inject(Router);
   private lookOn = signal<boolean | null>(null);
   @Input({ required: true }) post!: Post;
@@ -512,7 +520,14 @@ export class PostCardComponent implements OnInit, OnChanges {
   readonly authorRoute = computed(() =>
     this.post?.anonymous && !this.isMine() ? ['/post/' + this.post.id] : ['/user/' + (this.author?.id ?? '')]
   );
-  readonly longBody = computed(() => (this.post?.body?.trim().length ?? 0) > 120);
+  /**
+   * True when the text is actually cut off at three lines.
+   *
+   * This used to be `body.length > 120`, which is a guess: on a wide screen a
+   * 200-character post can fit, and "…see more" would be offered for a tap that
+   * changes nothing. Ask the element instead.
+   */
+  readonly textOverflows = signal(false);
 
   /** LinkedIn's second header line: the poster's own line about themselves. */
   readonly authorHeadline = computed(() =>
@@ -637,6 +652,21 @@ export class PostCardComponent implements OnInit, OnChanges {
       case 'locked-follow': return 'Follow each other to message';
       default: return 'Message the poster';
     }
+  }
+
+  /**
+   * Runs after every render: while the text is clamped, does it overflow?
+   * Only written when the answer changes, so a render cannot chase itself.
+   */
+  ngAfterViewChecked(): void {
+    const el = this.bodyRef?.nativeElement;
+    if (!el || this.expanded()) return;
+    // Where there is no layout to measure (tests, a hidden tab), fall back to
+    // the length rule this used to use rather than claiming the text fits.
+    const over = el.clientHeight > 0
+      ? el.scrollHeight > el.clientHeight + 2
+      : (this.post?.body?.trim().length ?? 0) > 120;
+    if (over !== this.textOverflows()) this.textOverflows.set(over);
   }
 
   toggleExpand(e: Event): void {

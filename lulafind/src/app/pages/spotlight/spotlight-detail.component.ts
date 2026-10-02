@@ -84,6 +84,7 @@ import { cover } from '../../core/data/seed';
                    [value]="draft().title" (input)="setDraft('title', $any($event.target).value)"
                    aria-label="Headline" />
             <textarea class="quick__text" rows="3" maxlength="5000" placeholder="What is happening? Add a photo or video if you have one."
+                      inputmode="text" autocorrect="on" autocomplete="on" autocapitalize="sentences" spellcheck="true"
                       [value]="draft().body" (input)="setDraft('body', $any($event.target).value)"
                       aria-label="Post text"></textarea>
             <div class="quick__where">

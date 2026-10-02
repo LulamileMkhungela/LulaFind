@@ -23,6 +23,21 @@ function isIdentityError(message: string): boolean {
 }
 
 /**
+ * Has this database got the function at all?
+ *
+ * PostgREST answers 404 / PGRST202 when a function is not in its schema cache,
+ * and Postgres itself says "function public.x(...) does not exist". A database
+ * created before a migration legitimately has neither, which must not read to
+ * the person as "your change failed".
+ */
+function isMissingFunction(error: { message: string; code?: string }, name: string): boolean {
+  const m = error?.message ?? '';
+  const missing = error?.code === 'PGRST202'
+    || /could not find the function|does not exist/i.test(m);
+  return missing && m.includes(name);
+}
+
+/**
  * What `lula_debug_identity()` reports about the current request. Every field
  * maps to a condition the write policies actually test, so a NULL or FALSE here
  * is a specific, fixable problem rather than a generic "write failed".
@@ -573,8 +588,20 @@ export class SupabaseApi implements LulaApi {
       post_id: id,
       patch: { ...patch, id } as unknown as Record<string, unknown>
     });
-    if (error) throw new Error(error.message);
-    return this.post(id);
+    if (!error) return this.post(id);
+
+    if (isMissingFunction(error, 'lula_patch_post')) {
+      // This database has not had supabase/lula-patch-post.sql run on it yet.
+      // The merge-in-the-database is the better way to do this (two writers
+      // cannot clobber each other), but the feature still has to work, so fall
+      // back to reading the row and writing it back with the change applied.
+      console.warn('lula_patch_post is missing; falling back to a read-and-write. Run supabase/lula-patch-post.sql to restore the atomic merge.');
+      const current = await this.post(id);
+      if (!current) throw new Error('That post is no longer available.');
+      await this.savePost({ ...current, ...patch } as Post);
+      return this.post(id);
+    }
+    throw new Error(error.message);
   }
 
   async queryFeed(f: FeedFilter, viewerId: string | null): Promise<Post[]> {

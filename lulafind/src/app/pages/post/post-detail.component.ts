@@ -158,9 +158,9 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
 
           <div class="actions">
             <lf-reaction-button [value]="myVote()" (react)="react($event)" />
-            <button class="act" type="button" (click)="focusComment()"><lf-icon name="comment" [size]="20" /><span>Comment</span></button>
-            <button class="act" type="button" (click)="repost()"><lf-icon name="repost" [size]="20" /><span>Repost</span></button>
-            <button class="act" type="button" (click)="send()"><lf-icon name="send" [size]="19" /><span>Send</span></button>
+            <button class="act" type="button" (click)="focusComment()" aria-label="Comment"><lf-icon name="comment" [size]="20" /><span>Comment</span></button>
+            <button class="act" type="button" (click)="repost()" aria-label="Repost"><lf-icon name="repost" [size]="20" /><span>Repost</span></button>
+            <button class="act" type="button" (click)="send()" aria-label="Send"><lf-icon name="send" [size]="19" /><span>Send</span></button>
           </div>
 
           @if (!isMine() || p()!.status === 'active') {
@@ -318,8 +318,6 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
               <div class="sort">
                 <button type="button" (click)="toggleSort()">{{ sort() === 'relevant' ? 'Most relevant' : 'Most recent' }} <lf-icon name="chevronDown" [size]="14" /></button>
               </div>
-            } @else {
-              <p class="empty">No comments yet. Start the conversation.</p>
             }
 
             @for (c of sorted(); track c.id) {
@@ -328,7 +326,9 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
                 <div class="cmsg__body">
                   @if (editingId() === c.id) {
                     <div class="edit">
-                      <textarea rows="2" [value]="editDraft()" (input)="editDraft.set($any($event.target).value)" aria-label="Edit your comment"></textarea>
+                      <textarea rows="2" inputmode="text" autocorrect="on" autocomplete="on"
+                                autocapitalize="sentences" spellcheck="true"
+                                [value]="editDraft()" (input)="editDraft.set($any($event.target).value)" aria-label="Edit your comment"></textarea>
                       <div class="edit__row">
                         <button type="button" class="pill" (click)="editingId.set(null)">Cancel</button>
                         <button type="button" class="pill pill--go" [disabled]="!editDraft().trim()" (click)="saveEdit(c)">Save</button>
@@ -405,7 +405,9 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
                             <div class="cmsg__body">
                               @if (editingId() === r.id) {
                                 <div class="edit">
-                                  <textarea rows="2" [value]="editDraft()" (input)="editDraft.set($any($event.target).value)" aria-label="Edit your reply"></textarea>
+                                  <textarea rows="2" inputmode="text" autocorrect="on" autocomplete="on"
+                                            autocapitalize="sentences" spellcheck="true"
+                                            [value]="editDraft()" (input)="editDraft.set($any($event.target).value)" aria-label="Edit your reply"></textarea>
                                   <div class="edit__row">
                                     <button type="button" class="pill" (click)="editingId.set(null)">Cancel</button>
                                     <button type="button" class="pill pill--go" [disabled]="!editDraft().trim()" (click)="saveEdit(r)">Save</button>
@@ -456,7 +458,6 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
           }
         </section>
 
-        <p class="fine">LulaFind is a community tool. It does not replace SAPS. In an emergency call <strong>10111</strong>.</p>
       }
     </ion-content>
 
@@ -542,12 +543,15 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
     .stack { display: inline-flex; }
     .stack lf-reaction-icon + lf-reaction-icon { margin-left: -6px; }
     .stats__right { display: inline-flex; align-items: center; gap: 12px; }
-    .actions { display: flex; align-items: center; gap: 2px; margin: 0 6px; padding: 4px 0; border-top: 1px solid var(--lf-line-soft); }
-    .act { flex: 0 0 auto; min-width: 0; height: 40px; border: 0; background: transparent; color: var(--lf-muted); font-family: inherit;
-      font-size: 14px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; gap: 5px; cursor: pointer; border-radius: 4px; }
+    /* React - Comment - Repost - Send, the four actions spread the full width
+       the way LinkedIn draws them, instead of bunched at the start. */
+    .actions { display: flex; align-items: center; margin: 0 8px; padding: 4px 0; border-top: 1px solid var(--lf-line-soft); }
+    .act { flex: 1 1 0; min-width: 0; height: 44px; border: 0; background: transparent; color: var(--lf-muted); font-family: inherit;
+      font-size: 14px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; gap: 6px; cursor: pointer; border-radius: 6px; }
     .act:hover, .act:active { background: var(--lf-hover); }
-    @media (max-width: 430px) { .actions { margin: 0 2px; gap: 0; } .act { font-size: 12.5px; gap: 4px; padding: 0 2px; } }
-    @media (max-width: 360px) { .act { font-size: 11.5px; } }
+    .act.on { color: var(--lf-primary); }
+    @media (max-width: 430px) { .actions { margin: 0 4px; } .act { font-size: 12.5px; gap: 4px; } }
+    @media (max-width: 360px) { .act { font-size: 11.5px; gap: 3px; } }
     .chatline { display: flex; align-items: center; justify-content: center; gap: 8px; width: calc(100% - 24px); margin: 4px 12px 12px;
       height: 38px; border: 1px solid var(--lf-line); border-radius: 6px; background: transparent; color: var(--ion-text-color);
       font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
@@ -589,7 +593,6 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
     .composer textarea, .composer .fld { border-radius: 999px !important; }
     .sort { display: flex; justify-content: flex-end; margin: 12px 0 2px; }
     .sort button { display: inline-flex; align-items: center; gap: 5px; border: 0; background: transparent; color: var(--lf-muted); font: inherit; font-size: 13px; cursor: pointer; }
-    .empty { margin: 12px 0 0; color: var(--lf-muted); font-size: 14px; }
     .cmsg { display: flex; align-items: flex-start; gap: 8px; margin-top: 14px; }
     .cmsg__body { flex: 1; min-width: 0; }
     .cmsg--reply { margin-top: 9px; }
@@ -637,7 +640,6 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
     .pill { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px; border: 1px solid var(--lf-line); border-radius: 15px;
       background: transparent; color: var(--ion-text-color); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
     .pill--go { background: var(--lf-primary-fill); border-color: var(--lf-primary-fill); color: #fff; }
-    .fine { margin: 12px var(--edge) 28px; font-size: 12px; text-align: center; color: var(--lf-muted); }
 
     .sheetwrap { position: fixed; inset: 0; z-index: 40; background: var(--lf-scrim); display: flex; align-items: flex-end; justify-content: center; }
     .sheet { width: 100%; max-width: 520px; max-height: 88vh; overflow-y: auto; background: var(--lf-card); border-radius: 18px 18px 0 0; padding: 18px 18px 28px; display: flex; flex-direction: column; gap: 8px; }

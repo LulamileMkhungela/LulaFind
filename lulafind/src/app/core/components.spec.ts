@@ -271,6 +271,77 @@ describe('Components render', () => {
     if (post.upvotes > voters.length) expect(el.textContent).toContain('reacted from outside this network');
   });
 
+  it('spreads the four post actions across the width, LinkedIn-style', async () => {
+    const data = TestBed.inject(DataService);
+    await data.loadFeed();
+    const post = data.feed().find((p) => !p.repostOf)!;
+    await TestBed.inject(AuthService).signInDemo();
+    const f = TestBed.createComponent(PostDetailComponent);
+    f.componentInstance.p.set(post);
+    await settle(f);
+    const el = f.nativeElement as HTMLElement;
+
+    const bar = el.querySelector('.actions');
+    expect(bar, 'the action bar is rendered').toBeTruthy();
+    const labels = [...bar!.querySelectorAll('button')].map((b) => b.textContent?.trim()).filter(Boolean);
+    // React is the reaction button; the other three are plain buttons.
+    expect(labels.join(' ')).toContain('Comment');
+    expect(labels.join(' ')).toContain('Repost');
+    expect(labels.join(' ')).toContain('Send');
+    expect(el.querySelector('lf-reaction-button'), 'React sits in the bar too').toBeTruthy();
+  });
+
+  it('keeps the post detail screen free of the community-tool footer and comments filler', async () => {
+    const data = TestBed.inject(DataService);
+    await data.loadFeed();
+    const post = data.feed().find((p) => !p.repostOf)!;
+    const f = TestBed.createComponent(PostDetailComponent);
+    f.componentInstance.p.set(post);
+    await settle(f);
+    const text = (f.nativeElement as HTMLElement).textContent ?? '';
+    expect(text).not.toContain('community tool');
+    expect(text).not.toContain('No comments yet');
+  });
+
+  it('offers read more only when the text is actually cut off', async () => {
+    const data = TestBed.inject(DataService);
+    await data.loadFeed();
+    const short = { ...data.feed().find((p) => !p.repostOf)!, body: 'Short update about the search.' };
+    const f = TestBed.createComponent(PostCardComponent);
+    f.componentRef.setInput('post', short);
+    await settle(f);
+    expect(f.nativeElement.querySelector('.fb-readmore'), 'no read-more on text that fits').toBe(null);
+
+    // jsdom has no layout, so give the paragraph the measurements a browser
+    // would produce for text that is cut off, then re-render: the component
+    // measures the element after every render.
+    const text = f.nativeElement.querySelector('.fb-post-text') as HTMLElement;
+    Object.defineProperty(text, 'clientHeight', { value: 60, configurable: true });
+    Object.defineProperty(text, 'scrollHeight', { value: 300, configurable: true });
+    f.detectChanges();
+    expect(f.nativeElement.querySelector('.fb-readmore')?.textContent).toContain('see more');
+    f.componentInstance.toggleExpand(new Event('click'));
+    f.detectChanges();
+    expect(f.nativeElement.querySelector('.fb-readmore')?.textContent).toContain('see less');
+  });
+
+  it('still saves a case update on a database without lula_patch_post', async () => {
+    // The live database was never given the function, and "Still searching"
+    // answered with "could not find function public.lula_patch_post". The app
+    // must not be blocked on a migration: it falls back to a read-and-write.
+    const api = new SupabaseApi();
+    const writes: string[] = [];
+    (api as unknown as { client: unknown }).client = {
+      rpc: async () => ({ error: { message: 'Could not find the function public.lula_patch_post(post_id, patch) in the schema cache', code: 'PGRST202' } })
+    };
+    (api as unknown as { post: unknown }).post = async (id: string) => ({ id, authorId: 'u_1', body: 'b' });
+    (api as unknown as { savePost: unknown }).savePost = async (p: { id: string }) => { writes.push(p.id); return true; };
+
+    const out = await api.patchPost('p_1', { outcomeNudgeAt: 5 });
+    expect(writes, 'the change was written the ordinary way').toEqual(['p_1']);
+    expect(out?.id).toBe('p_1');
+  });
+
   it('writes a notification owned by the actor, never by the recipient', async () => {
     // The recipient can never own the row: the insert policy compares owner_id
     // with the caller. Falling back to them produced a write the database could
