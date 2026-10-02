@@ -205,6 +205,28 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
         </div>
       }
 
+      <!-- The action bar this component's own header describes: react (hold
+           for the tray) - Comment - Repost - Send. It went missing from the
+           markup, so a post in the feed had no way to be reacted to or
+           commented on even though every handler below still existed. -->
+      <div class="fb-actions" (click)="$event.stopPropagation()">
+        <button class="fb-act" type="button" [class.on]="!!myReaction()"
+                (click)="quickReact()" (contextmenu)="openReactions($event)"
+                [attr.aria-label]="myReaction() ? 'Your reaction: ' + reactionWord() : 'React'">
+          <lf-reaction-icon [kind]="myReaction() ?? defaultReaction" [size]="20" />
+          <span>{{ reactionWord() }}</span>
+        </button>
+        <button class="fb-act" type="button" (click)="comment.emit()" aria-label="Comment">
+          <lf-icon name="comment" [size]="20" /><span>Comment</span>
+        </button>
+        <button class="fb-act" type="button" (click)="onRepost()" aria-label="Repost">
+          <lf-icon name="repost" [size]="20" /><span>Repost</span>
+        </button>
+        <button class="fb-act" type="button" (click)="onSend()" aria-label="Send">
+          <lf-icon name="send" [size]="19" /><span>Send</span>
+        </button>
+      </div>
+
       @if (post.chatEnabled && !isMine() && !post.repostOf) {
         <button class="fb-chat-cta" [class.open]="chatState === 'open'" (click)="chat.emit()">
           <lf-icon [name]="chatState === 'open' ? 'unlock' : 'lock'" [size]="15" />
@@ -391,6 +413,20 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
     }
     .fb-stats-right { display: flex; align-items: center; gap: 12px; }
 
+    /* React - Comment - Repost - Send, the bar LinkedIn puts under every post. */
+    .fb-actions {
+      display: flex; align-items: center; margin: 6px 8px 8px; padding-top: 2px;
+      border-top: 1px solid var(--lf-line-soft);
+    }
+    .fb-act {
+      flex: 1 1 0; min-width: 0; height: 40px; border: 0; background: transparent; color: var(--lf-muted);
+      font-family: inherit; font-size: 13.5px; font-weight: 600; cursor: pointer; border-radius: 6px;
+      display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    }
+    .fb-act:hover, .fb-act:active { background: var(--lf-hover); }
+    .fb-act.on { color: var(--lf-primary); }
+    @media (max-width: 380px) { .fb-act { font-size: 12px; gap: 4px; } }
+
     .fb-chat-cta {
       display: flex; align-items: center; justify-content: center; gap: 8px;
       width: calc(100% - 24px); margin: 0 12px 10px;
@@ -418,6 +454,9 @@ export class PostCardComponent implements OnInit, OnChanges {
   private data = inject(DataService);
   private auth = inject(AuthService);
   private actions = inject(PostActionsService);
+
+  /** Template-visible copy of DEFAULT_REACTION: module constants are not. */
+  readonly defaultReaction = DEFAULT_REACTION;
 
   /** Set once this card's post was deleted, so it disappears at once. */
   readonly gone = signal(false);
@@ -608,6 +647,22 @@ export class PostCardComponent implements OnInit, OnChanges {
 
   onReact(kind: ReactionKind): void {
     this.vote.emit(kind);
+  }
+
+  /** The reaction this viewer already gave, or null. */
+  myReaction(): ReactionKind | null {
+    return this.post ? this.data.myVote(this.post) : null;
+  }
+
+  /** "React" until you have reacted; the reaction's name after that. */
+  reactionWord(): string {
+    const mine = this.myReaction();
+    return mine ? REACTIONS.find((r) => r.key === mine)?.label ?? 'Reacted' : 'React';
+  }
+
+  /** A tap applies the default reaction; holding opens the tray. */
+  quickReact(): void {
+    this.onReact(this.myReaction() ?? DEFAULT_REACTION);
   }
 
   onRepost(): void { void this.actions.openRepost(this.post); }

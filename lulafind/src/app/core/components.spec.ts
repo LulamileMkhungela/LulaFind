@@ -7,6 +7,7 @@ import { ToastController } from '@ionic/angular/toast-controller';
 
 import { LocalDb } from './data/local-db';
 import { LULA_API, MockApi } from './data/api';
+import { SupabaseApi } from './data/supabase-api';
 import { AuthService } from './services/auth.service';
 import { DataService } from './services/data.service';
 import { feedWithRails } from './utils/feed';
@@ -268,6 +269,97 @@ describe('Components render', () => {
     expect(el.textContent).toContain('Follow');
     // The card's bigger number is reconciled, never quietly contradicted.
     if (post.upvotes > voters.length) expect(el.textContent).toContain('reacted from outside this network');
+  });
+
+  it('writes a notification owned by the actor, never by the recipient', async () => {
+    // The recipient can never own the row: the insert policy compares owner_id
+    // with the caller. Falling back to them produced a write the database could
+    // only refuse - and every caller awaited it right after saving something.
+    const api = new SupabaseApi();
+    const written: { collection: string; owner: string | null }[] = [];
+    (api as unknown as { putRecord: unknown }).putRecord = async (row: { collection: string; owner_id: string | null }) => {
+      written.push({ collection: row.collection, owner: row.owner_id });
+      return { error: null };
+    };
+    const note = {
+      id: 'n_1', userId: 'u_recipient', kind: 'missing' as const,
+      title: 'A new missing case nearby', body: 'Open the case for the poster.',
+      at: Date.now(), read: false, route: '/post/p_1', postId: 'p_1'
+    };
+
+    (api as unknown as { authBridge: unknown }).authBridge = { uid: async () => 'u_actor' };
+    await api.pushNotification(note);
+    expect(written.length, 'the notification was written').toBe(1);
+    expect(written[0].owner, 'owned by the actor').toBe('u_actor');
+
+    // No signed-in identity: write nothing rather than a row nobody may own.
+    (api as unknown as { authBridge: unknown }).authBridge = { uid: async () => null };
+    await api.pushNotification(note);
+    expect(written.length, 'nothing written without an actor').toBe(1);
+  });
+
+  it('keeps a post that was saved even when the alert fan-out fails', async () => {
+    // This is the bug people hit: the post is stored, then the notification
+    // fan-out that follows it is refused by the database, and the whole action
+    // reports "Nothing was saved. Try again" - while the post is right there in
+    // the feed. A failed alert must not rewrite history about the post.
+    const auth = TestBed.inject(AuthService);
+    await auth.signInDemo();
+    const api = TestBed.inject(LULA_API);
+    const data = TestBed.inject(DataService);
+    await data.loadFeed();
+    const me = auth.user()!;
+    const realPush = api.pushNotification.bind(api);
+    api.pushNotification = async () => { throw new Error('new row violates row-level security policy'); };
+
+    try {
+      const post = await data.createPost({
+        type: 'missing', title: 'Thandi Mokoena last seen in Soweto',
+        body: 'She was last seen near the taxi rank in Soweto wearing a blue school uniform.',
+        media: [], province: 'GP', town: 'Soweto',
+        lastSeenAt: Date.now(), lastSeenWhere: 'Soweto taxi rank', geo: null,
+        contactLabel: 'Family contact', contactValue: '082 555 0101',
+        contactVisibleTo: 'verified', caseNumber: null, reward: null, guardianConsent: false,
+        subject: null, vehicleDetails: null, audience: 'public', spotlightId: null,
+        chatEnabled: true, allowComments: true, anonymous: false, askWanted: false,
+        khumbu: null, danger: null
+      });
+      // It came back rather than throwing, it is stored, and it is in the feed.
+      expect(post.id).toBeTruthy();
+      expect(await api.post(post.id)).toBeTruthy();
+      expect(data.feed().some((p) => p.id === post.id), 'the saved post is in the feed').toBe(true);
+      expect(post.authorId).toBe(me.id);
+    } finally {
+      api.pushNotification = realPush;
+    }
+  });
+
+  it('offers React, Comment, Repost and Send on every feed card', async () => {
+    const data = TestBed.inject(DataService);
+    await data.loadFeed();
+    const post = data.feed().find((p) => !p.repostOf)!;
+    const f = TestBed.createComponent(PostCardComponent);
+    f.componentRef.setInput('post', post);
+    await settle(f);
+    const el = f.nativeElement as HTMLElement;
+
+    // The bar exists in the markup, not only in the component's handlers.
+    const labels = [...el.querySelectorAll('.fb-actions .fb-act')].map((b) => b.textContent?.trim());
+    expect(labels).toContain('React');
+    expect(labels).toContain('Comment');
+    expect(labels).toContain('Repost');
+    expect(labels).toContain('Send');
+
+    // Tapping React emits the reaction the app records, and Comment opens the
+    // post's comments - the two things a feed post must be able to do.
+    const votes: string[] = [];
+    const comments: number[] = [];
+    f.componentInstance.vote.subscribe((v) => votes.push(v));
+    f.componentInstance.comment.subscribe(() => comments.push(1));
+    (el.querySelector('.fb-actions .fb-act') as HTMLButtonElement).click();
+    ([...el.querySelectorAll('.fb-actions .fb-act')][1] as HTMLButtonElement).click();
+    expect(votes.length).toBe(1);
+    expect(comments.length).toBe(1);
   });
 
   it('does not insert a story rail before the feed reaches post eight', async () => {

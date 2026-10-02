@@ -750,7 +750,7 @@ export class CreatePostComponent implements OnInit {
       if (!f.town.trim()) out.push({ key: 'town', label: 'Add the town or suburb' });
     } else if (type) {
       const values = this.templateValues();
-      if (values.happened.trim().length < 30) out.push({ key: 'body', label: 'Add at least 30 characters about what happened' });
+      if (values.happened.trim().length < 20) out.push({ key: 'body', label: 'Add at least 20 characters about what happened' });
       if (!values.town || !values.province) out.push({ key: 'location', label: 'Complete the location line with a town and province' });
       if (this.childCase() && !f.guardianConsent) out.push({ key: 'consent', label: 'Confirm guardian permission for this child’s case' });
     }

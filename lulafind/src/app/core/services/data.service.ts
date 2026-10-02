@@ -664,7 +664,7 @@ export class DataService {
     if (me.suspended) throw new Error(`Your account is suspended. Contact ${SUPPORT_EMAIL} if you think this is a mistake.`);
     if (RETIRED_POST_TYPES.includes(input.type)) throw new Error('That kind of post is no longer available.');
     if (input.title.trim().length < 8) throw new Error('Give your post a clear title (at least 8 characters)');
-    if (input.body.trim().length < 30) throw new Error('Describe what happened in detail - at least 30 characters. Details save lives.');
+    if (input.body.trim().length < 20) throw new Error('Describe what happened - at least 20 characters.');
     if (!input.province) throw new Error('Choose the province where this happened');
     if (input.type !== 'story' && !input.town.trim()) throw new Error('Choose the town or suburb where this happened');
     if (input.type === 'danger' && !input.lastSeenWhere.trim()) throw new Error('Say the place where you saw this');
@@ -750,9 +750,17 @@ export class DataService {
       outcomeNudgeAt: null
     };
     await this.api.savePost(post);
-    if (post.type === 'danger') await this.alertProvince(post);
+    // Alerts are a side effect of a post that is already saved. If the fan-out
+    // fails, the post stays posted - so it must never be reported as a failed
+    // post, which is exactly what used to happen: "Nothing was saved", with the
+    // post sitting in the feed when the person went back for it.
+    if (post.type === 'danger') {
+      await this.alertProvince(post).catch((e) => console.warn('Danger alert fan-out failed:', e?.message ?? e));
+    }
     // A child case is held for review first, so its alert goes out on approval.
-    if (isCasePost(post) && post.status === 'active') await this.alertCase(post);
+    if (isCasePost(post) && post.status === 'active') {
+      await this.alertCase(post).catch((e) => console.warn('Case alert fan-out failed:', e?.message ?? e));
+    }
     if (post.spotlightId) {
       // the post is already live; a failed Spotlight index must not look like a failed post
       await this.api.linkSpotlightPost(post.spotlightId, post.id, true).catch((e) => console.warn(e?.message));
@@ -777,7 +785,7 @@ export class DataService {
       throw new Error('The title must be at least 8 characters');
     }
     if (patch.body !== undefined && patch.body.trim().length < 30) {
-      throw new Error('The description must be at least 30 characters');
+      throw new Error('The description must be at least 20 characters');
     }
     if (patch.province !== undefined && !patch.province) throw new Error('Choose a province');
     // Changing the audience to a community is also posting there. Check the

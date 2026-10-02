@@ -1083,8 +1083,32 @@ export class SupabaseApi implements LulaApi {
     return this.getAllWhere<Notification>('notifications', 'userId', userId);
   }
 
+  /**
+   * Write a notification for its recipient.
+   *
+   * The row's owner must be the person writing it - the actor - because the
+   * insert policy compares owner_id with the caller. The old code fell back to
+   * the *recipient* when the actor could not be read, which produces a row the
+   * database can only refuse. And because every caller awaits this right after
+   * saving something real (a post, a comment, a follow), that refusal came back
+   * as "Nothing was saved" on an action that had in fact been saved - the post
+   * was there when the person went back for it.
+   *
+   * Delivering a notification is a side effect of someone else's action, so it
+   * is now best-effort: a failure is logged and never thrown on to the save that
+   * caused it.
+   */
   async pushNotification(n: Notification): Promise<void> {
-    await this.upsert('notifications', n, (await this.currentUid()) ?? n.userId);
+    const actor = await this.currentUid();
+    if (!actor) {
+      console.warn(`pushNotification(${n.kind}) skipped: no signed-in identity to own the row.`);
+      return;
+    }
+    try {
+      await this.upsert('notifications', n, actor);
+    } catch (e) {
+      console.warn(`pushNotification(${n.kind}) could not be written:`, (e as Error)?.message ?? e);
+    }
   }
 
   async markNotificationsRead(userId: string): Promise<void> {
