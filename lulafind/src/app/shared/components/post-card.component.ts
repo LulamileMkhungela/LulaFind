@@ -1,7 +1,7 @@
 import { AfterViewChecked, Component, EventEmitter, Input, OnChanges, OnInit, Output, ViewChild, computed, inject, signal } from '@angular/core';
 import type { ElementRef } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
-import { DEFAULT_REACTION, Post, POST_TYPE_META, REACTIONS, ReactionKind, UserProfile, isReaction, provinceName } from '../../core/models/types';
+import { DEFAULT_REACTION, DEFAULT_REACTION_LABEL, Post, POST_TYPE_META, REACTIONS, ReactionKind, UserProfile, isReaction, provinceName } from '../../core/models/types';
 import { alreadySaid, compact, headingIsNew, timeAgo } from '../../core/utils/format';
 import { AvatarComponent } from './avatar.component';
 import { IconComponent } from './icon.component';
@@ -217,7 +217,7 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
       <div class="fb-actions" (click)="$event.stopPropagation()">
         <button class="fb-act" type="button" [class.on]="!!myReaction()"
                 (click)="quickReact()" (contextmenu)="openReactions($event)"
-                [attr.aria-label]="myReaction() ? 'Your reaction: ' + reactionWord() : 'React'">
+                [attr.aria-label]="myReaction() ? 'Your reaction: ' + reactionWord() : 'Like'">
           <lf-reaction-icon [kind]="myReaction() ?? defaultReaction" [size]="20" />
           <span>{{ reactionWord() }}</span>
         </button>
@@ -684,10 +684,10 @@ export class PostCardComponent implements OnInit, OnChanges, AfterViewChecked {
     return this.post ? this.data.myVote(this.post) : null;
   }
 
-  /** "React" until you have reacted; the reaction's name after that. */
+  /** "Like" until you have reacted, the reaction's own name after that. */
   reactionWord(): string {
     const mine = this.myReaction();
-    return mine ? REACTIONS.find((r) => r.key === mine)?.label ?? 'Reacted' : 'React';
+    return mine ? REACTIONS.find((r) => r.key === mine)?.label ?? DEFAULT_REACTION_LABEL : DEFAULT_REACTION_LABEL;
   }
 
   /** A tap applies the default reaction; holding opens the tray. */

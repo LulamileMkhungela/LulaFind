@@ -8,6 +8,8 @@ import { DataService } from './data.service';
 import { AuthService } from './auth.service';
 import { PlatformService } from './platform.service';
 import { ModerationService } from './moderation.service';
+import { ChatService } from './chat.service';
+import { UserProfile } from '../models/types';
 
 /**
  * Everything you can do to a post from a menu: repost, send, save, edit,
@@ -15,6 +17,13 @@ import { ModerationService } from './moderation.service';
  * profile, Search, a Spotlight and its own page - and so every one of them
  * tells you what happened ("Post deleted", "Reposted").
  */
+/** One row in the Send sheet. */
+export interface SendPerson {
+  profile: UserProfile;
+  /** True when you follow each other, so it also lands in your chat. */
+  connection: boolean;
+}
+
 @Injectable({ providedIn: 'root' })
 export class PostActionsService {
   private data = inject(DataService);
@@ -22,6 +31,7 @@ export class PostActionsService {
   private router = inject(Router);
   private platform = inject(PlatformService);
   private mod = inject(ModerationService);
+  private chat = inject(ChatService);
   private toastCtl = inject(ToastController);
   private sheetCtl = inject(ActionSheetController);
   private alertCtl = inject(AlertController);
@@ -31,6 +41,17 @@ export class PostActionsService {
   /** True when the viewer has already reposted `repostTarget`, so the sheet offers Undo. */
   readonly repostUndo = signal<Post | null>(null);
   readonly busy = signal(false);
+
+  /* ------------------------------- send ------------------------------- */
+
+  /** The post whose Send sheet is open (rendered once, by `lf-send-sheet`). */
+  readonly sendTarget = signal<Post | null>(null);
+  /** What the person has typed in the sheet's search box. */
+  readonly sendQuery = signal('');
+  /** Everyone this post can be sent to in the app, best matches first. */
+  readonly sendPeople = signal<SendPerson[]>([]);
+  readonly sendBusy = signal(false);
+  readonly sendLoading = signal(false);
 
   async toast(message: string, action?: { text: string; handler: () => void }): Promise<void> {
     const t = await this.toastCtl.create({
@@ -106,12 +127,110 @@ export class PostActionsService {
   }
 
   /* ------------------------------ send ------------------------------ */
+  /**
+   * Send on LinkedIn opens a picker, not the phone's share sheet: you choose
+   * the person, or you choose another app. This is that picker.
+   */
   async send(p: Post): Promise<void> {
+    if (!(await this.needAuth())) return;
     const target = p.repostOf ? (await this.data.loadPost(p.repostOf)) ?? p : p;
+    this.sendQuery.set('');
+    this.sendTarget.set(target);
+    void this.loadSendPeople();
+  }
+
+  closeSend(): void {
+    this.sendTarget.set(null);
+    this.sendQuery.set('');
+  }
+
+  /**
+   * Who can be sent this post, in the app.
+   *
+   * Connections (you follow each other) come first, then your followers: they
+   * chose to see your posts, so handing them one is welcome rather than a cold
+   * message. People you merely follow are left out - they have not asked for
+   * anything from you, and the app's rule is that messaging needs a mutual
+   * follow.
+   */
+  private async loadSendPeople(): Promise<void> {
+    this.sendLoading.set(true);
+    try {
+      const mutual = new Set(this.data.followingIds().filter((id) => this.data.followerIds().includes(id)));
+      const ids = [...mutual, ...this.data.followerIds().filter((id) => !mutual.has(id))];
+      const people = await Promise.all(ids.map((id) => this.data.profile(id)));
+      this.sendPeople.set(
+        people
+          .filter((u): u is UserProfile => !!u && u.id !== this.auth.viewerId)
+          .map((u) => ({ profile: u, connection: mutual.has(u.id) }))
+      );
+    } finally {
+      this.sendLoading.set(false);
+    }
+  }
+
+  /** The people matching what has been typed. */
+  matches(query: string): SendPerson[] {
+    const q = query.trim().toLowerCase();
+    if (!q) return this.sendPeople();
+    return this.sendPeople().filter((p) =>
+      p.profile.displayName.toLowerCase().includes(q)
+      || p.profile.handle.toLowerCase().includes(q)
+      || (p.profile.bio ?? '').toLowerCase().includes(q)
+    );
+  }
+
+  /**
+   * Send this post to one person, inside LulaFind.
+   *
+   * It always reaches them as a notification, so it works whoever they are.
+   * When you follow each other it also lands in your chat thread about the post,
+   * which is where a conversation can carry on.
+   */
+  async sendToUser(person: SendPerson): Promise<void> {
+    const p = this.sendTarget();
+    const me = this.auth.user();
+    if (!p || !me || this.sendBusy()) return;
+    this.sendBusy.set(true);
+    try {
+      await this.data.notifyPerson(person.profile.id, {
+        kind: 'share',
+        title: `${me.displayName} sent you a case`,
+        body: p.title,
+        route: `/post/${p.id}`,
+        postId: p.id
+      });
+
+      let inChat = false;
+      if (person.connection) {
+        const thread = await this.chat.ensureThread(p, person.profile.id);
+        if (thread) {
+          await this.chat.send(`I sent you this case: ${p.title}\n${this.platform.link(`/post/${p.id}`)}`);
+          inChat = true;
+        }
+      }
+      await this.data.recordShare(p.id).catch(() => undefined);
+      this.closeSend();
+      await this.toast(
+        inChat ? `Sent to ${person.profile.displayName} - it is in your chat and their notifications` : `Sent to ${person.profile.displayName}`,
+        inChat ? { text: 'Open chat', handler: () => void this.router.navigate(['/chats']) } : undefined
+      );
+    } catch (e: unknown) {
+      await this.toast((e as Error)?.message ?? 'Could not send this post');
+    } finally {
+      this.sendBusy.set(false);
+    }
+  }
+
+  /** "Share to other apps" - the phone's own share sheet: WhatsApp, SMS, mail. */
+  async shareExternally(): Promise<void> {
+    const target = this.sendTarget();
+    if (!target) return;
     const text = `${target.title}\n\n${target.body.slice(0, 220)}\n\nShared from LulaFind`;
     const mode = await this.platform.share(target.title, text, this.platform.link(`/post/${target.id}`));
     await this.data.recordShare(target.id).catch(() => undefined);
-    await this.toast(mode === 'clipboard' ? 'Link copied to clipboard' : 'Sent');
+    this.closeSend();
+    await this.toast(mode === 'clipboard' ? 'Link copied to clipboard' : 'Shared');
   }
 
   /* ------------------------------ menu ------------------------------ */

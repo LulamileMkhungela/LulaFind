@@ -974,6 +974,39 @@ export class DataService {
     this.mergeCache([next]);
   }
 
+  /**
+   * Deliver something to one person's notifications.
+   *
+   * This is how "send this post to someone" reaches them inside the app without
+   * pretending the two of you are in a private chat: it works for a connection,
+   * a follower, or anyone else, and it is the same notification list they
+   * already read.
+   */
+  async notifyPerson(userId: string, note: {
+    kind: Notification['kind'];
+    title: string;
+    body: string;
+    route: string | null;
+    postId?: string | null;
+  }): Promise<void> {
+    const me = this.auth.user();
+    if (!me) throw new Error('Sign in to send a post');
+    if (userId === me.id) throw new Error('That is you - no need to send it to yourself');
+    const profile = await this.api.user(userId).catch(() => undefined);
+    if (!profile) throw new Error('That person is not here any more');
+    await this.api.pushNotification({
+      id: uid('n'),
+      userId,
+      kind: note.kind,
+      title: note.title,
+      body: note.body,
+      at: Date.now(),
+      read: false,
+      route: note.route,
+      postId: note.postId ?? null
+    });
+  }
+
   async recordShare(postId: string): Promise<void> {
     const p = await this.loadPost(postId);
     if (!p) return;

@@ -15,6 +15,10 @@ import { ChatService } from './services/chat.service';
 import { emptyFilter } from './models/types';
 import { FilterBarComponent } from '../shared/components/filter-bar.component';
 import { PostCardComponent } from '../shared/components/post-card.component';
+import { RepostSheetComponent } from '../shared/components/repost-sheet.component';
+import { SendSheetComponent } from '../shared/components/send-sheet.component';
+import { PostActionsService } from './services/post-actions.service';
+import { PlatformService } from './services/platform.service';
 import { AuthComponent } from '../pages/auth/auth.component';
 import { SpotlightComponent } from '../pages/tabs/spotlight.component';
 import { MeComponent } from '../pages/tabs/me.component';
@@ -405,6 +409,117 @@ describe('Components render', () => {
     }
   });
 
+  it('Send opens a picker: your people in the app, or other apps on the phone', async () => {
+    const auth = TestBed.inject(AuthService);
+    const data = TestBed.inject(DataService);
+    const actions = TestBed.inject(PostActionsService);
+    await auth.signInDemo();
+    await data.loadFeed();
+    await data.loadUserScoped();
+
+    // A follower and a connection to choose between: the demo account starts
+    // with neither, so make one of each - someone who follows me, and someone
+    // we follow each other.
+    const me = auth.viewerId!;
+    const api = TestBed.inject(LULA_API);
+    const others = (await api.users()).filter((u) => u.id !== me);
+    const follower = others[0];
+    const connection = others[1] ?? others[0];
+    await api.follow(follower.id, me);
+    await api.follow(me, connection.id);
+    await api.follow(connection.id, me);
+    await data.loadUserScoped();
+
+    const post = data.feed().find((p) => !p.repostOf && p.authorId !== me) ?? data.feed()[0];
+    await actions.send(post);
+    expect(actions.sendTarget()?.id, 'the sheet opened on that post').toBe(post.id);
+    for (let i = 0; i < 60 && actions.sendLoading(); i++) await new Promise((r) => setTimeout(r, 5));
+    expect(actions.sendPeople().length, 'people can be sent to').toBeGreaterThan(0);
+    expect(actions.sendPeople().some((p) => p.connection), 'a connection is marked as such').toBe(true);
+
+    // Anyone shown can receive it; those you follow each other also get a chat.
+    for (const person of actions.sendPeople()) {
+      expect(person.profile.id, 'never yourself').not.toBe(me);
+    }
+
+    // The sheet itself: the people list, and the way out to other apps.
+    const f = TestBed.createComponent(SendSheetComponent);
+    f.detectChanges();
+    await f.whenStable();
+    const sheet = (f.nativeElement as HTMLElement).textContent ?? '';
+    expect(sheet).toContain('Send');
+    const search = f.nativeElement.querySelector('input[type="search"]') as HTMLInputElement;
+    expect(search?.placeholder, 'there is a search box for people').toBe('Search people');
+    expect(sheet).toContain('Share to other apps');
+    expect(sheet).toContain('WhatsApp');
+
+    const recipient = actions.sendPeople()[0];
+    {
+      expect(sheet, 'the people you can send to are listed').toContain(recipient.profile.displayName);
+      const delivered: { userId: string; title: string; postId: string | null }[] = [];
+      api.pushNotification = async (n) => { delivered.push({ userId: n.userId, title: n.title, postId: n.postId }); };
+      await actions.sendToUser(recipient);
+      expect(delivered.length, 'the post reached them as a notification').toBe(1);
+      expect(delivered[0].userId).toBe(recipient.profile.id);
+      expect(delivered[0].title).toContain(auth.user()!.displayName);
+      expect(delivered[0].postId).toBe(post.id);
+      expect(actions.sendTarget(), 'the sheet closed itself').toBe(null);
+    }
+
+    // The other half of LinkedIn's Send: the phone's own share sheet.
+    let shared: { title: string; url?: string } | null = null;
+    const platform = TestBed.inject(PlatformService);
+    platform.share = async (title: string, _text: string, url?: string) => { shared = { title, url }; return 'native'; };
+    await actions.send(post);
+    await actions.shareExternally();
+    expect(shared, 'Share to other apps asked the phone to share').toBeTruthy();
+    expect(shared!.url).toContain(`/post/${post.id}`);
+  });
+
+  it('searches the Send picker by name', async () => {
+    const auth = TestBed.inject(AuthService);
+    const data = TestBed.inject(DataService);
+    const actions = TestBed.inject(PostActionsService);
+    await auth.signInDemo();
+    await data.loadFeed();
+    await data.loadUserScoped();
+    await actions.send(data.feed()[0]);
+    const all = actions.sendPeople();
+    if (!all.length) return;
+    const first = all[0].profile.displayName;
+    expect(actions.matches(first.slice(0, 4)).some((p) => p.profile.displayName === first)).toBe(true);
+    expect(actions.matches('zzzz-no-such-person').length).toBe(0);
+  });
+
+  it('offers the whole LinkedIn repost sheet: Repost, with your thoughts, and Undo', async () => {
+    const auth = TestBed.inject(AuthService);
+    const data = TestBed.inject(DataService);
+    const actions = TestBed.inject(PostActionsService);
+    await auth.signInDemo();
+    await data.loadFeed();
+    const post = data.feed().find((p) => !p.repostOf && p.authorId !== auth.viewerId)!;
+
+    await actions.openRepost(post);
+    const f = TestBed.createComponent(RepostSheetComponent);
+    TestBed.flushEffects?.();
+    f.detectChanges();
+    await f.whenStable();
+    let text = (f.nativeElement as HTMLElement).textContent ?? '';
+    expect(actions.repostTarget()?.id).toBe(post.id);
+    expect(text).toContain('Repost');
+    expect(text).toContain('Repost with your thoughts');
+    expect(text).toContain('Instantly bring this post to others');
+
+    // Reposting puts it on your feed, and the sheet then offers to undo it.
+    await actions.repostNow();
+    expect(data.feed().some((p) => p.repostOf === post.id), 'the repost is in the feed').toBe(true);
+    await actions.openRepost(post);
+    f.detectChanges();
+    await f.whenStable();
+    text = (f.nativeElement as HTMLElement).textContent ?? '';
+    expect(text).toContain('Undo repost');
+  });
+
   it('offers React, Comment, Repost and Send on every feed card', async () => {
     const data = TestBed.inject(DataService);
     await data.loadFeed();
@@ -416,7 +531,7 @@ describe('Components render', () => {
 
     // The bar exists in the markup, not only in the component's handlers.
     const labels = [...el.querySelectorAll('.fb-actions .fb-act')].map((b) => b.textContent?.trim());
-    expect(labels).toContain('React');
+    expect(labels, 'LinkedIn calls the first action Like').toContain('Like');
     expect(labels).toContain('Comment');
     expect(labels).toContain('Repost');
     expect(labels).toContain('Send');
