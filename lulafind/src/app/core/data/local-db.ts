@@ -640,6 +640,20 @@ export class LocalDb {
 
   /* ------------------------- spotlights ------------------------- */
   spotlights(): Spotlight[] { return this.db.spotlights.map((s) => clone(s)); }
+
+  /**
+   * Posts filed to one Spotlight, newest first.
+   *
+   * No audience test: a Spotlight page is a public noticeboard, and everyone
+   * who opens it sees what the community filed there. Joining is what lets you
+   * add to it. Review rules still apply - see `searchPosts`.
+   */
+  postsInSpotlight(spotlightId: string): Post[] {
+    return this.db.posts
+      .filter((p) => p.spotlightId === spotlightId)
+      .sort((a, b) => b.createdAt - a.createdAt)
+      .map((p) => clone(p));
+  }
   spotlight(id: string): Spotlight | undefined {
     const sp = this.db.spotlights.find((x) => x.id === id);
     return sp ? clone(sp) : undefined;

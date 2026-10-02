@@ -13,7 +13,8 @@ import { AvatarComponent } from '../../shared/components/avatar.component';
 import { EmptyComponent } from '../../shared/components/empty.component';
 import { PostCardComponent } from '../../shared/components/post-card.component';
 import { DataService } from '../../core/services/data.service';
-import { UserProfile, Post, PROVINCES } from '../../core/models/types';
+import { UserProfile, Post, PROVINCES, Spotlight, provinceName } from '../../core/models/types';
+import { cover } from '../../core/data/seed';
 
 @Component({
   selector: 'lf-search',
@@ -66,12 +67,30 @@ import { UserProfile, Post, PROVINCES } from '../../core/models/types';
             }
           </div>
         </div>
-      } @else if (searching() && !posts().length && !users().length) {
+      } @else if (searching() && !posts().length && !users().length && !spotlights().length) {
         <p class="search-state" role="status">Searching…</p>
-      } @else if (!posts().length && !users().length) {
+      } @else if (!posts().length && !users().length && !spotlights().length) {
         <lf-empty icon="search" title="Nothing matches that"
                   message="Try a surname, a case number, or the town where they went missing." />
       } @else {
+        @if (spotlights().length) {
+          <div class="lf-pad">
+            <h3 class="lf-h2" style="margin:16px 0 8px">Spotlights</h3>
+            <div class="spots">
+              @for (sp of spotlights(); track sp.id) {
+                <a class="spot" [routerLink]="'/spotlight/' + sp.id">
+                  <img [src]="coverOf(sp)" [alt]="sp.surname" loading="lazy" />
+                  <div class="lf-grow">
+                    <strong>{{ sp.surname }}</strong>
+                    <span class="lf-meta">{{ sp.postIds.length }} posts · {{ sp.followers }} members
+                      @if (sp.province) { · {{ provinceName(sp.province) }} }</span>
+                  </div>
+                  <lf-icon name="chevronRight" [size]="18" />
+                </a>
+              }
+            </div>
+          </div>
+        }
         @if (users().length) {
           <div class="lf-pad">
             <h3 class="lf-h2" style="margin:16px 0 8px">People</h3>
@@ -107,6 +126,11 @@ import { UserProfile, Post, PROVINCES } from '../../core/models/types';
     .provs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
     .prov { padding: 12px 8px; border-radius: var(--lf-radius); border: 0; box-shadow: var(--lf-shadow); background: var(--lf-card);
       color: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer; }
+    .spots { display: flex; flex-direction: column; gap: 8px; }
+    .spot { display: flex; align-items: center; gap: 11px; padding: 9px 11px; border-radius: var(--lf-radius);
+      background: var(--lf-card); box-shadow: var(--lf-shadow); color: inherit; text-decoration: none; }
+    .spot img { width: 46px; height: 46px; border-radius: 9px; object-fit: cover; flex: none; }
+    .spot div { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
     .search-state { margin: 18px var(--lf-gap); font-size: 14px; color: var(--lf-muted); text-align: center; }
     .people { display: flex; flex-direction: column; gap: 8px; }
     .person { display: flex; align-items: center; gap: 11px; padding: 10px 12px; border-radius: var(--lf-radius);
@@ -125,9 +149,11 @@ export class SearchComponent {
   });
 
   protected readonly provinces = PROVINCES;
+  protected readonly provinceName = provinceName;
   query = signal('');
   users = signal<UserProfile[]>([]);
   posts = signal<Post[]>([]);
+  spotlights = signal<Spotlight[]>([]);
   /** True while a typed query is on its way to the database. */
   searching = signal(false);
 
@@ -140,6 +166,23 @@ export class SearchComponent {
   private seq = 0;
 
   readonly people = computed(() => this.users().slice(0, 8));
+
+  coverOf(sp: Spotlight): string {
+    return cover(`${sp.surname} family`, sp.coverHue || undefined);
+  }
+
+  /**
+   * The surnames on this device, narrowed by the same words. They need no round
+   * trip, so the section appears the moment a letter is typed - the database
+   * answers for cases and people a moment later.
+   */
+  private matchSpotlights(value: string): void {
+    const needle = value.trim().toLowerCase();
+    if (needle.length < 2) { this.spotlights.set([]); return; }
+    this.spotlights.set(this.data.spotlights()
+      .filter((s) => s.surname.toLowerCase().includes(needle) || s.tagline.toLowerCase().includes(needle))
+      .slice(0, 6));
+  }
 
   constructor() {
     // A search typed in the top bar arrives as /search?q=... and runs here.
@@ -161,6 +204,7 @@ export class SearchComponent {
   async onQuery(q: string): Promise<void> {
     const needle = q.trim();
     this.query.set(needle);
+    this.matchSpotlights(needle);
     if (needle.length < 2) {
       this.posts.set([]);
       this.users.set([]);

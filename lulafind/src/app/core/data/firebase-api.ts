@@ -295,6 +295,8 @@ export class FirebaseApi implements LulaApi {
   /* spotlights */
   async spotlights() { return this.getList<Spotlight>(this.col('spotlights')); }
   async spotlight(id: string) { return this.getOne<Spotlight>(`spotlights/${id}`); }
+  /** Posts filed to one Spotlight. Reading is public; posting needs membership. */
+  async postsInSpotlight(spotlightId: string) { return (await this.posts()).filter((p) => p.spotlightId === spotlightId); }
   async linkSpotlightPost(spotlightId: string, postId: string, linking: boolean): Promise<void> {
     const sp = await this.spotlight(spotlightId);
     if (!sp) return;

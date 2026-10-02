@@ -2111,3 +2111,134 @@ describe('Search is not limited to the page on screen', () => {
     expect(likePattern('a_b')).toBe('%a\\_b%');
   });
 });
+
+describe('Spotlights are public to read and members-only to post to', () => {
+  beforeEach(bed);
+
+  /** A post filed to a Spotlight, saved as the member's own writing. */
+  async function filedPost(data: DataService, spId: string, memberId: string): Promise<Post> {
+    const db = (TestBed.inject(LULA_API) as MockApi).db;
+    const base = db.posts().find((p) => p.type === 'missing')!;
+    const post: Post = {
+      ...base, id: 'p_filed_spot', authorId: memberId, spotlightId: spId, audience: 'surname',
+      title: 'Filed only to the family community', status: 'active', media: []
+    };
+    db.upsertPost(post);
+    return post;
+  }
+
+  it('lets someone who has not joined read the posts in a Spotlight', async () => {
+    const data = TestBed.inject(DataService);
+    await data.loadStatic();
+    const sp = data.spotlights()[0];
+    const member = data.spotlights()[0].memberIds[0] ?? 'u_demo';
+    await filedPost(data, sp.id, member);
+    // nobody is signed in here: a guest, exactly like a shared link
+    expect(TestBed.inject(AuthService).signedIn()).toBe(false);
+    const posts = await data.postsForSpotlight(sp);
+    expect(posts.map((p) => p.id)).toContain('p_filed_spot');
+  });
+
+  it('still hides a case held for review from a guest reading a Spotlight', async () => {
+    const data = TestBed.inject(DataService);
+    await data.loadStatic();
+    const sp = data.spotlights()[0];
+    const member = sp.memberIds[0] ?? 'u_demo';
+    const post = await filedPost(data, sp.id, member);
+    (TestBed.inject(LULA_API) as MockApi).db.upsertPost({ ...post, status: 'under_review' });
+    const posts = await data.postsForSpotlight(sp);
+    expect(posts.map((p) => p.id)).not.toContain('p_filed_spot');
+  });
+
+  it('refuses a post to a Spotlight the writer has not joined', async () => {
+    const data = TestBed.inject(DataService);
+    await data.loadStatic();
+    await TestBed.inject(AuthService).signInDemo();
+    const sp = data.spotlights().find((s) => !s.memberIds.includes('u_demo'))!;
+    await expect(data.postToSpotlight(sp, {
+      type: 'sighting', title: 'Seen near the taxi rank', body: 'x'.repeat(40), town: 'Umlazi', media: []
+    })).rejects.toThrow(/join/i);
+  });
+
+  it('posts a member\'s words and media straight into the community', async () => {
+    const data = TestBed.inject(DataService);
+    await data.loadStatic();
+    await TestBed.inject(AuthService).signInDemo();
+    const sp = data.spotlights().find((s) => s.memberIds.includes('u_demo'))!;
+    const photo: MediaItem = { id: 'm_q', kind: 'image', src: 'data:image/png;base64,AAAA' };
+    const post = await data.postToSpotlight(sp, {
+      type: 'sighting', title: 'Search continues on Saturday', body: 'Meet at the hall at 8am, we will cover the east side.',
+      town: 'Umlazi', media: [photo]
+    });
+    expect(post.spotlightId).toBe(sp.id);
+    expect(post.audience).toBe('surname');
+    expect(post.media.length).toBe(1);
+    expect(post.province).toBe(sp.province);
+    // and it is on the page, for everyone
+    const onPage = await data.postsForSpotlight(sp);
+    expect(onPage.map((p) => p.id)).toContain(post.id);
+  });
+});
+
+describe('Following a case is what brings someone back', () => {
+  beforeEach(bed);
+
+  it('follows and unfollows, and remembers the choice for the account', async () => {
+    const data = TestBed.inject(DataService);
+    await TestBed.inject(AuthService).signInDemo();
+    await data.refresh();
+    const post = data.feed()[0];
+    expect(data.isFollowingCase(post.id)).toBe(false);
+    expect(await data.toggleFollowCase(post.id)).toBe(true);
+    expect(data.isFollowingCase(post.id)).toBe(true);
+    const loaded = await data.loadFollowedCases();
+    expect(loaded.map((p) => p.id)).toContain(post.id);
+    expect(await data.toggleFollowCase(post.id)).toBe(false);
+    expect(data.isFollowingCase(post.id)).toBe(false);
+  });
+
+  it('tells the follower when a case they follow moves', async () => {
+    const data = TestBed.inject(DataService);
+    await TestBed.inject(AuthService).signInDemo();
+    await data.refresh();
+    const post = data.feed().find((p) => p.authorId !== 'u_demo')!;
+    await data.toggleFollowCase(post.id);
+    const before = await data.checkWatched(true);
+    // the first run only takes the snapshot - a follow must not announce the past
+    expect(before).toBe(0);
+
+    const db = (TestBed.inject(LULA_API) as MockApi).db;
+    const fresh = db.post(post.id)!;
+    db.upsertPost({ ...fresh, upvotes: fresh.upvotes + 3 });
+    // a real phone learns about the new reactions when the feed refreshes
+    await data.loadPost(post.id);
+    const sent = await data.checkWatched(true);
+    expect(sent).toBeGreaterThan(0);
+    const note = data.notifications().find((n) => n.postId === post.id && n.kind === 'vote');
+    expect(note).toBeTruthy();
+    expect(note!.body).toContain('a case you follow');
+  });
+});
+
+describe('While you were away', () => {
+  beforeEach(bed);
+
+  it('counts what is new since the last visit and clears when told', async () => {
+    const data = TestBed.inject(DataService);
+    await TestBed.inject(AuthService).signInDemo();
+    await data.refresh();
+    // a marker in the past, as if the app was last opened yesterday
+    data.markVisited(Date.now() - 2 * 24 * 3600_000);
+    const seen = data.sinceLastVisit();
+    expect(seen.newCases.length).toBeGreaterThan(0);
+    // "near you" is exactly the cases in the viewer's own province - no more
+    const province = TestBed.inject(AuthService).user()?.province;
+    expect(seen.newCases.every((p) => p.createdAt > data.lastVisitAt())).toBe(true);
+    expect(seen.nearYou).toBe(seen.newCases.filter((p) => p.province === province).length);
+
+    data.markVisited();
+    const after = data.sinceLastVisit();
+    expect(after.newCases).toEqual([]);
+    expect(after.followed).toEqual([]);
+  });
+});

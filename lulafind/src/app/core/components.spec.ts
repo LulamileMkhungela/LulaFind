@@ -334,15 +334,17 @@ describe('Components render', () => {
     expect(f.componentInstance.usernamePreview()).toBe('doe');
   });
 
-  it('renders the Spotlight tab with View / Create and A-Z letters', async () => {
+  it('renders the Spotlight tab as one searchable list with A-Z letters', async () => {
     const data = TestBed.inject(DataService);
     await data.loadStatic();
     const f = TestBed.createComponent(SpotlightComponent);
     f.detectChanges();
     await f.whenStable();
     const html: string = (f.nativeElement as HTMLElement).innerHTML;
-    expect(html).toContain('View');
-    expect(html).toContain('Create');
+    // The View / Create toggle is gone: the list is the page, and the filter
+    // sits beside the search field.
+    expect(html).not.toContain('>View<');
+    expect(html).toContain('All provinces');
     expect(html).toContain('Ndlela');
     // picking a letter narrows the list
     f.componentInstance.letter.set('N');
@@ -351,6 +353,58 @@ describe('Components render', () => {
     f.componentInstance.letter.set('B');
     f.detectChanges();
     expect(f.componentInstance.list().map((s) => s.surname)).toEqual(['Botha']);
+  });
+
+  it('filters the Spotlight list by province, including every province', async () => {
+    const data = TestBed.inject(DataService);
+    await data.loadStatic();
+    const f = TestBed.createComponent(SpotlightComponent);
+    f.detectChanges();
+    await f.whenStable();
+    const all = f.componentInstance.list().length;
+    const provinces = [...new Set(data.spotlights().map((s) => s.province))];
+    const one = provinces.find((p) => p)!;
+    f.componentInstance.province.set(one);
+    f.detectChanges();
+    const narrowed = f.componentInstance.list();
+    expect(narrowed.length).toBeLessThan(all);
+    expect(narrowed.every((s) => s.province === one)).toBe(true);
+    f.componentInstance.province.set('all');
+    f.detectChanges();
+    expect(f.componentInstance.list().length).toBe(all);
+  });
+
+  it('searches posts from the Spotlight tab and says where each was filed', async () => {
+    const data = TestBed.inject(DataService);
+    await data.refresh();
+    const f = TestBed.createComponent(SpotlightComponent);
+    f.detectChanges();
+    await f.whenStable();
+    f.componentInstance.onQuery('Ndlela');
+    await f.whenStable();
+    const filed = data.spotlights().find((s) => s.surname === 'Ndlela');
+    expect(filed).toBeTruthy();
+    // every post result filed to a Spotlight can name it
+    for (const p of f.componentInstance.posts()) {
+      if (p.spotlightId) expect(f.componentInstance.spotlightOf(p)?.id).toBe(p.spotlightId);
+    }
+    f.componentInstance.onQuery('');
+    expect(f.componentInstance.posts()).toEqual([]);
+  });
+
+  it('cancels out of the create Spotlight form without creating anything', async () => {
+    await TestBed.inject(AuthService).signInDemo();
+    const f = TestBed.createComponent(SpotlightComponent);
+    f.detectChanges();
+    await f.whenStable();
+    f.componentInstance.openCreate('Mkhungela');
+    f.detectChanges();
+    expect(f.componentInstance.mode()).toBe('create');
+    expect((f.nativeElement as HTMLElement).innerHTML).toContain('Cancel');
+    f.componentInstance.cancelCreate();
+    f.detectChanges();
+    expect(f.componentInstance.mode()).toBe('view');
+    expect(f.componentInstance.form.surname).toBe('');
   });
 
   it('flags a duplicate surname in the same province while you type', async () => {
@@ -756,6 +810,48 @@ describe('Search boxes actually search', () => {
     expect(f.componentInstance.list().map((s) => s.surname)).toEqual(['Khumalo']);
     type(f, '');
     expect(f.componentInstance.list().length).toBe(all);
+  });
+
+  it('shows a Spotlight to a guest, with posting locked behind joining', async () => {
+    const data = TestBed.inject(DataService);
+    await data.refresh();
+    const sp = data.spotlights().find((s) => s.surname === 'Ndlela')!;
+    const f = TestBed.createComponent(SpotlightDetailComponent);
+    f.componentInstance.sp.set(sp);
+    await f.componentInstance.reloadPosts();
+    f.detectChanges();
+    await f.whenStable();
+    const html = (f.nativeElement as HTMLElement).innerHTML;
+    // reading is open, posting is not
+    expect(html).toContain('Join the Ndlela community to post here');
+    expect(html).toContain('Anyone can read what is posted.');
+    expect(f.componentInstance.posts().length).toBeGreaterThan(0);
+  });
+
+  it('gives a member the short composer and searches people inside the Spotlight', async () => {
+    await TestBed.inject(AuthService).signInDemo();
+    const data = TestBed.inject(DataService);
+    await data.refresh();
+    const sp = data.spotlights().find((s) => s.memberIds.includes('u_demo'))!;
+    const f = TestBed.createComponent(SpotlightDetailComponent);
+    f.componentInstance.sp.set(sp);
+    await f.componentInstance.reloadPosts();
+    f.detectChanges();
+    await f.whenStable();
+    const html = (f.nativeElement as HTMLElement).innerHTML;
+    expect(html).toContain('Post to the ' + sp.surname + ' community');
+    expect(html).toContain('Photo');
+    expect(html).toContain('Video');
+    // searching inside the community finds the people in it
+    const memberId = sp.memberIds.find((id) => id !== 'u_demo')!;
+    const member = await data.people([memberId]);
+    const needle = member[0].displayName.split(' ')[0];
+    f.componentInstance.onSearch(needle);
+    await f.whenStable();
+    expect(f.componentInstance.people().map((u) => u.id)).toContain(memberId);
+    f.componentInstance.onSearch('');
+    await f.whenStable();
+    expect(f.componentInstance.people()).toEqual([]);
   });
 
   it('narrows the posts inside a Spotlight when you type', async () => {

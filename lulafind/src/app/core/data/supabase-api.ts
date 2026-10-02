@@ -859,6 +859,31 @@ export class SupabaseApi implements LulaApi {
     return this.getOne<Spotlight>('spotlights', id);
   }
 
+
+  /**
+   * Posts filed to one Spotlight, read from the whole collection.
+   *
+   * A Spotlight page is public reading: joining is what lets you post. The
+   * server-side rule lives in `lula_post_visible`; run
+   * supabase/spotlight-public-read.sql so the database agrees with this query.
+   */
+  async postsInSpotlight(spotlightId: string): Promise<Post[]> {
+    try {
+      const { data, error } = await this.client
+        .from('records')
+        .select('payload')
+        .eq('collection', 'posts')
+        .eq('payload->>spotlightId', spotlightId)
+        .order('updated_at', { ascending: false })
+        .limit(200);
+      if (error) throw new Error(error.message);
+      return await Promise.all((data ?? []).map((row) => this.signRecordMedia('posts', row.payload as Post)));
+    } catch (e: any) {
+      console.warn('Supabase postsInSpotlight fallback:', e?.message);
+      return this.localDb.postsInSpotlight(spotlightId);
+    }
+  }
+
   async saveSpotlight(s: Spotlight): Promise<void> {
     await this.upsert('spotlights', s, s.ownerId);
   }

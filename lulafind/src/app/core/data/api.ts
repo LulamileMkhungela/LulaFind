@@ -110,6 +110,15 @@ export abstract class LulaApi {
   /* spotlights */
   abstract spotlights(): Promise<Spotlight[]>;
   abstract spotlight(id: string): Promise<Spotlight | undefined>;
+  /**
+   * Every post filed to one Spotlight, newest first.
+   *
+   * A Spotlight is a public community page: anyone may read it, and joining is
+   * only what lets you *post* to it. This is deliberately not the feed query -
+   * the feed hides `surname`-audience posts from non-members, which is right
+   * everywhere else and wrong on the page those posts were written for.
+   */
+  abstract postsInSpotlight(spotlightId: string): Promise<Post[]>;
   abstract saveSpotlight(s: Spotlight): Promise<void>;
   /** Update only the signed-in member's Spotlight membership. */
   abstract setSpotlightMembership(id: string, memberId: string, joining: boolean): Promise<Spotlight | undefined>;
@@ -216,6 +225,7 @@ export class MockApi implements LulaApi {
 
   async spotlights() { return this.db.spotlights(); }
   async spotlight(id: string) { return this.db.spotlight(id); }
+  async postsInSpotlight(spotlightId: string) { return this.db.postsInSpotlight(spotlightId); }
   async saveSpotlight(s: Spotlight) { this.db.upsertSpotlight(s); }
   async setSpotlightMembership(id: string, memberId: string, joining: boolean) {
     const spotlight = this.db.spotlight(id);

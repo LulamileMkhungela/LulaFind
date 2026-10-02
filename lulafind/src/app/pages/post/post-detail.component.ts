@@ -163,6 +163,19 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
             <button class="act" type="button" (click)="send()"><lf-icon name="send" [size]="19" /><span>Send</span></button>
           </div>
 
+          @if (!isMine() || p()!.status === 'active') {
+            <!-- Following a case is the reason to come back to the app: it is
+                 what makes the updates arrive, and what the catch-up counts. -->
+            <button class="followline" type="button" [class.on]="followingCase()" (click)="toggleFollowCase()">
+              <lf-icon name="bell" [size]="16" [filled]="followingCase()" />
+              <span>
+                @if (followingCase()) { Following this case - we will tell you when something changes }
+                @else { Follow this case and be told when something changes }
+              </span>
+              <strong>{{ followingCase() ? 'Following' : 'Follow' }}</strong>
+            </button>
+          }
+
           @if (leads().length) {
             <button class="leads" type="button" (click)="openLeads()">
               <lf-icon name="search" [size]="16" />
@@ -498,6 +511,13 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
       background: color-mix(in srgb, var(--lf-ubuntu) 16%, transparent); color: var(--lf-ubuntu); font-size: 14px; }
     .title { margin: 4px var(--edge) 6px; font-size: 20px; line-height: 1.25; font-weight: 700; letter-spacing: -.2px; }
     .text { margin: 0 var(--edge) 12px; font-size: 16px; line-height: 1.45; white-space: pre-line; word-break: break-word; }
+    .followline { display: flex; align-items: center; gap: 8px; width: 100%; margin: 6px 0 0; padding: 10px 12px;
+      border: 0; border-radius: var(--lf-radius); background: var(--lf-card-2); color: var(--ion-text-color);
+      font: inherit; font-size: 13.5px; text-align: left; cursor: pointer; }
+    .followline span { flex: 1; color: var(--lf-muted); }
+    .followline strong { color: var(--lf-link); font-weight: 700; white-space: nowrap; }
+    .followline.on { background: var(--lf-primary-soft); }
+    .followline.on strong { color: var(--lf-link); }
     .media { margin: 4px 0 0; }
     .media img, .media video { display: block; width: 100%; max-height: 640px; object-fit: contain; background: #000; }
     .media.multi { display: flex; gap: 2px; overflow-x: auto; scroll-snap-type: x mandatory; }
@@ -654,6 +674,8 @@ export class PostDetailComponent implements OnInit {
 
   protected readonly compact = compact;
   protected readonly timeAgo = timeAgo;
+  /** Whether this account asked to hear about changes to this case. */
+  readonly followingCase = computed(() => !!this.p() && this.data.isFollowingCase(this.p()!.id));
   protected readonly headingIsNew = headingIsNewFn;
   protected readonly dayMonth = dayMonth;
   protected readonly provinceName = provinceName;
@@ -1244,6 +1266,34 @@ export class PostDetailComponent implements OnInit {
     if (g.step === 'sign_in') return 'Sign in to message';
     if (g.step === 'follow') return 'Follow each other to message';
     return 'Messaging unavailable';
+  }
+
+  /**
+   * Follow / unfollow this case.
+   *
+   * Following is what earns an alert when the case moves: a new lead, a
+   * reaction, a sighting, or the person being found. It is stored per account on
+   * this device and read by the catch-up card on Home.
+   */
+  async toggleFollowCase(): Promise<void> {
+    const post = this.p();
+    if (!post) return;
+    if (!this.auth.signedIn()) {
+      await this.router.navigate(['/auth'], { queryParams: { next: `/post/${post.id}` } });
+      return;
+    }
+    try {
+      const now = await this.data.toggleFollowCase(post.id);
+      const t = await this.toast.create({
+        message: now ? 'Following this case. You will be told when something changes.' : 'You stopped following this case.',
+        duration: 2200,
+        position: 'bottom'
+      });
+      await t.present();
+    } catch (e: unknown) {
+      const t = await this.toast.create({ message: e instanceof Error ? e.message : 'Could not change that', duration: 2400, position: 'bottom' });
+      await t.present();
+    }
   }
 
   async openChat(): Promise<void> {
