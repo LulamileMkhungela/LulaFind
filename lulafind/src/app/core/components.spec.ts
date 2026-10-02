@@ -343,6 +343,37 @@ describe('Components render', () => {
     expect(loginHtml).toContain('Forgot your password?');
   });
 
+  it('offers Create Account on the login screen instead of the save-login-info tick', async () => {
+    const f = TestBed.createComponent(AuthComponent);
+    f.detectChanges();
+    await f.whenStable();
+    f.componentInstance.mode.set('signin');
+    f.detectChanges();
+    await f.whenStable();
+    const el = f.nativeElement as HTMLElement;
+
+    expect(el.innerHTML).not.toContain('Save Login Info');
+    expect(el.querySelector('input[type="checkbox"]'), 'no tick box on the login form').toBe(null);
+    expect(el.textContent).toContain("Don't have an account?");
+    const link = [...el.querySelectorAll('button')].find((b) => b.textContent?.trim() === 'Create Account');
+    expect(link, 'Create Account must be a real button').toBeTruthy();
+    link!.click();
+    f.detectChanges();
+    await f.whenStable();
+    // It takes you to the sign-up flow, not to a dead end.
+    expect(f.componentInstance.mode()).toBe('signup');
+  });
+
+  it('still keeps the login on the device after signing in', async () => {
+    // The row that said "Save Login Info on your device" is gone, but the
+    // session is still remembered by the sign-in itself - it must not be lost.
+    const auth = TestBed.inject(AuthService);
+    await auth.signInDemo();
+    expect(localStorage.getItem('lulafind.auth.signedIn'), 'sign-in marker written').toBeTruthy();
+    const stored = JSON.parse(localStorage.getItem('lulafind.auth.session') ?? 'null');
+    expect(stored, 'session kept on the device').toBeTruthy();
+  });
+
   it('shows the five-step LulaFind signup flow', async () => {
     const f = TestBed.createComponent(AuthComponent);
     f.detectChanges();

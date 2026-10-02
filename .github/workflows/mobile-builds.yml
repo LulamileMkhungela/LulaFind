@@ -1,0 +1,166 @@
+# Builds installable Android and iOS test builds and attaches them to a GitHub
+# release, so they can be downloaded (and passed on to testers) without anyone
+# needing Android Studio or Xcode.
+#
+#   Android -> LulaFind-<sha>-android.apk   (debug-signed: installs on any phone)
+#   iOS     -> LulaFind-<sha>-ios-unsigned.ipa (unsigned: see the notes in the
+#              release body - it has to be sideloaded, see below)
+#
+# Run it by pushing to the test branch, or from the Actions tab ("Run workflow").
+name: Mobile test builds
+
+on:
+  push:
+    branches:
+      - arena/01a0fc52-lulafind
+    paths:
+      - 'lulafind/src/**'
+      - 'lulafind/android/**'
+      - 'lulafind/ios/**'
+      - 'lulafind/package.json'
+      - 'lulafind/capacitor.config.ts'
+      - '.github/workflows/mobile-builds.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  android:
+    name: Android APK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: lulafind/package-lock.json
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install the SDK packages the app targets
+        run: sdkmanager --install "platforms;android-36" "build-tools;36.0.0" "platform-tools"
+
+      - name: Install web dependencies
+        working-directory: lulafind
+        run: npm ci
+
+      - name: Build the web app and copy it into the Android project
+        working-directory: lulafind
+        run: |
+          npm run build
+          npx cap sync android
+
+      - name: Build the APK
+        working-directory: lulafind/android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Collect the APK
+        run: |
+          mkdir -p dist-mobile
+          cp lulafind/android/app/build/outputs/apk/debug/app-debug.apk \
+             "dist-mobile/LulaFind-${GITHUB_SHA::7}-android.apk"
+          ls -lh dist-mobile
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: dist-mobile/*.apk
+          if-no-files-found: error
+
+  ios:
+    name: iOS build
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: lulafind/package-lock.json
+
+      - name: Install web dependencies
+        working-directory: lulafind
+        run: npm ci
+
+      - name: Build the web app and copy it into the iOS project
+        working-directory: lulafind
+        run: |
+          npm run build
+          npx cap sync ios
+
+      - name: Build the app for a device, without signing
+        working-directory: lulafind/ios/App
+        run: |
+          xcodebuild \
+            -project App.xcodeproj \
+            -scheme App \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build
+
+      - name: Package the unsigned IPA
+        run: |
+          mkdir -p dist-mobile Payload
+          APP=$(find lulafind/ios/App/build -name 'App.app' -type d -path '*iphoneos*' | head -1)
+          echo "packaging $APP"
+          cp -R "$APP" Payload/
+          zip -qry "dist-mobile/LulaFind-${GITHUB_SHA::7}-ios-unsigned.ipa" Payload
+          ls -lh dist-mobile
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ios-ipa
+          path: dist-mobile/*.ipa
+          if-no-files-found: error
+
+  release:
+    name: Publish test build
+    needs: [android, ios]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist-mobile
+          merge-multiple: true
+
+      - name: Show what will be published
+        run: ls -lh dist-mobile
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: test-build-${{ github.run_number }}
+          name: LulaFind test build ${{ github.run_number }}
+          prerelease: true
+          body: |
+            Installable builds of LulaFind, built from `${{ github.sha }}`.
+
+            **Android** - `LulaFind-*-android.apk`
+            Download it on the phone, tap it, and allow "install unknown apps" when
+            Android asks. It installs over any earlier test build of the same app.
+
+            **iOS** - `LulaFind-*-ios-unsigned.ipa`
+            This one is not signed, because signing needs an Apple Developer
+            account. To put it on an iPhone it has to be sideloaded with a tool
+            that re-signs it using your own Apple ID - Sideloadly or AltStore on a
+            Mac or PC, connected to the phone. Free Apple IDs work (the app then
+            needs re-signing every 7 days). TestFlight is the alternative, but
+            that needs a paid Apple Developer account.
+
+            Both builds talk to the same live data as the web app - they are not
+            a separate demo.
+          files: dist-mobile/*
