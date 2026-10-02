@@ -108,6 +108,9 @@ export class SupabaseApi implements LulaApi {
     // database think I am?". Documented in supabase/check-setup.sql.
     if (typeof window !== 'undefined') {
       (window as unknown as Record<string, unknown>)['__lulaDebugWhoAmI'] = () => this.whoAmI();
+      // `await window.__lulaDebugStorage()` answers the photo-and-story version
+      // of the same question. Requires supabase/fix-photo-uploads.sql.
+      (window as unknown as Record<string, unknown>)['__lulaDebugStorage'] = () => this.storageReport();
     }
     try {
       this.channel = this.client
@@ -159,6 +162,30 @@ export class SupabaseApi implements LulaApi {
     const r: IdentityReportFields = { dbUid: uid, appUid, dbUidMatchesAppUid: !!uid && uid === appUid,
       suspended: false, canWrite: !!uid, postInteractRpc: false, spotlightRpc: false };
     return { ...r, message: describeIdentity(r) };
+  }
+
+  /**
+   * Diagnostics for photo, story and comment uploads.
+   *
+   * An upload needs two things to line up: the bucket and its four policies
+   * must exist, and the folder the app writes into must equal the UID the
+   * database reads out of the request token. When they do not, Postgres says
+   * "new row violates row-level security policy" and gives no hint which half
+   * is wrong. This says which half.
+   */
+  async storageReport(): Promise<{ ok: boolean; message: string; details: Record<string, unknown> }> {
+    const appUid = await this.currentUid();
+    const { data, error } = await this.client.rpc('lula_debug_storage', { app_uid: appUid ?? '' });
+    if (!error && data && typeof data === 'object') {
+      const d = data as Record<string, unknown>;
+      const verdict = String(d['verdict'] ?? '');
+      return { ok: verdict.startsWith('PASS'), message: verdict, details: d };
+    }
+    return {
+      ok: false,
+      message: 'lula_debug_storage() is not installed. Run supabase/fix-photo-uploads.sql in the Supabase SQL editor.',
+      details: { error: error?.message ?? 'no data returned', appUid }
+    };
   }
 
   changes(): Observable<number> {
@@ -626,7 +653,7 @@ export class SupabaseApi implements LulaApi {
 
   /**
    * Authors save their own post directly. Everyone else (voting, sharing,
-   * "I'm looking", search zones, danger updates, KhumbulEkhaya answers,
+   * "I'm looking", search zones, danger updates, Home Sweet Home answers,
    * reports) goes through lula_post_interact, which accepts only those
    * narrow changes - see supabase/post-interactions.sql.
    */
@@ -786,7 +813,15 @@ export class SupabaseApi implements LulaApi {
       const { error } = await this.client.storage.from('photos').upload(path, blob, {
         cacheControl: '3600', upsert: true, contentType: blob.type || (item.kind === 'video' ? 'video/mp4' : 'image/jpeg')
       });
-      if (error) throw new Error(`Could not upload media: ${error.message}`);
+      if (error) {
+        // Row-level security here means the bucket policy refused the folder,
+        // which is an identity or setup problem - not a problem with the photo.
+        // Say so, and point at the one command that names the exact cause.
+        const rls = /row-level security|violates/i.test(error.message);
+        throw new Error(rls
+          ? 'Photo upload was refused by the database. In the app console run: await window.__lulaDebugStorage()'
+          : `Could not upload media: ${error.message}`);
+      }
     }
     if (!path) return item;
     const src = await this.signedStorageUrl(path);
@@ -947,6 +982,53 @@ export class SupabaseApi implements LulaApi {
         .filter((n) => !n.read)
         .map((n) => this.upsert('notifications', { ...n, read: true }, n.userId))
     );
+  }
+
+  // ─── push device tokens ─────────────────────────────────────────────────
+  // The row-level security on public.push_tokens keys user_id off lula_uid(),
+  // exactly like every other write here. There is no way to file a token
+  // against another account even by asking nicely.
+
+  /**
+   * File this device's FCM token against the signed-in account.
+   *
+   * Upsert on the token, not on the user: FCM reissues tokens on reinstall and
+   * on restore to a new phone, and a reissued token belongs to whoever is
+   * signed in when it arrives. Overwriting by token moves it to the right
+   * person and refreshes last_seen_at, instead of leaving a second row that
+   * would deliver someone else's notifications.
+   */
+  async savePushToken(token: string, platform: string, appVersion: string): Promise<void> {
+    const owner = await this.currentUid();
+    // No identity means the insert policy would refuse it anyway. Say so
+    // rather than letting the caller think the device is registered.
+    if (!owner) throw new Error('Sign in before registering this device for notifications.');
+    const { error } = await this.client
+      .from('push_tokens')
+      .upsert(
+        {
+          token,
+          user_id: owner,
+          platform,
+          app_version: appVersion,
+          last_seen_at: new Date().toISOString()
+        },
+        { onConflict: 'token' }
+      );
+    if (error) throw new Error(`Could not register this device: ${error.message}`);
+  }
+
+  /** Drop just this device's token - signing out must not silence the tablet. */
+  async forgetPushToken(token: string): Promise<void> {
+    const owner = await this.currentUid();
+    if (!owner) return;
+    const { error } = await this.client
+      .from('push_tokens')
+      .delete()
+      .eq('token', token)
+      .eq('user_id', owner);
+    // A token that is already gone is the desired end state, not a failure.
+    if (error) throw new Error(`Could not remove this device: ${error.message}`);
   }
 
   // ─── tips ────────────────────────────────────────────────────────────────

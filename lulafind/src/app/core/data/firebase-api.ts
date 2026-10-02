@@ -383,6 +383,15 @@ export class FirebaseApi implements LulaApi {
     for (const n of items) await this.set(`notifications/${userId}/items/${n.id}`, { ...n, read: true });
   }
 
+  /*
+   * Device tokens. This Firebase path is the old mock-shaped backend and is not
+   * the one the app ships (dataMode is 'supabase'); push tokens live in
+   * public.push_tokens there, written by SupabaseApi. These are no-ops so the
+   * interface is honoured rather than silently half-implemented.
+   */
+  async savePushToken(_token: string, _platform: string, _appVersion: string): Promise<void> {}
+  async forgetPushToken(_token: string): Promise<void> {}
+
   /* tips */
   async tips() { return this.getList<Tip>(this.col('tips')); }
 

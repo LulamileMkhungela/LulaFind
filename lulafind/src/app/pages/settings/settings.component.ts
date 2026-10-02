@@ -137,7 +137,7 @@ import { SUPPORT_EMAIL, SUPPORT_NAME } from '../../core/config';
         </ion-item>
         <ion-item>
           <ion-label><strong>Let LulaFind match me to cases</strong><br />
-            <span class="lf-muted lf-small">If a KhumbulEkhaya post matches your name we will ask you first</span></ion-label>
+            <span class="lf-muted lf-small">If a Home Sweet Home post matches your name we will ask you first</span></ion-label>
           <ion-toggle [checked]="findable()" (ionChange)="setFindable($any($event.detail).checked)"></ion-toggle>
         </ion-item>
         <ion-item>

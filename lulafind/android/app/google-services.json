@@ -1,6 +1,7 @@
 {
   "project_info": {
     "project_number": "359295927708",
+    "firebase_url": "https://lulafinds-app-default-rtdb.firebaseio.com",
     "project_id": "lulafinds-app",
     "storage_bucket": "lulafinds-app.firebasestorage.app"
   },
@@ -13,6 +14,14 @@
         }
       },
       "oauth_client": [
+        {
+          "client_id": "359295927708-jdg9b8jvp9ihvic4lm110kba4gkmhcsj.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.lulafind.app",
+            "certificate_hash": "936f7c33f7298f2127ef7bce92896f1f70cac808"
+          }
+        },
         {
           "client_id": "359295927708-tg8gmcpu2k1nndksmro7b17eiffa6a55.apps.googleusercontent.com",
           "client_type": 3

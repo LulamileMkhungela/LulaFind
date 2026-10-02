@@ -25,13 +25,14 @@ const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
  * Filter by any letter of the alphabet, or see them all. Joining is instant -
  * no admin approval - and once you have joined you can post to it.
  */
+import { KeyboardDirective } from '../../shared/keyboard.directive';
+
 @Component({
   selector: 'lf-spotlight',
   standalone: true,
   imports: [
     IonContent, TopNavComponent, IonInput, IonTextarea, IonSelect,
-    IonSelectOption, IonItem, IonLabel, IonSearchbar, RouterLink, IconComponent, EmptyComponent
-  ],
+    IonSelectOption, IonItem, IonLabel, IonSearchbar, RouterLink, IconComponent, EmptyComponent, KeyboardDirective],
   template: `
     <lf-top-nav />
 
@@ -156,7 +157,7 @@ const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
           </ion-item>
           <ion-item>
             <ion-label position="stacked">About (optional)</ion-label>
-            <ion-textarea rows="3" placeholder="Who looks after this page" [value]="form.about"
+            <ion-textarea lfKeyboard rows="3" placeholder="Who looks after this page" [value]="form.about"
                           (ionInput)="form.about = $any($event.target).value"></ion-textarea>
           </ion-item>
 

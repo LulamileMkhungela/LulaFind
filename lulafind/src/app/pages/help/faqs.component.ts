@@ -38,7 +38,7 @@ import { FAQ_CATEGORIES, FAQS, FaqCategory, searchFaqs } from '../../core/data/f
       </div>
 
       @if (!rows().length) {
-        <p class="empty">No question matches that. <a routerLink="/chats">Open Chats to ask Lula</a>.</p>
+        <p class="empty">No question matches that. Try the Help page for the full list.</p>
       }
 
       <div class="list">
@@ -66,7 +66,7 @@ import { FAQ_CATEGORIES, FAQS, FaqCategory, searchFaqs } from '../../core/data/f
 
       <div class="foot">
         <button class="lf-btn lf-btn--primary lf-btn--block" type="button" (click)="openChats()">
-          <lf-icon name="chat" [size]="16" /> Still stuck? Ask Lula in Chats
+          <lf-icon name="chat" [size]="16" /> Still stuck? Open the Help page
         </button>
         <a class="lf-btn lf-btn--block" routerLink="/help"><lf-icon name="phone" [size]="16" /> Phone numbers</a>
       </div>

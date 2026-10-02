@@ -30,7 +30,7 @@
  *   --lf-card-2    secondary button, input, hover  #E4E6EB / #3A3B3C
  *   --lf-line      dividers               #CED0D4 / #3E4042
  *   --lf-muted     secondary text         #65676B / #B0B3B8
- *   --lf-primary   Facebook blue          #1877F2 / #2D88FF
+ *   --lf-primary   LulaFind blue          #2196F3 / #64B5F6
  * ------------------------------------------------------------------ */
 :root {
   --lf-radius: 8px;
@@ -38,15 +38,22 @@
   --lf-gap: 12px;
 
   color-scheme: light;
-  --lf-primary: #1877f2;
-  --lf-primary-rgb: 24, 119, 242;
-  /* Filled surfaces (buttons, bubbles) carry white text: this shade holds
-     WCAG AA for that, while --lf-primary stays the link/icon blue. */
-  --lf-primary-fill: #166fe5;
+  /*
+   * The LulaFind blue. One colour carries the whole app: every filled button,
+   * active tab and badge. #2196F3 is Material blue 500.
+   *
+   * White on #2196F3 is 3.1:1 - fine for a filled button or an icon, not enough
+   * for small text sitting on a white page. So --lf-link and
+   * --lf-primary-soft-text take #1976D2, the next shade down in the same blue
+   * (4.6:1 on white), and everything else stays exactly #2196F3.
+   */
+  --lf-primary: #2196f3;
+  --lf-primary-rgb: 33, 150, 243;
+  --lf-primary-fill: #2196f3;
   --lf-primary-text: #ffffff;
-  --lf-primary-soft: #e7f3ff;
-  --lf-primary-soft-text: #1877f2;
-  --lf-link: #216fdb;
+  --lf-primary-soft: #e3f2fd;
+  --lf-primary-soft-text: #1976d2;
+  --lf-link: #1976d2;
   --lf-bg: #f0f2f5;
   --lf-card: #ffffff;
   --lf-card-2: #e4e6eb;
@@ -95,12 +102,12 @@
   --ion-color-step-600: #65676b;
   --ion-color-step-850: #1c1e21;
 
-  --ion-color-primary: #1877f2;
-  --ion-color-primary-rgb: 24, 119, 242;
+  --ion-color-primary: #2196f3;
+  --ion-color-primary-rgb: 33, 150, 243;
   --ion-color-primary-contrast: #ffffff;
   --ion-color-primary-contrast-rgb: 255, 255, 255;
-  --ion-color-primary-shade: #166fe5;
-  --ion-color-primary-tint: #2d88ff;
+  --ion-color-primary-shade: #1e87db;
+  --ion-color-primary-tint: #37a1f4;
 
   --ion-color-secondary: #31a24c;
   --ion-color-secondary-rgb: 49, 162, 76;
@@ -125,14 +132,23 @@
 /* Facebook dark (Settings -> Appearance). */
 :root.lf-dark {
   color-scheme: dark;
-  --lf-primary: #4599ff;
-  --lf-primary-rgb: 69, 153, 255;
-  /* White text on the fill holds AA; the lighter --lf-primary stays for links. */
-  --lf-primary-fill: #1b6fe0;
+  /*
+   * The same blue, split by job.
+   *
+   * #2196F3 is still the brand: every filled surface (primary buttons, the
+   * Create tab, badges, the switch knob) is literally #2196F3. What changes is
+   * blue used as *ink* - the selected tab label, links, spinners, small icons.
+   * #2196F3 on a black page is only 3.1:1, so those take #64B5F6 (Material blue
+   * 300, 6.4:1 on black). Same hue, one step up in lightness: lighter only
+   * where legibility needs it.
+   */
+  --lf-primary: #64b5f6;
+  --lf-primary-rgb: 100, 181, 246;
+  --lf-primary-fill: #2196f3;
   --lf-primary-text: #ffffff;
-  --lf-primary-soft: #263951;
-  --lf-primary-soft-text: #6cb2ff;
-  --lf-link: #6cb2ff;
+  --lf-primary-soft: #132f4c;
+  --lf-primary-soft-text: #90caf9;
+  --lf-link: #90caf9;
   /* --lf-signal fills buttons (white on it passes AA); --lf-signal-text is the
      lifted red used wherever red is the text itself. */
   --lf-signal-text: #ff5c72;
@@ -166,10 +182,10 @@
   --ion-color-step-600: #b0b3b8;
   --ion-color-step-850: #e4e6eb;
 
-  --ion-color-primary: #4599ff;
-  --ion-color-primary-rgb: 69, 153, 255;
-  --ion-color-primary-shade: #2374e1;
-  --ion-color-primary-tint: #4599ff;
+  --ion-color-primary: #64b5f6;
+  --ion-color-primary-rgb: 100, 181, 246;
+  --ion-color-primary-shade: #1e87db;
+  --ion-color-primary-tint: #78bdf7;
   --ion-color-medium: #b0b3b8;
   --ion-color-medium-rgb: 176, 179, 184;
   --ion-color-light: #3a3b3c;

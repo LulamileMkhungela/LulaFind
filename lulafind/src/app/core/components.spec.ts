@@ -9,6 +9,7 @@ import { LocalDb } from './data/local-db';
 import { LULA_API, MockApi } from './data/api';
 import { AuthService } from './services/auth.service';
 import { DataService } from './services/data.service';
+import { feedWithRails } from './utils/feed';
 import { ChatService } from './services/chat.service';
 import { emptyFilter } from './models/types';
 import { FilterBarComponent } from '../shared/components/filter-bar.component';
@@ -26,6 +27,7 @@ import { PostDetailComponent } from '../pages/post/post-detail.component';
 import { ChatRoomComponent } from '../pages/chat/chat-room.component';
 import { HomeComponent } from '../pages/tabs/home.component';
 import { TabsComponent } from '../pages/tabs/tabs.component';
+import { ReactionsSheetComponent } from '../shared/components/reactions-sheet.component';
 import { AdminComponent } from '../pages/admin/admin.component';
 import { SpotlightDetailComponent } from '../pages/spotlight/spotlight-detail.component';
 import { SUPPORT_EMAIL } from './config';
@@ -86,14 +88,17 @@ function bed(): void {
 describe('Components render', () => {
   beforeEach(bed);
 
-  it('uses the bottom-right navigation action to create a photo post', async () => {
+  it('shows the five bottom tabs: Home, Spotlight, Create, Discover, Menu', async () => {
     const f = TestBed.createComponent(TabsComponent);
     f.detectChanges();
     await f.whenStable();
     const html = (f.nativeElement as HTMLElement).innerHTML;
-    expect(html).toContain('Create a post with a photo');
-    expect(html).toContain('Photo');
-    expect(html).not.toContain('menu-pip');
+    for (const label of ['Home', 'Spotlight', 'Create', 'Discover', 'Menu']) {
+      expect(html, label).toContain(label);
+    }
+    // Chats moved to the top navigation, and the Photo tab is gone.
+    expect(html).not.toContain('tab="chats"');
+    expect(html).not.toContain('Create a post with a photo');
   });
 
   it('renders the feed filter bar with a province dropdown', async () => {
@@ -123,23 +128,27 @@ describe('Components render', () => {
     await f.whenStable();
     const html: string = (f.nativeElement as HTMLElement).innerHTML;
     expect(html).toContain('Follow');
-    // LinkedIn's default reaction reads as its own name, never a yes/no vote.
-    expect(html).toContain('Have an idea');
-    expect(html).not.toContain('No idea');
-    // LinkedIn's card anatomy: the poster's headline under their name, the
-    // three-line clamp with a muted "Read more", a stats line and the four
-    // action buttons.
+    // Card anatomy: headline under the name, three-line clamp with a muted
+    // ellipsis, then the meta lines and the stats line.
     expect(html).toContain('Community organiser');
     expect(html).toContain('fb-clamp');
-    expect(html).toContain('Read more');
+    expect(html).toContain('see more');
     expect(html).toContain('fb-stats-bar');
-    expect(html).toContain('Comment');
-    expect(html).toContain('Repost');
-    expect(html).toContain('Send');
+    // Line 1 is where it is, then what kind of post it is; line 2 is when, then
+    // the audience icon. The old standalone chip under the avatar is gone.
+    expect(html).toContain('fb-kind');
+    expect(html).toContain('Missing person');
+    expect(html).toContain('Gauteng');
+    expect(html).not.toContain('fb-chips');
+    // The card carries no Like / Comment / Repost / Send row: those four live on
+    // the post page. Follow and … share one right-hand column.
+    expect(html).not.toContain('fb-actions-row');
+    expect(html).not.toContain('fb-action-btn');
+    expect(html).toContain('fb-head-actions');
+    expect(html).toContain('fb-more-btn');
     // the seeded latest activity shows above the post, LinkedIn-style
     expect(html).toContain('Lerato Mahlangu');
     expect(html).toContain('commented on this');
-    expect(html).toContain('Comment');
   });
 
   it('shows a selected generated poster in the feed card', async () => {
@@ -179,7 +188,7 @@ describe('Components render', () => {
     const html: string = (f.nativeElement as HTMLElement).innerHTML;
     expect(html).toContain('reposted this');
     expect(html).toContain('fb-embed');
-    expect(html).toContain('Repost');
+    expect(html).not.toContain('fb-actions-row');
   });
 
   /** Lets the component's own async work land, without waiting on app-wide timers. */
@@ -215,22 +224,64 @@ describe('Components render', () => {
     expect(html).toContain('Repost');
     expect(html).toContain('Send');
     expect(html).toContain('Most relevant');
-    expect(html).toContain('ccard__time');
+    // LinkedIn's comment keeps the time in the action row with Like and Reply,
+    // not in the header, and the comment itself is not drawn as a chat bubble.
+    expect(html).toContain('ctime2');
+    expect(html).not.toContain('ccard__time');
     expect(html).toContain('Reply');
     // the things that were taken off this page must stay off it
     expect(html).not.toContain('Case details');
     expect(html).not.toContain('Make a poster');
   });
 
+  it('lists the people behind a reaction count when the Reactions sheet opens', async () => {
+    const data = TestBed.inject(DataService);
+    await data.loadFeed();
+    const post = data.post('p_thato')!;
+    expect(post.upvotes).toBeGreaterThan(0);
+    const voters = Object.keys(post.voterIds);
+    expect(voters.length, 'seeded posts must have faces behind the number').toBeGreaterThan(0);
+
+    const f = TestBed.createComponent(ReactionsSheetComponent);
+    f.componentRef.setInput('post', post);
+    f.componentRef.setInput('open', false);
+    f.detectChanges();
+    expect((f.nativeElement as HTMLElement).textContent).not.toContain('Reactions');
+
+    // Opening is the event that loads the list. The loader is an effect(), so
+    // the inputs have to be signals for this to fire at all - with plain
+    // @Input() fields the sheet opened with tab counts and an empty list.
+    f.componentRef.setInput('open', true);
+    await settle(f);
+
+    const el = f.nativeElement as HTMLElement;
+    const rows = el.querySelectorAll('.row');
+    expect(el.textContent).toContain('Reactions');
+    expect(el.textContent).not.toContain('No reactions yet.');
+    expect(rows.length).toBe(voters.length);
+    // Each row is a real person with the reaction they gave, plus a Follow button.
+    for (const id of voters) expect(el.textContent).toContain(data.authorOf(id)?.displayName ?? '');
+    expect(el.textContent).toContain('Follow');
+    // The card's bigger number is reconciled, never quietly contradicted.
+    if (post.upvotes > voters.length) expect(el.textContent).toContain('reacted from outside this network');
+  });
+
   it('does not insert a story rail before the feed reaches post eight', async () => {
     const data = TestBed.inject(DataService);
     await data.loadFeed();
+    const feed = data.feed();
+
+    // The threshold is a pure rule, so test it directly. This used to lean on
+    // the guest feed being cut to four posts, which is why removing guest
+    // browsing made it fail - the rule never changed.
+    expect(feedWithRails(feed.slice(0, 7)).some((s) => s.kind === 'stories')).toBe(false);
+    expect(feedWithRails(feed.slice(0, 8)).some((s) => s.kind === 'stories')).toBe(true);
+
     const f = TestBed.createComponent(HomeComponent);
     await settle(f);
     const html: string = (f.nativeElement as HTMLElement).innerHTML;
-    expect(html).not.toContain('lf-story-rail');
-    expect(html).not.toContain('Create story');
     expect(html).toContain('lf-post-card');
+    if (feed.length >= 8) expect(html).toContain('lf-story-rail');
   });
 
   it('renders the LulaFind welcome and login screens', async () => {
@@ -242,7 +293,9 @@ describe('Components render', () => {
 
     expect(html).toContain('Continue with Google');
     expect(html).toContain('Create new account');
-    expect(html).toContain('Log in');
+    expect(html).toContain('Log In with email');
+    // Guest browsing was removed: everyone signs in or signs up.
+    expect(html).not.toContain('Browse as guest');
 
     // switch to signin mode
     f.componentInstance.mode.set('signin');
@@ -440,7 +493,7 @@ describe('Components render', () => {
     card.componentInstance.post = post!;
     card.componentInstance.author = data.authorOf(post!.authorId) ?? null;
     card.detectChanges();
-    expect((card.nativeElement as HTMLElement).innerHTML).toContain('Read more');
+    expect((card.nativeElement as HTMLElement).innerHTML).toContain('see more');
   });
 
   it('organizes the Menu into shortcuts, posts, and saved sections', async () => {

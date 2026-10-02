@@ -1,5 +1,5 @@
-import { Component, computed, inject, signal } from '@angular/core';
-import { Router, RouterLink } from '@angular/router';
+import { Component, computed, effect, inject, signal } from '@angular/core';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { IonContent } from '@ionic/angular/ion-content';
 
 
@@ -111,12 +111,18 @@ import { UserProfile, Post, PROVINCES } from '../../core/models/types';
 export class SearchComponent {
   protected data = inject(DataService);
   private router = inject(Router);
+  private route = inject(ActivatedRoute);
+  /** Put the query in the address bar too, so a search can be shared or reloaded. */
+  private readonly syncUrl = effect(() => {
+    const q = this.query();
+    void this.router.navigate([], { queryParams: q ? { q } : {}, replaceUrl: true });
+  });
 
   protected readonly provinces = PROVINCES;
   query = signal('');
   users = signal<UserProfile[]>([]);
 
-  quick = ['missing in Gauteng', 'SAPS case', 'KhumbulEkhaya', 'found', 'Orlando', 'Ndlela'];
+  quick = ['missing in Gauteng', 'SAPS case', 'Home Sweet Home', 'found', 'Orlando', 'Ndlela'];
 
   readonly results = computed(() => {
     const q = this.query();
@@ -128,6 +134,12 @@ export class SearchComponent {
   });
 
   readonly people = computed(() => this.users().slice(0, 8));
+
+  constructor() {
+    // A search started in the top bar arrives as /search?q=... and runs here.
+    const initial = this.route.snapshot.queryParamMap.get('q') ?? '';
+    if (initial) void this.onQuery(initial);
+  }
 
   async onQuery(q: string): Promise<void> {
     this.query.set(q.trim());

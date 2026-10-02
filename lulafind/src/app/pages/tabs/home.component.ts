@@ -32,7 +32,7 @@ import { timeAgo } from '../../core/utils/format';
   template: `
     <lf-top-nav />
 
-    <ion-content class="lf-page" [scrollY]="!isGuestLocked()">
+    <ion-content class="lf-page">
       <ion-refresher slot="fixed" (ionRefresh)="onRefresh($event)">
         <ion-refresher-content pullingText="Pull to refresh"></ion-refresher-content>
       </ion-refresher>
@@ -101,27 +101,6 @@ import { timeAgo } from '../../core/utils/format';
         }
       }
 
-      @if (isGuestLocked()) {
-        <div class="guest-scroll-lock" role="region" aria-label="Sign in or Create Account">
-          <div class="guest-scroll-lock__card">
-            <span class="guest-scroll-lock__badge">
-              <lf-icon name="lock" [size]="28" />
-            </span>
-            <h2 class="guest-scroll-lock__title">Sign in or Create an Account to view more</h2>
-            <p class="guest-scroll-lock__body">
-              You have viewed 4 posts in guest preview mode. Join LulaFind to view full case details and help bring missing people home across South Africa.
-            </p>
-            <div class="guest-scroll-lock__btns">
-              <button class="lf-btn lf-btn--success lf-btn--block" (click)="goSignUp()">
-                Create new account
-              </button>
-              <button class="lf-btn lf-btn--primary lf-btn--block" (click)="goSignIn()">
-                Log in
-              </button>
-            </div>
-          </div>
-        </div>
-      }
     </ion-content>
   `,
   styles: [`
@@ -144,25 +123,9 @@ import { timeAgo } from '../../core/utils/format';
     .skel__head { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; }
     .skel__av { width: 40px; height: 40px; border-radius: 50%; flex-shrink: 0; }
 
-    .guest-scroll-lock {
-      margin: 8px 0 28px;
-      padding: 24px 20px;
-      background: var(--lf-card);
-      box-shadow: var(--lf-shadow);
-      text-align: center;
-      display: flex; flex-direction: column; align-items: center; gap: 12px;
-    }
-    .guest-scroll-lock__badge {
-      display: flex; align-items: center; justify-content: center;
-      width: 56px; height: 56px; border-radius: 50%;
-      background: var(--lf-primary-soft); color: var(--lf-primary-soft-text);
-    }
-    .guest-scroll-lock__title { margin: 0; font-size: 20px; font-weight: 700; color: var(--ion-text-color); }
-    .guest-scroll-lock__body { margin: 0; font-size: 15px; line-height: 1.4; color: var(--lf-muted); }
-    .guest-scroll-lock__btns { display: flex; flex-direction: column; gap: 10px; width: 100%; max-width: 360px; margin-top: 4px; }
 
     @media (min-width: 700px) {
-      .composer, .skel, .guest-scroll-lock { max-width: var(--lf-maxw); margin-left: auto; margin-right: auto; border-radius: var(--lf-radius); }
+      .composer, .skel { max-width: var(--lf-maxw); margin-left: auto; margin-right: auto; border-radius: var(--lf-radius); }
       .composer { margin-top: 12px; }
     }
   `]
@@ -200,15 +163,7 @@ export class HomeComponent {
     this.data.feed().filter((p) => p.type === 'missing' && p.status === 'active').length
   );
 
-  readonly isGuestLocked = computed(() => !this.auth.signedIn() && this.data.feed().length >= 4);
-
-  readonly displayedFeed = computed(() => {
-    const feed = this.data.feed();
-    if (!this.auth.signedIn()) {
-      return feed.slice(0, 4);
-    }
-    return feed;
-  });
+  readonly displayedFeed = computed(() => this.data.feed());
 
   /** Stories after post 8, People after post 16, then alternate every eight. */
   readonly feedItems = computed(() => feedWithRails(this.displayedFeed(), 8));

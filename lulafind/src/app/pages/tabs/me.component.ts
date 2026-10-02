@@ -22,18 +22,19 @@ import { AuthService } from '../../core/services/auth.service';
 import { DataService } from '../../core/services/data.service';
 import { PlatformService } from '../../core/services/platform.service';
 import { ModerationService } from '../../core/services/moderation.service';
-import { compact, contributorLabel, dayMonth, parseFullName } from '../../core/utils/format';
+import { compact, contributorLabel, parseFullName } from '../../core/utils/format';
 import { PROVINCES, ProvinceCode, Post, UserProfile, defaultPrivacy, provinceName } from '../../core/models/types';
 import { CHECK_IN_COPY, RING_KEY, SafetyService } from '../../core/services/safety.service';
 import { MediaService } from '../../core/services/media.service';
+
+import { KeyboardDirective } from '../../shared/keyboard.directive';
 
 @Component({
   selector: 'lf-me',
   standalone: true,
   imports: [
     IonContent, TopNavComponent, IonModal, IonInput, IonTextarea, IonSelect, IonSelectOption, IonItem, IonLabel, IonToggle,
-    RouterLink, IconComponent, AvatarComponent, EmptyComponent, PostCardComponent
-  ],
+    RouterLink, IconComponent, AvatarComponent, EmptyComponent, PostCardComponent, KeyboardDirective],
   template: `
     <lf-top-nav />
 
@@ -113,7 +114,6 @@ import { MediaService } from '../../core/services/media.service';
               <lf-icon name="share" [size]="16" />
             </button>
           </div>
-          <div class="lf-meta"><lf-icon name="clock" [size]="14" /> Joined {{ dayMonth(me()!.createdAt) }}</div>
         </div>
 
         <div class="tabs menu-tabs" role="tablist" aria-label="Menu sections">
@@ -210,7 +210,7 @@ import { MediaService } from '../../core/services/media.service';
               @for (p of provinces; track p.code) { <ion-select-option [value]="p.code">{{ p.name }}</ion-select-option> }
             </ion-select></ion-item>
           <ion-item><ion-label position="stacked">Bio</ion-label>
-            <ion-textarea rows="3" [value]="form.bio" (ionInput)="form.bio = $any($event.target).value"></ion-textarea></ion-item>
+            <ion-textarea lfKeyboard rows="3" [value]="form.bio" (ionInput)="form.bio = $any($event.target).value"></ion-textarea></ion-item>
 
           <ion-item>
             <ion-label>
@@ -357,7 +357,6 @@ export class MeComponent {
   protected mod = inject(ModerationService);
 
   protected readonly compact = compact;
-  protected readonly dayMonth = dayMonth;
   protected readonly provinceName = provinceName;
   protected readonly provinces = PROVINCES;
   protected readonly contributorLabel = contributorLabel;

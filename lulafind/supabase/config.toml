@@ -1,0 +1,39 @@
+# Supabase CLI configuration.
+#
+# Created by hand because this repo was built without running `supabase init`:
+# the functions/ folder and the SQL migrations existed first. Without this file
+# the CLI has no idea where the Edge Functions live or which project they belong
+# to, and `supabase functions deploy` silently targets nothing useful.
+#
+# Link once per machine before deploying:
+#   npx supabase link --project-ref srwdtguxdjsjlkaydhet
+# (it asks for the database password - the one set when the project was created)
+#
+# Then deploy:
+#   npx supabase functions deploy send-push
+#
+# Docs: https://supabase.com/docs/guides/cli/config
+
+project_id = "srwdtguxdjsjlkaydhet"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+major_version = 15
+
+[studio]
+enabled = true
+port = 54323
+
+# Edge Functions are served from supabase/functions. verify_jwt is off because
+# the function authenticates callers itself: a database webhook arrives with no
+# user JWT at all, only the service-role key, which Supabase injects before the
+# request reaches the function.
+[functions.send-push]
+verify_jwt = false

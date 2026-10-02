@@ -8,13 +8,14 @@ import { PushService } from './core/services/push.service';
 import { PrefetchService } from './core/services/prefetch.service';
 import { BACKGROUNDS, SettingsService } from './core/services/settings.service';
 import { RepostSheetComponent } from './shared/components/repost-sheet.component';
+import { LogoComponent } from './shared/components/logo.component';
 import { supabaseNotice } from './core/data/supabase-client';
 import { demoMode, localMode } from './core/data/demo';
 
 @Component({
   selector: 'lf-root',
   standalone: true,
-  imports: [IonApp, IonRouterOutlet, RepostSheetComponent],
+  imports: [IonApp, IonRouterOutlet, RepostSheetComponent, LogoComponent],
   template: `
     <ion-app>
       @if (demoMode()) {
@@ -37,15 +38,9 @@ import { demoMode, localMode } from './core/data/demo';
       @if (splashVisible()) {
         <div class="lf-splash" [class.lf-splash--out]="splashFading()" aria-hidden="true">
           <div class="lf-splash__logo">
-            <svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-              <circle cx="32" cy="32" r="32" fill="var(--lf-primary)"/>
-              <!-- Stylised magnifier with a heart inside -->
-              <circle cx="29" cy="28" r="12" stroke="#fff" stroke-width="4" fill="none"/>
-              <line x1="38" y1="37" x2="50" y2="49" stroke="#fff" stroke-width="4" stroke-linecap="round"/>
-              <path d="M29 24 c0-2 3-3 3 0 c0-3 3-2 3 0 c0 3-3 5-3 5 s-3-2-3-5z" fill="#fff"/>
-            </svg>
+            <lf-logo [size]="76" />
           </div>
-          <p class="lf-splash__tagline">Bring them home.</p>
+          <p class="lf-splash__tagline">Spot me, help me and bring me home.</p>
           <div class="lf-splash__dots" role="status" aria-label="Loading">
             <span></span><span></span><span></span>
           </div>
@@ -72,7 +67,7 @@ import { demoMode, localMode } from './core/data/demo';
     .lf-splash__logo {
       animation: splash-pop .7s cubic-bezier(.2,.8,.2,1) both;
     }
-    .lf-splash__logo svg { display: block; width: 76px; height: 76px; }
+    .lf-splash__logo lf-logo { display: flex; width: 76px; height: 76px; }
     .lf-splash__tagline {
       margin: 0;
       font-size: 15px;
@@ -140,7 +135,7 @@ export class AppComponent implements OnInit {
       // Remove from DOM after the CSS transition finishes (580ms) and redirect if needed.
       setTimeout(() => {
         this.splashVisible.set(false);
-        if (!this.auth.signedIn() && !this.auth.guestBrowsing()) {
+        if (!this.auth.signedIn()) {
           void this.router.navigate(['/auth']);
         }
       }, 580);

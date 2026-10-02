@@ -28,7 +28,6 @@ import { SettingsComponent } from '../pages/settings/settings.component';
 import { PostDetailComponent } from '../pages/post/post-detail.component';
 import { CreatePostComponent } from '../pages/post/create-post.component';
 import { PosterComponent } from '../pages/post/poster.component';
-import { AskLulaComponent } from '../pages/chat/ask-lula.component';
 import { SafetyCenterComponent } from '../pages/safety/safety-center.component';
 import { ProfileComponent } from '../pages/user/profile.component';
 import { AuthComponent } from '../pages/auth/auth.component';
@@ -212,7 +211,6 @@ describe('Every screen says one thing without making anyone read a wall', () => 
     { name: 'Home / feed', component: HomeComponent, as: 'u_demo' },
     { name: 'Spotlight', component: SpotlightComponent, as: 'u_demo' },
     { name: 'Chats (list)', component: ChatsComponent, as: 'u_demo' },
-    { name: 'Ask Lula', component: AskLulaComponent, as: 'u_demo' },
     { name: 'Me', component: MeComponent, as: 'u_demo' },
     { name: 'Notifications', component: NotificationsComponent, as: 'u_demo' },
     { name: 'Found (reunions)', component: FoundComponent, as: 'u_demo' },

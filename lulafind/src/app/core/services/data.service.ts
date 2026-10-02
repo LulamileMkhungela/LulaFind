@@ -835,8 +835,17 @@ export class DataService {
     const before = await this.loadPost(id);
     if (!before) return true;
     await this.api.deletePost(id);
-    this.feed.set(this.feed().filter((p) => p.id !== id));
-    this.savedPosts.set(this.savedPosts().filter((p) => p.id !== id));
+    /*
+     * Every list the deleted post could be sitting in, not just the feed. It
+     * used to clear the feed and saved posts only, so a post deleted from the
+     * Menu stayed on the Menu - the page was reading `myAuthored`, which nothing
+     * had touched.
+     */
+    const drop = (list: Post[]) => list.filter((p) => p.id !== id);
+    this.feed.set(drop(this.feed()));
+    this.savedPosts.set(drop(this.savedPosts()));
+    this.myAuthored.set(drop(this.myAuthored()));
+    this.broughtHome.set(drop(this.broughtHome()));
     this.cache.update((c) => { const rest = { ...c }; delete rest[id]; return rest; });
     await this.loadFeed();
     const still = await this.api.post(id).catch(() => null);
@@ -1046,7 +1055,7 @@ export class DataService {
         await this.api.pushNotification({
           id: uid('n'), userId: me, kind: 'outcome',
           title: `Did you get help finding ${who}?`,
-          body: `${p.upvotes} people have an idea and ${p.commentCount} commented. If ${who} is home, tap to mark them found.`,
+          body: `${p.upvotes} reactions and ${p.commentCount} comments. If ${who} is home, tap to mark them found.`,
           at: Date.now(), read: false, route: `/post/${p.id}`, postId: p.id
         });
         await this.setOutcomeNudged(p.id).catch(() => undefined);
@@ -1078,8 +1087,8 @@ export class DataService {
           const n = p.upvotes - was.up;
           await this.api.pushNotification({
             id: uid('n'), userId: me, kind: 'vote',
-            title: n === 1 ? `Someone has an idea about ${who}` : `${n} people have an idea about ${who}`,
-            body: `Someone has an idea on ${where}. Open it to read the leads.`,
+            title: n === 1 ? `Someone reacted to ${who}` : `${n} people reacted to ${who}`,
+            body: `Someone reacted on ${where}. Open it to read the leads.`,
             at: Date.now(), read: false, route: `/post/${p.id}`, postId: p.id
           });
           sent++;
@@ -1599,7 +1608,7 @@ export class DataService {
     return updated;
   }
 
-  /* --------------------- KhumbulEkhaya flow -------------------- */
+  /* --------------------- Home Sweet Home flow -------------------- */
   /** The subject claims the post: "this is me". */
   async claimKhumbuPost(postId: string): Promise<Post | undefined> {
     const me = this.auth.viewerId;
@@ -1650,7 +1659,7 @@ export class DataService {
         id: uid('n'),
         userId: p.authorId,
         kind: 'claim',
-        title: response === 'not_going_home' ? 'They are safe but not coming home' : 'They answered your KhumbulEkhaya',
+        title: response === 'not_going_home' ? 'They are safe but not coming home' : 'They answered your Home Sweet Home',
         body: note.trim() || (response === 'not_going_home' ? 'They asked that you respect this.' : 'They are coming home.'),
         at: Date.now(),
         read: false,

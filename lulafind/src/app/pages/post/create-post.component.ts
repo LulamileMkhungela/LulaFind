@@ -28,7 +28,7 @@ const blankForm = (): ComposerForm => ({
 
 const CATEGORIES: { key: PostType; label: string; icon: string }[] = [
   { key: 'missing', label: 'Missing person', icon: 'search' },
-  { key: 'khumbulekhaya', label: 'Left home', icon: 'home' },
+  { key: 'khumbulekhaya', label: 'Home Sweet Home', icon: 'home' },
   { key: 'pet', label: 'Lost pet', icon: 'paw' },
   { key: 'sighting', label: 'Sighting', icon: 'pin' }
 ];
@@ -294,6 +294,7 @@ interface MissingField { key: string; label: string; }
               <p class="template-instruction">Fill in the prompts. Your post will stay as readable text unless you choose Generate.</p>
             }
             <textarea class="body-input" [class.body-input--template]="!editing()" [rows]="editing() ? 5 : 13"
+                      inputmode="text" autocorrect="on" autocomplete="on" autocapitalize="sentences" spellcheck="true"
                       maxlength="5000" data-field="body" [placeholder]="editing() ? bodyPlaceholder() : ''"
                       [value]="f().body" (input)="patch({ body: $any($event.target).value })"
                       aria-label="Post text template"></textarea>
@@ -769,8 +770,14 @@ export class CreatePostComponent implements OnInit {
 
   async ngOnInit(): Promise<void> {
     await this.data.loadStatic();
+    /*
+     * The address bar reads `home-sweet-home`, the name people know. The stored
+     * post type keeps its original key, so old links (`/create/khumbulekhaya`)
+     * and saved drafts still open the same composer.
+     */
     const routeType = this.route.snapshot.paramMap.get('type');
-    if (routeType && CATEGORIES.some((category) => category.key === routeType)) this.setType(routeType as PostType);
+    const wanted = routeType === 'home-sweet-home' ? 'khumbulekhaya' : routeType;
+    if (wanted && CATEGORIES.some((category) => category.key === wanted)) this.setType(wanted as PostType);
 
     const editId = this.route.snapshot.paramMap.get('id');
     const historyState = typeof window !== 'undefined' && window.history.state && typeof window.history.state === 'object'
