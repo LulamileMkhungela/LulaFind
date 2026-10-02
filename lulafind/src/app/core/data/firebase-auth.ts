@@ -365,6 +365,30 @@ export class FirebaseAuthBridge {
     try { history.replaceState(null, '', window.location.pathname + '?mode=signin'); } catch { /* ignore */ }
   }
 
+  /**
+   * Why a domain was refused, in words that say which host and what to do.
+   *
+   * `where` distinguishes the two code paths that share one cause: the page
+   * origin (popup / OAuth) and the continue URL (account emails). Naming the
+   * actual origin matters because the Arena preview is served from a proxy host
+   * that is regenerated every session - so it can never be added to the
+   * allowlist in advance, and the only real fix is to open the app on localhost.
+   */
+  private domainMessage(where: 'page' | 'email link'): string {
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    const host = origin ? origin.replace(/^https?:\/\//, '') : 'this address';
+    const base = origin
+      ? `${host} (${where}) is not allowed for sign-in yet.`
+      : `This ${where} is not allowed for sign-in yet.`;
+    if (host === 'localhost' || host.startsWith('localhost:') || host.startsWith('127.0.0.1')) {
+      // localhost is allowlisted by default, so this is the project's own list
+      // rather than anything about the machine.
+      return `${base} Add it in Firebase → Authentication → Settings → Authorised domains.`;
+    }
+    return `${base} That host changes every session, so it cannot be added in advance - ` +
+      `open the app on http://localhost:4200 and sign in there.`;
+  }
+
   private friendly(e: unknown): Error {
     const code = String((e as { code?: string })?.code ?? '');
     const raw = String((e as { message?: string })?.message ?? e ?? '');
@@ -397,13 +421,19 @@ export class FirebaseAuthBridge {
       'auth/network-request-failed': 'No connection. Check your internet and try again.',
       'auth/popup-closed-by-user': 'Google sign-in was closed before it finished.',
       'auth/popup-blocked': 'Your browser blocked the Google window. Allow pop-ups and try again.',
-      'auth/unauthorized-domain': 'This web address is not allowed for sign-in yet. Add it in Firebase → Authentication → Settings → Authorised domains.',
       // Same cause as auth/unauthorized-domain, different code path: Firebase
-      // rejects the *continue URL* rather than the page origin. Both mean the
-      // host in the address bar is not on the Authorised domains list, and both
-      // are fixed the same way - so they must not fall through to the raw
-      // "Domain not allowlisted by project", which names no place to go.
-      'auth/unauthorized-continue-uri': 'This web address is not allowed for sign-in yet. Add it in Firebase → Authentication → Settings → Authorised domains.',
+      // rejects the *continue URL* rather than the page origin. Both mean a host
+      // in play is not on the Authorised domains list, and both are fixed the
+      // same way - so they must not fall through to the raw "Domain not
+      // allowlisted by project", which names no place to go.
+      //
+      // The message names the origin and says where it is being checked from,
+      // because "this web address" is unreachable when the person cannot see
+      // which of the two hosts is at fault - and on the Arena preview the answer
+      // is always the proxy host, which changes every session and so can never
+      // be allowlisted in advance.
+      'auth/unauthorized-domain': this.domainMessage('page'),
+      'auth/unauthorized-continue-uri': this.domainMessage('email link'),
       'auth/expired-action-code': 'This link has expired. Request a new one.',
       'auth/invalid-action-code': 'This link was already used or is not valid. Request a new one.',
       'auth/requires-recent-login': 'For your safety, log out and log in again, then retry.',

@@ -98,3 +98,45 @@ describe('FirebaseAuthBridge continueUrl', () => {
     });
   });
 });
+
+/**
+ * What the person is told when a domain is refused.
+ *
+ * "This web address is not allowed" was unreachable on the Arena preview: the
+ * host there is a proxy that changes every session, so nobody could tell which
+ * address was meant, and adding it was not even possible. The message now names
+ * the origin and says what to actually do.
+ */
+describe('FirebaseAuthBridge domain refusal message', () => {
+  let bridge: any;
+
+  const message = (where: 'page' | 'email link') =>
+    (bridge as { domainMessage(w: 'page' | 'email link'): string }).domainMessage(where);
+
+  beforeEach(async () => {
+    const mod = await import('./firebase-auth');
+    bridge = new (mod as any).FirebaseAuthBridge();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('names the origin on a host that cannot be allowlisted', () => {
+    vi.stubGlobal('location', { origin: 'https://4200-iha287cgo5k5lzrv6ejge.e2b.app' });
+    const m = message('page');
+    expect(m).toContain('4200-iha287cgo5k5lzrv6ejge.e2b.app');
+    expect(m).toContain('localhost:4200');
+  });
+
+  it('tells the person to add it when the host is localhost', () => {
+    vi.stubGlobal('location', { origin: 'http://localhost:4200' });
+    expect(message('page')).toContain('Authorised domains');
+  });
+
+  it('distinguishes the page from the email link, which fail for different reasons', () => {
+    vi.stubGlobal('location', { origin: 'https://preview.example' });
+    expect(message('page')).toContain('(page)');
+    expect(message('email link')).toContain('(email link)');
+  });
+});
