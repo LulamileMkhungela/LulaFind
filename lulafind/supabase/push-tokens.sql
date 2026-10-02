@@ -38,9 +38,15 @@ create index if not exists push_tokens_user_idx
 -- Firebase UIDs are not UUIDs, so widen it before the policies compare against
 -- lula_uid(), exactly as schema.sql does for public.records.
 --
--- `pol` is declared rather than left implicit. A FOR ... IN query loop does
--- declare its own variable, so this is not strictly required, but an explicit
--- declaration states the shape and survives a reader who assumes it is missing.
+-- `pol` MUST be declared. Without `declare pol record;` Postgres refuses the
+-- block outright:
+--
+--     ERROR:  42601: loop variable of loop over rows must be a record variable
+--             or list of scalar variables
+--
+-- The `declare` is not a style choice here - it is the difference between this
+-- running and not running. It was previously described as merely "more
+-- explicit", which was wrong: the undeclared form does not execute at all.
 do $$
 declare
   pol record;
