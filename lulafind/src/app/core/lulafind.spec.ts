@@ -19,6 +19,7 @@ import { drawPoster, posterContent, publicPoster, POSTER_TEMPLATES } from './uti
 import { leadMarkView } from './utils/mark-check';
 import { GBV_CHANNEL_NOTE, HELP_LINES } from './data/sa-help';
 import { avatar, STORY_BLACK, storyBg } from './data/seed';
+import { likePattern } from './data/supabase-api';
 import { FAQ_TOPICS } from './data/faq-topics';
 import { feedWithRails } from './utils/feed';
 
@@ -2060,3 +2061,50 @@ describe('Bugs the browser found', () => {
   });
 });
 
+describe('Search is not limited to the page on screen', () => {
+  beforeEach(bed);
+
+  it('finds a case the feed hides, because it closed as found', async () => {
+    const api = TestBed.inject(LULA_API) as MockApi;
+    const inFeed = api.db.filtered(emptyFilter(), null, undefined).map((p) => p.id);
+    expect(inFeed, 'the feed is meant to hide found cases').not.toContain('p_found');
+    const hit = await api.searchPosts('Anele');
+    expect(hit.map((p) => p.id)).toContain('p_found');
+  });
+
+  it('never hands an unchecked child case to a public search', async () => {
+    const api = TestBed.inject(LULA_API) as MockApi;
+    const base = api.db.posts().find((p) => p.type === 'missing')!;
+    // Exactly what moderation creates: a child case held until a human checks it.
+    const held: Post = { ...base, id: 'p_held_for_review', title: 'Unchecked child case Zzq', status: 'under_review' };
+    api.db.upsertPost(held);
+    expect(await api.searchPosts('zzzz', 100)).toEqual([]);
+    const found = await api.searchPosts('Zzq', 100);
+    expect(found.map((p) => p.id)).not.toContain('p_held_for_review');
+  });
+
+  it('finds people by surname and by handle, never a suspended member', async () => {
+    const api = TestBed.inject(LULA_API) as MockApi;
+    expect((await api.searchUsers('ndlela')).map((u) => u.id)).toContain('u_sipho');
+    expect((await api.searchUsers('@lerato.m')).map((u) => u.id)).toContain('u_lerato');
+    const target = api.db.users()[1];
+    api.db.upsertUser({ ...target, suspended: true });
+    expect((await api.searchUsers(target.displayName)).map((u) => u.id)).not.toContain(target.id);
+  });
+
+  it('ignores a one-character query instead of matching the whole store', async () => {
+    const api = TestBed.inject(LULA_API) as MockApi;
+    expect(await api.searchPosts('a')).toEqual([]);
+    expect(await api.searchUsers('a')).toEqual([]);
+  });
+
+  it('treats wildcards and PostgREST punctuation as literal text', () => {
+    // A description can contain "50%" or "(child)"; the database must be asked
+    // for those characters, not for a pattern that matches everything.
+    expect(likePattern('ORL/441')).toBe('%ORL/441%');
+    expect(likePattern('50%')).toBe('%50\\%%');
+    expect(likePattern('Ndlela, Thabo')).toBe('%Ndlela\\, Thabo%');
+    expect(likePattern('(child)')).toBe('%\\(child\\)%');
+    expect(likePattern('a_b')).toBe('%a\\_b%');
+  });
+});

@@ -113,6 +113,8 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
             <p class="fb-embed__text">{{ o.body }}</p>
             @if (o.poster?.media?.src) {
               <img class="fb-embed__img fb-embed__poster" [src]="o.poster!.media.src" [alt]="'LulaFind poster: ' + o.title" loading="lazy" />
+            } @else if (o.media.length && o.media[0].kind === 'video') {
+              <video class="fb-embed__img" [src]="o.media[0].src" muted playsinline preload="metadata"></video>
             } @else if (o.media.length) { <img class="fb-embed__img" [src]="o.media[0].src" [alt]="o.title" loading="lazy" /> }
           </a>
         } @else {
@@ -154,6 +156,13 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
         <div class="fb-media fb-media--poster" [routerLink]="'/post/' + post.id">
           <img class="fb-media-img" [src]="post.poster!.media.src" [alt]="'LulaFind poster: ' + post.title" loading="lazy" />
         </div>
+      } @else if (post.media.length === 1 && post.media[0].kind === 'video') {
+        <!-- One video: its own controls are the point, so it is not wrapped in
+             the card's link - tapping play must play, not navigate. -->
+        <div class="fb-media">
+          <video class="fb-media-video" [src]="post.media[0].src" controls playsinline preload="metadata"
+                 [attr.aria-label]="'Video attached to: ' + post.title"></video>
+        </div>
       } @else if (post.media.length) {
         <div class="fb-media" [routerLink]="'/post/' + post.id">
           @if (post.media.length === 1) {
@@ -162,7 +171,11 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
             <div class="fb-grid" [attr.data-count]="visibleMedia().length">
               @for (m of visibleMedia(); track m.id; let i = $index) {
                 <div class="fb-grid__tile">
-                  <img [src]="m.src" [alt]="m.caption ?? ''" loading="lazy" />
+                  @if (m.kind === 'video') {
+                    <video [src]="m.src" muted playsinline preload="metadata" [attr.aria-label]="'Video: ' + post.title"></video>
+                  } @else {
+                    <img [src]="m.src" [alt]="m.caption ?? ''" loading="lazy" />
+                  }
                   @if (i === visibleMedia().length - 1 && extraMedia() > 0) {
                     <span class="fb-grid__more">+{{ extraMedia() }}</span>
                   }
@@ -315,12 +328,13 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
 
     .fb-media { width: 100%; overflow: hidden; background: var(--lf-card-2); cursor: pointer; }
     .fb-media-img { width: 100%; object-fit: cover; max-height: 520px; display: block; }
+    .fb-media-video { width: 100%; max-height: 520px; display: block; background: #000; }
     .fb-media--poster { background: #101116; }
     .fb-media--poster .fb-media-img { object-fit: contain; max-height: 720px; }
     .fb-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2px; }
     .fb-grid[data-count="3"] .fb-grid__tile:first-child { grid-column: 1 / -1; aspect-ratio: 2 / 1; }
     .fb-grid__tile { position: relative; aspect-ratio: 1 / 1; overflow: hidden; }
-    .fb-grid__tile img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .fb-grid__tile img, .fb-grid__tile video { width: 100%; height: 100%; object-fit: cover; display: block; }
     .fb-grid__more {
       position: absolute; inset: 0;
       display: flex; align-items: center; justify-content: center;

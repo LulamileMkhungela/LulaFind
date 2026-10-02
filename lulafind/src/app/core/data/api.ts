@@ -22,6 +22,23 @@ export abstract class LulaApi {
   abstract saveUser(u: UserProfile): Promise<void>;
   abstract deleteUser(id: string): Promise<void>;
 
+  /* search */
+  /**
+   * Free-text search over cases, answered from the whole store - not only the
+   * page of posts that happens to be in memory.
+   *
+   * The feed holds one page; a family searching a surname must still find the
+   * case posted last month. Every backend answers from everything it has, and
+   * applies the same review and audience rules as the feed - a search result
+   * can never be more visible than the post itself.
+   */
+  abstract searchPosts(q: string, limit?: number): Promise<Post[]>;
+  /**
+   * Free-text search over members: display name, surname and handle.
+   * Suspended accounts are never returned, on any backend.
+   */
+  abstract searchUsers(q: string, limit?: number): Promise<UserProfile[]>;
+
   /* posts */
   abstract post(id: string): Promise<Post | undefined>;
   abstract posts(): Promise<Post[]>;
@@ -167,6 +184,9 @@ export class MockApi implements LulaApi {
   async users() { return this.db.users(); }
   async saveUser(u: UserProfile) { this.db.upsertUser(u); }
   async deleteUser(id: string) { this.db.removeUser(id); }
+
+  async searchPosts(q: string, limit?: number) { return this.db.searchPosts(q, limit); }
+  async searchUsers(q: string, limit?: number) { return this.db.searchUsers(q, limit); }
 
   async post(id: string) { return this.db.post(id); }
   async posts() { return this.db.posts(); }

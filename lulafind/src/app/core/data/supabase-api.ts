@@ -589,23 +589,11 @@ export class SupabaseApi implements LulaApi {
         .limit(300);
       if (error) throw new Error(error.message);
       let posts = await Promise.all((data ?? []).map((row) => this.signRecordMedia('posts', row.payload as Post)));
-      const [viewer, spots, people] = await Promise.all([
+      const [viewer, people] = await Promise.all([
         viewerId ? this.user(viewerId) : Promise.resolve(undefined),
-        f.spotlightId || posts.some((p) => p.audience === 'surname') ? this.spotlights() : Promise.resolve([]),
         f.query.trim() ? this.users() : Promise.resolve([])
       ]);
-      const following = new Set<string>();
-      if (viewerId) {
-        await Promise.all(posts.filter((p) => p.authorId !== viewerId && p.audience === 'followers')
-          .map(async (p) => { if (await this.isFollowing(viewerId, p.authorId)) following.add(p.authorId); }));
-      }
-      posts = posts.filter((p) => {
-        if (p.status === 'under_review' && p.authorId !== viewerId) return false;
-        if (p.audience === 'followers' && p.authorId !== viewerId && !following.has(p.authorId)) return false;
-        if (p.audience === 'surname' && p.authorId !== viewerId) {
-          const spot = spots.find((s) => s.id === p.spotlightId);
-          if (!viewerId || !spot || !spot.memberIds.includes(viewerId)) return false;
-        }
+      posts = (await this.applyVisibility(posts, viewerId)).filter((p) => {
         if (f.type !== 'all' && p.type !== f.type) return false;
         if (f.province !== 'all' && p.province !== f.province) return false;
         if (f.spotlightId && p.spotlightId !== f.spotlightId) return false;
@@ -643,6 +631,96 @@ export class SupabaseApi implements LulaApi {
       if (f.status === 'found') posts = posts.filter((p) => p.status === 'found');
       if (f.spotlightId) posts = posts.filter((p) => p.spotlightId === f.spotlightId);
       return posts;
+    }
+  }
+
+  /**
+   * The review and audience rules the feed applies, in one place.
+   *
+   * Search uses this too, so a result can never be more visible than the post
+   * is in the feed: a child case held for review, a followers-only update and a
+   * surname-only Spotlight post all stay exactly as private as they were.
+   */
+  private async applyVisibility(posts: Post[], viewerId: string | null): Promise<Post[]> {
+    const spots = posts.some((p) => p.audience === 'surname') ? await this.spotlights() : [];
+    const following = new Set<string>();
+    if (viewerId) {
+      await Promise.all(posts.filter((p) => p.authorId !== viewerId && p.audience === 'followers')
+        .map(async (p) => { if (await this.isFollowing(viewerId, p.authorId)) following.add(p.authorId); }));
+    }
+    return posts.filter((p) => {
+      if (p.status === 'under_review' && p.authorId !== viewerId) return false;
+      if (p.audience === 'followers' && p.authorId !== viewerId && !following.has(p.authorId)) return false;
+      if (p.audience === 'surname' && p.authorId !== viewerId) {
+        const spot = spots.find((s) => s.id === p.spotlightId);
+        if (!viewerId || !spot || !spot.memberIds.includes(viewerId)) return false;
+      }
+      return true;
+    });
+  }
+
+  /* ─── search ────────────────────────────────────────────────────────────── */
+
+  /**
+   * Search the whole posts collection on the server.
+   *
+   * Records live as jsonb in `payload`, so the query is
+   * `payload->>field ilike %needle%`. PostgREST splits its `or(...)` expression
+   * on commas and parentheses, and LIKE treats `%` and `_` as wildcards, so the
+   * needle is escaped first - a surname with an apostrophe or a `%` in a case
+   * number must not change the shape of the query. RLS decides which rows this
+   * viewer may read at all; the audience and review rules are then applied
+   * exactly as they are for the feed.
+   */
+  async searchPosts(q: string, limit = 40): Promise<Post[]> {
+    const needle = q.trim();
+    if (needle.length < 2) return [];
+    const pattern = likePattern(needle);
+    try {
+      const { data, error } = await this.client
+        .from('records')
+        .select('payload')
+        .eq('collection', 'posts')
+        .or(SEARCH_POST_FIELDS.map((field) => `payload->>${field}.ilike.${pattern}`).join(','))
+        .order('updated_at', { ascending: false })
+        .limit(limit * 2);
+      if (error) throw new Error(error.message);
+      const viewerId = await this.currentUid();
+      const rows = await Promise.all((data ?? []).map((row) => this.signRecordMedia('posts', row.payload as Post)));
+      return (await this.applyVisibility(rows, viewerId)).slice(0, limit);
+    } catch (e: any) {
+      // The network is the only thing that failed: answer from what is stored
+      // on this device rather than showing an empty search.
+      console.warn('Supabase searchPosts fallback:', e?.message);
+      return this.localDb.searchPosts(q, limit);
+    }
+  }
+
+  /**
+   * Search members by name, surname or handle.
+   *
+   * The public profiles view keeps one jsonb `payload` per member, so the same
+   * escaping rules apply. Suspended accounts are filtered out here as well as
+   * locally, so a suspended member cannot surface through search.
+   */
+  async searchUsers(q: string, limit = 20): Promise<UserProfile[]> {
+    const needle = q.trim().replace(/^@/, '');
+    if (needle.length < 2) return [];
+    const pattern = likePattern(needle);
+    try {
+      const { data, error } = await this.client
+        .from('lula_user_profiles_public')
+        .select('payload')
+        .or(SEARCH_USER_FIELDS.map((field) => `payload->>${field}.ilike.${pattern}`).join(','))
+        .limit(limit * 2);
+      if (error) throw new Error(error.message);
+      return (data ?? [])
+        .map((row) => row.payload as UserProfile)
+        .filter((u) => !u.suspended)
+        .slice(0, limit);
+    } catch (e: any) {
+      console.warn('Supabase searchUsers fallback:', e?.message);
+      return this.localDb.searchUsers(q, limit);
     }
   }
 
@@ -807,7 +885,16 @@ export class SupabaseApi implements LulaApi {
     if (item.src.startsWith('data:')) {
       if (!ownerId) throw new Error('Sign in before uploading media');
       const blob = await fetch(item.src).then((response) => response.blob());
-      if (blob.size > 5 * 1024 * 1024) throw new Error('Choose a file smaller than 5 MB');
+      // A video is allowed to be much larger than a photo: the composer
+      // downscales photos before they get here, but a phone clip is already
+      // compressed and cannot be re-encoded in the browser.
+      const limit = item.kind === 'video' ? VIDEO_MAX_BYTES : PHOTO_MAX_BYTES;
+      if (blob.size > limit) {
+        const mb = Math.round(limit / (1024 * 1024));
+        throw new Error(item.kind === 'video'
+          ? `Choose a video smaller than ${mb} MB`
+          : `Choose a photo smaller than ${mb} MB`);
+      }
       const extension = blob.type.split('/')[1]?.replace('jpeg', 'jpg') || (item.kind === 'video' ? 'mp4' : 'jpg');
       path = `${ownerId}/${item.id}.${extension}`;
       const { error } = await this.client.storage.from('photos').upload(path, blob, {
@@ -1041,4 +1128,30 @@ export class SupabaseApi implements LulaApi {
       return [];
     }
   }
+}
+
+/**
+ * The fields a free-text post search looks at. Kept in step with LocalDb's
+ * matcher so the same words find the same case on any backend.
+ */
+const SEARCH_POST_FIELDS = ['title', 'body', 'town', 'caseNumber', 'subject', 'lastSeenWhere'] as const;
+
+/** The fields a member search looks at. */
+const SEARCH_USER_FIELDS = ['displayName', 'surname', 'handle'] as const;
+
+/** Video files are the exception to the photo limit: a phone clip is bigger. */
+export const VIDEO_MAX_BYTES = 25 * 1024 * 1024;
+/** Photos are downscaled in the composer, so this is what arrives at the bucket. */
+export const PHOTO_MAX_BYTES = 5 * 1024 * 1024;
+
+/**
+ * Escape a search needle for PostgREST and SQL LIKE.
+ *
+ * In `or=(...)` PostgREST uses commas and parentheses to separate expressions,
+ * and LIKE reads `%` and `_` as wildcards. A needle containing any of them -
+ * "50%" in a case note, an address in brackets - is quoted with a backslash so
+ * it is searched for literally instead of changing the query.
+ */
+export function likePattern(needle: string): string {
+  return `%${needle.replace(/([\\%_,()])/g, '\\$1')}%`;
 }

@@ -1,6 +1,7 @@
 import { Component, computed, effect, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { IonContent } from '@ionic/angular/ion-content';
+import { IonSearchbar } from '@ionic/angular/ion-searchbar';
 import { AlertController } from '@ionic/angular/alert-controller';
 import { ToastController } from '@ionic/angular/toast-controller';
 
@@ -19,11 +20,20 @@ type Tab = 'requests' | 'following' | 'followers';
 @Component({
   selector: 'lf-connections',
   standalone: true,
-  imports: [IonContent, TopNavComponent, RouterLink, AvatarComponent, EmptyComponent],
+  imports: [IonContent, IonSearchbar, TopNavComponent, RouterLink, AvatarComponent, EmptyComponent],
   template: `
     <lf-top-nav title="Friends" backTo="/me" />
 
     <ion-content class="lf-page">
+      <!-- Search the list you are looking at: following, followers, or the
+           requests waiting on you. It filters what is already loaded, so it
+           answers on the keystroke. -->
+      <div class="search-wrap">
+        <ion-searchbar placeholder="Search friends" [debounce]="0" showCancelButton="never" [value]="query()"
+                       (ionInput)="query.set($any($event.detail).value ?? $any($event.target).value ?? '')"
+                       aria-label="Search names on the Friends page"></ion-searchbar>
+      </div>
+
       <div class="seg" role="tablist" aria-label="Friends">
         <button class="pill" role="tab" [class.on]="tab() === 'requests'" (click)="tab.set('requests')">
           Requests @if (data.followRequests().length) { <em class="lf-badge">{{ data.followRequests().length }}</em> }
@@ -34,9 +44,12 @@ type Tab = 'requests' | 'following' | 'followers';
 
       @if (!rows().length) {
         <lf-empty icon="users" [title]="emptyTitle()" [message]="emptyText()" />
+      } @else if (!matchingRows().length) {
+        <lf-empty icon="search" title="No one matches that"
+                  message="No name or handle on this tab matches “{{ query() }}”." />
       } @else {
         <div class="list lf-safe-bottom">
-          @for (r of rows(); track r.id) {
+          @for (r of matchingRows(); track r.id) {
             <div class="row">
               <a [routerLink]="'/user/' + r.id" class="who">
                 <lf-avatar [src]="data.avatarFor(r.u)" [name]="r.u?.displayName ?? '?'" [size]="56" />
@@ -79,6 +92,9 @@ type Tab = 'requests' | 'following' | 'followers';
     .fb-head__title.sm { font-size: 20px; }
     .fb-head__bar { justify-content: flex-start; }
     .back { margin-right: 8px; }
+    .search-wrap { padding: 2px var(--lf-gap) 0; }
+    .search-wrap ion-searchbar { --background: var(--lf-card-2); --border-radius: 999px; --box-shadow: none;
+      --placeholder-color: var(--lf-muted); padding: 0; }
     .seg { display: flex; gap: 8px; padding: 4px var(--lf-gap) 10px; overflow-x: auto; scrollbar-width: none; }
     .pill { flex: none; height: 34px; padding: 0 14px; border: 0; border-radius: 999px; cursor: pointer; font: inherit;
       font-size: 14px; font-weight: 600; background: var(--lf-card-2); color: var(--ion-text-color);
@@ -102,6 +118,8 @@ export class ConnectionsComponent {
   private toast = inject(ToastController);
 
   readonly tab = signal<Tab>((this.route.snapshot.queryParamMap.get('tab') as Tab) || 'requests');
+  /** What the person typed into the search field on this page. */
+  readonly query = signal('');
   readonly busy = signal<string | null>(null);
   private readonly people = signal<Record<string, UserProfile>>({});
   private readonly asked = new Set<string>();
@@ -116,6 +134,14 @@ export class ConnectionsComponent {
 
   readonly rows = computed(() => this.ids().map((id): { id: string; u: UserProfile | null } =>
     ({ id, u: (this.people()[id] as UserProfile | undefined) ?? this.data.authorOf(id) ?? null })));
+
+  /** `rows()` narrowed to whatever is typed in the search field. */
+  readonly matchingRows = computed(() => {
+    const needle = this.query().trim().toLowerCase().replace(/^@/, '');
+    if (!needle) return this.rows();
+    return this.rows().filter((r) =>
+      `${r.u?.displayName ?? ''} ${r.u?.surname ?? ''} ${r.u?.handle ?? ''}`.toLowerCase().includes(needle));
+  });
 
   constructor() {
     void this.data.loadFollowRequests();

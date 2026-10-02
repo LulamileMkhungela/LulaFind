@@ -29,7 +29,7 @@ import { UserProfile, Post, PROVINCES } from '../../core/models/types';
            the status bar on notched phones. -->
       <div class="search-top">
         <ion-searchbar placeholder="Name, surname, case number, town…" [debounce]="220" showCancelButton="never"
-                       (ionInput)="onQuery($any($event.target).value)"></ion-searchbar>
+                       (ionInput)="onQuery($any($event.detail).value ?? $any($event.target).value ?? '')"></ion-searchbar>
         <div class="lf-scroller quick">
           @for (c of quick; track c) { <button class="chip" (click)="apply(c)">{{ c }}</button> }
         </div>
@@ -66,7 +66,9 @@ import { UserProfile, Post, PROVINCES } from '../../core/models/types';
             }
           </div>
         </div>
-      } @else if (!results().length && !users().length) {
+      } @else if (searching() && !posts().length && !users().length) {
+        <p class="search-state" role="status">Searching…</p>
+      } @else if (!posts().length && !users().length) {
         <lf-empty icon="search" title="Nothing matches that"
                   message="Try a surname, a case number, or the town where they went missing." />
       } @else {
@@ -84,9 +86,12 @@ import { UserProfile, Post, PROVINCES } from '../../core/models/types';
             }
           </div>
         }
-        @for (p of results(); track p.id) {
+        @for (p of posts(); track p.id) {
           <lf-post-card [post]="p" [author]="data.authorOf(p.authorId) ?? null" chatState="off"
                         (vote)="vote(p, $event)" (comment)="open(p)" />
+        }
+        @if (!posts().length) {
+          <p class="search-state">No cases match “{{ query() }}”. The people above do.</p>
         }
       }
     </ion-content>
@@ -102,6 +107,7 @@ import { UserProfile, Post, PROVINCES } from '../../core/models/types';
     .provs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
     .prov { padding: 12px 8px; border-radius: var(--lf-radius); border: 0; box-shadow: var(--lf-shadow); background: var(--lf-card);
       color: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer; }
+    .search-state { margin: 18px var(--lf-gap); font-size: 14px; color: var(--lf-muted); text-align: center; }
     .people { display: flex; flex-direction: column; gap: 8px; }
     .person { display: flex; align-items: center; gap: 11px; padding: 10px 12px; border-radius: var(--lf-radius);
       border: 0; box-shadow: var(--lf-shadow); background: var(--lf-card); color: inherit; text-decoration: none; }
@@ -121,29 +127,56 @@ export class SearchComponent {
   protected readonly provinces = PROVINCES;
   query = signal('');
   users = signal<UserProfile[]>([]);
+  posts = signal<Post[]>([]);
+  /** True while a typed query is on its way to the database. */
+  searching = signal(false);
 
   quick = ['missing in Gauteng', 'SAPS case', 'Home Sweet Home', 'found', 'Orlando', 'Ndlela'];
 
-  readonly results = computed(() => {
-    const q = this.query();
-    if (!q) return [];
-    return this.data.feed().filter((p) => {
-      const hay = [p.title, p.body, p.town, p.caseNumber ?? '', p.subject?.name ?? '', p.subject?.surname ?? ''].join(' ').toLowerCase();
-      return hay.includes(q.toLowerCase());
-    });
-  });
+  /**
+   * Guard against out-of-order answers: keystrokes fire overlapping requests,
+   * and a slow reply to "Ndl" must never overwrite the results for "Ndlela".
+   */
+  private seq = 0;
 
   readonly people = computed(() => this.users().slice(0, 8));
 
   constructor() {
-    // A search started in the top bar arrives as /search?q=... and runs here.
-    const initial = this.route.snapshot.queryParamMap.get('q') ?? '';
-    if (initial) void this.onQuery(initial);
+    // A search typed in the top bar arrives as /search?q=... and runs here.
+    // Listening to the parameter (rather than reading it once) means pressing
+    // Enter in the top bar while already on this page still runs the search.
+    this.route.queryParamMap.subscribe((params) => {
+      const fromUrl = params.get('q') ?? '';
+      if (fromUrl !== this.query()) void this.onQuery(fromUrl);
+    });
   }
 
+  /**
+   * Runs as the person types (the searchbar debounces the keystrokes).
+   *
+   * Cases come from the database through `data.searchPosts`, so the whole store
+   * is searched rather than only the feed page on screen, and people come from
+   * `data.searchUsers`. Both run together; the newer keystroke always wins.
+   */
   async onQuery(q: string): Promise<void> {
-    this.query.set(q.trim());
-    this.users.set(q.trim() ? await this.data.searchUsers(q) : []);
+    const needle = q.trim();
+    this.query.set(needle);
+    if (needle.length < 2) {
+      this.posts.set([]);
+      this.users.set([]);
+      this.searching.set(false);
+      return;
+    }
+    const token = ++this.seq;
+    this.searching.set(true);
+    const [posts, users] = await Promise.all([
+      this.data.searchPosts(needle).catch(() => [] as Post[]),
+      this.data.searchUsers(needle).catch(() => [] as UserProfile[])
+    ]);
+    if (token !== this.seq) return;
+    this.posts.set(posts);
+    this.users.set(users);
+    this.searching.set(false);
   }
 
   apply(q: string): void {

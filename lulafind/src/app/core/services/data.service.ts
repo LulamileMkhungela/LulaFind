@@ -1929,16 +1929,64 @@ export class DataService {
     return results.filter((u): u is UserProfile => u !== undefined);
   }
 
-  async searchUsers(q: string): Promise<UserProfile[]> {
+  /**
+   * Search every case the viewer may see, not just the page in memory.
+   *
+   * The backend runs the query, so a case posted last month is still found on
+   * the day it matters. Hits already in the feed are merged in and de-duplicated
+   * so a post made seconds ago answers immediately, before the next page of the
+   * feed has arrived. One character is not enough to search on - it matches
+   * almost everything and the request is not worth sending.
+   */
+  async searchPosts(q: string): Promise<Post[]> {
     const needle = q.trim().toLowerCase();
-    if (!needle) return [];
-    const all = await this.api.users();
-    return all.filter(
-      (u) =>
-        u.displayName.toLowerCase().includes(needle) ||
-        u.handle.toLowerCase().includes(needle) ||
-        u.surname.toLowerCase().includes(needle)
-    );
+    if (needle.length < 2) return [];
+    let fromApi: Post[] = [];
+    try {
+      fromApi = await this.api.searchPosts(q);
+    } catch {
+      // Offline or the query failed: the copies on this device still answer.
+    }
+    const fromFeed = this.feed().filter((p) => this.matchesQuery(p, needle));
+    const seen = new Set<string>();
+    return [...fromApi, ...fromFeed].filter((p) => {
+      if (seen.has(p.id)) return false;
+      seen.add(p.id);
+      return true;
+    });
+  }
+
+  /**
+   * Find members by name, surname or handle across the whole member list - not
+   * only the authors whose posts happen to be loaded. Profiles are pushed into
+   * the author cache so a result card renders without a second round trip.
+   */
+  async searchUsers(q: string): Promise<UserProfile[]> {
+    const needle = q.trim().toLowerCase().replace(/^@/, '');
+    if (needle.length < 2) return [];
+    let hits: UserProfile[] = [];
+    try {
+      hits = await this.api.searchUsers(q);
+    } catch {
+      hits = await this.api.users();
+    }
+    const seen = new Set<string>();
+    const out = hits.filter((u) => {
+      if (u.suspended || seen.has(u.id)) return false;
+      seen.add(u.id);
+      return true;
+    });
+    out.forEach((u) => this.touchAuthor(u));
+    return out;
+  }
+
+  /** The same fields the feed's free-text filter reads. One definition. */
+  private matchesQuery(p: Post, needle: string): boolean {
+    const author = this.authorOf(p.authorId);
+    return [
+      p.title, p.body, p.town, p.caseNumber ?? '',
+      p.subject?.name ?? '', p.subject?.surname ?? '', author?.displayName ?? ''
+    ].join(' ').toLowerCase().includes(needle);
   }
 
   /**

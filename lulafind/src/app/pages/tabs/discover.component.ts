@@ -1,4 +1,4 @@
-import { Component, ElementRef, afterNextRender, computed, effect, inject, signal, viewChild } from '@angular/core';
+import { Component, computed, effect, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { IonContent } from '@ionic/angular/ion-content';
 import { AlertController } from '@ionic/angular/alert-controller';

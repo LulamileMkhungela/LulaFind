@@ -386,6 +386,33 @@ export class LocalDb {
     this.persist();
   }
 
+  /**
+   * Free-text search over every stored post.
+   *
+   * Uses the same matcher as the feed's `query` filter, so a search behaves the
+   * same wherever it is typed. Cases held for review stay hidden from the
+   * public; the caller merges in whatever the viewer's own feed may show them.
+   */
+  searchPosts(q: string, limit = 40): Post[] {
+    const needle = q.trim().toLowerCase();
+    if (needle.length < 2) return [];
+    return this.db.posts
+      .filter((p) => p.status !== 'under_review' && this.matchesQuery(p, needle))
+      .sort((a, b) => b.updatedAt - a.updatedAt)
+      .slice(0, limit)
+      .map((p) => clone(p));
+  }
+
+  /** Free-text search over members by name, surname or handle. */
+  searchUsers(q: string, limit = 20): UserProfile[] {
+    const needle = q.trim().toLowerCase().replace(/^@/, '');
+    if (needle.length < 2) return [];
+    return this.db.users
+      .filter((u) => !u.suspended && `${u.displayName} ${u.surname} ${u.handle}`.toLowerCase().includes(needle))
+      .slice(0, limit)
+      .map((u) => clone(u));
+  }
+
   /* ------------------------- posts ------------------------- */
   posts(): Post[] { return this.db.posts.map((p) => clone(p)); }
   postsByAuthor(authorId: string): Post[] { return this.db.posts.filter((p) => p.authorId === authorId).map((p) => clone(p)); }
@@ -545,18 +572,7 @@ export class LocalDb {
 
     if (f.query.trim()) {
       const q = f.query.trim().toLowerCase();
-      list = list.filter((p) => {
-        const author = this.user(p.authorId);
-        return (
-          p.title.toLowerCase().includes(q) ||
-          p.body.toLowerCase().includes(q) ||
-          p.town.toLowerCase().includes(q) ||
-          (p.subject?.name.toLowerCase().includes(q) ?? false) ||
-          (p.subject?.surname.toLowerCase().includes(q) ?? false) ||
-          (p.caseNumber?.toLowerCase().includes(q) ?? false) ||
-          (author?.displayName.toLowerCase().includes(q) ?? false)
-        );
-      });
+      list = list.filter((p) => this.matchesQuery(p, q));
     }
 
     // audience enforcement
@@ -591,6 +607,20 @@ export class LocalDb {
   private score(p: Post): number {
     const ageH = Math.max(1, (Date.now() - p.createdAt) / 3600_000);
     return (p.upvotes * 3 + p.commentCount * 5 + p.shares * 2) / Math.pow(ageH, 0.55);
+  }
+
+  /**
+   * What "free text" means for a case: the words on the poster, the case number
+   * quoted by SAPS, the town, the last-seen town, and the author's name.
+   * One definition, so the feed filter and search can never drift apart.
+   */
+  private matchesQuery(p: Post, needle: string): boolean {
+    const author = this.user(p.authorId);
+    const hay = [
+      p.title, p.body, p.town, p.caseNumber ?? '',
+      p.subject?.name ?? '', p.subject?.surname ?? '', author?.displayName ?? ''
+    ].join(' ').toLowerCase();
+    return hay.includes(needle);
   }
 
   /* ------------------------- comments ------------------------- */

@@ -29,6 +29,8 @@ import { HomeComponent } from '../pages/tabs/home.component';
 import { TabsComponent } from '../pages/tabs/tabs.component';
 import { ReactionsSheetComponent } from '../shared/components/reactions-sheet.component';
 import { AdminComponent } from '../pages/admin/admin.component';
+import { SearchComponent } from '../pages/search/search.component';
+import { ConnectionsComponent } from '../pages/connections/connections.component';
 import { SpotlightDetailComponent } from '../pages/spotlight/spotlight-detail.component';
 import { SUPPORT_EMAIL } from './config';
 import { ActivatedRoute, convertToParamMap } from '@angular/router';
@@ -794,6 +796,59 @@ describe('Search boxes actually search', () => {
     expect(f.componentInstance.posts()).toEqual([]);
     type(f, '');
     expect(f.componentInstance.posts().length).toBe(all);
+  });
+
+  it('searches the whole store from the search page as you type', async () => {
+    const data = TestBed.inject(DataService);
+    await data.refresh();
+    const f = TestBed.createComponent(SearchComponent);
+    f.detectChanges();
+    await f.whenStable();
+    expect(f.componentInstance.posts()).toEqual([]);
+    type(f, 'ORL/441');
+    await f.whenStable();
+    expect(f.componentInstance.posts().map((p) => p.id)).toContain('p_thato');
+    // one character is not a search: nothing is asked of the database
+    type(f, 'O');
+    expect(f.componentInstance.posts()).toEqual([]);
+  });
+
+  it('finds people by name and by handle, not only post authors', async () => {
+    const data = TestBed.inject(DataService);
+    await data.refresh();
+    const f = TestBed.createComponent(SearchComponent);
+    f.detectChanges();
+    await f.whenStable();
+    type(f, 'ndlela');
+    await f.whenStable();
+    expect(f.componentInstance.users().map((u) => u.id)).toContain('u_sipho');
+    type(f, '@lerato.m');
+    await f.whenStable();
+    expect(f.componentInstance.users().map((u) => u.id)).toContain('u_lerato');
+    type(f, 'zzzznobody');
+    await f.whenStable();
+    expect(f.componentInstance.users()).toEqual([]);
+  });
+
+  it('narrows the Friends page to the name you type', async () => {
+    await TestBed.inject(AuthService).signInDemo();
+    const data = TestBed.inject(DataService);
+    await data.refresh();
+    const f = TestBed.createComponent(ConnectionsComponent);
+    f.detectChanges();
+    await f.whenStable();
+    f.componentInstance.tab.set('following');
+    f.detectChanges();
+    await f.whenStable();
+    const rows = f.componentInstance.rows();
+    expect(rows.length).toBeGreaterThan(0);
+    const one = rows.find((r) => !!r.u)!;
+    type(f, (one.u!.displayName.split(' ')[0]));
+    expect(f.componentInstance.matchingRows().map((r) => r.id)).toContain(one.id);
+    type(f, 'zzzznothingmatches');
+    expect(f.componentInstance.matchingRows()).toEqual([]);
+    type(f, '');
+    expect(f.componentInstance.matchingRows().length).toBe(rows.length);
   });
 });
 

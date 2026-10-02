@@ -18,6 +18,16 @@ import { PlatformService } from './platform.service';
  *
  * Web: <input type=file>, which is the browser's own picker/camera sheet.
  */
+/**
+ * A photo is downscaled to 1200px before it is uploaded, so the picker accepts
+ * a generous original: a modern phone camera writes 5-12 MB files that compress
+ * to well under the upload limit. A video cannot be re-encoded in the browser,
+ * so it is capped where it stands - and at the same limit the upload enforces,
+ * with an error the person can act on rather than a stall on a huge file.
+ */
+const IMAGE_PICK_MAX_BYTES = 25 * 1024 * 1024;
+export const VIDEO_PICK_MAX_BYTES = 25 * 1024 * 1024;
+
 @Injectable({ providedIn: 'root' })
 export class MediaService {
   private platform = inject(PlatformService);
@@ -56,7 +66,7 @@ export class MediaService {
             const asked = await Camera.requestPermissions({ permissions: ['camera'] }).catch(() => null);
             if (asked && asked.camera !== 'granted') {
               this.notice.set('Camera access is off. Your phone’s photo chooser will open instead.');
-              return await this.pickViaInput('image/*', false);
+              return await this.pickViaInput('image/*', false, IMAGE_PICK_MAX_BYTES);
             }
           }
         }
@@ -76,13 +86,13 @@ export class MediaService {
           this.notice.set(MediaService.pluginMissing(e)
             ? 'This build has no camera module. Your phone’s own photo chooser will open instead.'
             : 'The camera did not open. Your phone’s photo chooser will open instead.');
-          return await this.pickViaInput('image/*', false);
+          return await this.pickViaInput('image/*', false, IMAGE_PICK_MAX_BYTES);
         }
       }
       if (fromCamera && this.platform.isNative && !this.cameraAvailable) {
         this.notice.set('This build has no camera module. Your phone’s own photo chooser will open instead.');
       }
-      return await this.pickViaInput('image/*', false);
+      return await this.pickViaInput('image/*', false, IMAGE_PICK_MAX_BYTES);
     } catch (e: unknown) {
       const msg = String((e as Error)?.message ?? '').toLowerCase();
       if (msg.includes('cancel') || msg.includes('no image picked') || msg.includes('user denied')) {
@@ -101,7 +111,7 @@ export class MediaService {
     this.lastError.set(null);
     this.notice.set(null);
     try {
-      return await this.pickViaInput('video/*');
+      return await this.pickViaInput('video/*', false, VIDEO_PICK_MAX_BYTES);
     } catch (e: unknown) {
       if (!String((e as Error)?.message ?? '').toLowerCase().includes('cancel')) {
         this.lastError.set((e as Error)?.message ?? 'Could not pick video');
@@ -124,7 +134,7 @@ export class MediaService {
     return err?.code === 'UNIMPLEMENTED' || msg.includes('not implemented') || msg.includes('unimplemented') || msg.includes('not available');
   }
 
-  private pickViaInput(accept = 'image/*', capture = false): Promise<MediaItem | null> {
+  private pickViaInput(accept = 'image/*', capture = false, maxBytes = 0): Promise<MediaItem | null> {
     return new Promise((resolve) => {
       const input = document.createElement('input');
       input.type = 'file';
@@ -151,6 +161,16 @@ export class MediaService {
       const onChange = (): void => {
         const file = input.files?.[0];
         if (!file) { finish(null); return; }
+        // Refuse a file that is too big before reading it into memory: a 200 MB
+        // video would otherwise be turned into a data URL and stall the phone
+        // long before the upload had a chance to reject it.
+        if (maxBytes && file.size > maxBytes) {
+          const size = Math.max(1, Math.round(file.size / (1024 * 1024)));
+          const cap = Math.round(maxBytes / (1024 * 1024));
+          this.lastError.set(`That file is about ${size} MB. Choose one smaller than ${cap} MB.`);
+          finish(null);
+          return;
+        }
         const reader = new FileReader();
         reader.onload = () => finish({
           id: uid('m'),
