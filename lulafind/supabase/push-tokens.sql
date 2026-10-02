@@ -122,31 +122,18 @@ grant select, insert, update, delete
   to anon, authenticated;
 
 -- ─── Sign-out hygiene ───────────────────────────────────────────────────────
--- Called when an account signs out on a device. Deletes just this device's
--- token, so signing out on a phone does not silence the tablet. Returns how
--- many rows went, which is 0 if the token was already gone or never filed.
-create or replace function public.lula_forget_push_token(device_token text)
-returns integer
-language sql
-security definer
-set search_path = pg_catalog
-as $$
-  with gone as (
-    delete from public.push_tokens
-    where token = device_token
-      and user_id = (select public.lula_uid())
-    returning 1
-  )
-  select count(*)::integer from gone;
-$$;
-
-revoke all
-  on function public.lula_forget_push_token(text)
-  from public;
-
-grant execute
-  on function public.lula_forget_push_token(text)
-  to anon, authenticated;
+-- PushService.clearToken() deletes this device's row on sign-out, so signing
+-- out on a phone does not silence the tablet. It does that with a plain
+-- DELETE:
+--
+--     .from('push_tokens').delete().eq('token', token).eq('user_id', uid)
+--
+-- The delete policy above is what authorises it - no helper function is
+-- involved, and none is needed. A SECURITY DEFINER wrapper was here once and
+-- has been dropped: nothing ever called it, and a comment claiming it was the
+-- sign-out path was simply false. Dropping it rather than leaving it in place
+-- keeps the file describing what actually runs.
+drop function if exists public.lula_forget_push_token(text);
 
 -- ─── Is it wired up? ────────────────────────────────────────────────────────
 -- Read-only. Run after the above; a NULL uid here is expected in the SQL
