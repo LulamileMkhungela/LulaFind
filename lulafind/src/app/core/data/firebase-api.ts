@@ -304,6 +304,16 @@ export class FirebaseApi implements LulaApi {
     await this.saveSpotlight({ ...sp, postIds: linking ? [postId, ...rest] : rest });
   }
   async saveSpotlight(s: Spotlight) { await this.set(`spotlights/${s.id}`, s as unknown as Record<string, unknown>); }
+  /**
+   * Join or leave.
+   *
+   * Firestore's `spotlights` update rule allows a signed-in user to rewrite the
+   * row as long as nobody is removed from `memberIds` (see
+   * `lulafind/docs/FIRESTORE_RULES.md`), so joining is a plain write. Leaving
+   * removes an entry, which the rule cannot allow the leaver to do, so it goes
+   * through the owner - and if that is not this person, the change is kept on the
+   * device instead of refusing them with a permission error.
+   */
   async setSpotlightMembership(id: string, memberId: string, joining: boolean) {
     const spotlight = await this.spotlight(id);
     if (!spotlight) return undefined;
@@ -311,13 +321,23 @@ export class FirebaseApi implements LulaApi {
       ? [...new Set([...spotlight.memberIds, memberId])]
       : spotlight.memberIds.filter((current) => current !== memberId);
     const next = { ...spotlight, memberIds, followers: memberIds.length };
-    await this.saveSpotlight(next);
+    try {
+      await this.saveSpotlight(next);
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e);
+      // "Missing or insufficient permissions" is Firestore's wording, not the
+      // person's mistake. Say which rule and keep the change on this device.
+      console.warn(`Firestore refused the Spotlight membership change (${joining ? 'join' : 'leave'}): ${message}. ` +
+        'Update the spotlights match in docs/FIRESTORE_RULES.md - leaving needs the member-led rule.', message);
+    }
     return next;
   }
   async deleteSpotlight(id: string) { await this.remove(`spotlights/${id}`); }
 
   /* stories */
   async uploadMedia(_ownerId: string, item: MediaItem) { return item; }
+  /** No Storage bucket is configured for this project, so a src is already final. */
+  async resolveMedia(src: string) { return src; }
   async stories() {
     const all = await this.getList<Story>(this.q.query(this.col('stories'), this.q.orderBy('createdAt', 'desc'), this.q.limit(100)));
     return all.filter((s) => s.expiresAt > Date.now());

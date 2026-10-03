@@ -10,13 +10,14 @@ import { BACKGROUNDS, SettingsService } from './core/services/settings.service';
 import { RepostSheetComponent } from './shared/components/repost-sheet.component';
 import { SendSheetComponent } from './shared/components/send-sheet.component';
 import { LogoComponent } from './shared/components/logo.component';
+import { UserHoverCardComponent } from './shared/components/user-hover-card.component';
 import { supabaseNotice } from './core/data/supabase-client';
 import { demoMode, localMode } from './core/data/demo';
 
 @Component({
   selector: 'lf-root',
   standalone: true,
-  imports: [IonApp, IonRouterOutlet, RepostSheetComponent, SendSheetComponent, LogoComponent],
+  imports: [IonApp, IonRouterOutlet, RepostSheetComponent, SendSheetComponent, LogoComponent, UserHoverCardComponent],
   template: `
     <ion-app>
       @if (demoMode()) {
@@ -51,6 +52,7 @@ import { demoMode, localMode } from './core/data/demo';
       <ion-router-outlet></ion-router-outlet>
       <lf-repost-sheet />
       <lf-send-sheet />
+      <lf-user-hover-host />
     </ion-app>
   `,
   styles: [`

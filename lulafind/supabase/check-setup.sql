@@ -105,3 +105,21 @@ select
     ) then 'FAIL - the trigger exists but is not enabled for both INSERT and UPDATE'
     else 'PASS'
   end as result;
+
+-- 9. Joining a community has two ways to land: the SECURITY DEFINER function, or
+--    the narrow member-list policy. If BOTH are missing, "join" is a permission
+--    denial and the app can only keep the membership on this device.
+select
+  '9. spotlight membership has a write path' as check,
+  case
+    when to_regprocedure('public.lula_set_spotlight_membership(text, boolean)') is not null
+      and has_function_privilege('authenticated', 'public.lula_set_spotlight_membership(text, boolean)', 'execute')
+      then 'PASS - the membership function is installed and granted'
+    when exists (
+      select 1 from pg_policies
+      where schemaname = 'public' and tablename = 'records' and policyname = 'lula spotlight join'
+    ) then 'PASS - the member-list policy carries joins without the function'
+    when to_regprocedure('public.lula_set_spotlight_membership(text, boolean)') is null
+      then 'FAIL - run schema.sql, then supabase/post-interactions.sql'
+    else 'FAIL - grant execute on public.lula_set_spotlight_membership(text, boolean) to authenticated'
+  end as result;

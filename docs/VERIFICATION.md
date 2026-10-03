@@ -12,7 +12,7 @@ alerts sent: (none yet - see below)
 ### 2. What another Gauteng member sees in Notifications now
 
 ```text
-Notifications Mark all as read No alerts yetCase alerts for your area land here, along with comments, follows and chat replies.
+Notifications All Unread Mentions PostsNo alerts yetCase alerts for your area land here, along with comments, follows and chat replies.
 ```
 
 ### 3. The moderator’s Review tab
@@ -30,31 +30,31 @@ Admin1 You are signed in as an admin. You can remove posts, suspend people and d
 ### 5. The same member’s Notifications after publishing
 
 ```text
-Notifications1 Mark all as read A child is missing nearbyThandi Mokoena · Soweto, Gauteng. Open the case for the poster.now · 13 km from you
+Notifications1 Mark all as read  All Unread1 Mentions PostsTodayA child is missing nearbyThandi Mokoena · Soweto, Gauteng. Open the case for the poster.now · 13 km from you
 ```
 
 ### 6. The mother’s own Notifications (never her own case)
 
 ```text
-Mark all as read
+
 ```
 
 ### 7. The focused case page with the status actions
 
 ```text
-Post5Thandi MokoenaCommunity organiser. If you see something, say something. Ubuntu. now  · Gauteng · Help find Thandi Mokoena in SowetoShe was last seen walking to the taxi rank after work on Tuesday evening.LikeCommentRepostSend Mark as found Still searching Photo  Video Attachments stay with this commentNo comments yet. Start the conversation.LulaFind is a community tool. It does not replace SAPS. In an emergency call 10111.
+Post5Thandi MokoenaCommunity organiser. If you see something, say something. Ubuntu. now  · Gauteng · Help find Thandi Mokoena in SowetoShe was last seen walking to the taxi rank after work on Tuesday evening.LikeCommentRepostSend Mark as found Still searching Photo  Video Attachments stay with this comment
 ```
 
 ### 8. After the poster confirms they are still searching
 
 ```text
-Post5Thandi MokoenaCommunity organiser. If you see something, say something. Ubuntu. now  · Gauteng · Help find Thandi Mokoena in SowetoShe was last seen walking to the taxi rank after work on Tuesday evening.LikeCommentRepostSendStill searching. Confirmed now. This case remains open. Mark as found Still searching Photo  Video Attachments stay with this commentNo comments yet. Start the conversation.LulaFind is a community tool. It does not replace SAPS. In an emergency call 10111.
+Post5Thandi MokoenaCommunity organiser. If you see something, say something. Ubuntu. now  · Gauteng · Help find Thandi Mokoena in SowetoShe was last seen walking to the taxi rank after work on Tuesday evening.LikeCommentRepostSendStill searching. Confirmed now. This case remains open. Mark as found Still searching Photo  Video Attachments stay with this comment
 ```
 
 ### 11. A closed case, as the family sees it
 
 ```text
-Post5Thandi MokoenaCommunity organiser. If you see something, say something. Ubuntu. now  · Gauteng · Found · Home in Soweto  · 01 Oct 2026 Help find Thandi Mokoena in SowetoShe was last seen walking to the taxi rank after work on Tuesday evening.LikeCommentRepostSendFound. The family confirmed it. To take the case off the police circulation list, complete a SAPS 92 with the investigating officer. Photo  Video Attachments stay with this commentNo comments yet. Start the conversation.LulaFind is a community tool. It does not replace SAPS. In an emergency call 10111.
+Post5Thandi MokoenaCommunity organiser. If you see something, say something. Ubuntu. now  · Gauteng · Found · Home in Soweto  · 03 Oct 2026 Help find Thandi Mokoena in SowetoShe was last seen walking to the taxi rank after work on Tuesday evening.LikeCommentRepostSendFound. The family confirmed it. To take the case off the police circulation list, complete a SAPS 92 with the investigating officer. Photo  Video Attachments stay with this comment
 ```
 
 ### 12a. Closed cases the *feed* holds - the reason the page cannot be built from the feed

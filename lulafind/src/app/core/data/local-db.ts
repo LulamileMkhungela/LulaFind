@@ -97,6 +97,17 @@ const SEED_VERSION = 10;
 /** Live phones never load the old demo snapshot. Version 9 is an empty store. */
 const LIVE_VERSION = 9;
 
+/** A membership change waiting for the server to accept it. */
+export interface PendingMembership {
+  spotlightId: string;
+  memberId: string;
+  joining: boolean;
+  at: number;
+}
+
+/** Kept beside the snapshot, not inside it: it is about the account, not the data. */
+const PENDING_MEMBERSHIP_KEY = 'pendingSpotlightMemberships';
+
 export const emptyDb = (): DbSnapshot => ({
   users: [],
   posts: [],
@@ -661,6 +672,55 @@ export class LocalDb {
     this.persist();
   }
 
+  /** Join or leave, in the device store. The member count is the list length. */
+  setSpotlightMembership(spotlightId: string, memberId: string, joining: boolean): Spotlight | undefined {
+    const sp = this.spotlight(spotlightId);
+    if (!sp) return undefined;
+    const memberIds = joining
+      ? (sp.memberIds.includes(memberId) ? sp.memberIds : [...sp.memberIds, memberId])
+      : sp.memberIds.filter((id) => id !== memberId);
+    const next = { ...sp, memberIds, followers: memberIds.length };
+    this.upsertSpotlight(next);
+    return next;
+  }
+
+  /**
+   * A membership change the server has not accepted yet.
+   *
+   * A join refused by row-level security used to leave the person with a
+   * "permission denied" toast and no way in. Instead the change is kept here and
+   * replayed on the next refresh, so the community works on this device from the
+   * moment they tap Join and the server catches up when it can.
+   */
+  queueSpotlightMembership(spotlightId: string, memberId: string, joining: boolean): void {
+    const same = (op: PendingMembership): boolean => op.spotlightId === spotlightId && op.memberId === memberId;
+    const queue = this.pendingSpotlightMemberships();
+    const oppositeQueued = queue.some((op) => same(op) && op.joining !== joining);
+    const kept = queue.filter((op) => !same(op));
+    this.store.set(PENDING_MEMBERSHIP_KEY, oppositeQueued ? kept : [...kept, { spotlightId, memberId, joining, at: Date.now() }]);
+  }
+
+  pendingSpotlightMemberships(): PendingMembership[] {
+    return this.store.get<PendingMembership[]>(PENDING_MEMBERSHIP_KEY, []);
+  }
+
+  clearPendingSpotlightMembership(spotlightId: string): void {
+    const queue = this.pendingSpotlightMemberships();
+    const kept = queue.filter((op) => op.spotlightId !== spotlightId);
+    if (kept.length === queue.length) return;
+    this.store.set(PENDING_MEMBERSHIP_KEY, kept);
+  }
+
+  /** The community's own list of posts, filed or unfiled on this device. */
+  linkSpotlightPost(spotlightId: string, postId: string, linking: boolean): Spotlight | undefined {
+    const sp = this.spotlight(spotlightId);
+    if (!sp) return undefined;
+    const postIds = linking ? [...new Set([postId, ...sp.postIds])] : sp.postIds.filter((id) => id !== postId);
+    const next = { ...sp, postIds };
+    this.upsertSpotlight(next);
+    return next;
+  }
+
   /* ------------------------- stories ------------------------- */
   stories(): Story[] {
     const now = Date.now();
@@ -694,6 +754,15 @@ export class LocalDb {
     return this.db.messages.filter((m) => m.threadId === threadId).sort((a, b) => a.at - b.at).map((m) => clone(m));
   }
   upsertMessage(m: ChatMessage): void {
+    // An id that is already in the thread is an edit, a reaction or a read mark,
+    // not a second copy of the message: replace it where it stands and leave the
+    // inbox preview alone, because that message arrived some time ago.
+    const at = this.db.messages.findIndex((x) => x.id === m.id);
+    if (at >= 0) {
+      this.db.messages[at] = m;
+      this.persist();
+      return;
+    }
     this.db.messages.push(m);
     const t = this.thread(m.threadId);
     if (t) {

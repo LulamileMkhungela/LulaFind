@@ -378,6 +378,8 @@ export interface Comment {
   markCheck?: 'match' | 'no';
   /** Set when the author changes the text after posting. */
   editedAt?: number | null;
+  /** Profile ids picked from the @ list, in the order they were inserted. */
+  mentions?: string[];
 }
 
 export interface Sighting {
@@ -713,6 +715,18 @@ export interface ChatMessage {
   media?: MediaItem | null;
   /** set when the thread was opened because of a lead on a specific case */
   postId?: string;
+  /**
+   * LinkedIn's hover-Like on a message: one reaction per person, keyed by who
+   * reacted. Empty or absent when nobody has.
+   */
+  reactions?: Record<string, ReactionKind>;
+  /** The author changed the text after sending. */
+  editedAt?: number | null;
+  /**
+   * "Unsend". The row stays (the thread keeps counting messages the way LinkedIn's
+   * does), but the words, the attachment and the reactions are gone for both sides.
+   */
+  unsent?: boolean;
 }
 
 export interface ChatThread {
@@ -722,8 +736,18 @@ export interface ChatThread {
   createdAt: number;
   lastMessageAt: number;
   unread: Record<string, number>;
-  /** How the thread opened. Reactions no longer unlock chat, so new threads say 'follow'. */
-  unlockedVia: 'vote' | 'follow' | 'friend';
+  /**
+   * How the thread came to exist. A reaction is not an option any more - chat
+   * opens on a mutual follow ('follow') or on a profile visit between people who
+   * follow each other ('friend').
+   */
+  unlockedVia: 'follow' | 'friend';
+  /**
+   * "typing…" markers, keyed by participant, holding the moment they last typed.
+   * A marker older than a few seconds means nothing but a stale write, so the
+   * room ignores it rather than showing a person who has stopped.
+   */
+  typing?: Record<string, number> | null;
 }
 
 /**
@@ -743,7 +767,7 @@ export interface Notification {
   id: string;
   userId: string;
   kind:
-    | 'vote' | 'comment' | 'follow' | 'chat' | 'system'
+    | 'vote' | 'comment' | 'follow' | 'chat' | 'system' | 'mention'
     | 'escalation' | 'location_consent' | 'claim' | 'outcome' | 'spotlight'
     | 'checkin' | 'moderation' | 'danger' | 'story_reply' | 'repost' | 'missing'
     | 'lookout'

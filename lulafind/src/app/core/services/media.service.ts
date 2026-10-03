@@ -4,6 +4,7 @@ import { Capacitor } from '@capacitor/core';
 import { PHOTO_MAX_BYTES, PICK_MAX_BYTES, VIDEO_MAX_BYTES } from '../models/media-rules';
 import { MediaItem } from '../models/types';
 import { uid } from '../utils/format';
+import { jpegUnder, MAX_STORED_BYTES } from '../utils/media-encode';
 import { PlatformService } from './platform.service';
 
 /**
@@ -192,7 +193,8 @@ export class MediaService {
   }
 
   /**
-   * Downscales a data-uri and keeps re-encoding until it fits `maxBytes`.
+   * Downscales a data-uri and keeps re-encoding until it fits `maxBytes`, by
+   * stepping dimensions as well as quality.
    *
    * The old version tried once - 1200px at quality 0.82 - and returned whatever
    * that happened to weigh. Almost always that was far under the limit, but a
@@ -203,30 +205,15 @@ export class MediaService {
    */
   async compress(src: string, maxDim = 1200, maxBytes = PHOTO_MAX_BYTES): Promise<string> {
     if (!src.startsWith('data:image')) return src;
-    const img = await new Promise<HTMLImageElement | null>((resolve) => {
-      const el = new Image();
-      el.onload = () => resolve(el);
-      el.onerror = () => resolve(null);
-      el.src = src;
-    });
-    if (!img) return src;
-    const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
-    const canvas = document.createElement('canvas');
-    canvas.width = Math.max(1, Math.round(img.width * scale));
-    canvas.height = Math.max(1, Math.round(img.height * scale));
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return src;
-    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-
-    let smallest = src;
-    let smallestBytes = MediaService.dataUrlBytes(src) || Number.MAX_SAFE_INTEGER;
-    for (const quality of [0.82, 0.7, 0.6, 0.5, 0.4]) {
-      const out = canvas.toDataURL('image/jpeg', quality);
-      const bytes = MediaService.dataUrlBytes(out);
-      if (bytes < smallestBytes) { smallest = out; smallestBytes = bytes; }
-      if (bytes <= maxBytes) break;
-    }
-    return smallest;
+    // One encoder does this here, for the poster generator and for the storage edge
+    // as well: `jpegUnder` steps the dimensions along with the quality, which a
+    // single quality walk cannot do for a very large sensor photo, and three copies
+    // of a size loop are three chances to disagree. A picture that cannot be made to
+    // fit the product rule is still shrunk to what the bucket holds, so the upload
+    // gets its chance; only one this browser cannot decode comes back as it was.
+    const fits = await jpegUnder(src, maxBytes, maxDim);
+    if (fits) return fits;
+    return (await jpegUnder(src, MAX_STORED_BYTES, maxDim)) ?? src;
   }
 
   /**

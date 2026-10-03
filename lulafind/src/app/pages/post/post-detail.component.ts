@@ -10,6 +10,9 @@ import { IconComponent } from '../../shared/components/icon.component';
 import { TopNavComponent } from '../../shared/components/top-nav.component';
 import { AvatarComponent } from '../../shared/components/avatar.component';
 import { ReactionsSheetComponent } from '../../shared/components/reactions-sheet.component';
+import { MediaImageComponent, MediaVideoComponent } from '../../shared/components/media-image.component';
+import { UserHoverDirective } from '../../shared/components/user-hover-card.component';
+import { EmojiRowComponent } from '../../shared/components/emoji-row.component';
 import { ReactionButtonComponent } from '../../shared/components/reaction-button.component';
 import { ReactionIconComponent } from '../../shared/components/reaction-icon.component';
 import { PHOTO_MAX_BYTES, POST_MAX_PHOTOS, VIDEO_MAX_BYTES, mb } from '../../core/models/media-rules';
@@ -24,6 +27,7 @@ import { KvStore } from '../../core/data/local-db';
 import {
   Comment, MediaItem, Post, REACTIONS, ReactionKind, UserProfile, isReaction, provinceName
 } from '../../core/models/types';
+import { QUICK_EMOJIS } from '../../shared/components/emoji-row.component';
 import { compact, dayMonth, headingIsNew as headingIsNewFn, timeAgo } from '../../core/utils/format';
 import { leadMarkView } from '../../core/utils/mark-check';
 
@@ -49,7 +53,8 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
   standalone: true,
   imports: [
     IonContent, IonTextarea, IonSkeletonText, RouterLink, IconComponent, AvatarComponent,
-    TopNavComponent, ReactionButtonComponent, ReactionIconComponent, ReactionsSheetComponent, KeyboardDirective],
+    TopNavComponent, ReactionButtonComponent, ReactionIconComponent, ReactionsSheetComponent, KeyboardDirective,
+    MediaImageComponent, MediaVideoComponent, UserHoverDirective, EmojiRowComponent],
   template: `
     <lf-top-nav title="Post" backTo="/home" />
 
@@ -117,7 +122,7 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
                 </div>
                 <h2>{{ o.title }}</h2>
                 <p>{{ o.body }}</p>
-                @if (o.media.length) { <img [src]="o.media[0].src" [alt]="o.title" /> }
+                @if (o.media.length) { <lf-media-img [src]="o.media[0].src" [alt]="o.title" /> }
               </a>
             } @else {
               <p class="embed gone"><lf-icon name="info" [size]="16" /> This post is no longer available.</p>
@@ -130,9 +135,9 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
               <div class="media" [class.multi]="p()!.media.length > 1">
                 @for (m of p()!.media; track m.id) {
                   @if (m.kind === 'video') {
-                    <video [src]="m.src" controls preload="metadata"></video>
+                    <lf-media-video [src]="m.src" label="Video in this post" />
                   } @else {
-                    <img [src]="m.src" [alt]="m.caption ?? p()!.title" />
+                    <lf-media-img [src]="m.src" [alt]="m.caption ?? p()!.title" />
                   }
                 }
               </div>
@@ -283,9 +288,25 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
                     <textarea #box rows="1" [placeholder]="replyTo() ? 'Add a reply…' : 'Add a comment…'" [value]="draft()"
                               inputmode="text" enterkeyhint="send"
                               autocorrect="on" autocomplete="on" autocapitalize="sentences" spellcheck="true"
-                              (input)="onType($event)" (keydown.enter)="onEnter($event)" aria-label="Write a comment"></textarea>
+                              (input)="onType($event)" (keydown.enter)="onEnter($event)" (keydown)="onMentionKeys($event)"
+                              [attr.aria-expanded]="mentionOpen()" aria-autocomplete="list" aria-label="Write a comment"></textarea>
                     @if (draft().trim() || commentMedia().length) {
                       <button type="button" class="post" [disabled]="posting()" (click)="submitComment()">{{ replyTo() ? 'Reply' : 'Post' }}</button>
+                    }
+                    @if (mentionOpen()) {
+                      <div class="who-list" role="listbox" aria-label="People you can mention">
+                        @for (u of mentionPeople(); track u.id; let i = $index) {
+                          <button type="button" role="option" [attr.aria-selected]="i === mentionAt()"
+                                  (mousedown)="$event.preventDefault(); pickMention(u)" (click)="pickMention(u)">
+                            <lf-avatar [src]="data.avatarFor(u)" [name]="u.displayName" [size]="28" />
+                            <span class="who-list__name">{{ u.displayName }}</span>
+                            <small>{{ '@' + u.handle }}</small>
+                          </button>
+                        }
+                        @if (!mentionPeople().length) {
+                          <p class="who-list__none">No one here matches “{{ mentionQuery() }}”. Mentions only reach people already in this conversation.</p>
+                        }
+                      </div>
                     }
                   </div>
                   @if (commentMedia().length) {
@@ -302,7 +323,12 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
                       }
                     </div>
                   }
+                  @if (emojiOpen()) {
+                    <lf-emoji-row class="emoji-row" [list]="EMOJIS" (picked)="addEmoji($event)" />
+                  }
                   <div class="attach-actions">
+                    <button type="button" class="em-toggle" [class.on]="emojiOpen()" (click)="emojiOpen.set(!emojiOpen())"
+                            aria-label="Emoji" [attr.aria-expanded]="emojiOpen()"><lf-icon name="smile" [size]="17" /></button>
                     <button type="button" (click)="addCommentPhoto()" [disabled]="posting() || media.busy() || commentMedia().length >= maxPhotos || hasCommentVideo()">
                       <lf-icon name="image" [size]="17" /> Photo
                     </button>
@@ -338,18 +364,30 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
                   } @else {
                     <div class="ccard">
                       <div class="ccard__top">
-                        <a [routerLink]="'/user/' + c.authorId" class="ccard__name">{{ nameOf(c.authorId) }}</a>
+                        <a [routerLink]="'/user/' + c.authorId" class="ccard__name" [lfUserHover]="c.authorId">{{ nameOf(c.authorId) }}</a>
                         @if (c.authorId === p()!.authorId) { <span class="tag">Author</span> }
+                        @if (c.authorId !== me()) {
+                          <button type="button" class="cfollow" [class.on]="isFollowing(c.authorId)" (click)="followPerson(c.authorId)">
+                            {{ isFollowing(c.authorId) ? 'Following' : '+ Follow' }}
+                          </button>
+                        }
+                        
                       </div>
                       @if (headlineOf(c.authorId)) { <span class="ccard__headline">{{ headlineOf(c.authorId) }}</span> }
-                      @if (c.body) { <p class="ccard__text">{{ c.body }}</p> }
+                      @if (c.body) {
+                        <p class="ccard__text">@for (part of parts(c.body); track $index) {
+                          @if (part.userId) {
+                            <a [routerLink]="'/user/' + part.userId" class="mention">{{ part.text }}</a>
+                          } @else { {{ part.text }} }
+                        }</p>
+                      }
                       @if (c.media?.length) {
                         <div class="comment-media">
                           @for (item of c.media; track item.id) {
                             @if (item.kind === 'image') {
-                              <img [src]="item.src" alt="Photo attached to comment" loading="lazy" />
+                              <lf-media-img [src]="item.src" alt="Photo attached to comment" />
                             } @else {
-                              <video [src]="item.src" controls playsinline preload="metadata" aria-label="Video attached to comment"></video>
+                              <lf-media-video [src]="item.src" label="Video attached to comment" />
                             }
                           }
                         </div>
@@ -417,18 +455,30 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
                               } @else {
                                 <div class="ccard">
                                   <div class="ccard__top">
-                                    <a [routerLink]="'/user/' + r.authorId" class="ccard__name">{{ nameOf(r.authorId) }}</a>
+                                    <a [routerLink]="'/user/' + r.authorId" class="ccard__name" [lfUserHover]="r.authorId">{{ nameOf(r.authorId) }}</a>
                                     @if (r.authorId === p()!.authorId) { <span class="tag">Author</span> }
+                                    @if (r.authorId !== me()) {
+                                      <button type="button" class="cfollow" [class.on]="isFollowing(r.authorId)" (click)="followPerson(r.authorId)">
+                                        {{ isFollowing(r.authorId) ? 'Following' : '+ Follow' }}
+                                      </button>
+                                    }
+                                    
                                   </div>
                                   @if (headlineOf(r.authorId)) { <span class="ccard__headline">{{ headlineOf(r.authorId) }}</span> }
-                                  @if (r.body) { <p class="ccard__text">{{ r.body }}</p> }
+                                  @if (r.body) {
+                                    <p class="ccard__text">@for (part of parts(r.body); track $index) {
+                                      @if (part.userId) {
+                                        <a [routerLink]="'/user/' + part.userId" class="mention">{{ part.text }}</a>
+                                      } @else { {{ part.text }} }
+                                    }</p>
+                                  }
                                   @if (r.media?.length) {
                                     <div class="comment-media">
                                       @for (item of r.media; track item.id) {
                                         @if (item.kind === 'image') {
-                                          <img [src]="item.src" alt="Photo attached to reply" loading="lazy" />
+                                          <lf-media-img [src]="item.src" alt="Photo attached to reply" />
                                         } @else {
-                                          <video [src]="item.src" controls playsinline preload="metadata" aria-label="Video attached to reply"></video>
+                                          <lf-media-video [src]="item.src" label="Video attached to reply" />
                                         }
                                       }
                                     </div>
@@ -521,9 +571,9 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
     .followline.on { background: var(--lf-primary-soft); }
     .followline.on strong { color: var(--lf-link); }
     .media { margin: 4px 0 0; }
-    .media img, .media video { display: block; width: 100%; max-height: 640px; object-fit: contain; background: #000; }
+    .media lf-media-img, .media lf-media-video { display: block; width: 100%; max-height: 640px; overflow: hidden; background: #000; }
     .media.multi { display: flex; gap: 2px; overflow-x: auto; scroll-snap-type: x mandatory; }
-    .media.multi img, .media.multi video { flex: 0 0 88%; scroll-snap-align: start; }
+    .media.multi lf-media-img, .media.multi lf-media-video { flex: 0 0 88%; scroll-snap-align: start; }
     .embed { display: block; margin: 0 var(--edge) 12px; padding: 12px; border: 1px solid var(--lf-line); border-radius: 8px; color: inherit; text-decoration: none; }
     .embed__head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
     .embed__who { display: flex; flex-direction: column; min-width: 0; }
@@ -602,6 +652,22 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
        card, under the name, and the time lives in the action row with the
        buttons. A bubble read as a private message, which this is not. */
     .ccard { border: 0; border-radius: 0; background: transparent; padding: 0; }
+    .who-list { position: absolute; z-index: 12; left: 0; right: 0; top: calc(100% + 4px); display: flex; flex-direction: column;
+      padding: 6px; border: 1px solid var(--lf-line-soft); border-radius: 10px; background: var(--lf-card); box-shadow: var(--lf-shadow); }
+    .who-list button { display: flex; align-items: center; gap: 9px; width: 100%; padding: 7px 8px; border: none; border-radius: 8px;
+      background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+    .who-list button:hover, .who-list button[aria-selected="true"] { background: var(--lf-hover); }
+    .who-list__name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13.5px; font-weight: 600; }
+    .who-list small { color: var(--lf-muted); font-size: 11.5px; }
+    .who-list__none { margin: 2px 4px; font-size: 12px; color: var(--lf-muted); }
+    .field { position: relative; }
+    .mention { color: var(--lf-link); font-weight: 600; text-decoration: none; }
+    .mention:hover { text-decoration: underline; }
+    .em-toggle.on { background: var(--lf-primary-soft); color: var(--lf-primary); }
+    .cfollow { flex: none; border: 1px solid var(--lf-primary-text); border-radius: 999px; background: none; color: var(--lf-primary-text);
+      font: inherit; font-size: 11.5px; font-weight: 600; line-height: 1; padding: 4px 9px; cursor: pointer; opacity: .55; }
+    .ccard__top:hover .cfollow, .cfollow:focus-visible, .cfollow.on { opacity: 1; }
+    .cfollow.on { color: var(--lf-muted); border-color: var(--lf-line); }
     .ccard__top { display: flex; align-items: center; gap: 6px; min-width: 0; }
     .ccard__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; font-weight: 600; color: var(--ion-text-color); text-decoration: none; }
     .ccard__time { margin-left: auto; flex: none; color: var(--lf-muted); font-size: 11px; }
@@ -609,7 +675,7 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
     .tag { padding: 1px 6px; border-radius: 10px; background: var(--lf-primary-soft); color: var(--lf-primary-soft-text); font-size: 11px; font-weight: 700; }
     .ccard__text { margin: 5px 0 6px; font-size: 14.5px; line-height: 1.42; white-space: pre-line; word-break: break-word; }
     .comment-media { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr)); gap: 6px; margin: 8px 0; }
-    .comment-media img, .comment-media video { display: block; width: 100%; max-height: 360px; border-radius: 8px; background: #000; object-fit: contain; }
+    .comment-media lf-media-img, .comment-media lf-media-video { display: block; width: 100%; max-height: 360px; border-radius: 8px; overflow: hidden; background: #000; }
     .lead { display: inline-block; margin-bottom: 6px; padding: 1px 8px; border-radius: 10px; background: color-mix(in srgb, var(--lf-ubuntu) 18%, transparent); color: var(--lf-ubuntu); font-size: 11.5px; font-weight: 700; }
     .sighting { display: flex; align-items: center; gap: 5px; margin-bottom: 6px; font-size: 13px; color: var(--lf-muted); }
     .checked { display: flex; align-items: center; gap: 5px; margin: 0 0 6px; font-size: 13px; font-weight: 600; color: var(--lf-ubuntu); }
@@ -830,7 +896,7 @@ export class PostDetailComponent implements OnInit {
   }
 
   repost(): void { const p = this.p(); if (p) void this.actions.openRepost(p); }
-  send(): void { const p = this.p(); if (p) void this.actions.send(p).then(() => this.reload()); }
+  send(): void { const p = this.p(); if (p) void this.actions.send(p); }
 
   async toggleFollow(): Promise<void> {
     if (!this.auth.signedIn()) return this.needAuth();
@@ -849,6 +915,151 @@ export class PostDetailComponent implements OnInit {
   }
 
   /* --------------------------- comments --------------------------- */
+
+  /** The face row, from the same list the message box uses. */
+  protected readonly EMOJIS = QUICK_EMOJIS;
+  protected emojiOpen = signal(false);
+  /** What the `@` in the box can still become, and which row is highlighted. */
+  protected mentionOpen = signal(false);
+  protected mentionQuery = signal('');
+  protected mentionAt = signal(0);
+  private mentionStart = -1;
+
+  /**
+   * LinkedIn's mention list is not the whole address book - it offers the people in
+   * front of you. On a missing-person post that limit matters more than usual: a
+   * stranger you have never followed cannot be dragged into a case by an @, and
+   * the person named is the one already reading the thread.
+   */
+  readonly mentionPool = computed<UserProfile[]>(() => {
+    const p = this.p();
+    const ids = new Set<string>();
+    if (p) ids.add(p.authorId);
+    for (const c of this.comments()) {
+      ids.add(c.authorId);
+      for (const r of this.repliesOf(c.id)) ids.add(r.authorId);
+    }
+    const me = this.me();
+    if (me) ids.delete(me);
+    return [...ids].map((id) => this.data.authorOf(id)).filter((u): u is UserProfile => !!u);
+  });
+
+  readonly mentionPeople = computed<UserProfile[]>(() => {
+    const q = this.mentionQuery().trim().toLowerCase();
+    const pool = this.mentionPool();
+    const hits = q
+      ? pool.filter((u) => u.displayName.toLowerCase().includes(q) || u.handle.toLowerCase().includes(q))
+      : pool;
+    return hits.slice(0, 6);
+  });
+
+  /** Typing in the box: grow it, and open or close the @ list off the tail. */
+  private scanMentions(value: string): void {
+    const at = value.lastIndexOf('@');
+    if (at < 0) return this.closeMentions();
+    const tail = value.slice(at + 1);
+    // A name follows the @ with no space, and an email address is not a mention.
+    const before = at === 0 ? '' : value[at - 1];
+    if (/\s/.test(tail) || tail.length > 24 || (before && !/[\s(:,]/.test(before))) return this.closeMentions();
+    this.mentionStart = at;
+    this.mentionQuery.set(tail);
+    this.mentionAt.set(0);
+    this.mentionOpen.set(true);
+  }
+
+  private closeMentions(): void {
+    if (!this.mentionOpen() && this.mentionStart < 0) return;
+    this.mentionOpen.set(false);
+    this.mentionQuery.set('');
+    this.mentionStart = -1;
+  }
+
+  /** Up and down walk the list; Escape shuts it; Enter picks instead of posting. */
+  onMentionKeys(ev: Event): void {
+    const e = ev as KeyboardEvent;
+    if (!this.mentionOpen()) return;
+    const n = this.mentionPeople().length;
+    if (e.key === 'Escape') { e.stopPropagation(); this.closeMentions(); return; }
+    if (!n) return;
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      e.stopPropagation();
+      const step = e.key === 'ArrowDown' ? 1 : -1;
+      this.mentionAt.set((this.mentionAt() + step + n) % n);
+    }
+  }
+
+  protected pickMention(u: UserProfile): void {
+    const el = this.box?.nativeElement;
+    const value = el ? el.value : this.draft();
+    if (this.mentionStart < 0) return;
+    const end = this.mentionStart + 1 + this.mentionQuery().length;
+    const next = `${value.slice(0, this.mentionStart)}@${u.displayName} ${value.slice(end)}`;
+    if (el) {
+      el.value = next;
+      el.focus();
+      el.style.height = 'auto';
+      el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
+    }
+    this.draft.set(next);
+    this.closeMentions();
+  }
+
+  /**
+   * Who the finished text really names, resolved against the same pool the list
+   * offered - so typing the words by hand counts the same as picking from the list.
+   */
+  mentionedIds(body: string): string[] {
+    const found: string[] = [];
+    for (const m of body.matchAll(/(?:^|[\s(:,])@([^\s@]{1,24})/g)) {
+      const name = m[1].toLowerCase().replace(/[.,;:]+$/, '');
+      if (!name) continue;
+      const hit = this.mentionPool().find((u) => u.handle.toLowerCase() === name
+        || u.displayName.toLowerCase() === name
+        || u.displayName.toLowerCase().split(/\s+/)[0] === name);
+      if (hit && !found.includes(hit.id)) found.push(hit.id);
+    }
+    return found;
+  }
+
+  /** One `@name` becomes a link to the profile; anything else stays plain text. */
+  parts(body: string): { text: string; userId?: string }[] {
+    const out: { text: string; userId?: string }[] = [];
+    const re = /(?:^|[\s(:,])@([^\s@]{1,24})/g;
+    let last = 0;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(body))) {
+      const at = m.index + m[0].indexOf('@');
+      const name = m[1].replace(/[.,;:]+$/, '');
+      const hit = this.mentionPool().find((u) => u.handle.toLowerCase() === name.toLowerCase()
+        || u.displayName.toLowerCase() === name.toLowerCase()
+        || u.displayName.toLowerCase().split(/\s+/)[0] === name.toLowerCase());
+      const before = body.slice(last, at);
+      if (before) out.push({ text: before });
+      out.push(hit ? { text: `@${name}`, userId: hit.id } : { text: `@${name}` });
+      last = at + 1 + name.length;
+    }
+    const rest = body.slice(last);
+    if (rest) out.push({ text: rest });
+    return out;
+  }
+
+  /** A commenter you do not follow is one tap from being someone you do. */
+  isFollowing(id: string): boolean {
+    return this.data.followingIds().includes(id);
+  }
+
+  async followPerson(id: string): Promise<void> {
+    if (!this.auth.signedIn()) return this.needAuth();
+    try {
+      const now = await this.data.toggleFollow(id);
+      await this.data.loadUserScoped();
+      await this.say(now ? 'Following them - their posts will show up in your feed.' : 'Unfollowed');
+    } catch (e: unknown) {
+      await this.say(e instanceof Error ? e.message : 'Could not change that follow');
+    }
+  }
+
   repliesOf(parentId: string): Comment[] {
     return this.comments().filter((c) => c.parentId === parentId).sort((a, b) => a.createdAt - b.createdAt);
   }
@@ -945,11 +1156,30 @@ export class PostDetailComponent implements OnInit {
     this.draft.set(el.value);
     el.style.height = 'auto';
     el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
+    this.scanMentions(el.value);
+  }
+
+  /** A face goes in at the end of what is written, the way the message box does it. */
+  addEmoji(e: string): void {
+    const el = this.box?.nativeElement;
+    const next = `${this.draft()}${e}`;
+    if (el) {
+      el.value = next;
+      el.style.height = 'auto';
+      el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
+    }
+    this.draft.set(next);
+    this.scanMentions(next);
   }
 
   /** Enter sends on a keyboard; on a phone it starts a new line. */
   onEnter(ev: Event): void {
     const e = ev as KeyboardEvent;
+    if (this.mentionOpen() && this.mentionPeople().length) {
+      e.preventDefault();
+      this.pickMention(this.mentionPeople()[Math.min(this.mentionAt(), this.mentionPeople().length - 1)]);
+      return;
+    }
     if (e.shiftKey || (typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches)) return;
     e.preventDefault();
     void this.submitComment();
@@ -965,12 +1195,20 @@ export class PostDetailComponent implements OnInit {
     const lead = this.asLead() && !reply && !!body;
     this.posting.set(true);
     try {
+      const mentions = this.mentionedIds(body);
       await this.data.addComment({
-        postId: p.id, body, parentId: reply?.rootId ?? null, isLead: lead, media,
+        postId: p.id, body, parentId: reply?.rootId ?? null, isLead: lead, media, mentions,
         markGuess: lead && this.markGuess().trim() ? this.markGuess().trim() : undefined
       });
       this.comments.set(await this.data.comments(p.id));
       this.p.set(this.data.post(p.id) ?? null);
+      // The comment is out and only an attachment is missing: say so once, in the
+      // words the uploader used, rather than leaving the writer to notice.
+      const stuck = this.data.commentMediaNotice();
+      if (stuck) {
+        this.data.commentMediaNotice.set('');
+        await this.say(stuck);
+      }
       if (reply) this.expand(reply.rootId);
       this.draft.set('');
       this.commentMedia.set([]);
@@ -979,6 +1217,8 @@ export class PostDetailComponent implements OnInit {
       this.replyTo.set(null);
       this.asLead.set(false);
       this.markGuess.set('');
+      this.emojiOpen.set(false);
+      this.closeMentions();
     } catch (e: unknown) {
       await this.say(e instanceof Error ? e.message : 'Could not post your comment');
     } finally {
@@ -1035,6 +1275,13 @@ export class PostDetailComponent implements OnInit {
       await this.data.deleteComment(c);
       this.comments.set(await this.data.comments(p.id));
       this.p.set(this.data.post(p.id) ?? null);
+      // The comment is out and only an attachment is missing: say so once, in the
+      // words the uploader used, rather than leaving the writer to notice.
+      const stuck = this.data.commentMediaNotice();
+      if (stuck) {
+        this.data.commentMediaNotice.set('');
+        await this.say(stuck);
+      }
       await this.say(c.parentId ? 'Reply deleted' : 'Comment deleted');
     } catch (e: unknown) {
       await this.say(e instanceof Error ? `Not deleted: ${e.message}` : 'The comment was not deleted');
@@ -1171,7 +1418,7 @@ export class PostDetailComponent implements OnInit {
     if (next) this.p.set(next);
     await this.say(response === 'not_going_home' ? 'Your family has been told you are safe.' : 'Your family has been notified.');
     if (response === 'contact_me' && p.authorId) {
-      const thread = await this.chat.ensureThread(p, p.authorId, 'vote');
+      const thread = await this.chat.ensureThread(p, p.authorId);
       if (thread) await this.router.navigate(['/chats/thread', thread.id]);
     }
   }
@@ -1310,7 +1557,7 @@ export class PostDetailComponent implements OnInit {
     if (!p) return;
     const g = await this.chat.gate(p, p.khumbu?.claimedByUserId === this.auth.viewerId);
     if (g.allowed) {
-      const thread = await this.chat.ensureThread(p, p.authorId, 'vote');
+      const thread = await this.chat.ensureThread(p, p.authorId);
       if (thread) await this.router.navigate(['/chats/thread', thread.id]);
       return;
     }

@@ -6,6 +6,7 @@ import { alreadySaid, compact, headingIsNew, timeAgo } from '../../core/utils/fo
 import { AvatarComponent } from './avatar.component';
 import { IconComponent } from './icon.component';
 import { ReactionsSheetComponent } from './reactions-sheet.component';
+import { UserHoverDirective } from './user-hover-card.component';
 import { ReactionIconComponent } from './reaction-icon.component';
 import { DataService } from '../../core/services/data.service';
 import { AuthService } from '../../core/services/auth.service';
@@ -32,7 +33,7 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
 @Component({
   selector: 'lf-post-card',
   standalone: true,
-  imports: [RouterLink, IconComponent, AvatarComponent, ReactionIconComponent, ReactionsSheetComponent],
+  imports: [RouterLink, IconComponent, AvatarComponent, ReactionIconComponent, ReactionsSheetComponent, UserHoverDirective],
   template: `
     @if (!gone()) {
     <article class="fb-card lf-fade-in"
@@ -53,7 +54,7 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
                    [status]="authorStatus()" />
         <div class="fb-author-meta">
           <div class="fb-author-row">
-            <span class="fb-author-name">{{ authorName() }}</span>
+            <span class="fb-author-name" [lfUserHover]="post.authorId">{{ authorName() }}</span>
           </div>
           @if (authorHeadline()) { <span class="fb-headline">{{ authorHeadline() }}</span> }
           <!-- Line 1: where it is, then what kind of post it is. -->
@@ -107,7 +108,7 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
             <div class="fb-embed__head">
               <lf-avatar [src]="originalAvatar()" [name]="originalName()" [size]="40" />
               <div>
-                <strong>{{ originalName() }}</strong>
+                <strong [lfUserHover]="post.repostOf ? original()?.authorId ?? '' : ''">{{ originalName() }}</strong>
                 @if (originalHeadline(o)) { <span>{{ originalHeadline(o) }}</span> }
                 <span class="fb-embed__when">{{ timeAgo(o.createdAt) }}@if (o.editedAt) { · Edited } · <lf-icon name="globe" [size]="11" /></span>
               </div>

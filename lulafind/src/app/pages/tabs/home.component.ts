@@ -319,7 +319,7 @@ export class HomeComponent {
     if (!(await this.needAuth())) return;
     const g = await this.chat.gate(p, p.khumbu?.claimedByUserId === this.auth.viewerId);
     if (g.allowed) {
-      const thread = await this.chat.ensureThread(p, p.authorId, 'vote');
+      const thread = await this.chat.ensureThread(p, p.authorId);
       if (thread) await this.router.navigate(['/chats/thread', thread.id]);
       return;
     }

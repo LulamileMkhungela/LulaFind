@@ -278,6 +278,17 @@ interface MissingField { key: string; label: string; }
           </div>
         }
 
+        @if (mediaFailure(); as failure) {
+          <div class="media-failure" role="alert">
+            <lf-icon name="image" [size]="16" />
+            <p>{{ failure }}</p>
+            <div class="media-failure__acts">
+              <button type="button" (click)="retryMedia()">Try again</button>
+              <button type="button" class="quiet" (click)="postWithoutPhoto()">Post without the photo</button>
+            </div>
+          </div>
+        }
+
         @if (!type()) {
           <div class="start-hint">
             <span class="hint-icon"><lf-icon name="edit" [size]="18" /></span>
@@ -550,6 +561,15 @@ interface MissingField { key: string; label: string; }
     .missing strong { display: flex; align-items: center; gap: 6px; color: var(--lf-signal-text); font-size: 14px; }
     .missing ul { margin: 7px 0 0; padding-left: 20px; }
     .missing li { font-size: 14px; line-height: 1.45; color: var(--fb-muted); }
+    /* A stuck upload is not a refused post: one strip, two ways on, no red wall. */
+    .media-failure { display: grid; gap: 8px; margin: 12px 0 0; padding: 11px 13px; border-radius: 8px;
+      background: var(--lf-card-2); color: var(--fb-text); font-size: 14px; }
+    .media-failure p { margin: 0; display: flex; align-items: flex-start; gap: 8px; line-height: 1.45; }
+    .media-failure lf-icon { flex: none; color: var(--lf-muted); margin-top: 2px; }
+    .media-failure__acts { display: flex; gap: 8px; flex-wrap: wrap; }
+    .media-failure__acts button { border: 1px solid var(--lf-link); background: var(--lf-link); color: #fff; font: inherit;
+      font-size: 13px; font-weight: 600; padding: 7px 12px; border-radius: 999px; cursor: pointer; }
+    .media-failure__acts button.quiet { background: transparent; color: var(--lf-link); }
     .fb-create-header { background: var(--lf-card); }
     .consent { display: flex; gap: 10px; align-items: flex-start; margin: 14px 0 0; padding: 11px 12px; border-radius: 8px;
       background: var(--lf-card); border: 1px solid var(--fb-line); font-size: 13.5px; line-height: 1.4; }
@@ -642,6 +662,7 @@ export class CreatePostComponent implements OnInit {
     if (p.body !== undefined && p.body !== this.f().body) this.invalidateGenerated();
     this.f.update((f) => ({ ...f, ...p }));
     if (this.error()) this.error.set('');
+    if (this.mediaFailure() && p.body !== undefined) this.mediaFailure.set('');
     this.persistDraft();
   }
 
@@ -739,25 +760,41 @@ export class CreatePostComponent implements OnInit {
   /**
    * Everything still missing before this post can be shared, in the order the
    * person will meet it. Empty means the Post button is live.
+   *
+   * A photo is a post. LinkedIn asks for nothing, and here a picture of the
+   * person or the street is often the whole message, so text and location become
+   * optional the moment something is attached - the province then comes from the
+   * profile, which is what the case alerts need. What stays required is only what
+   * the law needs (guardian permission for a child) and what the audience needs
+   * (which community a surname-only post belongs to).
    */
   readonly missing = computed<MissingField[]>(() => {
     const f = this.f();
     const out: MissingField[] = [];
     const type = this.type();
     if (!type) out.push({ key: 'type', label: 'Choose what you are posting' });
+    const attached = f.media.length > 0;
     if (this.editing()) {
-      if (!f.body.trim()) out.push({ key: 'body', label: 'Write what happened so people know how to help' });
-      if (!f.province) out.push({ key: 'province', label: 'Choose the province' });
-      if (!f.town.trim()) out.push({ key: 'town', label: 'Add the town or suburb' });
+      if (!f.body.trim() && !attached) out.push({ key: 'body', label: 'Write what happened, or attach a photo' });
+      if (!f.province && !this.profileProvince()) out.push({ key: 'province', label: 'Choose the province' });
     } else if (type) {
       const values = this.templateValues();
-      if (values.happened.trim().length < 20) out.push({ key: 'body', label: 'Add at least 20 characters about what happened' });
-      if (!values.town || !values.province) out.push({ key: 'location', label: 'Complete the location line with a town and province' });
+      if (!attached && values.happened.trim().length < 30) {
+        out.push({ key: 'body', label: 'Add a photo, or at least 30 characters about what happened' });
+      }
+      if (!attached && (!values.town || !values.province) && !this.profileProvince()) {
+        out.push({ key: 'location', label: 'Complete the location line with a town and province' });
+      }
       if (this.childCase() && !f.guardianConsent) out.push({ key: 'consent', label: 'Confirm guardian permission for this child’s case' });
     }
     if (f.audience === 'surname' && !f.spotlightId) out.push({ key: 'spotlightId', label: 'Choose a Spotlight community' });
     return out;
   });
+
+  /** The province on the account, used when a photo-only post names no place. */
+  protected profileProvince(): ProvinceCode | null {
+    return this.auth.user()?.province ?? null;
+  }
 
   readonly canPost = computed(() => this.missing().length === 0);
   /** Only highlighted once someone has actually tried to post. */
@@ -796,6 +833,14 @@ export class CreatePostComponent implements OnInit {
 
     if (!editId) {
       this.restoreDraft();
+      // "Start a post" on a Spotlight page arrives with the community already chosen,
+      // so the writer never has to find the audience picker afterwards.
+      const fromSpotlight = this.route.snapshot.queryParamMap.get('spotlight');
+      if (fromSpotlight && this.data.isMember(fromSpotlight)) {
+        this.f.update((form) => ({ ...form, audience: 'surname', spotlightId: fromSpotlight }));
+      } else if (fromSpotlight) {
+        this.error.set('Join that community before you can post to it.');
+      }
       if (photoAttachment?.kind === 'image' && photoAttachment.src) {
         const existingMedia = this.f().media;
         if (!existingMedia.some((item) => item.id === photoAttachment.id)) {
@@ -1057,6 +1102,7 @@ export class CreatePostComponent implements OnInit {
       return;
     }
     const src = await this.media.compress(item.src, 1200);
+    this.mediaFailure.set('');
     this.invalidateGenerated();
     this.f.update((current) => ({ ...current, media: [...current.media, { ...item, src }] }));
   }
@@ -1074,6 +1120,7 @@ export class CreatePostComponent implements OnInit {
   }
 
   removeMedia(id: string): void {
+    this.mediaFailure.set('');
     this.invalidateGenerated();
     this.f.update((current) => ({ ...current, media: current.media.filter((item) => item.id !== id) }));
   }
@@ -1110,8 +1157,11 @@ export class CreatePostComponent implements OnInit {
       } : null);
     })() : this.subjectFromTemplate();
     const body = this.editing() ? f.body : this.publicBody();
-    const locationProvince = this.editing() ? f.province! : values.province!;
-    const town = this.editing() ? f.town.trim() : values.town.trim();
+    // A post that names no place still needs a province for the case alerts, and
+    // the account already knows it. Only when neither has one does the service
+    // refuse - and it says so in the same words as the checklist above.
+    const locationProvince = ((this.editing() ? f.province : values.province) ?? this.profileProvince()) as ProvinceCode;
+    const town = (this.editing() ? f.town : values.town).trim();
     const lastSeenWhere = this.editing() ? (f.lastSeenWhere || f.town).trim() : '';
     const caseNumber = this.editing() ? (f.caseNumber || null) : (values.caseNumber.trim() || null);
     const contactValue = this.editing() ? f.contactValue : values.contact.trim();
@@ -1175,10 +1225,39 @@ export class CreatePostComponent implements OnInit {
         }
       }
     } catch (e: any) {
-      this.error.set(e?.message ?? 'Could not share this post');
+      const message = e?.message ?? 'Could not share this post';
+      if (e?.mediaFailed) {
+        // The words are fine - only the attachment is stuck. Say which, and give
+        // the way to post now without losing the photo from the composer.
+        this.mediaFailure.set(message);
+      } else {
+        this.error.set(message);
+      }
     } finally {
       this.busy.set(false);
     }
+  }
+
+  /**
+   * A photo that would not store. The photo stays in the composer, so the person
+   * can pick another one or send the post without it - the case does not wait on
+   * a upload.
+   */
+  readonly mediaFailure = signal('');
+
+  /** Post without the attachment that would not upload. */
+  async postWithoutPhoto(): Promise<void> {
+    const dropped = this.f().media.length;
+    this.f.update((f) => ({ ...f, media: [] }));
+    this.mediaFailure.set('');
+    this.notice.set(dropped === 1 ? 'The photo was left out of this post.' : 'The photos were left out of this post.');
+    await this.submit();
+  }
+
+  /** Try the same upload again - usually after a connection came back. */
+  async retryMedia(): Promise<void> {
+    this.mediaFailure.set('');
+    await this.submit();
   }
 
   /** Brings the first empty required field into view. */

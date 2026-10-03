@@ -10,6 +10,14 @@
 -- flow needs and rebuild counters on the server, so nobody can edit someone
 -- else's case or stuff the vote count.
 --
+-- The bottom of this file also adds:
+--   * "lula spotlight join" - a policy that lets a member add or remove ONLY
+--     themselves in a community's member list. Without it, joining a Spotlight
+--     works only through lula_set_spotlight_membership(), and a deployment that
+--     never ran that function's grant answers "join" with permission denied.
+--   * the execute grant on lula_set_spotlight_membership, repeated here because
+--     a missing grant is exactly the failure above and a grant is safe to redo.
+--
 -- Run once in the Supabase SQL editor (safe to re-run). schema.sql includes it.
 
 create or replace function public.lula_post_interact(post_id text, next jsonb)
@@ -260,3 +268,51 @@ revoke all on function public.lula_post_interact(text, jsonb) from public;
 revoke all on function public.lula_link_spotlight_post(text, text, boolean) from public;
 grant execute on function public.lula_post_interact(text, jsonb) to anon, authenticated;
 grant execute on function public.lula_link_spotlight_post(text, text, boolean) to anon, authenticated;
+
+-- ── joining and leaving a surname community ────────────────────────────────
+--
+-- "lula update" only lets a Spotlight's owner rewrite the row. That is right for
+-- the tagline and the about text and wrong for membership: everybody is allowed
+-- to join. Without this policy, joining works only through
+-- lula_set_spotlight_membership(), and a deployment that never installed that
+-- function (or never granted it) answers "join" with permission denied - which
+-- is why the client also knows how to update the row itself.
+--
+-- The rule: the row must be a spotlight; everything in it except memberIds and
+-- followers must be byte-identical to what was there; the only person who may
+-- appear or disappear from memberIds is the caller; and the follower count may
+-- rise by at most one (falling is harmless, and lets a count that was inflated
+-- elsewhere come back to the list). Ownership, admins and the filed posts are
+-- therefore untouchable by a member, and a vote cannot be stuffed from the side.
+drop policy if exists "lula spotlight join" on public.records;
+create policy "lula spotlight join" on public.records
+for update to authenticated
+using (
+  collection = 'spotlights'
+  and (select public.lula_uid()) is not null
+)
+with check (
+  collection = 'spotlights'
+  and (select public.lula_uid()) is not null
+  and (payload - 'memberIds' - 'followers') = (old.payload - 'memberIds' - 'followers')
+  -- nobody newly listed except the caller
+  and not exists (
+    select 1 from jsonb_array_elements_text(coalesce(payload->'memberIds', '[]'::jsonb)) as added(id)
+    where added.id <> (select public.lula_uid())
+      and not (coalesce(old.payload->'memberIds', '[]'::jsonb) @> to_jsonb(added.id))
+  )
+  -- nobody dropped except the caller
+  and not exists (
+    select 1 from jsonb_array_elements_text(coalesce(old.payload->'memberIds', '[]'::jsonb)) as gone(id)
+    where gone.id <> (select public.lula_uid())
+      and not (coalesce(payload->'memberIds', '[]'::jsonb) @> to_jsonb(gone.id))
+  )
+  and coalesce((payload->>'followers')::int, 0)
+      <= coalesce((old.payload->>'followers')::int, 0) + 1
+)
+;
+
+-- The membership function's own grant. Repeated here because a missing grant is
+-- the same permission-denied failure seen from the other side, and a grant that
+-- is already in place costs nothing to restate.
+grant execute on function public.lula_set_spotlight_membership(text, boolean) to anon, authenticated;

@@ -2,7 +2,6 @@ import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { IonContent } from '@ionic/angular/ion-content';
 import { IonInput } from '@ionic/angular/ion-input';
-import { IonTextarea } from '@ionic/angular/ion-textarea';
 
 
 
@@ -28,7 +27,7 @@ import { cover } from '../../core/data/seed';
 @Component({
   selector: 'lf-spotlight-detail',
   standalone: true,
-  imports: [IonContent, IonInput, IonTextarea, IonSearchbar, IonSkeletonText, IconComponent, EmptyComponent, PostCardComponent, AvatarComponent, RouterLink, TopNavComponent],
+  imports: [IonContent, IonInput, IonSearchbar, IonSkeletonText, IconComponent, EmptyComponent, PostCardComponent, AvatarComponent, RouterLink, TopNavComponent],
   template: `
     <lf-top-nav backTo="/spotlight" />
 
