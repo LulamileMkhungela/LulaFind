@@ -114,7 +114,7 @@ export class FoundComponent implements OnInit {
   /** What kind of case closed. Not every reunion is a missing person. */
   typeLabel(p: Post): string {
     return ({
-      missing: 'Missing person', khumbulekhaya: 'KhumbulEkhaya', pet: 'Pet',
+      missing: 'Missing person', khumbulekhaya: 'Home Sweet Home', pet: 'Pet',
       vehicle: 'Vehicle', sighting: 'Sighting', story: 'Story'
     } as Record<string, string>)[p.type] ?? 'Case';
   }

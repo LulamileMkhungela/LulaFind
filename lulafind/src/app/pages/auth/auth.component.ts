@@ -4,6 +4,7 @@ import { IonContent } from '@ionic/angular/ion-content';
 import { ToastController } from '@ionic/angular/toast-controller';
 import { IconComponent } from '../../shared/components/icon.component';
 import { AvatarComponent } from '../../shared/components/avatar.component';
+import { LogoComponent } from '../../shared/components/logo.component';
 import { AuthService, AuthProvider } from '../../core/services/auth.service';
 import { DataService } from '../../core/services/data.service';
 import { ProvinceCode, PROVINCES } from '../../core/models/types';
@@ -21,27 +22,22 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 @Component({
   selector: 'lf-auth',
   standalone: true,
-  imports: [IonContent, IconComponent, AvatarComponent],
+  imports: [IonContent, IconComponent, AvatarComponent, LogoComponent],
   template: `
     <ion-content class="lf-page auth" [class.welcome-bg]="mode() === 'welcome'">
       @if (mode() === 'welcome') {
         <section class="lf-fade-in snap-welcome">
           <div class="snap-logo-wrap">
             <div class="ghost-logo">
-              <span class="logo-disc" aria-hidden="true">
-                <svg width="40" height="40" viewBox="0 0 64 64" fill="none">
-                  <circle cx="29" cy="28" r="13" stroke="#fff" stroke-width="5"/>
-                  <line x1="39" y1="38" x2="50" y2="49" stroke="#fff" stroke-width="5" stroke-linecap="round"/>
-                  <path d="M29 23.5c0-2.2 3.3-3.2 3.3 0 0-3.2 3.3-2.2 3.3 0 0 3.3-3.3 5.4-3.3 5.4s-3.3-2.1-3.3-5.4z" fill="#fff" transform="translate(-3.3 1)"/>
-                </svg>
-              </span>
-              <span class="wordmark">lulafind</span>
-              <span class="tagline">Bring them home.</span>
+              <!-- the shared mark, so this screen cannot drift from the app icon -->
+              <lf-logo [size]="72" [label]="''" />
+              <span class="wordmark">LulaFind</span>
+              <span class="tagline">Spot me, help me and bring me home.</span>
             </div>
           </div>
 
           <div class="snap-bottom-cta">
-            <button class="snap-btn snap-btn--blue" (click)="mode.set('signin')">Log in</button>
+            <button class="snap-btn snap-btn--blue" (click)="mode.set('signin')">Log In with email</button>
 
             <button class="snap-btn snap-btn--google" (click)="provider('google')">
               <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -58,10 +54,6 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
             <button class="snap-btn snap-btn--outline" (click)="startSignup()">
               Create new account
             </button>
-
-            <p class="snap-switch guest-link">
-              <button class="snap-link-muted" (click)="browse()">Browse as guest</button>
-            </p>
           </div>
         </section>
       }
@@ -122,10 +114,13 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
               <span>Continue with Google</span>
             </button>
 
-            <label class="snap-checkbox-row">
-              <input type="checkbox" [checked]="saveLoginInfo" (change)="saveLoginInfo = $any($event.target).checked" />
-              <span>Save Login Info on your device</span>
-            </label>
+            <!-- Login info is kept on the device by the sign-in flow itself
+                 (AuthService.rememberSignIn), so there is nothing to tick here.
+                 This row is the way across to sign-up instead. -->
+            <p class="snap-alt-row">
+              Don't have an account?
+              <button class="snap-text-link" type="button" (click)="mode.set('signup')">Create Account</button>
+            </p>
 
             @if (error()) { <p class="err-msg"><lf-icon name="alert" [size]="15" /> {{ error() }}</p> }
             @if (notice()) { <p class="ok-msg"><lf-icon name="check" [size]="15" /> {{ notice() }}</p> }
@@ -169,6 +164,23 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
                 <button class="snap-btn snap-btn--blue snap-block" (click)="nextStep()">
                   Agree and continue
                 </button>
+
+                <div class="snap-divider"><span>or</span></div>
+
+                <button class="snap-btn snap-btn--google snap-block" (click)="provider('google')">
+              <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+              </svg>
+                  <span>Continue with Google</span>
+                </button>
+
+                <p class="snap-switch">
+                  Already have an account?
+                  <button class="snap-link" type="button" (click)="goToSignIn()">Log In</button>
+                </p>
               </div>
             }
 
@@ -386,11 +398,6 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
     }
     .snap-logo-wrap { flex: 1; display: flex; align-items: center; justify-content: center; }
     .ghost-logo { display: flex; flex-direction: column; align-items: center; gap: 12px; }
-    .logo-disc {
-      width: 72px; height: 72px; border-radius: 50%;
-      background: var(--lf-primary);
-      display: flex; align-items: center; justify-content: center;
-    }
     .wordmark {
       font-size: 40px; font-weight: 800; letter-spacing: -1.6px; line-height: 1;
       color: var(--lf-primary);
@@ -418,8 +425,14 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
     .snap-btn:active { transform: scale(.98); }
     .snap-btn:hover { filter: brightness(.97); }
     .snap-btn[disabled] { opacity: .5; pointer-events: none; }
-    .snap-btn--blue { background: var(--lf-primary-fill); color: #fff; }
-    :host-context(.lf-dark) .snap-btn--blue { background: #2374e1; }
+    /*
+     * The Log in button is the one asked for by name: #64B5F6, Material blue
+     * 300. White on that is only 2.2:1 and washes out, so the label is the deep
+     * navy #0a2540 (7:1). Every other filled button in the app stays on
+     * --lf-primary-fill (#2196F3) with white text.
+     */
+    .snap-btn--blue { background: #64b5f6; color: #0a2540; }
+    :host-context(.lf-dark) .snap-btn--blue { background: #64b5f6; color: #0a2540; }
     .snap-btn--google, .snap-btn--black {
       background: transparent;
       color: var(--ion-text-color);
@@ -504,12 +517,14 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
     .snap-divider::before, .snap-divider::after { content: ''; flex: 1; height: 1px; background: var(--lf-line-soft); }
     .snap-bottom-cta .snap-divider { margin: 4px 0; }
 
-    .snap-checkbox-row {
-      display: flex; align-items: center; gap: 10px;
+    /* "Don't have an account? Create Account" - sits where the old
+       save-login-info row was, at the foot of the login form. */
+    .snap-alt-row {
+      display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+      justify-content: center; margin-top: 18px;
       font-size: 14px; color: var(--lf-muted);
-      margin-top: 18px; justify-content: center;
     }
-    .snap-checkbox-row input { accent-color: var(--lf-primary); width: 18px; height: 18px; }
+    .snap-alt-row .snap-text-link { margin-top: 0; font-size: 14px; }
 
     .snap-ident-card {
       display: flex; align-items: center; gap: 14px;
@@ -564,7 +579,6 @@ export class AuthComponent implements OnInit {
   readonly emailError = signal('');
   over18 = false;
   terms = false;
-  saveLoginInfo = true;
   showPass = signal(false);
   private next = '/home';
 
@@ -894,13 +908,7 @@ export class AuthComponent implements OnInit {
     }
   }
 
-  browse(): void {
-    this.auth.setGuestBrowsing(true);
-    void this.router.navigate(['/home']);
-  }
-
   private async afterAuth(): Promise<void> {
-    this.auth.setGuestBrowsing(false);
     this.auth.passwordRecovery.set(false);
     // Show the app first. Waiting for the feed, the stories, the tips and the
     // follow lists before the first screen appears is what made sign-in feel

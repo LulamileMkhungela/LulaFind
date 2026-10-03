@@ -6,13 +6,13 @@ import { ReactionIconComponent } from './reaction-icon.component';
 /**
  * The reaction control, behaving exactly like LinkedIn's action button:
  *
- *  - The main icon is always "Have an idea" (the bulb) until you react.
- *  - Quick tap: gives "Have an idea". Tap again to take it back.
+ *  - The main icon is an outlined thumbs-up and the label reads "Like" until
+ *    you react.
+ *  - Quick tap: gives a "Like". Tap again to take it back.
  *  - Hold (or hover with a mouse): the tray opens with Like, Support, Sad and
  *    Have an idea, the way LinkedIn opens its reaction flyout. Slide onto one
  *    and lift your finger, or tap one, to pick it.
- *  - The button then reads the reaction you chose ("Like", "Support", "Sad",
- *    "Have an idea") in that reaction's colour.
+ *  - The button then reads the reaction you chose in that reaction's colour.
  *
  * It only reports the choice through `react`; the page decides what to save.
  */
@@ -47,14 +47,14 @@ import { ReactionIconComponent } from './reaction-icon.component';
       @if (current(); as c) {
         <lf-reaction-icon [kind]="c" [size]="22" />
       } @else {
-        <lf-icon name="bulb" [size]="21" />
+        <lf-icon name="thumbup" [size]="21" />
       }
       <span class="label">{{ label() }}</span>
     </button>
   `,
   styles: [`
-    /* The reaction label is the longest in the row, so this button takes the
-       slack and the short labels beside it take only what they need. */
+    /* This button takes the slack in the action row; the short labels beside
+       it take only what they need. */
     :host { position: relative; display: block; flex: 1 1 auto; min-width: 0; }
     .btn {
       width: 100%; height: 40px; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
@@ -64,10 +64,9 @@ import { ReactionIconComponent } from './reaction-icon.component';
       -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; touch-action: manipulation;
     }
     .btn:hover, .btn:active { background: var(--lf-hover); }
-    /* "Have an idea" is the longest label in the row: it may shrink, never overlap. */
     .btn .label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-    /* The label in this button is the longest in the action row. On phones it
-       steps down so the words stay whole next to Comment / Repost / Send. */
+    /* On phones the label steps down so the words stay whole next to
+       Comment / Repost / Send. */
     @media (max-width: 430px) { .btn { font-size: 13px; gap: 4px; } }
     @media (max-width: 360px) { .btn { font-size: 11.5px; gap: 3px; } }
     @media (max-width: 340px) {
@@ -107,7 +106,7 @@ export class ReactionButtonComponent {
 
   readonly current = computed<ReactionKind | null>(() => (isReaction(this.value()) ? (this.value() as ReactionKind) : null));
   readonly mine = this.current;
-  /** Nothing chosen reads "Have an idea" - the default reaction is the action's own name. */
+  /** Nothing chosen reads "Like" - the default reaction is the action's own name. */
   readonly label = computed(() => {
     const c = this.current();
     if (!c) return DEFAULT_REACTION_LABEL;
@@ -116,7 +115,7 @@ export class ReactionButtonComponent {
   readonly tone = computed(() => REACTIONS.find((r) => r.key === this.current())?.color ?? 'var(--lf-muted)');
   readonly ariaLabel = computed(() => this.current()
     ? `Your reaction: ${REACTIONS.find((r) => r.key === this.current())!.label}. Tap to remove, hold to change.`
-    : `${DEFAULT_REACTION_LABEL}. Hold for Like, Support and Sad.`);
+    : `${DEFAULT_REACTION_LABEL}. Hold for Support, Sad and Have an idea.`);
 
   private timer: ReturnType<typeof setTimeout> | null = null;
   private held = false;

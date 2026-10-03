@@ -41,13 +41,21 @@ import { cover } from '../../core/data/seed';
       @if (!u()) {
         <div class="lf-card"><ion-skeleton-text style="height:200px"></ion-skeleton-text></div>
       } @else {
-        <div class="hero">
+        <div class="hero" [attr.data-status]="checkIn()?.status ?? null">
           <img class="banner" [src]="banner()" alt="" />
           <div class="ident">
             <lf-avatar [src]="avatar()" [name]="u()!.displayName" [size]="82" [ring]="true"
                [status]="checkIn()?.status ?? null" />
             <h1 class="lf-h2">
               {{ u()!.displayName }}
+              <!-- The status sits against the name where a verified tick would
+                   be, so one glance at who this is also says how they are. -->
+              @if (checkIn()?.status; as st) {
+                <span class="statustick" [attr.data-key]="st" [attr.title]="checkInLabel()"
+                      [attr.aria-label]="checkInLabel()" role="img">
+                  <lf-icon [name]="statusIcon(st)" [size]="12" [weight]="3" />
+                </span>
+              }
               @if (u()!.verified) { <lf-icon name="award" [size]="16" /> }
               @if (u()!.isAdmin) { <span class="lf-chip lf-chip--success lf-tiny">admin</span> }
               @if (u()!.suspended) { <span class="lf-chip lf-chip--danger lf-tiny">suspended</span> }
@@ -155,8 +163,6 @@ import { cover } from '../../core/data/seed';
                 @if (checkInError() && !saving()) { <p class="err">{{ checkInError() }}</p> }
               </div>
             }
-
-            <div class="lf-meta" style="margin-top:10px">Joined {{ dayMonth(u()!.createdAt) }}</div>
           </div>
         </div>
 
@@ -246,6 +252,16 @@ import { cover } from '../../core/data/seed';
     .quickbtn.help { border-color: var(--lf-signal); color: var(--lf-signal-text); }
     .quickbtn.help.on { background: var(--lf-signal); color: #fff; border-color: var(--lf-signal); }
     .quickbtn:disabled { opacity: .55; cursor: wait; }
+    /* The status tick: a small filled disc, the way a verified mark reads. */
+    .statustick { display: inline-flex; align-items: center; justify-content: center;
+      width: 18px; height: 18px; border-radius: 50%; color: #fff; vertical-align: -2px; }
+    .statustick[data-key="safe"] { background: var(--lf-ubuntu); }
+    .statustick[data-key="need_help"] { background: var(--lf-signal); }
+    .statustick[data-key="watch_me"], .statustick[data-key="unfamiliar"] { background: var(--lf-marigold); color: #1a1204; }
+    /* The whole profile is tinted by the status, so the colour reads at a glance. */
+    .hero[data-status="safe"] { box-shadow: inset 0 3px 0 var(--lf-ubuntu); }
+    .hero[data-status="need_help"] { box-shadow: inset 0 3px 0 var(--lf-signal); }
+    .hero[data-status="watch_me"], .hero[data-status="unfamiliar"] { box-shadow: inset 0 3px 0 var(--lf-marigold); }
     .checkin { display: flex; align-items: center; gap: 10px; padding: 11px 13px; border-radius: 12px;
       background: color-mix(in srgb, var(--lf-ubuntu) 16%, transparent); }
     .checkin div { display: flex; flex-direction: column; gap: 1px; }
@@ -417,6 +433,11 @@ export class ProfileComponent implements OnInit {
     const n = this.u()?.contributorCredits ?? 0;
     if (n <= 0) { this.mostNamed.set(false); return; }
     this.mostNamed.set(n >= await this.data.topContributorCount());
+  }
+
+  /** Icon shown in the tick beside the name, one per status. */
+  statusIcon(status: string): string {
+    return status === 'need_help' ? 'alert' : status === 'watch_me' ? 'eye' : status === 'unfamiliar' ? 'map' : 'check';
   }
 
   checkInLabel(): string {

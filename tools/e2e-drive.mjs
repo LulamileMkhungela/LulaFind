@@ -342,15 +342,19 @@ for (const [label, path] of [['Spotlight', '/spotlight'], ['Chats', '/chats'], [
   await shot(`13-tab-${label.toLowerCase()}`, label);
 }
 
-console.log('\n== 7. Ask Lula ==');
-await goto('/ask-lula', 1800);
-await shot('16-ask-lula');
-await fill('input[placeholder*="Ask Lula" i]', 'what do I do in the first hour', { what: 'ask box' });
-await tap('Send', { what: 'send the question' });
-await sleep(3000);
-const answered = await text();
-if (!/SAPS|police|10111|case/i.test(answered)) problems.push('Ask Lula did not answer');
-await shot('17-ask-lula-answer');
+console.log('\n== 7. Discover ==');
+await goto('/discover', 1800);
+await shot('16-discover-statuses');
+const discover = await text();
+if (!/How are you right now/i.test(discover)) problems.push('Discover did not ask how you are');
+for (const label of ["I'm Safe", 'I Need Help', 'Watch Me']) {
+  if (!discover.includes(label)) problems.push(`Discover is missing the ${label} action`);
+}
+// All four tabs must be reachable, including the default Statuses tab.
+for (const [label, name] of [['Following', '16b-discover-following'], ['Requests', '16c-discover-requests']]) {
+  await tap(label, { what: `${label} tab` });
+  await shot(name);
+}
 
 console.log('\n== 8. the rest of the app ==');
 for (const [name, path, wait] of [

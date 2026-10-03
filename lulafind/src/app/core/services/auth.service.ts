@@ -52,13 +52,10 @@ export class AuthService {
 
   readonly user = signal<UserProfile | null>(null);
   readonly ready = signal(false);
-  readonly guestBrowsing = signal(false);
+  /** Anything waiting on the first session check (see `whenReady`). */
+  private readonly readyWaiters: Array<() => void> = [];
   readonly signedIn = computed(() => !!this.user());
   readonly needsOnboarding = computed(() => !!this.user() && !this.user()!.onboarded);
-
-  setGuestBrowsing(val: boolean): void {
-    this.guestBrowsing.set(val);
-  }
   readonly userAvatar = computed(() => {
     const u = this.user();
     if (!u) return avatar('Guest');
@@ -132,6 +129,36 @@ export class AuthService {
     try { localStorage.removeItem(this.signInMarker); } catch { /* private mode */ }
   }
 
+  /**
+   * Resolves once the stored session has actually been checked.
+   *
+   * `signedIn()` is false for the first few hundred milliseconds of every cold
+   * start, signed-in or not, because the answer comes back from storage and the
+   * network. A route guard that asks before then would throw a returning user
+   * out to the login screen - which is exactly the flash we had. So guards wait
+   * for this instead of guessing.
+   */
+  async whenReady(): Promise<void> {
+    if (this.ready()) return;
+    // Register before starting the check: with no stored session the restore
+    // finishes synchronously, and a waiter added afterwards would wait forever.
+    const wait = new Promise<void>((resolve) => {
+      this.readyWaiters.push(resolve);
+      // Last-resort release: a hung session check must not hold the router
+      // forever. Ten seconds is far longer than a healthy restore takes.
+      setTimeout(resolve, 10_000);
+    });
+    // The data layer starts the restore on boot; if nothing has kicked it off
+    // yet, start it here rather than wait for something that may never come.
+    this.attachApi();
+    await wait;
+  }
+
+  /** Releases everything waiting in `whenReady()`. */
+  private resolveReady(): void {
+    for (const done of this.readyWaiters.splice(0)) done();
+  }
+
   attachApi(_api?: LulaApi): void {
     if (this.restored) return;
     this.restored = true;
@@ -192,6 +219,7 @@ export class AuthService {
       console.warn('Could not restore authentication session:', e);
     } finally {
       this.ready.set(true);
+      this.resolveReady();
     }
   }
 

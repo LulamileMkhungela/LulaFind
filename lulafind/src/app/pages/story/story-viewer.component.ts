@@ -147,7 +147,7 @@ const HOLD_MS = 420;
     .reply-footer input { min-width: 0; height: 40px; box-sizing: border-box; border: 1px solid rgba(255,255,255,.58); border-radius: 999px; outline: 0; background: rgba(0,0,0,.20); color: #fff; padding: 0 14px; font-size: 13px; }
     .reply-footer input::placeholder { color: rgba(255,255,255,.84); }
     .reply-footer input:focus { background: rgba(0,0,0,.38); }
-    .send { width: 36px; height: 36px; display: grid; place-items: center; border: 0; border-radius: 50%; background: #1877f2; color: #fff; }
+    .send { width: 36px; height: 36px; display: grid; place-items: center; border: 0; border-radius: 50%; background: var(--lf-primary); color: var(--lf-primary-text); }
     .send:disabled { opacity: .45; }
     .private-hint { grid-column: 1 / -1; justify-self: center; display: flex; align-items: center; gap: 4px; color: rgba(255,255,255,.82); font-size: 9.5px; padding: 0 0 4px; }
     .sign-in-reply { grid-column: 1 / -1; min-height: 38px; border: 1px solid rgba(255,255,255,.55); border-radius: 999px; background: rgba(0,0,0,.22); color: #fff; font-size: 12px; font-weight: 600; }

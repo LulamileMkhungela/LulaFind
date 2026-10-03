@@ -1,12 +1,11 @@
-import { LULA_TOPICS } from './ask-lula';
+import { FAQ_TOPICS } from './faq-topics';
 
 /**
  * The FAQ page's content.
  *
- * Every answer Lula can give is listed here as a question, so the two can never
- * drift apart: `LULA_TOPICS` is the single source, and this file only adds the
- * categories and the handful of app-housekeeping questions Lula does not need
- * to answer in a chat (editing a post, notifications, permissions).
+ * Every answer is listed here as a question: `FAQ_TOPICS` holds the ones written
+ * as help content, and this file adds the categories and the handful of
+ * app-housekeeping questions (editing a post, notifications, permissions).
  *
  * Answers are kept to two or three sentences on purpose. Anything longer
  * belongs on the page that does the job, and every answer links there.
@@ -56,10 +55,10 @@ const TOPIC_CATEGORY: Record<string, FaqCategory> = {
   story: 'Stories & posting'
 };
 
-const fromLula: Faq[] = LULA_TOPICS
+const fromLula: Faq[] = FAQ_TOPICS
   .filter((t) => TOPIC_CATEGORY[t.id])
   .map((t) => ({
-    id: `lula-${t.id}`,
+    id: `faq-${t.id}`,
     category: TOPIC_CATEGORY[t.id],
     q: t.question,
     a: t.answer.text,
@@ -84,7 +83,7 @@ const housekeeping: Faq[] = [
     id: 'create',
     category: 'Start here',
     q: 'How do I post something?',
-    a: 'Tap Create at the bottom of the screen and pick what you are posting - a missing person, a KhumbulEkhaya post, a sighting, a lost pet, or a story. Add a photo, then share.',
+    a: 'Tap Create at the bottom of the screen and pick what you are posting - a missing person, a Home Sweet Home post, a sighting, a lost pet, or a story. Add a photo, then share.',
     links: [{ label: 'Create a post', route: '/new' }]
   },
   {

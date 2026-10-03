@@ -153,7 +153,14 @@ export class FirebaseAuthBridge {
       const name = String(input.options?.data?.['displayName'] ?? '').trim();
       if (name) await updateProfile(cred.user, { displayName: name });
       this.savePending(input.email, input.options?.data ?? {});
-      await sendEmailVerification(cred.user, this.continueUrl(input.options?.emailRedirectTo));
+      // The account exists from here on. A verification email that fails to
+      // send must not report the signup as failed - the person would think they
+      // have no account, try again with the same address, and be told it is
+      // taken. Send it best-effort and let them request another from /auth.
+      await sendEmailVerification(
+        cred.user,
+        this.continueUrl(input.options?.emailRedirectTo)
+      ).catch(() => undefined);
       await signOut(this.auth);
       return { data: { user: this.shape(cred.user), session: null }, error: null };
     } catch (e) {
@@ -286,13 +293,51 @@ export class FirebaseAuthBridge {
     };
   }
 
+  /**
+   * The URL Firebase sends the person back to after they act on an account
+   * email (verify address, reset password).
+   *
+   * Firebase refuses the WHOLE request - not just the email - when the continue
+   * URL's host is not on the project's Authorised domains list:
+   *
+   *     auth/unauthorized-continue-uri
+   *     Domain not allowlisted by project
+   *
+   * The host has to be one we can actually know is allowlisted. `localhost` and
+   * `127.0.0.1` are there by default, and so is the project's own authDomain
+   * (`lulafinds-app.firebaseapp.com`) because Firebase adds it when the project
+   * is created. Anything else - the Arena preview host, a custom domain nobody
+   * has added yet - is a guess, and a guess here does not degrade gracefully:
+   * it takes the signup down with it, after the account has already been
+   * created.
+   *
+   * So an unrecognised host is not sent at all. Omitting the continue URL makes
+   * Firebase fall back to its own action page on authDomain, which is always
+   * allowed. The person still verifies or resets; they just land on Firebase's
+   * page instead of ours.
+   */
   private continueUrl(url?: string) {
     // In the app, Firebase's own page confirms the step; the person then returns to LulaFind.
     if (Capacitor.isNativePlatform()) return undefined;
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
-    // Firebase only follows http(s) continue URLs on authorised domains.
     const target = url || `${origin}/auth`;
-    return /^https?:\/\//.test(target) ? { url: target, handleCodeInApp: false } : undefined;
+    if (!/^https?:\/\//.test(target)) return undefined;
+
+    let host: string;
+    try {
+      host = new URL(target).hostname;
+    } catch {
+      return undefined;
+    }
+
+    const authDomain = (environment.firebase as { authDomain?: string }).authDomain ?? '';
+    const allowed =
+      host === 'localhost' ||
+      host === '127.0.0.1' ||
+      host === '[::1]' ||
+      (!!authDomain && host === authDomain);
+
+    return allowed ? { url: target, handleCodeInApp: false } : undefined;
   }
 
   private savePending(email: string, data: Record<string, unknown>): void {
@@ -318,6 +363,30 @@ export class FirebaseAuthBridge {
 
   private clearResetCode(): void {
     try { history.replaceState(null, '', window.location.pathname + '?mode=signin'); } catch { /* ignore */ }
+  }
+
+  /**
+   * Why a domain was refused, in words that say which host and what to do.
+   *
+   * `where` distinguishes the two code paths that share one cause: the page
+   * origin (popup / OAuth) and the continue URL (account emails). Naming the
+   * actual origin matters because the Arena preview is served from a proxy host
+   * that is regenerated every session - so it can never be added to the
+   * allowlist in advance, and the only real fix is to open the app on localhost.
+   */
+  private domainMessage(where: 'page' | 'email link'): string {
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    const host = origin ? origin.replace(/^https?:\/\//, '') : 'this address';
+    const base = origin
+      ? `${host} (${where}) is not allowed for sign-in yet.`
+      : `This ${where} is not allowed for sign-in yet.`;
+    if (host === 'localhost' || host.startsWith('localhost:') || host.startsWith('127.0.0.1')) {
+      // localhost is allowlisted by default, so this is the project's own list
+      // rather than anything about the machine.
+      return `${base} Add it in Firebase → Authentication → Settings → Authorised domains.`;
+    }
+    return `${base} That host changes every session, so it cannot be added in advance - ` +
+      `open the app on http://localhost:4200 and sign in there.`;
   }
 
   private friendly(e: unknown): Error {
@@ -352,7 +421,19 @@ export class FirebaseAuthBridge {
       'auth/network-request-failed': 'No connection. Check your internet and try again.',
       'auth/popup-closed-by-user': 'Google sign-in was closed before it finished.',
       'auth/popup-blocked': 'Your browser blocked the Google window. Allow pop-ups and try again.',
-      'auth/unauthorized-domain': 'This web address is not allowed for sign-in yet. Add it in Firebase → Authentication → Settings → Authorised domains.',
+      // Same cause as auth/unauthorized-domain, different code path: Firebase
+      // rejects the *continue URL* rather than the page origin. Both mean a host
+      // in play is not on the Authorised domains list, and both are fixed the
+      // same way - so they must not fall through to the raw "Domain not
+      // allowlisted by project", which names no place to go.
+      //
+      // The message names the origin and says where it is being checked from,
+      // because "this web address" is unreachable when the person cannot see
+      // which of the two hosts is at fault - and on the Arena preview the answer
+      // is always the proxy host, which changes every session and so can never
+      // be allowlisted in advance.
+      'auth/unauthorized-domain': this.domainMessage('page'),
+      'auth/unauthorized-continue-uri': this.domainMessage('email link'),
       'auth/expired-action-code': 'This link has expired. Request a new one.',
       'auth/invalid-action-code': 'This link was already used or is not valid. Request a new one.',
       'auth/requires-recent-login': 'For your safety, log out and log in again, then retry.',

@@ -22,6 +22,26 @@ export abstract class LulaApi {
   abstract saveUser(u: UserProfile): Promise<void>;
   abstract deleteUser(id: string): Promise<void>;
 
+  /* search */
+  /**
+   * Free-text search over cases, answered from the whole store - not only the
+   * page of posts that happens to be in memory.
+   *
+   * The feed holds one page; a family searching a surname must still find the
+   * case posted last month. Every backend answers from everything it has, and
+   * applies the same review and audience rules as the feed - a search result
+   * can never be more visible than the post itself.
+   */
+  abstract searchPosts(q: string, limit?: number): Promise<Post[]>;
+  /**
+   * Free-text search over members: display name, surname and handle.
+   *
+   * A single character is allowed here where posts are not: someone typing the
+   * first letter of a name into a location check must not be told "no match"
+   * when a match exists. Suspended accounts are never returned, on any backend.
+   */
+  abstract searchUsers(q: string, limit?: number): Promise<UserProfile[]>;
+
   /* posts */
   abstract post(id: string): Promise<Post | undefined>;
   abstract posts(): Promise<Post[]>;
@@ -90,6 +110,15 @@ export abstract class LulaApi {
   /* spotlights */
   abstract spotlights(): Promise<Spotlight[]>;
   abstract spotlight(id: string): Promise<Spotlight | undefined>;
+  /**
+   * Every post filed to one Spotlight, newest first.
+   *
+   * A Spotlight is a public community page: anyone may read it, and joining is
+   * only what lets you *post* to it. This is deliberately not the feed query -
+   * the feed hides `surname`-audience posts from non-members, which is right
+   * everywhere else and wrong on the page those posts were written for.
+   */
+  abstract postsInSpotlight(spotlightId: string): Promise<Post[]>;
   abstract saveSpotlight(s: Spotlight): Promise<void>;
   /** Update only the signed-in member's Spotlight membership. */
   abstract setSpotlightMembership(id: string, memberId: string, joining: boolean): Promise<Spotlight | undefined>;
@@ -150,6 +179,10 @@ export abstract class LulaApi {
   abstract pushNotification(n: Notification): Promise<void>;
   abstract markNotificationsRead(userId: string): Promise<void>;
 
+  /* push device tokens - see supabase/push-tokens.sql */
+  abstract savePushToken(token: string, platform: string, appVersion: string): Promise<void>;
+  abstract forgetPushToken(token: string): Promise<void>;
+
   /* tips */
   abstract tips(): Promise<Tip[]>;
 
@@ -180,6 +213,9 @@ export class MockApi implements LulaApi {
   async saveUser(u: UserProfile) { this.db.upsertUser(u); }
   async deleteUser(id: string) { this.db.removeUser(id); }
 
+  async searchPosts(q: string, limit?: number) { return this.db.searchPosts(q, limit); }
+  async searchUsers(q: string, limit?: number) { return this.db.searchUsers(q, limit); }
+
   async post(id: string) { return this.db.post(id); }
   async posts() { return this.db.posts(); }
   async postsByAuthor(authorId: string) { return this.db.postsByAuthor(authorId); }
@@ -205,6 +241,7 @@ export class MockApi implements LulaApi {
 
   async spotlights() { return this.db.spotlights(); }
   async spotlight(id: string) { return this.db.spotlight(id); }
+  async postsInSpotlight(spotlightId: string) { return this.db.postsInSpotlight(spotlightId); }
   async saveSpotlight(s: Spotlight) { this.db.upsertSpotlight(s); }
   spotlightMembershipQueued(spotlightId: string): boolean {
     return this.db.pendingSpotlightMemberships().some((op) => op.spotlightId === spotlightId);
@@ -275,6 +312,10 @@ export class MockApi implements LulaApi {
   }
   async pushNotification(n: Notification) { this.db.pushNotification(n); }
   async markNotificationsRead(userId: string) { this.db.markNotificationsRead(userId); }
+
+  /* No device tokens in mock mode - there is no FCM in a browser tab. */
+  async savePushToken(_token: string, _platform: string, _appVersion: string): Promise<void> {}
+  async forgetPushToken(_token: string): Promise<void> {}
 
   async tips() { return this.db.tips(); }
 

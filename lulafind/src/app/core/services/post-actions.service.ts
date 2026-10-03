@@ -3,22 +3,13 @@ import { Router } from '@angular/router';
 import { ToastController } from '@ionic/angular/toast-controller';
 import { ActionSheetController } from '@ionic/angular/action-sheet-controller';
 import { AlertController } from '@ionic/angular/alert-controller';
-import { Post, UserProfile, provinceName } from '../models/types';
+import { Post } from '../models/types';
 import { DataService } from './data.service';
 import { AuthService } from './auth.service';
 import { PlatformService } from './platform.service';
 import { ModerationService } from './moderation.service';
 import { ChatService } from './chat.service';
-
-/** One row of the Send sheet. */
-export interface SendRecipient {
-  id: string;
-  name: string;
-  headline: string;
-  avatar: string;
-}
-
-const provinceNameOf = (code: UserProfile['province']): string => provinceName(code ?? undefined);
+import { UserProfile } from '../models/types';
 
 /**
  * Everything you can do to a post from a menu: repost, send, save, edit,
@@ -26,6 +17,13 @@ const provinceNameOf = (code: UserProfile['province']): string => provinceName(c
  * profile, Search, a Spotlight and its own page - and so every one of them
  * tells you what happened ("Post deleted", "Reposted").
  */
+/** One row in the Send sheet. */
+export interface SendPerson {
+  profile: UserProfile;
+  /** True when you follow each other, so it also lands in your chat. */
+  connection: boolean;
+}
+
 @Injectable({ providedIn: 'root' })
 export class PostActionsService {
   private data = inject(DataService);
@@ -43,6 +41,17 @@ export class PostActionsService {
   /** True when the viewer has already reposted `repostTarget`, so the sheet offers Undo. */
   readonly repostUndo = signal<Post | null>(null);
   readonly busy = signal(false);
+
+  /* ------------------------------- send ------------------------------- */
+
+  /** The post whose Send sheet is open (rendered once, by `lf-send-sheet`). */
+  readonly sendTarget = signal<Post | null>(null);
+  /** What the person has typed in the sheet's search box. */
+  readonly sendQuery = signal('');
+  /** Everyone this post can be sent to in the app, best matches first. */
+  readonly sendPeople = signal<SendPerson[]>([]);
+  readonly sendBusy = signal(false);
+  readonly sendLoading = signal(false);
 
   async toast(message: string, action?: { text: string; handler: () => void }): Promise<void> {
     const t = await this.toastCtl.create({
@@ -119,68 +128,110 @@ export class PostActionsService {
 
   /* ------------------------------ send ------------------------------ */
   /**
-   * LinkedIn's Send. The post goes to a person, into a thread you can both
-   * answer - not to the app's share sheet, which is what "Share" is for.
+   * Send on LinkedIn opens a picker, not the phone's share sheet: you choose
+   * the person, or you choose another app. This is that picker.
    */
   async send(p: Post): Promise<void> {
+    if (!(await this.needAuth())) return;
     const target = p.repostOf ? (await this.data.loadPost(p.repostOf)) ?? p : p;
-    const mode = await this.platform.share(target.title, `${target.title}\n\nShared from LulaFind`, this.platform.link(`/post/${target.id}`));
-    await this.data.recordShare(target.id).catch(() => undefined);
-    await this.toast(mode === 'clipboard' ? 'Link copied to clipboard' : 'Sent');
+    this.sendQuery.set('');
+    this.sendTarget.set(target);
+    void this.loadSendPeople();
   }
 
-  /** Who a post may be sent to: the members who follow you and you follow back. */
-  async sendRecipients(query = ''): Promise<SendRecipient[]> {
-    const me = this.auth.viewerId;
-    if (!me) return [];
-    const mutual = this.data.followingIds().filter((id) => this.data.followerIds().includes(id) && id !== me);
-    const people = await this.data.people(mutual).catch(() => [] as UserProfile[]);
-    const byId = new Map(people.map((u) => [u.id, u]));
-    const needle = query.trim().toLowerCase();
-    return mutual
-      .map((id) => byId.get(id) ?? this.data.authorOf(id) ?? null)
-      .filter((u): u is UserProfile => !!u && !u.suspended)
-      .map((u) => ({
-        id: u.id,
-        name: u.displayName,
-        headline: (u.bio || provinceNameOf(u.province)).slice(0, 70),
-        avatar: this.data.avatarFor(u)
-      }))
-      .filter((r) => !needle || r.name.toLowerCase().includes(needle) || r.headline.toLowerCase().includes(needle))
-      .sort((a, b) => a.name.localeCompare(b.name));
+  closeSend(): void {
+    this.sendTarget.set(null);
+    this.sendQuery.set('');
   }
 
   /**
-   * Send the post to the chosen people. Returns how many it reached, and tells
-   * each one in their own bell - the same message the thread carries.
+   * Who can be sent this post, in the app.
+   *
+   * Connections (you follow each other) come first, then your followers: they
+   * chose to see your posts, so handing them one is welcome rather than a cold
+   * message. People you merely follow are left out - they have not asked for
+   * anything from you, and the app's rule is that messaging needs a mutual
+   * follow.
    */
-  async sendTo(post: Post, ids: string[], note = ''): Promise<number> {
-    const me = this.auth.user();
-    if (!me) throw new Error('Sign in to send a post');
-    const original = post.repostOf ? (await this.data.loadPost(post.repostOf)) ?? post : post;
-    let sent = 0;
-    for (const id of ids) {
-      const ok = await this.chat.sendPost(original, id, note.trim()).catch(() => false);
-      if (!ok) continue;
-      sent += 1;
-      await this.data.notify({
-        userId: id, kind: 'chat',
-        title: `${me.displayName} sent you a post`,
-        body: note.trim() || original.title,
-        route: `/post/${original.id}`, postId: original.id
-      }).catch(() => undefined);
+  private async loadSendPeople(): Promise<void> {
+    this.sendLoading.set(true);
+    try {
+      const mutual = new Set(this.data.followingIds().filter((id) => this.data.followerIds().includes(id)));
+      const ids = [...mutual, ...this.data.followerIds().filter((id) => !mutual.has(id))];
+      const people = await Promise.all(ids.map((id) => this.data.profile(id)));
+      this.sendPeople.set(
+        people
+          .filter((u): u is UserProfile => !!u && u.id !== this.auth.viewerId)
+          .map((u) => ({ profile: u, connection: mutual.has(u.id) }))
+      );
+    } finally {
+      this.sendLoading.set(false);
     }
-    if (sent) await this.data.recordShare(original.id).catch(() => undefined);
-    return sent;
   }
 
-  /** Whether a post can be sent to a given member at all (used by the sheet's empty state). */
-  async canSendTo(peerId: string): Promise<boolean> {
-    const me = this.auth.viewerId;
-    if (!me || me === peerId) return false;
-    return this.data.mutualFollow(peerId);
+  /** The people matching what has been typed. */
+  matches(query: string): SendPerson[] {
+    const q = query.trim().toLowerCase();
+    if (!q) return this.sendPeople();
+    return this.sendPeople().filter((p) =>
+      p.profile.displayName.toLowerCase().includes(q)
+      || p.profile.handle.toLowerCase().includes(q)
+      || (p.profile.bio ?? '').toLowerCase().includes(q)
+    );
   }
 
+  /**
+   * Send this post to one person, inside LulaFind.
+   *
+   * It always reaches them as a notification, so it works whoever they are.
+   * When you follow each other it also lands in your chat thread about the post,
+   * which is where a conversation can carry on.
+   */
+  async sendToUser(person: SendPerson): Promise<void> {
+    const p = this.sendTarget();
+    const me = this.auth.user();
+    if (!p || !me || this.sendBusy()) return;
+    this.sendBusy.set(true);
+    try {
+      await this.data.notifyPerson(person.profile.id, {
+        kind: 'share',
+        title: `${me.displayName} sent you a case`,
+        body: p.title,
+        route: `/post/${p.id}`,
+        postId: p.id
+      });
+
+      let inChat = false;
+      if (person.connection) {
+        const thread = await this.chat.ensureThread(p, person.profile.id);
+        if (thread) {
+          await this.chat.send(`I sent you this case: ${p.title}\n${this.platform.link(`/post/${p.id}`)}`);
+          inChat = true;
+        }
+      }
+      await this.data.recordShare(p.id).catch(() => undefined);
+      this.closeSend();
+      await this.toast(
+        inChat ? `Sent to ${person.profile.displayName} - it is in your chat and their notifications` : `Sent to ${person.profile.displayName}`,
+        inChat ? { text: 'Open chat', handler: () => void this.router.navigate(['/chats']) } : undefined
+      );
+    } catch (e: unknown) {
+      await this.toast((e as Error)?.message ?? 'Could not send this post');
+    } finally {
+      this.sendBusy.set(false);
+    }
+  }
+
+  /** "Share to other apps" - the phone's own share sheet: WhatsApp, SMS, mail. */
+  async shareExternally(): Promise<void> {
+    const target = this.sendTarget();
+    if (!target) return;
+    const text = `${target.title}\n\n${target.body.slice(0, 220)}\n\nShared from LulaFind`;
+    const mode = await this.platform.share(target.title, text, this.platform.link(`/post/${target.id}`));
+    await this.data.recordShare(target.id).catch(() => undefined);
+    this.closeSend();
+    await this.toast(mode === 'clipboard' ? 'Link copied to clipboard' : 'Shared');
+  }
 
   /* ------------------------------ menu ------------------------------ */
   /**
@@ -192,10 +243,7 @@ export class PostActionsService {
     const saved = this.data.savedIds().includes(p.id);
     const isRepost = !!p.repostOf;
     const buttons: { text: string; role?: string; icon?: string; handler?: () => void }[] = [
-      // LinkedIn's order: the two share paths first, then the private ones.
-      { text: 'Send this to a connection', icon: 'send', handler: () => this.openSend(p) },
-      { text: 'Share this post', icon: 'share', handler: () => void this.send(p) },
-      { text: saved ? 'Unsave post' : 'Save post', icon: 'bookmark', handler: () => void this.toggleSave(p) },
+      { text: saved ? 'Unsave' : 'Save', icon: 'bookmark', handler: () => void this.toggleSave(p) },
       { text: 'Copy link to post', icon: 'link', handler: () => void this.copyLink(p) }
     ];
     if (mine) {
@@ -205,42 +253,11 @@ export class PostActionsService {
         handler: () => void this.confirmDelete(p, onGone)
       });
     } else {
-      const author = this.data.authorOf(p.authorId);
-      if (!p.anonymous && author && author.id !== this.auth.viewerId) {
-        const following = await this.data.isFollowing(author.id);
-        buttons.push({
-          text: following ? `Unfollow ${author.displayName.split(' ')[0]}` : `Follow ${author.displayName.split(' ')[0]}`,
-          icon: 'user',
-          handler: () => void this.toggleFollow(author!.id)
-        });
-      }
       buttons.push({ text: 'Report post', role: 'destructive', icon: 'flag', handler: () => void this.report(p) });
     }
     buttons.push({ text: 'Cancel', role: 'cancel' });
     const sheet = await this.sheetCtl.create({ header: p.title.slice(0, 48), buttons: buttons as never });
     await sheet.present();
-  }
-
-  /** The post the Send sheet is open for. Rendered once by the shell (lf-send-sheet). */
-  readonly sendTarget = signal<Post | null>(null);
-
-  openSend(p: Post): void {
-    if (!this.auth.signedIn()) {
-      void this.needAuth();
-      return;
-    }
-    this.sendTarget.set(p);
-  }
-
-  closeSend(): void { this.sendTarget.set(null); }
-
-  private async toggleFollow(id: string): Promise<void> {
-    try {
-      const following = await this.data.toggleFollow(id);
-      await this.toast(following ? 'You will see their posts in your feed' : 'Unfollowed');
-    } catch (e: unknown) {
-      await this.toast(e instanceof Error ? e.message : 'Could not change that follow');
-    }
   }
 
   async toggleSave(p: Post): Promise<void> {
@@ -263,23 +280,38 @@ export class PostActionsService {
         { text: 'Cancel', role: 'cancel' },
         {
           text: 'Delete', role: 'destructive',
-          handler: async () => {
-            try {
-              const gone = await this.data.deletePost(p.id);
-              if (gone) {
-                await this.toast(p.repostOf ? 'Repost deleted' : 'Post deleted');
-                onGone?.();
-              } else {
-                await this.toast('The post was not deleted. Check your connection and try again.');
-              }
-            } catch (e: unknown) {
-              await this.toast(e instanceof Error ? `Post not deleted: ${e.message}` : 'The post was not deleted. Try again.');
-            }
-          }
+          /*
+           * Deliberately not `async`.
+           *
+           * Ionic keeps a dialog on screen until its button handler settles, so
+           * an async handler meant "Delete" left the popup sitting there for the
+           * whole write. This returns nothing, so the dialog is gone on the tap;
+           * the removal itself runs in the background.
+           */
+          handler: () => { void this.runDelete(p, onGone); }
         }
       ]
     });
     await alert.present();
+  }
+
+  /**
+   * Delete a post the person has already confirmed.
+   *
+   * Order matters: the caller (a list, or the post's own page) drops the post
+   * first so it disappears the instant Delete is tapped, and the toast is fired
+   * without being awaited - nothing here blocks the screen.
+   */
+  private async runDelete(p: Post, onGone?: () => void): Promise<void> {
+    onGone?.();
+    try {
+      const gone = await this.data.deletePost(p.id);
+      void this.toast(gone
+        ? (p.repostOf ? 'Repost deleted' : 'Post deleted')
+        : 'The post was not deleted. Check your connection and try again.');
+    } catch (e: unknown) {
+      void this.toast(e instanceof Error ? `Post not deleted: ${e.message}` : 'The post was not deleted. Try again.');
+    }
   }
 
   async report(p: Post): Promise<void> {

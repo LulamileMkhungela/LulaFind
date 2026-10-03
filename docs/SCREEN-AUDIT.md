@@ -11,47 +11,46 @@ No screen may show a block of its *own* copy longer than 30 words. Text written 
 
 | Screen | Text | App paragraphs | Longest app copy | Longest user text |
 | --- | --- | --- | --- | --- |
-| Home / feed | 962 words | 0 | none | 122w |
-| Spotlight | 63 words | 1 | 26w | none |
-| Chats (list) | 39 words | 0 | none | none |
-| Ask Lula | 79 words | 1 | 29w | none |
-| Me | 47 words | 0 | none | none |
-| Notifications | 100 words | 2 | 18w | none |
+| Home / feed | 1154 words | 0 | none | 122w |
+| Spotlight | 37 words | 0 | none | none |
+| Chats (list) | 31 words | 0 | none | none |
+| Me | 42 words | 0 | none | none |
+| Notifications | 103 words | 1 | 19w | none |
 | Found (reunions) | 103 words | 1 | 20w | none |
 | Review queue | 34 words | 1 | 23w | none |
-| Post detail (my case) | 319 words | 0 | none | 122w |
-| New post | 30 words | 0 | none | none |
+| Post detail (my case) | 312 words | 0 | none | 122w |
+| New post | 31 words | 0 | none | none |
 | Poster maker | 80 words | 2 | 27w | none |
-| Profile | 66 words | 0 | none | 24w |
-| Search | 15 words | 0 | none | none |
+| Profile | 62 words | 0 | none | 24w |
+| Search | 17 words | 0 | none | none |
 | Saved | 39 words | 0 | none | none |
 | Connections | 47 words | 0 | none | none |
-| Settings | 272 words | 1 | 30w | none |
+| Settings | 274 words | 1 | 30w | none |
 | Safety centre | 255 words | 3 | 27w | none |
 | Help | 470 words | 3 | 26w | none |
 | Tips | 21 words | 0 | none | none |
 | Terms | 401 words | 6 | 30w | none |
-| Sign in | 12 words | 0 | none | none |
-| FAQs (the long answers live here) | 252 words | 0 | none | none |
+| Sign in | 16 words | 0 | none | none |
+| FAQs (the long answers live here) | 254 words | 0 | none | none |
 
 
 ### Home / feed
 
 ```text
-Search5Pull to refresh All  Missing people 4 Left home  Sightings  Lost pets All provincesGautengKwaZulu-NatalWestern CapeEastern CapeFree StateLimpopoMpumalangaNorth WestNorthern Cape Most recent  Still missing  Reset Johan Botha· + Follow Farm community watch.9h·Free State· Missing person Hendrik Botha, 78, walked out of the house at 05:30 - WesselbronLast seen: Farm Weltevrede, R30My father Hendrik has early-stage dementia. He walked out of the farmhouse at 05:30 in his pyjamas and slippers. He believes it is 1974 and that he is walking to school.
+15Pull to refresh All  Missing people 4 Home Sweet Home  Sightings  Lost pets All provincesGautengKwaZulu-NatalWestern CapeEastern CapeFree StateLimpopoMpumalangaNorth WestNorthern Cape Most recent  Still missing  Reset Johan BothaFarm community watch.Free State· Missing person 9h· + Follow Hendrik Botha, 78, walked out of the house at 05:30 - WesselbronLast seen: Farm Weltevrede, R30My father Hendrik has early-stage dementia. He walked out of the farmhouse at 05:30 in his pyjamas and slippers. He believes it is 1974 and that he is walking to school.
 He answers to "Hennie". He is 1.78 m, thin, grey hair, and will be very confused and cold. The veld around the farm is open and there are two farm dams.
-We have searchers on the ground from 06:00. If you are on the R30 between Wesselbron and Bothaville, please slow down and look at the verges. …see more 1892 comments76 repostsHave an ideaCommentRepostSend Follow each other to message Lerato Mahlangu commented on thisThandi MokoenaCommunity organiser. If you see something, say something. Ubuntu.3d·Gauteng· Missing person Help find Thato Mokoena, 14 - last seen Orlando West, SowetoLast seen: Orlando taxi rank, SowetoThato left home on Tuesday morning for school at Orlando High and never arrived. She was wearing her full school uniform with a grey cardigan and black takkies.
+We have searchers on the ground from 06:00. If you are on the R30 between Wesselbron and Bothaville, please slow down and look at the verges.…see more1892 comments·76 repostsLikeCommentRepostSendJohan BothaUPDATE: A farm worker on Weltevrede found footprints heading north-east towards the dam. Searchers are moving there now. Please stay off the R30 verges so the tracks are not disturbed. 4h · 71 likes  Follow each other to message Lerato Mahlangu commented on thisThandi MokoenaCommunity organiser. If you see something, say something. Ubuntu.Gauteng· Missing person 3d·Help find Thato Mokoena, 14 - last seen Orlando West, SowetoLast seen: Orlando taxi rank, SowetoThato left home on Tuesday morning for school at Orlando High and never arrived. She was wearing her full school uniform with a grey cardigan and black takkies.
 Her phone went off at 09:40 near the Orlando taxi rank. She was with her cousin Nokuthula, who says Thato said she was going to the clinic and would be back by 14:00. She never came home.
 Thato is quiet, has a small scar above her left eyebrow and wears a silver anklet. She is on chronic medication (asthma) and did not take her pump with her. We have opened a case at Orlando SAPS.
-If you have seen her, please do not approach alone - call the number on this post or 10111. …see more 4123 comments187 repostsHave an ideaCommentRepostSendAyanda Khumalo reacted to thisSipho Ndlela· Following Ndlela family page admin. Search volunteer.6d·KwaZulu-Natal· KhumbulEkhaya KhumbulEkhaya: Lindiwe Ndlela has not been home for 11 daysLast seen: Family home, V Section, UmlaziOur sister Lindiwe left the family home in Umlazi after an argument and has not come back. We are not sure whether she is missing or whether she simply does not want to come home right now - and that is the hardest part, not knowing.
+If you have seen her, please do not approach alone - call the number on this post or 10111.…see more4123 comments·187 repostsLikeCommentRepostSendLerato MahlanguReminder: there is NO 24-hour waiting period in South Africa. If anyone at a station tells you to wait, escalate to the station commander immediately. Case number is on this post, so you are already correct. 1d · 214 likes Ayanda Khumalo reacted to thisSipho NdlelaNdlela family page admin. Search volunteer.KwaZulu-Natal· Home Sweet Home 6d· Following Home Sweet Home: Lindiwe Ndlela has not been home for 11 daysLast seen: Family home, V Section, UmlaziOur sister Lindiwe left the family home in Umlazi after an argument and has not come back. We are not sure whether she is missing or whether she simply does not want to come home right now - and that is the hardest part, not knowing.
 She is 23, works part-time at a salon in Isipingo and her phone rings but is not answered. We are not angry. We just want to know she is alive and eating.
-Lindiwe, if you are reading this: you are not in trouble. Nobody is looking to punish you. Grandmother is asking for you every day. …see more 2673 comments94 repostsHave an ideaCommentRepostSend Message them Pieter van Wyk· + Follow CPF member, Table View.5h·Western Cape· Sighting Possible sighting: young girl matching the Orlando West case at Bellville stationLast seen: Bellville station, platform 3I was on the 07:10 train this morning and saw a girl who could be the learner from the Soweto post. She was with an older woman, no school uniform, carrying a blue plastic bag. I did not want to cause a scene.
-I reported it to the station commander and attached my details to the LulaFind case. Adding it here so the family sees it fast. …see more 1431 comment33 repostsHave an ideaCommentRepostSend Follow each other to message Lindiwe Ndlela· + Follow I am okay. I needed time.1d·KwaZulu-Natal· Sighting Sighting at Umlazi taxi rank - man matching our fatherLast seen: Umlazi, DurbanA hawker at the Umlazi taxi rank says a man matching our father's description bought airtime on Tuesday morning. He was wearing a dark jacket and carrying a plastic bag.
-We are not asking anyone to follow him. Please take a photo from a safe distance and send it to the number on this case. …see more 13488 repostsHave an ideaCommentRepostSend Follow each other to message LulaFind member2d·KwaZulu-Natal· Sighting Green tracksuit seen near Pinetown station on Friday nightTwo people separately described a young man in a green tracksuit near Pinetown station between 20:00 and 21:00 on Friday. Both said he was alone and walking towards the Mall.
-This may be nothing. It may be Sibusiso. Either way, the family wants to know. …see more 9771 repostsHave an ideaCommentRepostSend Follow each other to message Ayanda Khumalo· Following Amateur radio operator - help locate people.4d·KwaZulu-Natal· KhumbulEkhaya KhumbulEkhaya: Sibusiso Khumalo, 19, left Pietermaritzburg after matric resultsLast seen: Northway taxi rankSibusiso failed two subjects and told his mother he was going to Johannesburg to find work. That was nine days ago. He has R300 and no jacket.
-We are not looking to drag him back. We want to know he is alive. If you are Sibusiso, follow me and I will follow back, so we can chat privately - you can stay anonymous. …see more 881 comment29 repostsHave an ideaCommentRepostSend Message them Sipho Ndlela· Following Ndlela family page admin. Search volunteer.3d·KwaZulu-Natal· Missing person Update from the Ndlela family: posters are up in four suburbsLast seen: Umlazi, DurbanThank you to everyone in this Spotlight. The posters are now up in Umlazi, Isipingo, Amanzimtoti and Chatsworth. We have also given copies to three taxi associations.
-If you print one for your own street, please post a photo here so we do not overlap. …see more 212156 repostsHave an ideaCommentRepostSend Message them Create storyAnonymous1d·North West· Missing person My brother Tshepo Molefe has been missing from Rustenburg for 2 daysI am posting anonymously because of who I believe took him. I have given my real details to LulaFind and to the police.
-He was collecting a debt on Thursday night near Rustenburg CBD. His bakkie was found at home on Friday, keys in the ignition, but he was not in it. …see more 761 comment18 repostsHave an ideaCommentRepostSend Follow each other to message
+Lindiwe, if you are reading this: you are not in trouble. Nobody is looking to punish you. Grandmother is asking for you every day.…see more2673 comments·94 repostsLikeCommentRepostSendA neighbourTo whoever this is about: nobody is going to force you home. Just tell them you are alive. That is all they are asking for. 6h · 133 likes  Message them Pieter van WykCPF member, Table View.Western Cape· Sighting 5h· + Follow Possible sighting: young girl matching the Orlando West case at Bellville stationLast seen: Bellville station, platform 3I was on the 07:10 train this morning and saw a girl who could be the learner from the Soweto post. She was with an older woman, no school uniform, carrying a blue plastic bag. I did not want to cause a scene.
+I reported it to the station commander and attached my details to the LulaFind case. Adding it here so the family sees it fast.…see more1431 comment·33 repostsLikeCommentRepostSendThandi MokoenaThank you Pieter. This is exactly the right way to do it - you did not approach, you reported. I have forwarded this to SAPS Bellville and they are pulling the platform camera footage. 3h · 122 likes  Follow each other to message Lindiwe NdlelaI am okay. I needed time.KwaZulu-Natal· Sighting 1d· + Follow Sighting at Umlazi taxi rank - man matching our fatherLast seen: Umlazi, DurbanA hawker at the Umlazi taxi rank says a man matching our father's description bought airtime on Tuesday morning. He was wearing a dark jacket and carrying a plastic bag.
+We are not asking anyone to follow him. Please take a photo from a safe distance and send it to the number on this case.…see more13488 repostsLikeCommentRepostSend Follow each other to message LulaFind memberKwaZulu-Natal· Sighting 2d·Green tracksuit seen near Pinetown station on Friday nightTwo people separately described a young man in a green tracksuit near Pinetown station between 20:00 and 21:00 on Friday. Both said he was alone and walking towards the Mall.
+This may be nothing. It may be Sibusiso. Either way, the family wants to know.…see more9771 repostsLikeCommentRepostSend Follow each other to message Ayanda KhumaloAmateur radio operator - help locate people.KwaZulu-Natal· Home Sweet Home 4d· Following Home Sweet Home: Sibusiso Khumalo, 19, left Pietermaritzburg after matric resultsLast seen: Northway taxi rankSibusiso failed two subjects and told his mother he was going to Johannesburg to find work. That was nine days ago. He has R300 and no jacket.
+We are not looking to drag him back. We want to know he is alive. If you are Sibusiso, follow me and I will follow back, so we can chat privately - you can stay anonymous.…see more881 comment·29 repostsLikeCommentRepostSendA neighbourSibusiso, if you are reading: follow me and I will follow back - then we can chat privately. Nobody else sees it. You do not have to come home today, just say you are alive. 1d · 77 likes  Message them Sipho NdlelaNdlela family page admin. Search volunteer.KwaZulu-Natal· Missing person 3d· Following Update from the Ndlela family: posters are up in four suburbsLast seen: Umlazi, DurbanThank you to everyone in this Spotlight. The posters are now up in Umlazi, Isipingo, Amanzimtoti and Chatsworth. We have also given copies to three taxi associations.
+If you print one for your own street, please post a photo here so we do not overlap.…see more212156 repostsLikeCommentRepostSend Message them Create storyAnonymousNorth West· Missing person 1d·My brother Tshepo Molefe has been missing from Rustenburg for 2 daysI am posting anonymously because of who I believe took him. I have given my real details to LulaFind and to the police.
+He was collecting a debt on Thursday night near Rustenburg CBD. His bakkie was found at home on Friday, keys in the ignition, but he was not in it.…see more761 comment·18 repostsLikeCommentRepostSendA neighbourLulaFind Trust & Safety: this post is anonymous to the public but the poster is verified with us and with SAPS. Reports of intimidation around this case should go to Crime Stop 08600 10111. 1d · 190 likes  Follow each other to message
 ```
 No app paragraphs - labels and values only.
 
@@ -61,31 +60,23 @@ No app paragraphs - labels and values only.
 ### Spotlight
 
 ```text
-Search5SpotlightA page for every surname. Anyone searching for a Mokoena, a Ndlela or a Dlamini finds the cases, the sightings and the updates in one place. Create a spotlight  Find a surname AllABCDEFGHIJKLMNOPQRSTUVWXYZNo spotlight for your surname yetStart the Mokoena spotlight All spotlights 0No spotlight for that letter yetCreate it and it becomes the home for every post with that surname.Create a spotlight
+5SpotlightAll provincesGautengKwaZulu-NatalWestern CapeEastern CapeFree StateLimpopoMpumalangaNorth WestNorthern CapeAllABCDEFGHIJKLMNOPQRSTUVWXYZNo spotlight for your surname yetStart the Mokoena spotlight All spotlights 0No spotlight for that letter yetCreate it and it becomes the home for every post with that surname.Create a spotlight
 ```
-- 26 words of app copy: "A page for every surname. Anyone searching for a Mokoena, a Ndlela or a Dlamini finds the cases, the sightings and the updates in one place."
+No app paragraphs - labels and values only.
 
 
 ### Chats (list)
 
 ```text
-Chats5LulaAsk Lula PinnedReporting, posters, safety and how LulaFind worksYou can message someone once you follow each other.LulaFind member1hYes - and the school photo, not the taxi rank one. She remembers faces, 1 Help find Thato Mokoena, 14 - last
+Chats15You can message someone once you follow each other.LulaFind member1hYes - and the school photo, not the taxi rank one. She remembers faces, 1 Help find Thato Mokoena, 14 - last
 ```
 No app paragraphs - labels and values only.
-
-
-### Ask Lula
-
-```text
-LulaAsk LulaHelp with LulaFind Lula gives written guidance, not a live person. In an emergency call 10111.LulaHi, I'm Lula. I can help with reporting someone missing, what to do in the first 72 hours, posters, lookouts, privacy and how LulaFind works. What do you need?How do I report a missing person?What should I do in the first 72 hours?How do I make a poster?I think I saw someoneWhat is KhumbulEkhaya?How does private chat work?What is "be on the lookout"?
-```
-- 29 words of app copy: "Hi, I'm Lula. I can help with reporting someone missing, what to do in the first 72 hours, posters, lookouts, privacy and how LulaFind works. What do you need?"
 
 
 ### Me
 
 ```text
-Search5Menu Thandi Mokoena @thandi.m · Soweto, Johannesburg · GautengCommunity organiser. If you see something, say something. Ubuntu.6followers4following2.3khelp pointsGreen ring: safe. Orange ring: unfamiliar place. Red ring: check on me. Check in  Edit profile  Joined 05 Jun 2026 All shortcuts  Posts  Saved FriendsAdd a StorySafetyTipsAdminPeople foundFAQsGet helpSign out
+5Menu Thandi Mokoena @thandi.m · Soweto, Johannesburg · GautengCommunity organiser. If you see something, say something. Ubuntu.6followers4following2.3khelp pointsGreen ring: safe. Amber ring: watch me. Red ring: needs help. Check in  Edit profile  All shortcuts  Posts  Saved FriendsAdd a StorySafetyTipsAdminPeople foundFAQsGet helpSign out
 ```
 No app paragraphs - labels and values only.
 
@@ -93,10 +84,9 @@ No app paragraphs - labels and values only.
 ### Notifications
 
 ```text
-Notifications5NotificationsDid you get help finding Thato Mokoena?412 people have an idea and 3 commented. If Thato Mokoena is home, tap to mark them found.nowViolence nearbyBree taxi rank, north entrance, Johannesburg CBD. Stay away and do not approach.12mDid you get help?Hendrik Botha has 189 upvotes. Let us know if he is home so we can stop the search.1hYour case is trending in GautengHelp find Thato Mokoena has 412 upvotes and 187 shares.2hStation case number savedORL/441/09/2026. LulaFind did not send this case.9hKabelo Nkosi added a leadWhite Quantum heading towards Roodepoort around 10:00 on Tuesday.20hNaledi Dlamini started following youNurse. Missing-persons volunteer since 2019.1d
+Notifications5 Mark all as read Did you get help finding Thato Mokoena?412 reactions and 3 comments. If Thato Mokoena is home, tap to mark them found.nowViolence nearbyBree taxi rank, north entrance, Johannesburg CBD. Stay away and do not approach.12mDid you get help?Hendrik Botha’s case is still open. Let us know if he is home so we can stop the search.1hYour case is trending in GautengHelp find Thato Mokoena has 412 reactions and 187 reposts.2hStation case number savedORL/441/09/2026. LulaFind did not send this case.9hKabelo Nkosi added a leadWhite Quantum heading towards Roodepoort around 10:00 on Tuesday.20hNaledi Dlamini started following youNurse. Missing-persons volunteer since 2019.1d
 ```
-- 18 words of app copy: "412 people have an idea and 3 commented. If Thato Mokoena is home, tap to mark them found."
-- 18 words of app copy: "Hendrik Botha has 189 upvotes. Let us know if he is home so we can stop the search."
+- 19 words of app copy: "Hendrik Botha’s case is still open. Let us know if he is home so we can stop the search."
 
 
 ### Found (reunions)
@@ -121,7 +111,7 @@ Admin5 You are signed in as an admin. You can remove posts, suspend people and d
 Post5Thandi MokoenaCommunity organiser. If you see something, say something. Ubuntu. 3d  · Gauteng · Help find Thato Mokoena, 14 - last seen Orlando West, SowetoThato left home on Tuesday morning for school at Orlando High and never arrived. She was wearing her full school uniform with a grey cardigan and black takkies.
 Her phone went off at 09:40 near the Orlando taxi rank. She was with her cousin Nokuthula, who says Thato said she was going to the clinic and would be back by 14:00. She never came home.
 Thato is quiet, has a small scar above her left eyebrow and wears a silver anklet. She is on chronic medication (asthma) and did not take her pump with her. We have opened a case at Orlando SAPS.
-If you have seen her, please do not approach alone - call the number on this post or 10111. 412 3 comments187 repostsHave an ideaCommentRepostSend1 lead · newest: Orlando taxi rank  Mark as found Still searching Photo  Video Attachments stay with this commentMost relevant Lerato Mahlangu Following 1dSocial worker. GBV advocate. Reminder: there is NO 24-hour waiting period in South Africa. If anyone at a station tells you to wait, escalate to the station commander immediately. Case number is on this post, so you are already correct.  Like  Reply 214LulaFind member Following 2d I spoke to the spaza owner opposite Orlando taxi rank. She says two girls matching this description got into a white Quantum heading towards Roodepoort around 10:00 on Tuesday. Lead Orlando taxi rank · Gauteng · White Quantum towards Roodepoort Mark as checked Like  Reply 96Thandi MokoenaAuthor20hCommunity organiser. If you see something, say something. Ubuntu. Thank you Kabelo. I reported the Quantum at the station. Please DM me through the case chat - I want to speak to the spaza owner directly.  Like  Reply 41LulaFind is a community tool. It does not replace SAPS. In an emergency call 10111.
+If you have seen her, please do not approach alone - call the number on this post or 10111. 412 3 comments187 repostsLikeCommentRepostSend Follow this case and be told when something changes Follow1 lead · newest: Orlando taxi rank  Mark as found Still searching Photo  Video Attachments stay with this commentMost relevant Lerato Mahlangu Following Social worker. GBV advocate. Reminder: there is NO 24-hour waiting period in South Africa. If anyone at a station tells you to wait, escalate to the station commander immediately. Case number is on this post, so you are already correct.  Like  Reply 2141dLulaFind member Following  I spoke to the spaza owner opposite Orlando taxi rank. She says two girls matching this description got into a white Quantum heading towards Roodepoort around 10:00 on Tuesday. Lead Orlando taxi rank · Gauteng · White Quantum towards Roodepoort Mark as checked Like  Reply 962dThandi MokoenaAuthorCommunity organiser. If you see something, say something. Ubuntu. Thank you Kabelo. I reported the Quantum at the station. Please DM me through the case chat - I want to speak to the spaza owner directly.  Like  Reply 4120h
 ```
 No app paragraphs - labels and values only.
 
@@ -131,7 +121,7 @@ No app paragraphs - labels and values only.
 ### New post
 
 ```text
-Create post Post Thandi MokoenaPublicFollowersSpotlightWhat are you posting?Choose oneMissing personLeft homeLost petSightingChoose a category to start your post.Share only information you are allowed to post. In an emergency, call 10111.
+Create post Post Thandi MokoenaPublicFollowersSpotlightWhat are you posting?Choose oneMissing personHome Sweet HomeLost petSightingChoose a category to start your post.Share only information you are allowed to post. In an emergency, call 10111.
 ```
 No app paragraphs - labels and values only.
 
@@ -148,7 +138,7 @@ Poster5SignalBold and urgentAuroraSoft glass on a glowing gradientEditorialClean
 ### Profile
 
 ```text
-Search5Profile Lerato Mahlangu @lerato.mSocial worker. GBV advocate.754followers253following347help points1posts Following  Share MessageJoined 05 Jun 2026PostsLerato Mahlangu· Following Social worker. GBV advocate.3d·Gauteng· Found - home safe FOUND: Rex the boerboel is back in MamelodiLost pet: PetLast seen: Mamelodi, PretoriaRex slipped his collar at the taxi rank on Sunday. A neighbour recognised him from the photo and walked him home the next morning.9622 repostsHave an ideaCommentRepostSend Message the poster
+5Profile Lerato Mahlangu @lerato.mSocial worker. GBV advocate.754followers253following347help points1posts Following  Share MessagePostsLerato MahlanguSocial worker. GBV advocate.Gauteng· Found - home safe 3d· Following FOUND: Rex the boerboel is back in MamelodiLost pet: PetLast seen: Mamelodi, PretoriaRex slipped his collar at the taxi rank on Sunday. A neighbour recognised him from the photo and walked him home the next morning.…see more9622 repostsLikeCommentRepostSend Message the poster
 ```
 No app paragraphs - labels and values only.
 
@@ -158,7 +148,7 @@ No app paragraphs - labels and values only.
 ### Search
 
 ```text
-Search5Searchmissing in GautengSAPS caseKhumbulEkhayafoundOrlandoNdlelaStart with a surnameJump to a provinceGautengKwaZulu-NatalWestern CapeEastern CapeFree StateLimpopoMpumalangaNorth WestNorthern CapePeople
+5Searchmissing in GautengSAPS caseHome Sweet HomefoundOrlandoNdlelaStart with a surnameJump to a provinceGautengKwaZulu-NatalWestern CapeEastern CapeFree StateLimpopoMpumalangaNorth WestNorthern CapePeople
 ```
 No app paragraphs - labels and values only.
 
@@ -182,7 +172,7 @@ No app paragraphs - labels and values only.
 ### Settings
 
 ```text
-Settings5AppearanceThemeDark (default)LightMatch my phoneBackgroundPick the colour behind the appBlackReduce motionStories wait for your tap, so you can read or reply without being rushed.Data saver (less background loading)AlertsPush notificationsMissing children onlySilence everything except urgent child casesAlert provinceAll provincesGautengKwaZulu-NatalWestern CapeEastern CapeFree StateLimpopoMpumalangaNorth WestNorthern CapeAlert radius · 50 kmHow far from your last location you still want case alertsPrivacy & dataSafety & consent centreTerms, privacy and community rulesAdmin - reports and moderationFAQsWho sees your profile is set in Me → Edit profile.Let LulaFind post a case about meOnly after a follower says something is wrong on a lookoutShow my town and last seenEveryone can see the town on your cases and when you were last aroundLet LulaFind match me to casesIf a KhumbulEkhaya post matches your name we will ask you firstHaptic feedbackPhone permissionsOff until you tap Enable. Nothing is read in the background.NotificationsGet alerts when someone comments on your post or a new case appears near you.Unknown Enable CameraTake photos directly when posting a missing person or sighting.Unknown Enable Photos / GalleryUpload photos from your gallery to posts and your profile.Unknown Enable LocationAttach an accurate map pin to sightings. Never used in the background.Unknown Enable  Open phone settings Your dataYour data lives in your account, not in this app's code. Clear cases on this phone About LulaFind 1.0.0 · Web preview · Angular + Ionic + Capacitor. LulaFind is a community tool. It does not replace the South African Police Service. In an emergency call 10111.  Support: support@mkhungela.l@gmail.com · Lulamile at LulaFind. LulaFind is for people 18 and older. Terms and privacyEmail support Change email  Change password  Sign out  Delete my account and data
+Settings5AppearanceThemeDark (default)LightMatch my phoneBackgroundPick the colour behind the appBlackReduce motionStories wait for your tap, so you can read or reply without being rushed.Data saver (less background loading)AlertsPush notificationsMissing children onlySilence everything except urgent child casesAlert provinceAll provincesGautengKwaZulu-NatalWestern CapeEastern CapeFree StateLimpopoMpumalangaNorth WestNorthern CapeAlert radius · 50 kmHow far from your last location you still want case alertsPrivacy & dataSafety & consent centreTerms, privacy and community rulesAdmin - reports and moderationFAQsWho sees your profile is set in Me → Edit profile.Let LulaFind post a case about meOnly after a follower says something is wrong on a lookoutShow my town and last seenEveryone can see the town on your cases and when you were last aroundLet LulaFind match me to casesIf a Home Sweet Home post matches your name we will ask you firstHaptic feedbackPhone permissionsOff until you tap Enable. Nothing is read in the background.NotificationsGet alerts when someone comments on your post or a new case appears near you.Unknown Enable CameraTake photos directly when posting a missing person or sighting.Unknown Enable Photos / GalleryUpload photos from your gallery to posts and your profile.Unknown Enable LocationAttach an accurate map pin to sightings. Never used in the background.Unknown Enable  Open phone settings Your dataYour data lives in your account, not in this app's code. Clear cases on this phone About LulaFind 1.0.0 · Web preview · Angular + Ionic + Capacitor. LulaFind is a community tool. It does not replace the South African Police Service. In an emergency call 10111.  Support: support@mkhungela.l@gmail.com · Lulamile at LulaFind. LulaFind is for people 18 and older. Terms and privacyEmail support Change email  Change password  Sign out  Delete my account and data
 ```
 - 30 words of app copy: "LulaFind 1.0.0 · Web preview · Angular + Ionic + Capacitor. LulaFind is a community tool. It does not replace the South African Police Service. In an emergency call ."
 
@@ -190,7 +180,7 @@ Settings5AppearanceThemeDark (default)LightMatch my phoneBackgroundPick the colo
 ### Safety centre
 
 ```text
-Safety & consent centre5 LulaFind never reads anyone's location without that person's own consent, and never sends a case to the police or an NGO. Get help has the real numbers. My locationPermission: unknownNo location has been read yet. Read my location  Forget my location Safety beaconSend "I am safe" check-ins with your location to people you choose. Off by default.Beacon enabled Send an "I am safe" check-in now Be on the lookout Tell your followers you may not feel safe where you are going. They see the area, and 24 hours later we ask them to check on you. Where are you going, or which area worries you?Anything your followers should know? (optional)Attach where I am now, so my followers see it Start the lookout If I go missing A lookout only becomes a case if a follower says something is wrong. This decides whether LulaFind may post that case, and who sees it. Let LulaFind post a case about meOff by default. Without it, a "no" answer never becomes a post.Being foundWe can ask you if a case is about you. Your account is never handed to the family.Allow name matchingConsent log on my casesFamily reported at the station and messaged Pink Ladies. LulaFind did not send the caseHelp find Thato Mokoena, 14 - last · 30 Sept 2026, 16:59expires 30 Oct 2026, 16:29Photos stay on this case unless the family shares the linkHelp find Thato Mokoena, 14 - last · 30 Sept 2026, 16:59expires 30 Oct 2026, 16:29 Privacy & data settings
+Safety & consent centre5 LulaFind never reads anyone's location without that person's own consent, and never sends a case to the police or an NGO. Get help has the real numbers. My locationPermission: unknownNo location has been read yet. Read my location  Forget my location Safety beaconSend "I am safe" check-ins with your location to people you choose. Off by default.Beacon enabled Send an "I am safe" check-in now Be on the lookout Tell your followers you may not feel safe where you are going. They see the area, and 24 hours later we ask them to check on you. Where are you going, or which area worries you?Anything your followers should know? (optional)Attach where I am now, so my followers see it Start the lookout If I go missing A lookout only becomes a case if a follower says something is wrong. This decides whether LulaFind may post that case, and who sees it. Let LulaFind post a case about meOff by default. Without it, a "no" answer never becomes a post.Being foundWe can ask you if a case is about you. Your account is never handed to the family.Allow name matchingConsent log on my casesFamily reported at the station and messaged Pink Ladies. LulaFind did not send the caseHelp find Thato Mokoena, 14 - last · 30 Sept 2026, 18:04expires 30 Oct 2026, 17:34Photos stay on this case unless the family shares the linkHelp find Thato Mokoena, 14 - last · 30 Sept 2026, 18:04expires 30 Oct 2026, 17:34 Privacy & data settings
 ```
 - 27 words of app copy: "Tell your followers you may not feel safe where you are going. They see the area, and 24 hours later we ask them to check on you."
 - 25 words of app copy: "LulaFind never reads anyone's location without that person's own consent, and never sends a case to the police or an NGO. has the real numbers."
@@ -229,7 +219,7 @@ Terms & privacy5LulaFind 1.0.0 · last updated 24 September 2026In one paragraph
 ### Sign in
 
 ```text
-lulafindBring them home.Log inContinue with Googleor Create new account Browse as guest
+LulaFindSpot me, help me and bring me home.Log In with emailContinue with Googleor Create new account
 ```
 No app paragraphs - labels and values only.
 
@@ -237,6 +227,6 @@ No app paragraphs - labels and values only.
 ### FAQs (the long answers live here)
 
 ```text
-FAQs5All 35Start hereReporting & helpingChat & followsStories & postingSafety & privacyCommunitiesYour accountSomeone is in danger right now - what do I do?How do I report a missing person?What should I do in the first 72 hours?How do I make a poster?I think I saw someone - what now?What is KhumbulEkhaya?What if the missing person is a child?How does private chat work?How do reactions work?How do I close a case when they come home?Who can see what I post?What are Spotlight communities?Someone is asking for money for information. Is that LulaFind?How long do stories last?Which gender-based violence line actually works?What happens if someone posts something false about me?How do I post something?Why do I not see every post?Can I edit or delete my post?Who sees my story?Why can I not post in a community?Is there a waiting period before SAPS will take a case?How do I stop or start notifications?Why does LulaFind ask for permissions?How do I change my details or delete my account?Does LulaFind cost anything?Why was my child’s case not published straight away?Who gets an alert when I post a case?What is a case number and do I need one?What should I never put in a case post?How do I know a case or a sighting is real?What are the steps after someone goes missing?Can I post a case about a child?The police station says I must wait 24 hours. Is that true?I am not family or police. What can I actually do? Still stuck? Ask Lula in Chats  Phone numbers
+FAQs5All 35Start hereReporting & helpingChat & followsStories & postingSafety & privacyCommunitiesYour accountSomeone is in danger right now - what do I do?How do I report a missing person?What should I do in the first 72 hours?How do I make a poster?I think I saw someone - what now?What is Home Sweet Home?What if the missing person is a child?How does private chat work?How do reactions work?How do I close a case when they come home?Who can see what I post?What are Spotlight communities?Someone is asking for money for information. Is that LulaFind?How long do stories last?Which gender-based violence line actually works?What happens if someone posts something false about me?How do I post something?Why do I not see every post?Can I edit or delete my post?Who sees my story?Why can I not post in a community?Is there a waiting period before SAPS will take a case?How do I stop or start notifications?Why does LulaFind ask for permissions?How do I change my details or delete my account?Does LulaFind cost anything?Why was my child’s case not published straight away?Who gets an alert when I post a case?What is a case number and do I need one?What should I never put in a case post?How do I know a case or a sighting is real?What are the steps after someone goes missing?Can I post a case about a child?The police station says I must wait 24 hours. Is that true?I am not family or police. What can I actually do? Still stuck? Open the Help page  Phone numbers
 ```
 No app paragraphs - labels and values only.

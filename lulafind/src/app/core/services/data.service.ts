@@ -2,6 +2,7 @@ import { Injectable, computed, effect, inject, signal, untracked } from '@angula
 import { Subscription } from 'rxjs';
 import { toObservable } from '@angular/core/rxjs-interop';
 import { LULA_API } from '../data/api';
+import { POST_MAX_PHOTOS, STORY_MAX_PHOTOS } from '../models/media-rules';
 import {
   AlertPrefs, Audience, CasePlan, CaseStepId, Comment, DangerAlert, GeoPoint, FeedFilter, FollowEdge, Lookout, MediaItem, Notification, Post, PostType, Spotlight, Story, StoryReply, StoryView, Tip, UserProfile,
   VoteValue, ReactionKind, REACTIONS, RETIRED_POST_TYPES, isReaction, VehicleDetails, dangerLabel, emptyFilter, provinceName,
@@ -135,6 +136,21 @@ export class DataService {
   readonly tips = signal<Tip[]>([]);
   readonly notifications = signal<Notification[]>([]);
   readonly savedIds = signal<string[]>([]);
+  /**
+   * Cases the person chose to follow, per account.
+   *
+   * Saving is "keep this for later"; following is "tell me when something
+   * changes". The two are deliberately separate, because the reason a family
+   * follows a case is the reason they come back to the app.
+   */
+  readonly followedCaseIds = signal<string[]>([]);
+  /** The followed cases themselves, so a card can render without a lookup. */
+  readonly followedCases = signal<Post[]>([]);
+  /**
+   * When this account last looked at the feed. Everything newer is "while you
+   * were away" - the honest answer to "what happened since I left".
+   */
+  readonly lastVisitAt = signal<number>(0);
   /** Full posts for the Saved page, newest save first. Deleted posts drop out. */
   readonly savedPosts = signal<Post[]>([]);
   /** Posts the user tapped "Don't want to see this" on. Per device, per account. */
@@ -293,6 +309,9 @@ export class DataService {
       const visible = hidden.length ? list.filter((p) => !hidden.includes(p.id)) : list;
       this.feed.set(visible);
       this.mergeCache(list);
+      // First ever look on this account: remember the moment as the baseline,
+      // so the next visit has something honest to compare against.
+      if (!this.lastVisitAt()) this.markVisited();
       if (f.status === 'found') {
         this.broughtHome.set(visible);
       } else {
@@ -378,6 +397,42 @@ export class DataService {
     return this.cache()[id] ?? this.feed().find((p) => p.id === id);
   }
 
+  /**
+   * Comments already fetched for a card's comment preview.
+   *
+   * LinkedIn shows the most relevant comment under a post; a card therefore
+   * needs the comments themselves, not just the count. They are fetched once per
+   * post and kept here, so a feed of twenty cards does not re-ask for the same
+   * post, and a card that has no comments never asks at all.
+   */
+  private readonly cardComments = signal<Record<string, Comment[]>>({});
+
+  commentsFor(postId: string): Comment[] {
+    return this.cardComments()[postId] ?? [];
+  }
+
+  async loadCommentsFor(postId: string): Promise<void> {
+    if (!postId || this.cardComments()[postId]) return;
+    try {
+      const list = await this.api.commentsFor(postId);
+      this.cardComments.update((all) => ({ ...all, [postId]: list }));
+    } catch {
+      // A preview under a card is not worth an error banner; the counts the
+      // card already has stay as they were and tapping still opens the post.
+    }
+  }
+
+  /** Forget a post's prefetched comments, e.g. after a comment is deleted. */
+  dropCommentsFor(postId: string): void {
+    this.cardComments.update((all) => {
+      if (!(postId in all)) return all;
+      const next = { ...all };
+      delete next[postId];
+      return next;
+    });
+  }
+
+
   async loadPost(id: string): Promise<Post | undefined> {
     const p = await this.api.post(id);
     if (p) {
@@ -435,6 +490,7 @@ export class DataService {
       this.followerIds.set([]);
       this.followRequests.set([]);
       this.myAuthored.set([]);
+      this.followedCases.set([]);
       return;
     }
     const [notes, following, followers, requests, mine] = await Promise.all([
@@ -449,6 +505,7 @@ export class DataService {
     this.followingIds.set(following.map((edge) => edge.followingId));
     this.followerIds.set(followers.map((edge) => edge.followerId));
     this.followRequests.set(requests);
+    void this.loadFollowedCases();
     void this.checkWatched();
   }
 
@@ -721,6 +778,9 @@ export class DataService {
     if (input.media.length > 1 && input.media.some((m) => m.kind === 'video')) {
       throw new Error('Choose photos or one video - not both');
     }
+    if (input.media.filter((m) => m.kind === 'image').length > POST_MAX_PHOTOS) {
+      throw new Error(`A case can show up to ${POST_MAX_PHOTOS} photos`);
+    }
 
     // A photo that cannot be stored must not take the whole post with it: the
     // composer is told which one failed and offers to post without it. `me.id`
@@ -803,9 +863,17 @@ export class DataService {
       outcomeNudgeAt: null
     };
     await this.api.savePost(post);
-    if (post.type === 'danger') await this.alertProvince(post);
+    // Alerts are a side effect of a post that is already saved. If the fan-out
+    // fails, the post stays posted - so it must never be reported as a failed
+    // post, which is exactly what used to happen: "Nothing was saved", with the
+    // post sitting in the feed when the person went back for it.
+    if (post.type === 'danger') {
+      await this.alertProvince(post).catch((e) => console.warn('Danger alert fan-out failed:', e?.message ?? e));
+    }
     // A child case is held for review first, so its alert goes out on approval.
-    if (isCasePost(post) && post.status === 'active') await this.alertCase(post);
+    if (isCasePost(post) && post.status === 'active') {
+      await this.alertCase(post).catch((e) => console.warn('Case alert fan-out failed:', e?.message ?? e));
+    }
     if (post.spotlightId) {
       // the post is already live; a failed Spotlight index must not look like a failed post
       await this.api.linkSpotlightPost(post.spotlightId, post.id, true).catch((e) => console.warn(e?.message));
@@ -914,8 +982,17 @@ export class DataService {
     const before = await this.loadPost(id);
     if (!before) return true;
     await this.api.deletePost(id);
-    this.feed.set(this.feed().filter((p) => p.id !== id));
-    this.savedPosts.set(this.savedPosts().filter((p) => p.id !== id));
+    /*
+     * Every list the deleted post could be sitting in, not just the feed. It
+     * used to clear the feed and saved posts only, so a post deleted from the
+     * Menu stayed on the Menu - the page was reading `myAuthored`, which nothing
+     * had touched.
+     */
+    const drop = (list: Post[]) => list.filter((p) => p.id !== id);
+    this.feed.set(drop(this.feed()));
+    this.savedPosts.set(drop(this.savedPosts()));
+    this.myAuthored.set(drop(this.myAuthored()));
+    this.broughtHome.set(drop(this.broughtHome()));
     this.cache.update((c) => { const rest = { ...c }; delete rest[id]; return rest; });
     await this.loadFeed();
     const still = await this.api.post(id).catch(() => null);
@@ -1016,6 +1093,39 @@ export class DataService {
     this.mergeCache([next]);
   }
 
+  /**
+   * Deliver something to one person's notifications.
+   *
+   * This is how "send this post to someone" reaches them inside the app without
+   * pretending the two of you are in a private chat: it works for a connection,
+   * a follower, or anyone else, and it is the same notification list they
+   * already read.
+   */
+  async notifyPerson(userId: string, note: {
+    kind: Notification['kind'];
+    title: string;
+    body: string;
+    route: string | null;
+    postId?: string | null;
+  }): Promise<void> {
+    const me = this.auth.user();
+    if (!me) throw new Error('Sign in to send a post');
+    if (userId === me.id) throw new Error('That is you - no need to send it to yourself');
+    const profile = await this.api.user(userId).catch(() => undefined);
+    if (!profile) throw new Error('That person is not here any more');
+    await this.api.pushNotification({
+      id: uid('n'),
+      userId,
+      kind: note.kind,
+      title: note.title,
+      body: note.body,
+      at: Date.now(),
+      read: false,
+      route: note.route,
+      postId: note.postId ?? null
+    });
+  }
+
   async recordShare(postId: string): Promise<void> {
     const p = await this.loadPost(postId);
     if (!p) return;
@@ -1047,6 +1157,91 @@ export class DataService {
       /* offline - the device copy is kept and re-sent with the next profile save */
     }
     return !has;
+  }
+
+  /* ---------------------- following a case ---------------------- */
+
+  /**
+   * Follow or unfollow a case.
+   *
+   * A follower is told when the case moves: a new lead, a reaction, a sighting
+   * or the person being found. That is the loop that brings someone back to the
+   * app, so the first follow also takes a snapshot - only what happens from now
+   * on is announced, never the backlog.
+   */
+  async toggleFollowCase(postId: string): Promise<boolean> {
+    if (!this.auth.viewerId) throw new Error('Sign in to follow a case');
+    const has = this.followedCaseIds().includes(postId);
+    const next = has ? this.followedCaseIds().filter((x) => x !== postId) : [postId, ...this.followedCaseIds()];
+    this.followedCaseIds.set(next);
+    this.followedCases.set(has
+      ? this.followedCases().filter((p) => p.id !== postId)
+      : [this.post(postId), ...this.followedCases()].filter((p): p is Post => !!p));
+    if (!has) {
+      const p = this.post(postId);
+      if (p) this.rememberWatch([p]);
+    }
+    this.persistViewerPrefs();
+    return !has;
+  }
+
+  isFollowingCase(postId: string): boolean {
+    return this.followedCaseIds().includes(postId);
+  }
+
+  /** Load every followed case. Deleted cases drop out of the list. */
+  async loadFollowedCases(): Promise<Post[]> {
+    const ids = this.followedCaseIds();
+    const posts = (await Promise.all(ids.map((id) => this.loadPost(id).catch(() => undefined))))
+      .filter((p): p is Post => !!p);
+    this.followedCases.set(posts);
+    if (posts.length !== ids.length) {
+      this.followedCaseIds.set(posts.map((p) => p.id));
+      this.persistViewerPrefs();
+    }
+    return posts;
+  }
+
+  /* ---------------------- while you were away ---------------------- */
+
+  /**
+   * What changed since this account last looked: new cases on the feed (and how
+   * many are in the viewer's own province), movement on the cases they follow,
+   * and anything newly filed to the Spotlights they are part of.
+   *
+   * Read from what is already on the device - the feed, the followed cases and
+   * the cache - so opening the app never costs an extra round trip to say
+   * something happened.
+   */
+  readonly sinceLastVisit = computed(() => {
+    const since = this.lastVisitAt();
+    const me = this.auth.user();
+    if (!since) return { newCases: [] as Post[], nearYou: 0, followed: [] as Post[], spotlight: [] as Post[] };
+    const visible = this.visiblePosts();
+    const newCases = visible.filter((p) => p.createdAt > since && p.status === 'active');
+    const nearYou = me ? newCases.filter((p) => p.province === me.province).length : 0;
+    const followed = this.followedCases().filter((p) => p.updatedAt > since && p.status !== 'under_review');
+    const mine = new Set(this.spotlights().filter((s) => !!this.auth.viewerId && s.memberIds.includes(this.auth.viewerId)).map((s) => s.id));
+    const spotlight = visible.filter((p) => p.createdAt > since && !!p.spotlightId && mine.has(p.spotlightId));
+    return { newCases, nearYou, followed, spotlight };
+  });
+
+  /** Everything the catch-up card is allowed to count. */
+  private visiblePosts(): Post[] {
+    const seen = new Set<string>();
+    return [...this.feed(), ...this.followedCases(), ...Object.values(this.cache())].filter((p) => {
+      if (seen.has(p.id)) return false;
+      seen.add(p.id);
+      return true;
+    });
+  }
+
+  /** "Now I have seen it" - the next card starts from here. */
+  markVisited(at = Date.now()): void {
+    this.lastVisitAt.set(at);
+    try {
+      if (typeof localStorage !== 'undefined') localStorage.setItem(this.visitKey, String(at));
+    } catch { /* private mode - the session still remembers */ }
   }
 
   /** Load every saved post for the Saved page. */
@@ -1109,6 +1304,7 @@ export class DataService {
     try {
       const why = new Map<string, string>();
       for (const id of this.savedIds()) why.set(id, 'a post you saved');
+      for (const id of this.followedCaseIds()) why.set(id, 'a case you follow');
       for (const sp of this.spotlights().filter((s) => s.memberIds.includes(me))) {
         const posts = await this.api.queryFeed({ ...emptyFilter(), status: 'all', spotlightId: sp.id }, me).catch(() => [] as Post[]);
         this.mergeCache(posts);
@@ -1125,7 +1321,7 @@ export class DataService {
         await this.api.pushNotification({
           id: uid('n'), userId: me, kind: 'outcome',
           title: `Did you get help finding ${who}?`,
-          body: `${p.upvotes} people have an idea and ${p.commentCount} commented. If ${who} is home, tap to mark them found.`,
+          body: `${p.upvotes} reactions and ${p.commentCount} comments. If ${who} is home, tap to mark them found.`,
           at: Date.now(), read: false, route: `/post/${p.id}`, postId: p.id
         });
         await this.setOutcomeNudged(p.id).catch(() => undefined);
@@ -1157,8 +1353,8 @@ export class DataService {
           const n = p.upvotes - was.up;
           await this.api.pushNotification({
             id: uid('n'), userId: me, kind: 'vote',
-            title: n === 1 ? `Someone has an idea about ${who}` : `${n} people have an idea about ${who}`,
-            body: `Someone has an idea on ${where}. Open it to read the leads.`,
+            title: n === 1 ? `Someone reacted to ${who}` : `${n} people reacted to ${who}`,
+            body: `Someone reacted on ${where}. Open it to read the leads.`,
             at: Date.now(), read: false, route: `/post/${p.id}`, postId: p.id
           });
           sent++;
@@ -1181,11 +1377,22 @@ export class DataService {
     return `lulafind.saved.${this.auth.viewerId ?? 'anon'}`;
   }
 
+  /** Cases this account follows - device-local, like hidden and saved. */
+  private get followedKey(): string {
+    return `lulafind.following-cases.${this.auth.viewerId ?? 'anon'}`;
+  }
+
+  /** When this account last looked at the feed. */
+  private get visitKey(): string {
+    return `lulafind.last-visit.${this.auth.viewerId ?? 'anon'}`;
+  }
+
   private persistViewerPrefs(): void {
     try {
       if (typeof localStorage === 'undefined') return;
       localStorage.setItem(this.hiddenKey, JSON.stringify(this.hiddenIds()));
       localStorage.setItem(this.savedKey, JSON.stringify(this.savedIds()));
+      localStorage.setItem(this.followedKey, JSON.stringify(this.followedCaseIds()));
     } catch { /* private mode / full quota - the choice lasts for this session only */ }
   }
 
@@ -1201,9 +1408,15 @@ export class DataService {
       const rawSaved = localStorage.getItem(this.savedKey);
       const local = rawSaved ? (JSON.parse(rawSaved) as string[]) : [];
       this.savedIds.set(fromProfile ?? (Array.isArray(local) ? local : []));
+      const rawFollowed = localStorage.getItem(this.followedKey);
+      const followed = rawFollowed ? (JSON.parse(rawFollowed) as string[]) : [];
+      this.followedCaseIds.set(Array.isArray(followed) ? followed : []);
+      this.lastVisitAt.set(Number(localStorage.getItem(this.visitKey) ?? 0) || 0);
     } catch {
       this.hiddenIds.set([]);
       this.savedIds.set(fromProfile ?? []);
+      this.followedCaseIds.set([]);
+      this.lastVisitAt.set(0);
     }
   }
 
@@ -1457,20 +1670,79 @@ export class DataService {
    * a person with that surname (so nobody has to scroll the whole feed).
    * Independent of the home feed filters; found cases included.
    */
+  /**
+   * Everything on a Spotlight page: posts filed to it, plus every post about
+   * someone with that surname.
+   *
+   * Reading is open to anyone - you must join a community to post to it, not to
+   * read it - so the filed posts are fetched directly rather than through the
+   * feed, whose audience rules hide `surname` posts from non-members. Cases
+   * held for review stay hidden from everyone but their author and admins.
+   */
   async postsForSpotlight(sp: Spotlight): Promise<Post[]> {
     const me = this.auth.viewerId;
+    const viewer = this.auth.user();
     const needle = sp.surname.trim().toLowerCase();
-    const all = await this.api.queryFeed({ ...emptyFilter(), status: 'all', sort: 'recent' }, me);
-    const hidden = this.hiddenIds();
-    const list = all.filter((p) => !RETIRED_POST_TYPES.includes(p.type) && !hidden.includes(p.id) && (
-      p.spotlightId === sp.id ||
-      (p.type !== 'danger' && !!needle && (
-        (p.subject?.surname ?? '').trim().toLowerCase() === needle ||
-        (p.subject?.name ?? '').trim().toLowerCase().split(/\s+/).includes(needle)
-      ))
+    const [filed, feed] = await Promise.all([
+      this.api.postsInSpotlight(sp.id).catch(() => [] as Post[]),
+      this.api.queryFeed({ ...emptyFilter(), status: 'all', sort: 'recent' }, me).catch(() => [] as Post[])
+    ]);
+    const surnameMatched = feed.filter((p) => p.type !== 'danger' && !!needle && (
+      (p.subject?.surname ?? '').trim().toLowerCase() === needle ||
+      (p.subject?.name ?? '').trim().toLowerCase().split(/\s+/).includes(needle)
     ));
+    const hidden = this.hiddenIds();
+    const list = [...filed, ...surnameMatched].filter((p) =>
+      !RETIRED_POST_TYPES.includes(p.type) &&
+      !hidden.includes(p.id) &&
+      (p.status !== 'under_review' || p.authorId === me || viewer?.isAdmin === true)
+    );
     this.mergeCache(list);
     return uniqueById(list).sort((a, b) => b.createdAt - a.createdAt);
+  }
+
+  /**
+   * Post straight into a Spotlight - the short way, with whatever photo or
+   * video was attached.
+   *
+   * The rules are the ones `createPost` enforces for every post: membership is
+   * required, a title needs eight characters and the text needs thirty. The
+   * province comes from the community, so the person does not have to pick it
+   * again, and the audience is the community itself.
+   */
+  async postToSpotlight(
+    sp: Spotlight,
+    input: { type: PostType; title: string; body: string; town: string; media: MediaItem[] }
+  ): Promise<Post> {
+    const me = this.auth.user();
+    if (!me) throw new Error('Sign in to post');
+    const province = sp.province ?? me.province;
+    if (!province) throw new Error('This community has no province yet, so a post cannot be filed to it');
+    return this.createPost({
+      type: input.type,
+      title: input.title,
+      body: input.body,
+      media: input.media,
+      province,
+      town: input.town.trim() || sp.surname,
+      lastSeenAt: null,
+      lastSeenWhere: '',
+      geo: null,
+      contactLabel: 'Family contact',
+      contactValue: '',
+      contactVisibleTo: 'verified',
+      caseNumber: null,
+      reward: null,
+      subject: null,
+      audience: 'surname',
+      spotlightId: sp.id,
+      chatEnabled: true,
+      allowComments: true,
+      anonymous: false,
+      askWanted: false,
+      khumbu: null,
+      danger: null
+    });
   }
 
   /**
@@ -1510,8 +1782,8 @@ export class DataService {
     if (audience === 'surname' && (!input.spotlightId || !this.isMember(input.spotlightId))) {
       throw new Error('Choose a Spotlight community you have joined.');
     }
-    if (input.media.length > 3 || input.media.some((item) => item.kind !== 'image')) {
-      throw new Error('A story can contain up to three photos. Video stories are not available yet.');
+    if (input.media.length > STORY_MAX_PHOTOS || input.media.some((item) => item.kind !== 'image')) {
+      throw new Error('A story can contain one photo. Video stories are not available yet.');
     }
     const media = await Promise.all(input.media.map((item) => this.api.uploadMedia(me.id, item)));
     const now = Date.now();
@@ -1722,7 +1994,7 @@ export class DataService {
     return updated;
   }
 
-  /* --------------------- KhumbulEkhaya flow -------------------- */
+  /* --------------------- Home Sweet Home flow -------------------- */
   /** The subject claims the post: "this is me". */
   async claimKhumbuPost(postId: string): Promise<Post | undefined> {
     const me = this.auth.viewerId;
@@ -1773,7 +2045,7 @@ export class DataService {
         id: uid('n'),
         userId: p.authorId,
         kind: 'claim',
-        title: response === 'not_going_home' ? 'They are safe but not coming home' : 'They answered your KhumbulEkhaya',
+        title: response === 'not_going_home' ? 'They are safe but not coming home' : 'They answered your Home Sweet Home',
         body: note.trim() || (response === 'not_going_home' ? 'They asked that you respect this.' : 'They are coming home.'),
         at: Date.now(),
         read: false,
@@ -2043,16 +2315,64 @@ export class DataService {
     return results.filter((u): u is UserProfile => u !== undefined);
   }
 
-  async searchUsers(q: string): Promise<UserProfile[]> {
+  /**
+   * Search every case the viewer may see, not just the page in memory.
+   *
+   * The backend runs the query, so a case posted last month is still found on
+   * the day it matters. Hits already in the feed are merged in and de-duplicated
+   * so a post made seconds ago answers immediately, before the next page of the
+   * feed has arrived. One character is not enough to search on - it matches
+   * almost everything and the request is not worth sending.
+   */
+  async searchPosts(q: string): Promise<Post[]> {
     const needle = q.trim().toLowerCase();
+    if (needle.length < 2) return [];
+    let fromApi: Post[] = [];
+    try {
+      fromApi = await this.api.searchPosts(q);
+    } catch {
+      // Offline or the query failed: the copies on this device still answer.
+    }
+    const fromFeed = this.feed().filter((p) => this.matchesQuery(p, needle));
+    const seen = new Set<string>();
+    return [...fromApi, ...fromFeed].filter((p) => {
+      if (seen.has(p.id)) return false;
+      seen.add(p.id);
+      return true;
+    });
+  }
+
+  /**
+   * Find members by name, surname or handle across the whole member list - not
+   * only the authors whose posts happen to be loaded. Profiles are pushed into
+   * the author cache so a result card renders without a second round trip.
+   */
+  async searchUsers(q: string): Promise<UserProfile[]> {
+    const needle = q.trim().toLowerCase().replace(/^@/, '');
     if (!needle) return [];
-    const all = await this.api.users();
-    return all.filter(
-      (u) =>
-        u.displayName.toLowerCase().includes(needle) ||
-        u.handle.toLowerCase().includes(needle) ||
-        u.surname.toLowerCase().includes(needle)
-    );
+    let hits: UserProfile[] = [];
+    try {
+      hits = await this.api.searchUsers(q);
+    } catch {
+      hits = await this.api.users();
+    }
+    const seen = new Set<string>();
+    const out = hits.filter((u) => {
+      if (u.suspended || seen.has(u.id)) return false;
+      seen.add(u.id);
+      return true;
+    });
+    out.forEach((u) => this.touchAuthor(u));
+    return out;
+  }
+
+  /** The same fields the feed's free-text filter reads. One definition. */
+  private matchesQuery(p: Post, needle: string): boolean {
+    const author = this.authorOf(p.authorId);
+    return [
+      p.title, p.body, p.town, p.caseNumber ?? '',
+      p.subject?.name ?? '', p.subject?.surname ?? '', author?.displayName ?? ''
+    ].join(' ').toLowerCase().includes(needle);
   }
 
   /**

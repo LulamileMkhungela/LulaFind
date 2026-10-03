@@ -1,8 +1,9 @@
 import {
   ChatMessage, ChatThread, Comment, FeedFilter, FollowEdge, Lookout, Notification, Post, Spotlight, Story, Tip,
-  UserProfile, defaultPrivacy
+  ReactionKind, UserProfile, defaultPrivacy, isReaction
 } from '../models/types';
 import { seedComments, seedPosts, seedSpotlights, seedStories, seedTips, seedUsers } from './seed';
+import { canReadPostAudience } from '../utils/audience';
 import { answerBlocker, hasAnswered, withAnswer } from '../utils/lookout';
 import { lookoutCasePost } from '../utils/lookout-case';
 
@@ -92,7 +93,7 @@ export interface DbSnapshot {
 }
 
 const VERSION_KEY = 'seedVersion';
-const SEED_VERSION = 8;
+const SEED_VERSION = 10;
 /** Live phones never load the old demo snapshot. Version 9 is an empty store. */
 const LIVE_VERSION = 9;
 
@@ -232,9 +233,35 @@ export class LocalDb {
       if (p.spotlightId) db.spotlights.find((s) => s.id === p.spotlightId)?.postIds.push(p.id);
       p.commentCount = db.comments.filter((c) => c.postId === p.id).length;
     }
-    // demo demo user already votes on a couple of things so the UI shows states
-    const demo = db.posts.find((p) => p.id === 'p_johan');
-    if (demo) demo.voterIds['u_demo'] = 'up';
+    // The demo user reacts to a couple of things so the UI shows an active state.
+    const voted = db.posts.find((p) => p.id === 'p_johan');
+    if (voted) voted.voterIds['u_demo'] = 'like';
+    /*
+     * Every reaction count has faces behind it.
+     *
+     * The cards carried an `upvotes` number with no voters at all, so a post
+     * could read "412" and then open a Reactions sheet saying "No reactions yet":
+     * the number and the list were two different facts. Each post now gets a
+     * stable slice of the community as its known voters, and the count is never
+     * smaller than the list it can actually show. Bigger counts stay - a case can
+     * be shared far beyond this small demo network - and the sheet states how
+     * many more people reacted, so nothing is claimed that cannot be shown.
+     *
+     * `u_demo` is deliberately left out: the signed-in person's own reaction is
+     * theirs to give, never pre-seeded behind their back.
+     */
+    const voters = db.users.filter((u) => u.id !== 'u_mod' && u.id !== 'u_demo').map((u) => u.id);
+    const kinds: ReactionKind[] = ['like', 'support', 'sad', 'up'];
+    db.posts.forEach((p, index) => {
+      if (p.upvotes <= 0) return;
+      const size = Math.max(3, Math.min(voters.length, 4 + ((index * 5) % 7)));
+      for (let i = 0; i < size; i++) {
+        const uid = voters[(index * 3 + i * 2) % voters.length];
+        if (uid !== p.authorId && !p.voterIds[uid]) p.voterIds[uid] = kinds[(index + i) % kinds.length];
+      }
+      const known = Object.values(p.voterIds).filter((v) => isReaction(v)).length;
+      p.upvotes = Math.max(p.upvotes, known);
+    });
     // some follows so the demo user has a network
     const edges: [string, string][] = [
       ['u_demo', 'u_lerato'], ['u_demo', 'u_kabelo'], ['u_demo', 'u_sipho'], ['u_demo', 'u_ayanda'],
@@ -264,7 +291,7 @@ export class LocalDb {
     db.notifications = [
       {
         id: 'n1', userId: 'u_demo', kind: 'vote', title: 'Your case is trending in Gauteng',
-        body: 'Help find Thato Mokoena has 412 upvotes and 187 shares.', at: Date.now() - 3600_000 * 2,
+        body: `Help find Thato Mokoena has ${db.posts.find((p) => p.id === 'p_thato')?.upvotes ?? 0} reactions and 187 reposts.`, at: Date.now() - 3600_000 * 2,
         read: false, route: '/post/p_thato', postId: 'p_thato'
       },
       {
@@ -284,7 +311,7 @@ export class LocalDb {
       },
       {
         id: 'n5', userId: 'u_demo', kind: 'outcome', title: 'Did you get help?',
-        body: 'Hendrik Botha has 189 upvotes. Let us know if he is home so we can stop the search.',
+        body: 'Hendrik Botha\u2019s case is still open. Let us know if he is home so we can stop the search.',
         at: Date.now() - 3600_000 * 1, read: false, route: '/post/p_johan', postId: 'p_johan'
       },
       {
@@ -369,6 +396,33 @@ export class LocalDb {
     this.db.users = this.db.users.filter((u) => u.id !== id);
     this.db.posts = this.db.posts.filter((p) => p.authorId !== id);
     this.persist();
+  }
+
+  /**
+   * Free-text search over every stored post.
+   *
+   * Uses the same matcher as the feed's `query` filter, so a search behaves the
+   * same wherever it is typed. Cases held for review stay hidden from the
+   * public; the caller merges in whatever the viewer's own feed may show them.
+   */
+  searchPosts(q: string, limit = 40): Post[] {
+    const needle = q.trim().toLowerCase();
+    if (needle.length < 2) return [];
+    return this.db.posts
+      .filter((p) => p.status !== 'under_review' && this.matchesQuery(p, needle))
+      .sort((a, b) => b.updatedAt - a.updatedAt)
+      .slice(0, limit)
+      .map((p) => clone(p));
+  }
+
+  /** Free-text search over members by name, surname or handle. */
+  searchUsers(q: string, limit = 20): UserProfile[] {
+    const needle = q.trim().toLowerCase().replace(/^@/, '');
+    if (!needle) return [];
+    return this.db.users
+      .filter((u) => !u.suspended && `${u.displayName} ${u.surname} ${u.handle}`.toLowerCase().includes(needle))
+      .slice(0, limit)
+      .map((u) => clone(u));
   }
 
   /* ------------------------- posts ------------------------- */
@@ -530,32 +584,12 @@ export class LocalDb {
 
     if (f.query.trim()) {
       const q = f.query.trim().toLowerCase();
-      list = list.filter((p) => {
-        const author = this.user(p.authorId);
-        return (
-          p.title.toLowerCase().includes(q) ||
-          p.body.toLowerCase().includes(q) ||
-          p.town.toLowerCase().includes(q) ||
-          (p.subject?.name.toLowerCase().includes(q) ?? false) ||
-          (p.subject?.surname.toLowerCase().includes(q) ?? false) ||
-          (p.caseNumber?.toLowerCase().includes(q) ?? false) ||
-          (author?.displayName.toLowerCase().includes(q) ?? false)
-        );
-      });
+      list = list.filter((p) => this.matchesQuery(p, q));
     }
 
-    // audience enforcement
-    list = list.filter((p) => {
-      if (p.authorId === viewerId) return true;
-      if (p.audience === 'public') return true;
-      if (p.audience === 'followers') return following.has(p.authorId);
-      if (p.audience === 'surname') {
-        if (!p.spotlightId) return false;
-        const sp = this.spotlight(p.spotlightId);
-        return !!sp && (!viewer?.surname || sp.surname.toLowerCase() === viewer.surname.toLowerCase() || sp.memberIds.includes(viewerId ?? ''));
-      }
-      return true;
-    });
+    // audience enforcement - the shared rule, so this backend and the live one
+    // cannot answer the same question differently.
+    list = list.filter((p) => canReadPostAudience(p, { viewerId, following }));
 
     switch (f.sort) {
       case 'hot':
@@ -578,6 +612,20 @@ export class LocalDb {
     return (p.upvotes * 3 + p.commentCount * 5 + p.shares * 2) / Math.pow(ageH, 0.55);
   }
 
+  /**
+   * What "free text" means for a case: the words on the poster, the case number
+   * quoted by SAPS, the town, the last-seen town, and the author's name.
+   * One definition, so the feed filter and search can never drift apart.
+   */
+  private matchesQuery(p: Post, needle: string): boolean {
+    const author = this.user(p.authorId);
+    const hay = [
+      p.title, p.body, p.town, p.caseNumber ?? '',
+      p.subject?.name ?? '', p.subject?.surname ?? '', author?.displayName ?? ''
+    ].join(' ').toLowerCase();
+    return hay.includes(needle);
+  }
+
   /* ------------------------- comments ------------------------- */
   comments(): Comment[] { return this.db.comments.map((c) => clone(c)); }
   commentsFor(postId: string): Comment[] {
@@ -595,6 +643,20 @@ export class LocalDb {
 
   /* ------------------------- spotlights ------------------------- */
   spotlights(): Spotlight[] { return this.db.spotlights.map((s) => clone(s)); }
+
+  /**
+   * Posts filed to one Spotlight, newest first.
+   *
+   * No audience test: a Spotlight page is a public noticeboard, and everyone
+   * who opens it sees what the community filed there. Joining is what lets you
+   * add to it. Review rules still apply - see `searchPosts`.
+   */
+  postsInSpotlight(spotlightId: string): Post[] {
+    return this.db.posts
+      .filter((p) => p.spotlightId === spotlightId)
+      .sort((a, b) => b.createdAt - a.createdAt)
+      .map((p) => clone(p));
+  }
   spotlight(id: string): Spotlight | undefined {
     const sp = this.db.spotlights.find((x) => x.id === id);
     return sp ? clone(sp) : undefined;

@@ -15,22 +15,28 @@ export const CHECK_IN_COPY: Record<CheckInStatus, { label: string; short: string
     ring: 'Green ring',
     detail: 'A green ring means this person is safe.'
   },
+  need_help: {
+    label: 'I need help',
+    short: 'Needs help',
+    ring: 'Red ring',
+    detail: 'A red ring means this person asked for help. In a real emergency, call 10111.'
+  },
+  watch_me: {
+    label: 'Watch me',
+    short: 'Watch me',
+    ring: 'Amber ring',
+    detail: 'An amber ring means this person asked to be watched over - travelling alone, or somewhere they do not feel safe.'
+  },
   unfamiliar: {
     label: 'I am in an unfamiliar place',
     short: 'Unfamiliar place',
-    ring: 'Orange ring',
-    detail: 'An orange ring means this person is somewhere they do not know.'
-  },
-  need_help: {
-    label: 'I need someone to check on me',
-    short: 'Check on me',
-    ring: 'Red ring',
-    detail: 'A red ring means this person asked someone to check on them. In a real emergency, call 10111.'
+    ring: 'Amber ring',
+    detail: 'An amber ring means this person is somewhere they do not know.'
   }
 };
 
 /** One line, shown wherever a coloured ring can appear. Colour is never the only clue. */
-export const RING_KEY = 'Green ring: safe. Orange ring: unfamiliar place. Red ring: check on me.';
+export const RING_KEY = 'Green ring: safe. Amber ring: watch me. Red ring: needs help.';
 
 /**
  * "Am I safe?" check-ins and optional live location.
@@ -182,18 +188,25 @@ export class SafetyService {
   }
 
   private async notifyFollowers(me: UserProfile, record: CheckIn): Promise<void> {
-    // only "check on me" and live sharing are worth telling people about
+    // "I'm safe" on its own is not worth a notification. "I Need Help" and
+    // "Watch Me" both are - that is the whole point of setting them.
     if (record.status === 'safe' && !record.liveShareOn) return;
     const followers = await this.followersOf(me.id);
     const body = record.liveShareOn
       ? `${me.displayName} is sharing their live location for the next hour.`
-      : `${me.displayName} asked people to check on them.`;
+      : record.status === 'need_help'
+        ? `${me.displayName} asked for help. Check they are okay.`
+        : record.status === 'watch_me'
+          ? `${me.displayName} asked to be watched over. Keep an eye out for them.`
+          : `${me.displayName} asked people to check on them.`;
     for (const f of followers) {
       await this.api.pushNotification({
         id: uid('n'),
         userId: f.id,
         kind: 'checkin',
-        title: record.status === 'need_help' ? `Check on ${me.displayName}` : `${me.displayName} checked in`,
+        title: record.status === 'need_help' ? `Check on ${me.displayName}`
+          : record.status === 'watch_me' ? `Keep an eye on ${me.displayName}`
+          : `${me.displayName} checked in`,
         body,
         at: Date.now(),
         read: false,

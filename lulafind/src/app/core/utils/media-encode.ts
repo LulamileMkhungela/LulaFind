@@ -56,8 +56,20 @@ function loadImage(src: string): Promise<HTMLImageElement | null> {
   return new Promise((resolve) => {
     if (typeof Image === 'undefined' || typeof document === 'undefined') return resolve(null);
     const img = new Image();
-    img.onload = () => resolve(img.width > 0 && img.height > 0 ? img : null);
-    img.onerror = () => resolve(null);
+    let done = false;
+    const finish = (el: HTMLImageElement | null): void => {
+      if (done) return;
+      done = true;
+      clearTimeout(guard);
+      resolve(el);
+    };
+    // A decoder that never reports back is treated as one that cannot do it: a
+    // headless test runner, a webview that will not load a data-url image, a corrupt
+    // file. Without this the encode hangs and the composer sits there spinning,
+    // which is a worse failure than refusing the photo out loud.
+    const guard = setTimeout(() => finish(null), 1_500);
+    img.onload = () => finish(img.width > 0 && img.height > 0 ? img : null);
+    img.onerror = () => finish(null);
     img.src = src;
   });
 }

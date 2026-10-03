@@ -18,12 +18,13 @@ import { LULA_API } from '../../core/data/api';
 import { Post } from '../../core/models/types';
 import { fullDate } from '../../core/utils/format';
 
+import { KeyboardDirective } from '../../shared/keyboard.directive';
+
 @Component({
   selector: 'lf-location-check',
   standalone: true,
   imports: [
-    IonContent, IonHeader, IonToolbar, IonButtons, IonBackButton, IonTitle, IonSkeletonText, IonTextarea, IconComponent
-  ],
+    IonContent, IonHeader, IonToolbar, IonButtons, IonBackButton, IonTitle, IonSkeletonText, IonTextarea, IconComponent, KeyboardDirective],
   template: `
     <ion-header [translucent]="false">
       <ion-toolbar>
@@ -46,7 +47,7 @@ import { fullDate } from '../../core/utils/format';
 
         <section class="card">
           <h2 class="lf-h2" style="margin:0 0 6px">1 · Is the subject registered on LulaFind?</h2>
-          <ion-textarea rows="1" placeholder="Search by name or surname" [value]="lookup"
+          <ion-textarea lfKeyboard rows="1" placeholder="Search by name or surname" [value]="lookup"
                         (ionInput)="lookup = $any($event.target).value"></ion-textarea>
           <button class="lf-btn lf-btn--ghost lf-btn--block" (click)="runLookup()">
             <lf-icon name="search" [size]="16" /> Check the member directory
@@ -74,7 +75,7 @@ import { fullDate } from '../../core/utils/format';
               The subject gets a notification: "{{ p()!.subject?.name ?? 'Someone' }} may be the person in this case.
               Do you want to share your location with this search?" They can say yes, no, or ignore it.
             </p>
-            <ion-textarea rows="2" placeholder="A short message to them (optional)" [value]="note"
+            <ion-textarea lfKeyboard rows="2" placeholder="A short message to them (optional)" [value]="note"
                           (ionInput)="note = $any($event.target).value"></ion-textarea>
             <button class="lf-btn lf-btn--primary lf-btn--block" [disabled]="requested()" (click)="request()">
               <lf-icon name="send" [size]="16" /> {{ requested() ? 'Request sent' : 'Send consent request' }}

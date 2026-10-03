@@ -9,7 +9,6 @@ import { IonTextarea } from '@ionic/angular/ion-textarea';
 import { IconComponent } from '../../shared/components/icon.component';
 import { AvatarComponent } from '../../shared/components/avatar.component';
 import { MediaImageComponent, MediaVideoComponent } from '../../shared/components/media-image.component';
-import { EmojiRowComponent, QUICK_EMOJIS } from '../../shared/components/emoji-row.component';
 import { UserHoverDirective } from '../../shared/components/user-hover-card.component';
 import { ReactionIconComponent } from '../../shared/components/reaction-icon.component';
 import { ChatService } from '../../core/services/chat.service';
@@ -19,10 +18,12 @@ import { ChatMessage, MediaItem, REACTIONS, ReactionKind } from '../../core/mode
 import { clockTime } from '../../core/utils/format';
 import { MediaService } from '../../core/services/media.service';
 
+import { KeyboardDirective } from '../../shared/keyboard.directive';
+
 @Component({
   selector: 'lf-chat-room',
   standalone: true,
-  imports: [IonContent, IonHeader, IonToolbar, IonButtons, IonBackButton, IonTextarea, RouterLink, IconComponent, AvatarComponent, MediaImageComponent, MediaVideoComponent, EmojiRowComponent, ReactionIconComponent, UserHoverDirective],
+  imports: [IonContent, IonHeader, IonToolbar, IonButtons, IonBackButton, IonTextarea, RouterLink, IconComponent, AvatarComponent, KeyboardDirective, MediaImageComponent, MediaVideoComponent, ReactionIconComponent, UserHoverDirective],
   template: `
     <ion-header [translucent]="false">
       <ion-toolbar>
@@ -87,7 +88,7 @@ import { MediaService } from '../../core/services/media.service';
                 }
                 <div class="msg-stack">
                   @if (showMessageHeader(i)) {
-                    <div class="msg-meta"><strong>{{ m.fromUserId === me() ? 'You' : peerName() }}</strong><time>{{ clockTime(m.at) }}</time></div>
+                    <div class="msg-meta"><strong>{{ m.fromUserId === me() ? 'You' : peerName() }}</strong></div>
                   }
                   @if (m.unsent) {
                     <!-- Unsend leaves the gap on both sides, the way LinkedIn does. -->
@@ -163,15 +164,19 @@ import { MediaService } from '../../core/services/media.service';
           <button class="rm" (click)="clearPending()" aria-label="Remove photo"><lf-icon name="x" [size]="14" /></button>
         </div>
       }
-      @if (emojiOpen()) {
-        <lf-emoji-row class="picker" [list]="EMOJIS" (picked)="addEmoji($event)" />
-      }
       <div class="bar">
-        <button type="button" class="ico em-btn" [class.on]="emojiOpen()" (click)="emojiOpen.set(!emojiOpen())"
-                aria-label="Emoji" [attr.aria-expanded]="emojiOpen()"><lf-icon name="smile" [size]="22" /></button>
         <button type="button" class="ico" (click)="attach()" aria-label="Attach a photo"><lf-icon name="image" [size]="22" /></button>
         <button type="button" class="ico" (click)="attach(true)" aria-label="Take a photo"><lf-icon name="camera" [size]="22" /></button>
-        <ion-textarea rows="1" autoGrow placeholder="Message…" [value]="draft"
+        <!--
+          No custom emoji keypad: the phone keyboard already has emoji,
+          autocorrect and word suggestions, and it is the one people know. These
+          attributes ask for them explicitly - without them a webview can put up
+          a bare keyboard with no suggestions and no emoji key at all.
+        -->
+        <ion-textarea lfKeyboard rows="1" autoGrow placeholder="Message…" [value]="draft"
+                      inputmode="text" enterkeyhint="send"
+                      autocorrect="on" autocomplete="on" autocapitalize="sentences" spellcheck="true"
+                      aria-label="Message"
                       (ionInput)="onType($any($event.target).value)"
                       (keydown.enter)="$event.preventDefault(); send()"></ion-textarea>
         <button class="lf-icon-btn send" (click)="send()" [disabled]="chat.sending() || (!draft.trim() && !pending())">
@@ -217,7 +222,6 @@ import { MediaService } from '../../core/services/media.service';
     .msg.mine .msg-stack { align-items: flex-end; }
     .msg-meta { display: flex; align-items: baseline; gap: 7px; padding: 0 4px; color: var(--lf-muted); font-size: 11px; }
     .msg-meta strong { color: var(--ion-text-color); font-size: 12px; font-weight: 700; }
-    .msg-meta time { font-size: 10px; }
     .bubble { max-width: 100%; box-sizing: border-box; padding: 9px 12px 6px; border: 1px solid var(--lf-line-soft);
       border-radius: 12px 12px 12px 4px; background: var(--lf-card); color: var(--ion-text-color); box-shadow: 0 1px 2px rgba(0,0,0,.04); }
     .msg.mine .bubble { border-color: color-mix(in srgb, var(--lf-primary) 22%, var(--lf-line-soft)); border-radius: 12px 12px 4px 12px;
@@ -230,8 +234,6 @@ import { MediaService } from '../../core/services/media.service';
       background: transparent; color: var(--lf-primary); display: grid; place-items: center; }
     .ico:hover { background: var(--lf-hover); }
     .ico.on { background: var(--lf-primary-soft); }
-    .em-btn { font-size: 19px; line-height: 1; }
-    .picker { width: 100%; margin: 0; padding: 4px 2px 6px; border-bottom: 1px solid var(--lf-line); }
     .pending { display: flex; align-items: center; gap: 9px; width: 100%; padding-bottom: 8px;
       border-bottom: 1px solid var(--lf-line); margin-bottom: 8px; }
     .pending img { width: 42px; height: 42px; object-fit: cover; border-radius: 9px; }
@@ -308,15 +310,7 @@ export class ChatRoomComponent implements OnInit, OnDestroy {
   draft = '';
   private timer: any;
 
-  protected emojiOpen = signal(false);
   protected pending = signal<MediaItem | null>(null);
-
-  /**
-   * Real phone emojis, from the same list the comment box uses, so a face means
-   * the same thing in either place. They come off the keyboard too - this row is
-   * a shortcut, not the only way in.
-   */
-  public readonly EMOJIS = QUICK_EMOJIS;
 
   /**
    * In-thread search, LinkedIn's magnifier. Filtering the list rather than
@@ -465,11 +459,6 @@ export class ChatRoomComponent implements OnInit, OnDestroy {
     this.chat.noteTyping();
   }
 
-  public addEmoji(e: string): void {
-    this.draft = `${this.draft}${e}`;
-    this.chat.noteTyping();
-  }
-
   readonly me = computed(() => this.auth.viewerId);
   readonly thread = computed(() => this.chat.threads().find((t) => t.id === this.route.snapshot.paramMap.get('threadId')));
   readonly peerId = computed(() => this.thread()?.participantIds.find((id) => id !== this.auth.viewerId) ?? '');
@@ -544,7 +533,6 @@ export class ChatRoomComponent implements OnInit, OnDestroy {
 
   /** Attach a photo from the gallery, or straight from the camera. */
   protected async attach(camera = false): Promise<void> {
-    this.emojiOpen.set(false);
     try {
       const m = await this.media.pickImage({ source: camera ? 'camera' : 'gallery', quality: 78 });
       if (m) this.pending.set({ ...m, src: await this.media.compress(m.src, 1200) });
@@ -561,7 +549,6 @@ export class ChatRoomComponent implements OnInit, OnDestroy {
     const text = this.draft.trim();
     const photo = this.pending();
     if (!text && !photo) return;
-    this.emojiOpen.set(false);
     this.sendError.set('');
     try {
       await this.chat.send(text, photo);

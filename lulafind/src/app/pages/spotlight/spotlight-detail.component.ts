@@ -1,303 +1,232 @@
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { IonContent } from '@ionic/angular/ion-content';
+import { IonInput } from '@ionic/angular/ion-input';
+
+
+
+
 import { IonSearchbar } from '@ionic/angular/ion-searchbar';
 import { IonSkeletonText } from '@ionic/angular/ion-skeleton-text';
 import { ToastController } from '@ionic/angular/toast-controller';
 import { AlertController } from '@ionic/angular/alert-controller';
-import { ReactionKind } from '../../core/models/types';
 import { IconComponent } from '../../shared/components/icon.component';
 import { TopNavComponent } from '../../shared/components/top-nav.component';
-import { AvatarComponent } from '../../shared/components/avatar.component';
 import { EmptyComponent } from '../../shared/components/empty.component';
 import { PostCardComponent } from '../../shared/components/post-card.component';
+import { AvatarComponent } from '../../shared/components/avatar.component';
 import { DataService } from '../../core/services/data.service';
 import { AuthService } from '../../core/services/auth.service';
 import { PlatformService } from '../../core/services/platform.service';
+import { POST_MAX_PHOTOS } from '../../core/models/media-rules';
+import { MediaItem, POST_TYPE_META, Post, PostType, ReactionKind, Spotlight, UserProfile, provinceName } from '../../core/models/types';
 import { MediaService } from '../../core/services/media.service';
-import { Post, Spotlight, UserProfile, provinceName } from '../../core/models/types';
-import { compact, timeAgo } from '../../core/utils/format';
+import { compact } from '../../core/utils/format';
+import { cover } from '../../core/data/seed';
 
-/**
- * One surname's community, laid out the way LinkedIn lays a group out:
- *
- *   cover banner, with the community's round mark sitting on its bottom edge
- *   name · tagline · "N members · N posts"
- *   Join (or the member's actions) pinned at the end of that header
- *   a sticky tab row: Posts | Members | About
- *   inside Posts: a "Start a post" row for members, then the community feed
- *
- * The one thing that is deliberately not LinkedIn's is what a post is *about*:
- * cases, sightings and updates filed by surname, and anyone may join and post
- * without an approval queue.
- */
 @Component({
   selector: 'lf-spotlight-detail',
   standalone: true,
-  imports: [
-    IonContent, IonSearchbar, IonSkeletonText, RouterLink, IconComponent, AvatarComponent, EmptyComponent,
-    PostCardComponent, TopNavComponent
-  ],
+  imports: [IonContent, IonInput, IonSearchbar, IonSkeletonText, IconComponent, EmptyComponent, PostCardComponent, AvatarComponent, RouterLink, TopNavComponent],
   template: `
-    <lf-top-nav backTo="/spotlight" [title]="sp()?.surname ? sp()!.surname + ' Spotlight' : 'Spotlight'">
-      <div lf-nav-end>
-        <button class="nav-act" type="button" (click)="share()" aria-label="Share this spotlight">
-          <lf-icon name="share" [size]="19" />
-        </button>
-        @if (owner()) {
-          <button class="nav-act" type="button" (click)="menu()" aria-label="Community options">
-            <lf-icon name="more" [size]="19" />
-          </button>
-        }
-      </div>
-    </lf-top-nav>
+    <lf-top-nav backTo="/spotlight" />
 
     <ion-content class="lf-page">
       @if (!sp()) {
         <div class="lf-card"><ion-skeleton-text style="height:180px"></ion-skeleton-text></div>
       } @else {
-        <!-- ── cover + identity, exactly LinkedIn's group header ── -->
-        <header class="cover">
-          <img class="banner" [src]="coverOf()" [alt]="sp()!.surname + ' cover'" />
+        <div class="hero">
+          <img class="banner" [src]="coverOf()" [alt]="sp()!.surname" />
           <div class="ident">
-            <img class="mark" [src]="coverOf()" alt="" />
-            <div class="ident-copy">
-              <h1>{{ sp()!.surname }} <span class="tag">Spotlight</span></h1>
-              @if (sp()!.verified) { <p class="verified"><lf-icon name="check" [size]="12" /> verified family page</p> }
-              <p class="tagline">{{ sp()!.tagline }}</p>
-              <p class="counts">
-                <strong>{{ compact(sp()!.followers) }}</strong> {{ sp()!.followers === 1 ? 'member' : 'members' }}
-                <span class="dot">·</span>
-                <strong>{{ all().length }}</strong> {{ all().length === 1 ? 'post' : 'posts' }}
-                <span class="dot">·</span>
-                {{ sp()!.adminIds.length }} {{ sp()!.adminIds.length === 1 ? 'admin' : 'admins' }}
-                @if (sp()!.province) { <span class="dot">·</span> {{ provinceName(sp()!.province ?? undefined) }} }
-              </p>
+            <h1 class="lf-h1">{{ sp()!.surname }} <span class="lf-chip">Spotlight</span></h1>
+            @if (sp()!.verified) { <span class="lf-chip lf-chip--success"><lf-icon name="check" [size]="12" /> verified family page</span> }
+            <p class="tag">{{ sp()!.tagline }}</p>
+            <div class="stats">
+              <div><strong>{{ compact(sp()!.followers) }}</strong><span>members</span></div>
+              <div><strong>{{ all().length }}</strong><span>posts</span></div>
+              <div><strong>{{ sp()!.adminIds.length }}</strong><span>admins</span></div>
             </div>
-          </div>
-
-          <div class="acts">
-            @if (!member()) {
-              <button class="pill pill--go" type="button" [disabled]="busy()" (click)="join()">
-                <lf-icon name="plus" [size]="16" [weight]="2.6" /> {{ busy() ? 'Joining…' : 'Join this community' }}
-              </button>
-            } @else {
-              <button class="pill pill--go" type="button" (click)="postHere()">
-                <lf-icon name="plus" [size]="16" [weight]="2.6" /> Post
-              </button>
-              @if (!owner()) {
-                <button class="pill" type="button" (click)="leave()">Leave</button>
+            @if (sp()!.about) { <p class="about">{{ sp()!.about }}</p> }
+            <div class="acts">
+              @if (!member()) {
+                <button class="lf-btn lf-btn--primary lf-btn--sm" (click)="join()">
+                  <lf-icon name="plus" [size]="15" /> Join this community
+                </button>
+                <span class="lf-meta">No approval needed - you can post as soon as you join.</span>
+              } @else {
+                <span class="lf-chip lf-chip--success"><lf-icon name="check" [size]="12" /> you are a member</span>
+                <button class="lf-btn lf-btn--primary lf-btn--sm" (click)="postHere()">
+                  <lf-icon name="plus" [size]="15" /> Post to {{ sp()!.surname }}
+                </button>
+                @if (!owner()) {
+                  <button class="lf-btn lf-btn--ghost lf-btn--sm" (click)="leave()">Leave</button>
+                }
               }
-              <span class="joined"><lf-icon name="check" [size]="13" [weight]="3" /> Member</span>
-            }
+              @if (owner()) {
+                <button class="lf-btn lf-btn--ghost lf-btn--sm" (click)="edit()">Edit</button>
+                <button class="lf-btn lf-btn--danger lf-btn--sm" (click)="remove()">Delete</button>
+              }
+              <button class="lf-btn lf-btn--ghost lf-btn--sm" (click)="share()">
+                <lf-icon name="share" [size]="15" /> Share
+              </button>
+            </div>
           </div>
-          <p class="no-approval" role="note">
-            {{ member()
-              ? 'Members post here straight away - no approval queue.'
-              : 'Joining is instant, and you can post as soon as you have joined.' }}
-          </p>
-          @if (notice()) { <p class="soft-notice" role="status"><lf-icon name="info" [size]="14" /> {{ notice() }}</p> }
-        </header>
+        </div>
 
-        <!-- ── tab row, stuck under the app bar the way LinkedIn's is ── -->
-        <nav class="tabs" role="tablist" aria-label="Spotlight sections">
-          @for (tab of tabs(); track tab.id) {
-            <button role="tab" type="button" class="tab" [class.on]="section() === tab.id"
-                    [attr.aria-selected]="section() === tab.id" (click)="section.set(tab.id)">
-              {{ tab.label }}@if (tab.count !== null) { <span class="tab-count">{{ tab.count }}</span> }
-            </button>
-          }
-        </nav>
-
-        @if (section() === 'posts') {
-          @if (member()) {
-            <!-- LinkedIn's group composer row: your face, one button, two shortcuts. -->
-            <div class="start">
-              <lf-avatar [src]="myAvatar()" [name]="myName()" [size]="40" />
-              <button type="button" class="start__box" (click)="postHere()">Start a post in {{ sp()!.surname }}</button>
-              <div class="start__acts">
-                <button type="button" (click)="postWithPhoto()"><lf-icon name="image" [size]="17" /> Photo</button>
-                <button type="button" (click)="postHere()"><lf-icon name="edit" [size]="17" /> Write</button>
-              </div>
+        <!-- Posting is the members' privilege; reading never is. -->
+        @if (member()) {
+          <section class="quick" aria-label="Share with this community">
+            <div class="quick__who">
+              <lf-avatar [src]="data.avatarFor(me())" [name]="me()?.displayName ?? ''" [size]="36" />
+              <span class="lf-small lf-muted">Post to the {{ sp()!.surname }} community</span>
             </div>
-          }
-
-          <ion-searchbar class="inside" placeholder="Search inside the {{ sp()!.surname }} spotlight" [debounce]="200"
-                         (ionInput)="q.set($any($event.detail).value ?? '')"></ion-searchbar>
-
-          <div class="filters">
-            <div class="pills">
-              <button class="pill-mini" [class.on]="show() === 'all'" (click)="show.set('all')">All · {{ all().length }}</button>
-              <button class="pill-mini" [class.on]="show() === 'active'" (click)="show.set('active')">Still missing</button>
-              <button class="pill-mini" [class.on]="show() === 'found'" (click)="show.set('found')">Found</button>
+            <input class="quick__headline" type="text" maxlength="120" placeholder="Headline (at least 8 characters)"
+                   [value]="draft().title" (input)="setDraft('title', $any($event.target).value)"
+                   aria-label="Headline" />
+            <textarea class="quick__text" rows="3" placeholder="What is happening? Add a photo or video if you have one."
+                      inputmode="text" autocorrect="on" autocomplete="on" autocapitalize="sentences" spellcheck="true"
+                      [value]="draft().body" (input)="setDraft('body', $any($event.target).value)"
+                      aria-label="Post text"></textarea>
+            <div class="quick__where">
+              <ion-input label="Town or suburb" labelPlacement="stacked" placeholder="e.g. Umlazi"
+                         [value]="draft().town" (ionInput)="setDraft('town', $any($event.detail).value ?? '')"></ion-input>
             </div>
-            <button class="sort" type="button" (click)="cycleSort()" [attr.aria-label]="'Sort by ' + sortLabel()">
-              <lf-icon name="grid" [size]="15" /> Sort: {{ sortLabel() }} <lf-icon name="chevronDown" [size]="13" />
-            </button>
-          </div>
-          <p class="scope">Everything filed here, plus every post about someone with the surname {{ sp()!.surname }}.</p>
 
-          @if (!posts().length) {
-            <lf-empty icon="users" [title]="q() ? 'Nothing matches that search' : 'Nothing posted to this spotlight yet'"
-                      [message]="member()
-                        ? 'Be the first to bring a case, a sighting or an update to the community.'
-                        : 'Members post cases and updates here. Join, and you can post too.'"
-                      [actionLabel]="member() ? 'Post here' : 'Join and post'"
-                      (action)="member() ? postHere() : join()" />
-          }
-          @for (p of posts(); track p.id) {
-            <lf-post-card [post]="p" [author]="data.authorOf(p.authorId) ?? null" chatState="off"
-                          (vote)="vote(p, $event)" (comment)="open(p)" />
-          }
-        } @else if (section() === 'members') {
-          <div class="members">
-            <div class="members__top">
-              <h2>{{ sp()!.memberIds.length }} {{ sp()!.memberIds.length === 1 ? 'member' : 'members' }}</h2>
-              <input class="members__search" type="search" placeholder="Search members" [value]="memberQuery()"
-                     (input)="memberQuery.set($any($event.target).value)" aria-label="Search members" />
-            </div>
-            @if (!memberList().length) {
-              <p class="members__empty">Nobody by that name is in this community yet.</p>
-            }
-            @for (row of memberList(); track row.id) {
-              <div class="member">
-                <lf-avatar [src]="row.avatar" [name]="row.name" [size]="52" />
-                <div class="member-copy">
-                  <strong>{{ row.name }}</strong>
-                  <span>{{ row.headline }}</span>
-                  <span class="member-meta">{{ row.meta }}</span>
-                </div>
-                @if (row.id !== viewerId()) {
-                  <button class="pill pill--sm" type="button" [class.on]="row.following" (click)="follow(row.id)">
-                    {{ row.following ? 'Following' : '+ Follow' }}
-                  </button>
+            @if (draft().media.length) {
+              <div class="quick__media" aria-label="Attached media">
+                @for (item of draft().media; track item.id) {
+                  <div class="tile">
+                    @if (item.kind === 'video') { <video [src]="item.src" controls preload="metadata"></video> }
+                    @else { <img [src]="item.src" alt="Attachment" /> }
+                    <button type="button" class="tile__x" (click)="removeMedia(item.id)" aria-label="Remove attachment">
+                      <lf-icon name="x" [size]="13" />
+                    </button>
+                  </div>
                 }
               </div>
             }
-          </div>
-        } @else {
-          <section class="about">
-            <h2>About</h2>
-            <p class="about__text">{{ sp()!.about || sp()!.tagline }}</p>
-            <h3>How this page works</h3>
-            <ul class="rules">
-              <li><lf-icon name="users" [size]="15" /> Anyone with the surname, and anyone looking for them, can join and post.</li>
-              <li><lf-icon name="globe" [size]="15" /> Everything posted here is public unless the writer chooses another audience.</li>
-              <li><lf-icon name="shield" [size]="15" /> No money is ever asked for here. Report anyone who asks - the ⋯ menu on their post.</li>
-              <li><lf-icon name="check" [size]="15" /> A case closes when the family marks it found. Anyone can post a sighting.</li>
-            </ul>
-            <h3>Admins</h3>
-            <div class="admins">
-              @for (a of admins(); track a.id) {
-                <a class="admin" [routerLink]="'/user/' + a.id">
-                  <lf-avatar [src]="a.avatar" [name]="a.name" [size]="40" />
-                  <span>{{ a.name }}</span>
-                </a>
+
+            <div class="quick__types" role="group" aria-label="What kind of post is this">
+              @for (t of quickTypes; track t) {
+                <button type="button" class="chip" [class.on]="draft().type === t" (click)="setDraft('type', t)">
+                  {{ typeLabel(t) }}
+                </button>
               }
             </div>
-            <p class="created">Started {{ dayMonth(sp()!.createdAt) }}{{ sp()!.province ? ' · ' + provinceName(sp()!.province ?? undefined) : '' }}</p>
-            @if (owner()) {
-              <button class="pill" type="button" (click)="edit()">Edit this page</button>
-            }
+
+            <div class="quick__actions">
+              <button type="button" class="attach" [disabled]="mediaBusy() || hasVideo() || draft().media.length >= maxPhotos"
+                      (click)="attachImage()"><lf-icon name="image" [size]="17" /> Photo</button>
+              <button type="button" class="attach" [disabled]="mediaBusy() || hasVideo() || draft().media.length > 0"
+                      (click)="attachVideo()"><lf-icon name="video" [size]="17" /> Video</button>
+              <button type="button" class="lf-btn lf-btn--primary lf-btn--sm post" [disabled]="posting() || mediaBusy()"
+                      (click)="postToSpotlight()">{{ posting() ? 'Posting…' : 'Post' }}</button>
+            </div>
+            @if (notice()) { <p class="quick__note" role="status">{{ notice() }}</p> }
+            @if (composerError()) { <p class="quick__err" role="alert"><lf-icon name="alert" [size]="14" /> {{ composerError() }}</p> }
           </section>
+        } @else {
+          <div class="locked">
+            <lf-icon name="lock" [size]="16" />
+            <span>Join the {{ sp()!.surname }} community to post here. Anyone can read what is posted.</span>
+            @if (signedIn()) { <button class="lf-btn lf-btn--primary lf-btn--sm" (click)="join()">Join</button> }
+            @else { <a class="lf-btn lf-btn--primary lf-btn--sm" routerLink="/auth">Sign in</a> }
+          </div>
+        }
+
+        <ion-searchbar placeholder="Search posts and people in {{ sp()!.surname }}" [debounce]="200"
+                       (ionInput)="onSearch($any($event.detail).value ?? '')"></ion-searchbar>
+        <div class="pills">
+          <button class="pill" [class.on]="show() === 'all'" (click)="show.set('all')">All · {{ all().length }}</button>
+          <button class="pill" [class.on]="show() === 'active'" (click)="show.set('active')">Still missing</button>
+          <button class="pill" [class.on]="show() === 'found'" (click)="show.set('found')">Found</button>
+        </div>
+        <p class="lf-tiny lf-muted scope">Posts filed here and every post about someone with the surname {{ sp()!.surname }}.</p>
+
+        @if (people().length) {
+          <h3 class="sect">People <span class="lf-muted lf-tiny">{{ people().length }}</span></h3>
+          <div class="people">
+            @for (u of people(); track u.id) {
+              <a class="person" [routerLink]="'/user/' + u.id">
+                <lf-avatar [src]="data.avatarFor(u)" [name]="u.displayName" [size]="40" />
+                <div>
+                  <strong>{{ u.displayName }}</strong>
+                  <span class="lf-tiny lf-muted">&#64;{{ u.handle }}
+                    @if (u.surname.toLowerCase() === sp()!.surname.toLowerCase()) { · {{ sp()!.surname }} }</span>
+                </div>
+              </a>
+            }
+          </div>
+        }
+
+        @if (!posts().length && !people().length) {
+          <lf-empty icon="users" [title]="q().trim().length >= 2 ? 'Nothing matches that here' : 'Nothing posted to this spotlight yet'"
+                    [message]="member() ? 'Be the first to bring a case, story or update to the community.' : 'Join the community to add the first post.'"
+                    [actionLabel]="member() ? 'Post here' : 'Join this community'" (action)="postHere()" />
+        }
+        @for (p of posts(); track p.id) {
+          <lf-post-card [post]="p" [author]="data.authorOf(p.authorId) ?? null" chatState="off"
+                        (vote)="vote(p, $event)" (comment)="open(p)" />
         }
       }
     </ion-content>
   `,
   styles: [`
-    /* ── header ── */
-    .cover { background: var(--lf-card); box-shadow: var(--lf-shadow); padding-bottom: 12px; }
-    .banner { width: 100%; height: 156px; object-fit: cover; display: block; }
-    .ident { display: flex; gap: 12px; align-items: flex-end; margin-top: -34px; padding: 0 var(--lf-gap); }
-    .mark { width: 72px; height: 72px; border-radius: 50%; object-fit: cover; border: 4px solid var(--lf-card);
-      background: var(--lf-card-2); flex: none; box-sizing: border-box; }
-    .ident-copy { flex: 1; min-width: 0; padding-bottom: 2px; }
-    .ident-copy h1 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 22px; line-height: 1.25; flex-wrap: wrap; }
-    .tag { font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; padding: 3px 7px;
-      border-radius: 4px; background: var(--lf-primary-soft); color: var(--lf-primary-soft-text); }
-    .verified { display: flex; align-items: center; gap: 5px; margin: 4px 0 0; color: var(--lf-ubuntu); font-size: 12px; font-weight: 600; }
-    .tagline { margin: 4px 0 0; font-size: 14px; color: var(--ion-text-color); line-height: 1.4; }
-    .counts { margin: 5px 0 0; font-size: 13px; color: var(--lf-muted); display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
-    .counts strong { color: var(--lf-link); font-weight: 600; }
-    .dot { color: var(--lf-muted); }
-    .acts { display: flex; align-items: center; gap: 8px; padding: 12px var(--lf-gap) 0; flex-wrap: wrap; }
-    .pill { display: inline-flex; align-items: center; gap: 6px; min-height: 38px; padding: 0 18px; border-radius: 999px;
-      border: 1px solid var(--lf-line); background: none; color: var(--ion-text-color); font: inherit; font-size: 15px;
-      font-weight: 600; cursor: pointer; }
-    .pill--sm { min-height: 32px; padding: 0 12px; font-size: 13.5px; }
-    .pill--go { border-color: var(--lf-link); background: var(--lf-link); color: #fff; }
-    .pill.on { border-color: var(--lf-line); background: none; color: var(--lf-muted); }
-    .joined { display: inline-flex; align-items: center; gap: 5px; color: var(--lf-ubuntu); font-size: 13px; font-weight: 600; }
-    .no-approval { margin: 8px var(--lf-gap) 0; font-size: 12.5px; color: var(--lf-muted); }
-    .soft-notice { display: flex; gap: 6px; align-items: flex-start; margin: 8px var(--lf-gap) 0; padding: 8px 10px;
-      border-radius: 8px; background: var(--lf-card-2); color: var(--lf-muted); font-size: 12.5px; line-height: 1.4; }
-    .nav-act { width: 40px; height: 40px; border: 0; background: none; color: var(--ion-text-color); border-radius: 50%;
-      display: grid; place-items: center; cursor: pointer; }
-    .nav-act:hover { background: var(--lf-hover); }
-
-    /* ── tabs ── */
-    .tabs { position: sticky; top: 0; z-index: 4; display: flex; gap: 4px; background: var(--lf-card);
-      border-top: 1px solid var(--lf-line-soft); box-shadow: var(--lf-shadow); padding: 0 var(--lf-gap); }
-    .tab { position: relative; flex: 1; border: 0; background: none; color: var(--lf-muted); font: inherit; font-size: 14.5px;
-      font-weight: 600; padding: 13px 4px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 5px; }
-    .tab.on { color: var(--lf-link); }
-    .tab.on::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: var(--lf-link); }
-    .tab-count { font-size: 12.5px; color: inherit; }
-
-    /* ── composer row ── */
-    .start { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 10px var(--lf-gap) 0; padding: 10px 12px;
-      background: var(--lf-card); border-radius: var(--lf-radius); box-shadow: var(--lf-shadow); }
-    .start__box { flex: 1; min-width: 150px; text-align: left; border: 1px solid var(--lf-line); border-radius: 999px;
-      background: none; color: var(--lf-muted); font: inherit; font-size: 15px; padding: 9px 14px; cursor: pointer; }
-    .start__box:hover { background: var(--lf-hover); }
-    .start__acts { display: flex; gap: 6px; width: 100%; }
-    .start__acts button { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 0;
-      background: none; color: var(--lf-muted); font: inherit; font-size: 13.5px; font-weight: 600; padding: 8px 4px; cursor: pointer;
-      border-radius: 6px; }
-    .start__acts button:hover { background: var(--lf-hover); color: var(--ion-text-color); }
-
-    ion-searchbar.inside { padding: 8px var(--lf-gap) 0 !important; --border-radius: 999px; background: transparent; }
-    .filters { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px var(--lf-gap) 0; }
-    .pills { display: flex; gap: 6px; overflow-x: auto; }
-    .pill-mini { flex: none; height: 32px; padding: 0 12px; border: 0; border-radius: 999px; cursor: pointer; font: inherit;
+    .banner { width: 100%; height: 150px; object-fit: cover; display: block; }
+    .ident { padding: 14px var(--lf-gap) 10px; display: flex; flex-direction: column; gap: 8px; margin-top: -18px; }
+    .ident h1 { display: flex; align-items: center; gap: 8px; margin: 0; flex-wrap: wrap; }
+    .tag { margin: 0; font-weight: 600; }
+    .about { margin: 0; font-size: 13.5px; color: var(--lf-muted); line-height: 1.5; }
+    .stats { display: flex; gap: 18px; }
+    .stats div { display: flex; flex-direction: column; }
+    .stats strong { font-size: 17px; }
+    .stats span { font-size: 11.5px; color: var(--lf-muted); }
+    .acts { display: flex; gap: 8px; flex-wrap: wrap; }
+    .pills { display: flex; gap: 8px; padding: 4px var(--lf-gap) 0; overflow-x: auto; }
+    .pill { flex: none; height: 32px; padding: 0 12px; border: 0; border-radius: 999px; cursor: pointer; font: inherit;
       font-size: 14px; font-weight: 600; background: var(--lf-card-2); color: var(--ion-text-color); }
-    .pill-mini.on { background: var(--lf-primary-soft); color: var(--lf-link); }
-    .sort { display: inline-flex; align-items: center; gap: 5px; border: 0; background: none; color: var(--lf-muted);
-      font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; flex: none; }
-    .scope { margin: 6px var(--lf-gap) 8px; font-size: 12px; color: var(--lf-muted); }
-
-    /* ── members ── */
-    .members { background: var(--lf-card); margin: 8px 0; padding: 4px 0 8px; box-shadow: var(--lf-shadow); }
-    @media (min-width: 700px) { .members, .about, .start { max-width: var(--lf-maxw); margin-left: auto; margin-right: auto; } }
-    .members__top { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px var(--lf-gap); }
-    .members__top h2 { margin: 0; font-size: 16px; }
-    .members__search { flex: 1; max-width: 220px; min-height: 36px; border: 1px solid var(--lf-line); border-radius: 8px;
-      background: var(--lf-card); color: var(--ion-text-color); font: inherit; font-size: 14px; padding: 0 10px; }
-    .member { display: flex; align-items: center; gap: 10px; padding: 10px var(--lf-gap); border-top: 1px solid var(--lf-line-soft); }
-    .member-copy { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-    .member-copy strong { font-size: 15px; font-weight: 600; }
-    .member-copy span { font-size: 13px; color: var(--lf-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .member-meta { font-size: 12px !important; }
-    .members__empty { margin: 6px var(--lf-gap); color: var(--lf-muted); font-size: 13.5px; }
-
-    /* ── about ── */
-    .about { background: var(--lf-card); margin: 8px 0; padding: 14px var(--lf-gap) 18px; box-shadow: var(--lf-shadow); }
-    .about h2 { margin: 0 0 6px; font-size: 17px; }
-    .about h3 { margin: 16px 0 6px; font-size: 15px; }
-    .about__text { margin: 0; font-size: 14px; line-height: 1.5; }
-    .rules { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
-    .rules li { display: flex; gap: 8px; align-items: flex-start; font-size: 13.5px; line-height: 1.45; color: var(--lf-muted); }
-    .rules lf-icon { flex: none; color: var(--lf-link); margin-top: 2px; }
-    .admins { display: flex; flex-direction: column; gap: 8px; }
-    .admin { display: flex; align-items: center; gap: 10px; color: inherit; text-decoration: none; font-size: 14px; font-weight: 600; }
-    .created { margin: 16px 0 10px; font-size: 12.5px; color: var(--lf-muted); }
+    .pill.on { background: var(--lf-primary-soft); color: var(--lf-link); }
+    .scope { margin: 6px var(--lf-gap) 8px; }
+    .quick { display: flex; flex-direction: column; gap: 8px; margin: 10px var(--lf-gap) 4px; padding: 12px;
+      border-radius: var(--lf-radius); background: var(--lf-card); box-shadow: var(--lf-shadow); }
+    .quick__who { display: flex; align-items: center; gap: 8px; }
+    .quick__headline, .quick__text { width: 100%; box-sizing: border-box; border: 1px solid var(--lf-line);
+      border-radius: 8px; padding: 9px 10px; font: inherit; background: var(--lf-card-2); color: var(--ion-text-color); }
+    .quick__headline { font-weight: 600; }
+    .quick__text { resize: vertical; min-height: 76px; }
+    .quick__where ion-input { --background: var(--lf-card-2); --border-radius: 8px; --padding-start: 10px; }
+    .quick__media { display: flex; flex-wrap: wrap; gap: 7px; }
+    .quick__media .tile { position: relative; width: 84px; height: 84px; border-radius: 8px; overflow: hidden; background: var(--lf-card-2); }
+    .quick__media img, .quick__media video { width: 100%; height: 100%; object-fit: cover; }
+    .tile__x { position: absolute; right: 4px; top: 4px; display: grid; place-items: center; width: 22px; height: 22px;
+      border: 0; border-radius: 50%; background: rgba(0,0,0,.68); color: #fff; cursor: pointer; }
+    .quick__types { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
+    .quick__types::-webkit-scrollbar { display: none; }
+    .chip { flex: none; height: 30px; padding: 0 11px; border: 0; border-radius: 999px; cursor: pointer; font: inherit;
+      font-size: 13px; font-weight: 600; background: var(--lf-card-2); color: var(--ion-text-color); }
+    .chip.on { background: var(--lf-primary-soft); color: var(--lf-link); }
+    .quick__actions { display: flex; align-items: center; gap: 8px; }
+    .attach { display: inline-flex; align-items: center; gap: 5px; height: 34px; padding: 0 11px; border: 0;
+      border-radius: 999px; background: var(--lf-card-2); color: var(--ion-text-color); font: inherit; font-size: 13.5px;
+      font-weight: 600; cursor: pointer; }
+    .attach:disabled { opacity: .5; cursor: default; }
+    .post { margin-left: auto; }
+    .quick__note { margin: 0; font-size: 12.5px; color: var(--lf-muted); }
+    .quick__err { display: flex; align-items: center; gap: 6px; margin: 0; font-size: 13px; color: var(--lf-signal); }
+    .locked { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 10px var(--lf-gap) 4px;
+      padding: 12px; border-radius: var(--lf-radius); background: var(--lf-card-2); font-size: 13.5px; color: var(--lf-muted); }
+    .locked span { flex: 1 1 200px; }
+    .sect { margin: 12px var(--lf-gap) 6px; font-size: 16px; font-weight: 700; }
+    .people { display: flex; flex-direction: column; gap: 8px; padding: 0 var(--lf-gap) 8px; }
+    .person { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: var(--lf-radius);
+      background: var(--lf-card); box-shadow: var(--lf-shadow); color: inherit; text-decoration: none; }
+    .person div { display: flex; flex-direction: column; gap: 1px; }
   `]
 })
 export class SpotlightDetailComponent implements OnInit {
   protected data = inject(DataService);
   private auth = inject(AuthService);
   private platform = inject(PlatformService);
-  private media = inject(MediaService);
   private router = inject(Router);
   private route = inject(ActivatedRoute);
   private toast = inject(ToastController);
@@ -305,28 +234,121 @@ export class SpotlightDetailComponent implements OnInit {
 
   protected readonly compact = compact;
   protected readonly provinceName = provinceName;
-  protected readonly timeAgo = timeAgo;
 
   sp = signal<Spotlight | null>(null);
   q = signal('');
-  memberQuery = signal('');
-  busy = signal(false);
-  notice = signal('');
   /** posts filed here + posts about anyone with this surname */
   readonly all = signal<Post[]>([]);
   readonly show = signal<'all' | 'active' | 'found'>('all');
-  readonly section = signal<'posts' | 'members' | 'about'>('posts');
-  readonly sort = signal<'recent' | 'top'>('recent');
-  /** Members of the community, read from the store the first time the tab opens. */
-  readonly members = signal<UserProfile[]>([]);
 
-  readonly tabs = computed(() => [
-    { id: 'posts' as const, label: 'Posts', count: this.all().length },
-    { id: 'members' as const, label: 'Members', count: this.sp()?.memberIds.length ?? 0 },
-    { id: 'about' as const, label: 'About', count: null as number | null }
-  ]);
+  /* ─── the short way to post here ──────────────────────────────────────── */
 
-  readonly viewerId = computed(() => this.auth.viewerId);
+  private media = inject(MediaService);
+  readonly quickTypes: PostType[] = ['sighting', 'missing', 'khumbulekhaya', 'pet'];
+  readonly draft = signal<{ type: PostType; title: string; body: string; town: string; media: MediaItem[] }>({
+    type: 'sighting', title: '', body: '', town: '', media: []
+  });
+  readonly posting = signal(false);
+  readonly mediaBusy = computed(() => this.media.busy());
+
+  /** The attachment rule shared with the composer: three photos, one video. */
+  readonly maxPhotos = POST_MAX_PHOTOS;
+  readonly notice = signal('');
+  readonly composerError = signal('');
+  /** Members matching the search, so you can find a person inside a community. */
+  readonly people = signal<UserProfile[]>([]);
+
+  readonly me = computed(() => this.auth.user());
+  readonly signedIn = computed(() => this.auth.signedIn());
+
+  setDraft<K extends 'type' | 'title' | 'body' | 'town'>(key: K, value: string): void {
+    this.draft.update((d) => ({ ...d, [key]: value }));
+    this.composerError.set('');
+  }
+
+  typeLabel(t: PostType): string {
+    return POST_TYPE_META[t].label;
+  }
+
+  hasVideo(): boolean {
+    return this.draft().media.some((m) => m.kind === 'video');
+  }
+
+  async attachImage(): Promise<void> {
+    const item = await this.media.pickImage({ quality: 76 });
+    if (this.media.notice()) this.notice.set(this.media.notice()!);
+    if (!item) {
+      if (this.media.lastError()) this.composerError.set(this.media.lastError()!);
+      return;
+    }
+    const src = await this.media.compress(item.src, 1200);
+    this.draft.update((d) => ({ ...d, media: [...d.media, { ...item, src }] }));
+  }
+
+  async attachVideo(): Promise<void> {
+    const item = await this.media.pickVideo();
+    if (this.media.notice()) this.notice.set(this.media.notice()!);
+    if (!item) {
+      if (this.media.lastError()) this.composerError.set(this.media.lastError()!);
+      return;
+    }
+    this.draft.update((d) => ({ ...d, media: [item] }));
+  }
+
+  removeMedia(id: string): void {
+    this.draft.update((d) => ({ ...d, media: d.media.filter((m) => m.id !== id) }));
+  }
+
+  /**
+   * Publish the short post into this community.
+   *
+   * The draft goes to the same `createPost` the full composer uses, so every
+   * rule holds - membership first of all. The message from the service is shown
+   * as-is, because it says exactly what is missing.
+   */
+  async postToSpotlight(): Promise<void> {
+    const sp = this.sp();
+    if (!sp) return;
+    const d = this.draft();
+    this.composerError.set('');
+    if (!d.title.trim() && !d.body.trim() && !d.media.length) {
+      this.composerError.set('Write something, or attach a photo or video.');
+      return;
+    }
+    this.posting.set(true);
+    try {
+      // A headline was not typed: take the first line, so nothing is invented.
+      const firstLine = d.body.trim().split(/\n/)[0]?.trim() ?? '';
+      const title = d.title.trim() || firstLine.slice(0, 120);
+      await this.data.postToSpotlight(sp, { type: d.type, title, body: d.body, town: d.town, media: d.media });
+      this.draft.set({ type: d.type, title: '', body: '', town: d.town, media: [] });
+      await this.reloadPosts();
+      await this.data.loadStatic();
+      const t = await this.toast.create({ message: `Posted to the ${sp.surname} community`, duration: 2000, position: 'bottom' });
+      await t.present();
+    } catch (e: any) {
+      this.composerError.set(e?.message ?? 'Could not post to this community');
+    } finally {
+      this.posting.set(false);
+    }
+  }
+
+  /** One field for the in-spotlight search: posts on the card, people above. */
+  onSearch(value: string): void {
+    this.q.set(value);
+    void this.loadPeople(value);
+  }
+
+  private async loadPeople(value: string): Promise<void> {
+    const sp = this.sp();
+    const needle = value.trim().toLowerCase().replace(/^@/, '');
+    if (!sp || needle.length < 2) { this.people.set([]); return; }
+    const members = await this.data.people(sp.memberIds).catch(() => [] as UserProfile[]);
+    this.people.set(members
+      .filter((u) => !u.suspended && `${u.displayName} ${u.surname} ${u.handle}`.toLowerCase().includes(needle))
+      .slice(0, 12));
+  }
+
   readonly member = computed(() => {
     const me = this.auth.viewerId;
     return !!me && !!this.sp() && this.sp()!.memberIds.includes(me);
@@ -348,40 +370,8 @@ export class SpotlightDetailComponent implements OnInit {
           (p.subject?.name.toLowerCase().includes(needle) ?? false)
       );
     }
-    return this.sort() === 'top'
-      ? [...list].sort((a, b) => (b.upvotes * 3 + b.commentCount * 5) - (a.upvotes * 3 + a.commentCount * 5))
-      : [...list].sort((a, b) => b.updatedAt - a.updatedAt);
+    return list;
   });
-
-  readonly memberList = computed(() => {
-    const sp = this.sp();
-    if (!sp) return [];
-    const known = new Map(this.members().map((u) => [u.id, u]));
-    const needle = this.memberQuery().trim().toLowerCase();
-    const rows = sp.memberIds.map((id) => {
-      const u = known.get(id) ?? this.data.authorOf(id) ?? null;
-      return {
-        id,
-        name: u?.displayName ?? 'LulaFind member',
-        headline: u ? (u.bio || (u.surname ? `${u.surname} family` : 'LulaFind member')) : 'Member of this community',
-        avatar: u ? this.data.avatarFor(u) : '',
-        meta: u
-          ? [u.town, u.province ? provinceName(u.province) : ''].filter(Boolean).join(' · ') || `Joined ${timeAgo(sp.createdAt)}`
-          : `Joined ${timeAgo(sp.createdAt)}`,
-        following: this.data.followingIds().includes(id),
-        admin: sp.adminIds.includes(id)
-      };
-    });
-    const filtered = needle
-      ? rows.filter((r) => r.name.toLowerCase().includes(needle) || r.headline.toLowerCase().includes(needle))
-      : rows;
-    return [...filtered].sort((a, b) => Number(b.admin) - Number(a.admin) || a.name.localeCompare(b.name));
-  });
-
-  readonly admins = computed(() => this.memberList().filter((m) => m.admin).slice(0, 4));
-
-  protected myAvatar(): string { return this.data.avatarFor(this.auth.user()); }
-  protected myName(): string { return this.auth.user()?.displayName ?? 'You'; }
 
   async ngOnInit(): Promise<void> {
     const id = this.route.snapshot.paramMap.get('id');
@@ -393,8 +383,6 @@ export class SpotlightDetailComponent implements OnInit {
       this.sp.set(this.data.spotlights().find((s) => s.id === id) ?? null);
     }
     await this.reloadPosts();
-    if (this.route.snapshot.queryParamMap.get('tab') === 'members') this.section.set('members');
-    await this.loadMembers();
   }
 
   async reloadPosts(): Promise<void> {
@@ -402,33 +390,11 @@ export class SpotlightDetailComponent implements OnInit {
     if (sp) this.all.set(await this.data.postsForSpotlight(sp));
   }
 
-  private async loadMembers(): Promise<void> {
-    const sp = this.sp();
-    if (!sp) return;
-    this.members.set(await this.data.people(sp.memberIds).catch(() => [] as UserProfile[]));
-  }
-
   coverOf(): string {
-    return this.sp() ? this.data.spotlightCover(this.sp()!) : '';
+    return cover(`${this.sp()?.surname ?? ''} family`, this.sp()?.coverHue || undefined);
   }
 
-  dayMonth(at: number): string {
-    return new Date(at).toLocaleDateString('en-ZA', { day: 'numeric', month: 'long', year: 'numeric' });
-  }
-
-  sortLabel(): string {
-    return this.sort() === 'top' ? 'Top' : 'Recent';
-  }
-
-  cycleSort(): void {
-    this.sort.set(this.sort() === 'recent' ? 'top' : 'recent');
-  }
-
-  /**
-   * Instant - no admin approval, and a refusal from the server never reaches the
-   * person as an error: `joinSpotlight` lands the membership on this device if it
-   * has to, and `notice()` explains it in one line.
-   */
+  /** Instant - no admin approval. You can post the moment you join. */
   async join(): Promise<void> {
     const sp = this.sp();
     if (!sp) return;
@@ -436,20 +402,12 @@ export class SpotlightDetailComponent implements OnInit {
       await this.router.navigate(['/auth'], { queryParams: { next: '/spotlight/' + sp.id } });
       return;
     }
-    this.busy.set(true);
     try {
       const joined = await this.data.joinSpotlight(sp.id);
       await this.data.loadStatic();
       this.sp.set(this.data.spotlights().find((s) => s.id === sp.id) ?? null);
-      await this.loadMembers();
-      const pending = this.data.spotlightSync() === 'device';
-      this.notice.set(pending
-        ? 'You are in on this device; the member list on the server is still catching up. Posting here works either way.'
-        : '');
       const t = await this.toast.create({
-        message: joined
-          ? `You joined the ${sp.surname} community. You can post here now.`
-          : `You are already a member of ${sp.surname}.`,
+        message: joined ? `You joined the ${sp.surname} community. You can post here now.` : `You are already a member of ${sp.surname}.`,
         duration: 2400,
         position: 'bottom'
       });
@@ -457,27 +415,7 @@ export class SpotlightDetailComponent implements OnInit {
     } catch (e: any) {
       const t = await this.toast.create({ message: e?.message ?? 'Could not join', duration: 2600, position: 'bottom' });
       await t.present();
-    } finally {
-      this.busy.set(false);
     }
-  }
-
-  menu(): void {
-    const sp = this.sp();
-    if (!sp) return;
-    void (async () => {
-      const buttons: { text: string; role?: string; handler?: () => void }[] = [
-        { text: 'Copy link to this page', handler: () => void this.platform.copy(this.platform.link(`/spotlight/${sp.id}`)) },
-        { text: 'Share this spotlight', handler: () => void this.share() }
-      ];
-      if (this.owner()) {
-        buttons.push({ text: 'Edit page', handler: () => void this.edit() });
-        buttons.push({ text: 'Delete page', role: 'destructive', handler: () => void this.remove() });
-      }
-      buttons.push({ text: 'Cancel', role: 'cancel' });
-      const a = await this.alert.create({ header: `${sp.surname} Spotlight`, buttons: buttons as never });
-      await a.present();
-    })();
   }
 
   async edit(): Promise<void> {
@@ -538,20 +476,6 @@ export class SpotlightDetailComponent implements OnInit {
   async leave(): Promise<void> {
     const sp = this.sp();
     if (!sp) return;
-    const a = await this.alert.create({
-      header: `Leave the ${sp.surname} community?`,
-      message: 'You keep the posts you made here. You can join again at any time.',
-      buttons: [
-        { text: 'Stay', role: 'cancel' },
-        { text: 'Leave', role: 'destructive', handler: () => void this.doLeave() }
-      ]
-    });
-    await a.present();
-  }
-
-  private async doLeave(): Promise<void> {
-    const sp = this.sp();
-    if (!sp) return;
     try {
       await this.data.leaveSpotlight(sp.id);
       await this.data.loadStatic();
@@ -564,53 +488,17 @@ export class SpotlightDetailComponent implements OnInit {
     }
   }
 
-  /** The composer, already set to this community. */
+  /** Members open the composer; everyone else is asked to join first. */
   async postHere(): Promise<void> {
     const sp = this.sp();
     if (!sp) return;
     if (!this.auth.signedIn()) {
-      await this.router.navigate(['/auth'], { queryParams: { next: `/spotlight/${sp.id}` } });
-      return;
-    }
-    if (!this.member()) {
-      await this.join();
-      return;
-    }
-    await this.router.navigate(['/create', 'missing'], { queryParams: { spotlight: sp.id } });
-  }
-
-  /** "Photo" in the community composer row: pick it here, carry it into the post. */
-  async postWithPhoto(): Promise<void> {
-    const sp = this.sp();
-    if (!sp) return;
-    if (!this.auth.signedIn()) {
-      await this.router.navigate(['/auth'], { queryParams: { next: `/spotlight/${sp.id}` } });
+      await this.router.navigate(['/auth']);
       return;
     }
     if (!this.member()) { await this.join(); return; }
-    const item = await this.media.pickImage({ source: 'gallery' });
-    if (!item) {
-      if (this.media.lastError()) await this.say(this.media.lastError()!);
-      return;
-    }
-    const src = await this.media.compress(item.src, 1200);
-    await this.router.navigate(['/create', 'missing'], {
-      queryParams: { spotlight: sp.id },
-      state: { photoAttachment: { ...item, src } }
-    });
-  }
-
-  async follow(id: string): Promise<void> {
-    if (!this.auth.signedIn()) {
-      await this.router.navigate(['/auth'], { queryParams: { next: this.router.url } });
-      return;
-    }
-    try {
-      await this.data.toggleFollow(id);
-      this.members.update((list) => [...list]);
-    } catch (e: unknown) {
-      await this.say(e instanceof Error ? e.message : 'Could not change that follow');
-    }
+    this.data.setFilter({ spotlightId: sp.id });
+    await this.router.navigate(['/create', 'missing']);
   }
 
   async share(): Promise<void> {
@@ -619,18 +507,18 @@ export class SpotlightDetailComponent implements OnInit {
     await this.platform.share(`${sp.surname} Spotlight`, `${sp.tagline} - join the ${sp.surname} community on LulaFind`, this.platform.link(`/spotlight/${sp.id}`));
   }
 
-  private async say(message: string): Promise<void> {
-    const t = await this.toast.create({ message, duration: 2400, position: 'bottom' });
-    await t.present();
-  }
-
   vote(p: Post, v: ReactionKind): void {
     void this.data.vote(p.id, v).then(() => this.reloadPosts()).catch(async (e) => {
-      await this.say(e?.message ?? 'Could not react');
+      await this.toast.create({ message: e?.message ?? 'Could not vote', duration: 2200, position: 'bottom' }).then((t) => t.present());
     });
   }
 
   open(p: Post): void {
-    void this.router.navigate(['/post', p.id], { fragment: 'comments' });
+    void this.router.navigate(['/post', p.id]);
+  }
+
+  async sharePost(p: Post): Promise<void> {
+    await this.platform.share(p.title, `${p.title}\n\nShared from LulaFind`, this.platform.link(`/post/${p.id}`));
+    await this.data.recordShare(p.id);
   }
 }
