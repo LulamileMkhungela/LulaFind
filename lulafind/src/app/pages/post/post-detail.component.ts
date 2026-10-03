@@ -11,6 +11,7 @@ import { TopNavComponent } from '../../shared/components/top-nav.component';
 import { AvatarComponent } from '../../shared/components/avatar.component';
 import { ReactionsSheetComponent } from '../../shared/components/reactions-sheet.component';
 import { MediaImageComponent, MediaVideoComponent } from '../../shared/components/media-image.component';
+import { UserHoverDirective } from '../../shared/components/user-hover-card.component';
 import { ReactionButtonComponent } from '../../shared/components/reaction-button.component';
 import { ReactionIconComponent } from '../../shared/components/reaction-icon.component';
 import { DataService } from '../../core/services/data.service';
@@ -48,7 +49,7 @@ import { leadMarkView } from '../../core/utils/mark-check';
   imports: [
     IonContent, IonTextarea, IonSkeletonText, RouterLink, IconComponent, AvatarComponent,
     TopNavComponent, ReactionButtonComponent, ReactionIconComponent, ReactionsSheetComponent,
-    MediaImageComponent, MediaVideoComponent],
+    MediaImageComponent, MediaVideoComponent, UserHoverDirective],
   template: `
     <lf-top-nav title="Post" backTo="/home" />
 
@@ -321,7 +322,7 @@ import { leadMarkView } from '../../core/utils/mark-check';
                   } @else {
                     <div class="ccard">
                       <div class="ccard__top">
-                        <a [routerLink]="'/user/' + c.authorId" class="ccard__name">{{ nameOf(c.authorId) }}</a>
+                        <a [routerLink]="'/user/' + c.authorId" class="ccard__name" [lfUserHover]="c.authorId">{{ nameOf(c.authorId) }}</a>
                         @if (c.authorId === p()!.authorId) { <span class="tag">Author</span> }
                         <time class="ccard__time">{{ timeAgo(c.createdAt) }}@if (c.editedAt) { · Edited }</time>
                       </div>
@@ -398,7 +399,7 @@ import { leadMarkView } from '../../core/utils/mark-check';
                               } @else {
                                 <div class="ccard">
                                   <div class="ccard__top">
-                                    <a [routerLink]="'/user/' + r.authorId" class="ccard__name">{{ nameOf(r.authorId) }}</a>
+                                    <a [routerLink]="'/user/' + r.authorId" class="ccard__name" [lfUserHover]="r.authorId">{{ nameOf(r.authorId) }}</a>
                                     @if (r.authorId === p()!.authorId) { <span class="tag">Author</span> }
                                     <time class="ccard__time">{{ timeAgo(r.createdAt) }}@if (r.editedAt) { · Edited }</time>
                                   </div>

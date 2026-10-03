@@ -9,17 +9,20 @@ import { IonTextarea } from '@ionic/angular/ion-textarea';
 import { IconComponent } from '../../shared/components/icon.component';
 import { AvatarComponent } from '../../shared/components/avatar.component';
 import { MediaImageComponent, MediaVideoComponent } from '../../shared/components/media-image.component';
+import { EmojiRowComponent, QUICK_EMOJIS } from '../../shared/components/emoji-row.component';
+import { UserHoverDirective } from '../../shared/components/user-hover-card.component';
+import { ReactionIconComponent } from '../../shared/components/reaction-icon.component';
 import { ChatService } from '../../core/services/chat.service';
 import { DataService } from '../../core/services/data.service';
 import { AuthService } from '../../core/services/auth.service';
-import { MediaItem } from '../../core/models/types';
+import { ChatMessage, MediaItem, REACTIONS, ReactionKind } from '../../core/models/types';
 import { clockTime } from '../../core/utils/format';
 import { MediaService } from '../../core/services/media.service';
 
 @Component({
   selector: 'lf-chat-room',
   standalone: true,
-  imports: [IonContent, IonHeader, IonToolbar, IonButtons, IonBackButton, IonTextarea, RouterLink, IconComponent, AvatarComponent, MediaImageComponent, MediaVideoComponent],
+  imports: [IonContent, IonHeader, IonToolbar, IonButtons, IonBackButton, IonTextarea, RouterLink, IconComponent, AvatarComponent, MediaImageComponent, MediaVideoComponent, EmojiRowComponent, ReactionIconComponent, UserHoverDirective],
   template: `
     <ion-header [translucent]="false">
       <ion-toolbar>
@@ -33,10 +36,23 @@ import { MediaService } from '../../core/services/media.service';
           </div>
         </div>
         <ion-buttons slot="end">
-          <button class="lf-icon-btn" [routerLink]="'/user/' + peerId()"><lf-icon name="user" [size]="20" /></button>
+          <button class="lf-icon-btn" (click)="toggleSearch()" [attr.aria-pressed]="searchOpen()"
+                  [attr.aria-label]="searchOpen() ? 'Close search' : 'Search in this conversation'">
+            <lf-icon [name]="searchOpen() ? 'x' : 'search'" [size]="20" />
+          </button>
+          <button class="lf-icon-btn" [routerLink]="'/user/' + peerId()" [lfUserHover]="peerId()" aria-label="Open profile"><lf-icon name="user" [size]="20" /></button>
         </ion-buttons>
       </ion-toolbar>
     </ion-header>
+
+    @if (searchOpen()) {
+      <div class="find">
+        <lf-icon name="search" [size]="15" />
+        <input #q type="search" [value]="query()" (input)="setQuery(q.value)" (keydown.escape)="closeSearch()"
+               placeholder="Search in this conversation" aria-label="Search in this conversation" />
+        @if (query()) { <span class="hits">{{ shown().length }}</span> }
+      </div>
+    }
 
     <ion-content class="lf-page lf-plain room">
       @if (post()) {
@@ -57,12 +73,13 @@ import { MediaService } from '../../core/services/media.service';
           @if (!chat.messages().length) {
             <div class="thread-empty"><span><lf-icon name="chat" [size]="22" /></span><strong>Start the conversation</strong><p>Messages stay private between you and {{ peerName() }}.</p></div>
           }
-          @for (m of chat.messages(); track m.id; let i = $index) {
+          @for (m of shown(); track m.id; let i = $index) {
             @if (dayBoundary(i); as day) { <div class="day-divider"><span>{{ day }}</span></div> }
             @if (m.kind === 'system') {
               <div class="sys"><lf-icon name="lock" [size]="13" /><span>{{ m.body }}</span></div>
             } @else {
-              <div class="msg" [class.mine]="m.fromUserId === me()" [class.continued]="!showMessageHeader(i)">
+              <div class="msg" [class.mine]="m.fromUserId === me()" [class.continued]="!showMessageHeader(i)"
+                   [class.open]="openActs() === m.id">
                 @if (m.fromUserId !== me()) {
                   @if (showMessageHeader(i)) {
                     <lf-avatar [src]="peerAvatar()" [name]="peerName()" [size]="30" />
@@ -72,24 +89,72 @@ import { MediaService } from '../../core/services/media.service';
                   @if (showMessageHeader(i)) {
                     <div class="msg-meta"><strong>{{ m.fromUserId === me() ? 'You' : peerName() }}</strong><time>{{ clockTime(m.at) }}</time></div>
                   }
-                  <div class="bubble">
-                    @if (m.media?.kind === 'video') {
-                      <lf-media-video [src]="m.media!.src" label="Video sent in this chat" />
-                    } @else if (m.media) {
-                      <lf-media-img [src]="m.media.src" alt="Photo sent in this chat" />
+                  @if (m.unsent) {
+                    <!-- Unsend leaves the gap on both sides, the way LinkedIn does. -->
+                    <div class="bubble bubble--gone"><p><lf-icon name="lock" [size]="13" /> {{ unsentLabel(m) }}</p></div>
+                  } @else {
+                    <div class="bubble">
+                      @if (m.media?.kind === 'video') {
+                        <lf-media-video [src]="m.media!.src" label="Video sent in this chat" />
+                      } @else if (m.media) {
+                        <lf-media-img [src]="m.media.src" alt="Photo sent in this chat" />
+                      }
+                      @if (m.body) { <p>{{ m.body }}</p> }
+                      <span class="msg-time">{{ clockTime(m.at) }}@if (m.editedAt) { · Edited }</span>
+                    </div>
+                    @for (f of facesOn(m); track f.key) {
+                      <button type="button" class="face" [class.mine]="f.mine" (click)="react(m, f.key)"
+                              [attr.aria-label]="(f.mine ? 'Remove your ' : 'React ') + f.label">
+                        <lf-reaction-icon [kind]="f.key" [size]="16" /><span>{{ f.count }}</span>
+                      </button>
                     }
-                    @if (m.body) { <p>{{ m.body }}</p> }
-                    <span class="msg-time">{{ clockTime(m.at) }}</span>
-                  </div>
+                    <div class="acts">
+                      @for (r of REACTIONS; track r.key) {
+                        <button type="button" class="act" [attr.aria-pressed]="myFace(m) === r.key" (click)="react(m, r.key)"
+                                [attr.aria-label]="(myFace(m) === r.key ? 'Remove your ' : 'React ') + r.label">
+                          <lf-reaction-icon [kind]="r.key" [size]="18" />
+                        </button>
+                      }
+                      @if (canManage(m)) {
+                        <button type="button" class="act txt" (click)="startEdit(m)"><lf-icon name="edit" [size]="13" /> Edit</button>
+                        <button type="button" class="act txt" (click)="unsend(m)"><lf-icon name="trash" [size]="13" /> Unsend</button>
+                      }
+                      @if (m.body) {
+                        <button type="button" class="act txt" (click)="copy(m)">
+                          <lf-icon name="copy" [size]="13" /> {{ copied() === m.id ? 'Copied' : 'Copy' }}
+                        </button>
+                      }
+                    </div>
+                    @if (m.fromUserId === me() && isLastMine(m)) { <div class="status">{{ tick(m) }}</div> }
+                  }
                 </div>
+                <button type="button" class="more" (click)="toggleActs(m)"
+                        [attr.aria-label]="'Actions for this message'"><lf-icon name="more" [size]="16" /></button>
               </div>
             }
+          }
+          @if (query() && !shown().length && chat.messages().length) {
+            <p class="no-hits">Nothing in this conversation says “{{ query() }}”.</p>
+          }
+          @if (chat.typingPeer()) {
+            <div class="typing" role="status"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>{{ peerName() }} is typing</div>
           }
         </div>
       </div>
     </ion-content>
 
     @if (sendError()) { <p class="send-error" role="alert">{{ sendError() }}</p> }
+    @if (edit(); as m) {
+      <div class="editbar">
+        <label for="lf-edit-body" class="lf-tiny lf-muted">Editing your message</label>
+        <textarea id="lf-edit-body" rows="2" [value]="editText()" (input)="editText.set($any($event.target).value)"
+                  (keydown.escape)="cancelEdit()"></textarea>
+        <div class="editbar-acts">
+          <button type="button" class="cancel" (click)="cancelEdit()">Cancel</button>
+          <button type="button" class="go" [disabled]="!editText().trim()" (click)="saveEdit()">Save</button>
+        </div>
+      </div>
+    } @else {
     <div class="composer">
       @if (pending()) {
         <div class="pending">
@@ -99,11 +164,7 @@ import { MediaService } from '../../core/services/media.service';
         </div>
       }
       @if (emojiOpen()) {
-        <div class="picker" role="group" aria-label="Emoji">
-          @for (e of EMOJIS; track e) {
-            <button type="button" class="em" (click)="addEmoji(e)" [attr.aria-label]="'Insert ' + e">{{ e }}</button>
-          }
-        </div>
+        <lf-emoji-row class="picker" [list]="EMOJIS" (picked)="addEmoji($event)" />
       }
       <div class="bar">
         <button type="button" class="ico em-btn" [class.on]="emojiOpen()" (click)="emojiOpen.set(!emojiOpen())"
@@ -111,13 +172,14 @@ import { MediaService } from '../../core/services/media.service';
         <button type="button" class="ico" (click)="attach()" aria-label="Attach a photo"><lf-icon name="image" [size]="22" /></button>
         <button type="button" class="ico" (click)="attach(true)" aria-label="Take a photo"><lf-icon name="camera" [size]="22" /></button>
         <ion-textarea rows="1" autoGrow placeholder="Message…" [value]="draft"
-                      (ionInput)="draft = $any($event.target).value"
+                      (ionInput)="onType($any($event.target).value)"
                       (keydown.enter)="$event.preventDefault(); send()"></ion-textarea>
         <button class="lf-icon-btn send" (click)="send()" [disabled]="chat.sending() || (!draft.trim() && !pending())">
           <lf-icon name="send" [size]="22" [filled]="true" />
         </button>
       </div>
     </div>
+    }
   `,
   styles: [`
     .peer { display: flex; align-items: center; gap: 10px; min-width: 0; }
@@ -169,10 +231,7 @@ import { MediaService } from '../../core/services/media.service';
     .ico:hover { background: var(--lf-hover); }
     .ico.on { background: var(--lf-primary-soft); }
     .em-btn { font-size: 19px; line-height: 1; }
-    .picker { display: grid; grid-template-columns: repeat(8, 1fr); gap: 2px; width: 100%;
-      padding: 6px 2px 8px; border-bottom: 1px solid var(--lf-line); }
-    .em { border: none; background: none; font-size: 21px; line-height: 1; padding: 5px 0; cursor: pointer; border-radius: 8px; }
-    .em:active { background: var(--lf-card-2); }
+    .picker { width: 100%; padding: 4px 2px 6px; border-bottom: 1px solid var(--lf-line); }
     .pending { display: flex; align-items: center; gap: 9px; width: 100%; padding-bottom: 8px;
       border-bottom: 1px solid var(--lf-line); margin-bottom: 8px; }
     .pending img { width: 42px; height: 42px; object-fit: cover; border-radius: 9px; }
@@ -190,6 +249,47 @@ import { MediaService } from '../../core/services/media.service';
     .bar { align-items: center; gap: 4px; }
     .bar ion-textarea { flex: 1; --background: var(--lf-input); border-radius: 20px; --padding-start: 14px; --padding-end: 14px;
       --padding-top: 9px; --padding-bottom: 9px; min-height: 38px; font-size: 15px; margin: 0 4px; }
+    .find { display: flex; align-items: center; gap: 8px; padding: 8px 14px; border-bottom: 1px solid var(--lf-line);
+      background: var(--lf-card); color: var(--lf-muted); }
+    .find input { flex: 1; min-width: 0; border: none; background: none; color: var(--ion-text-color); font: inherit;
+      font-size: 14px; outline: none; padding: 4px 0; }
+    .find .hits { font-size: 11px; font-weight: 600; color: var(--lf-primary); }
+    .no-hits { margin: 10px 0; font-size: 13px; color: var(--lf-muted); text-align: center; }
+    .typing { display: flex; align-items: center; gap: 7px; margin-top: 4px; font-size: 12px; color: var(--lf-muted); }
+    .typing .dots { display: inline-flex; gap: 3px; }
+    .typing .dots i { width: 5px; height: 5px; border-radius: 50%; background: var(--lf-muted); opacity: .35;
+      animation: lf-typing 1.1s infinite; }
+    .typing .dots i:nth-child(2) { animation-delay: .18s; }
+    .typing .dots i:nth-child(3) { animation-delay: .36s; }
+    @keyframes lf-typing { 0%, 60%, 100% { opacity: .3; transform: translateY(0); } 30% { opacity: 1; transform: translateY(-2px); } }
+    .face { display: inline-flex; align-items: center; gap: 4px; align-self: flex-start; margin-top: 1px; padding: 2px 7px 2px 4px;
+      border: 1px solid var(--lf-line-soft); border-radius: 999px; background: var(--lf-card); color: var(--lf-muted);
+      font: inherit; font-size: 11px; font-weight: 600; cursor: pointer; }
+    .msg.mine .face { align-self: flex-end; }
+    .face.mine { border-color: var(--lf-primary); color: var(--lf-primary); background: var(--lf-primary-soft); }
+    .acts { display: flex; align-items: center; gap: 2px; margin-top: 1px; opacity: 0; transition: opacity .12s ease; }
+    .msg.mine .acts { justify-content: flex-end; }
+    .msg:hover .acts, .msg:focus-within .acts, .msg.open .acts { opacity: 1; }
+    .act { display: inline-flex; align-items: center; gap: 4px; padding: 3px 7px; border: none; border-radius: 999px;
+      background: none; color: var(--lf-muted); font: inherit; font-size: 11px; font-weight: 600; cursor: pointer; }
+    .act:hover { background: var(--lf-hover); color: var(--lf-primary); }
+    .act[aria-pressed="true"] { background: var(--lf-primary-soft); color: var(--lf-primary); }
+    .status { font-size: 10px; color: var(--lf-muted); padding: 0 4px; }
+    .bubble--gone p { display: flex; align-items: center; gap: 6px; color: var(--lf-muted); font-style: italic; }
+    .more { flex: none; align-self: center; width: 26px; height: 26px; border: none; border-radius: 50%; cursor: pointer;
+      background: none; color: var(--lf-muted); display: none; place-items: center; }
+    @media (hover: none) { .acts { opacity: 0; } .msg.open .acts { opacity: 1; } .more { display: grid; } }
+    .editbar { position: fixed; left: 0; right: 0; bottom: var(--keyboard-offset, 0px); display: flex; flex-direction: column;
+      gap: 6px; padding: 10px 14px; padding-bottom: max(10px, var(--lf-safe-bottom, 0px)); background: var(--lf-card);
+      border-top: 1px solid var(--lf-line-soft); }
+    .editbar textarea { box-sizing: border-box; width: 100%; padding: 9px 12px; border: 1px solid var(--lf-line);
+      border-radius: 10px; background: var(--lf-input); color: var(--ion-text-color); font: inherit; font-size: 15px; resize: none; }
+    .editbar-acts { display: flex; justify-content: flex-end; gap: 8px; }
+    .editbar-acts button { border: none; border-radius: 999px; padding: 7px 16px; font: inherit; font-size: 13px;
+      font-weight: 600; cursor: pointer; background: none; color: var(--lf-muted); }
+    .editbar-acts .go { background: var(--lf-primary-fill); color: var(--lf-primary-text); }
+    .editbar-acts .go[disabled] { opacity: .5; cursor: default; }
+    @media (prefers-reduced-motion: reduce) { .typing .dots i { animation: none; opacity: .6; } .acts { transition: none; } }
     .send { background: transparent; color: var(--lf-primary); width: 38px; height: 38px; }
     .send[disabled] { opacity: .4; }
   `]
@@ -212,14 +312,163 @@ export class ChatRoomComponent implements OnInit, OnDestroy {
   protected pending = signal<MediaItem | null>(null);
 
   /**
-   * Real phone emojis. No image pack to ship and nothing to download, so they
-   * work offline and render in whatever style the device already uses.
+   * Real phone emojis, from the same list the comment box uses, so a face means
+   * the same thing in either place. They come off the keyboard too - this row is
+   * a shortcut, not the only way in.
    */
-  protected readonly EMOJIS = [
-    '\ud83d\udc4d', '\ud83d\ude4f', '\u2764\ufe0f', '\ud83d\ude22', '\ud83d\ude2e', '\ud83e\udd7a',
-    '\u2705', '\u274c', '\ud83d\udea8', '\ud83d\ude97', '\ud83d\udc15', '\ud83c\udfe0',
-    '\ud83d\udccd', '\ud83d\udcde', '\ud83d\dd52', '\u2b50'
-  ];
+  protected readonly EMOJIS = QUICK_EMOJIS;
+
+  /**
+   * In-thread search, LinkedIn's magnifier. Filtering the list rather than
+   * stepping through hits keeps the day dividers honest: what you see is only
+   * what matches.
+   */
+  protected searchOpen = signal(false);
+  protected query = signal('');
+  /** The message whose action row is open. Touch has no hover, so it needs a tap. */
+  protected openActs = signal('');
+  /** A message being edited in place, and the text in the box. */
+  protected edit = signal<ChatMessage | null>(null);
+  protected editText = signal('');
+  /** Which message was just copied, so the button can say so for a moment. */
+  protected copied = signal('');
+
+  /** The reaction faces offered on a message: the same set a post gets. */
+  protected readonly REACTIONS = REACTIONS;
+
+  /**
+   * What the thread shows. A search narrows it; otherwise every message, unsent
+   * ones included - the gap is the point of unsending, and hiding the row would
+   * leave the other person wondering.
+   */
+  readonly shown = computed(() => {
+    const list = this.chat.messages();
+    const q = this.query().trim().toLowerCase();
+    if (!q) return list;
+    return list.filter((m) => !m.unsent && (m.body || '').toLowerCase().includes(q));
+  });
+
+  /** The four faces and who gave them, in the order the tray lists them. */
+  protected facesOn(m: ChatMessage): { key: ReactionKind; label: string; count: number; mine: boolean }[] {
+    const me = this.me() ?? '';
+    const given = new Map<ReactionKind, number>();
+    for (const k of Object.values(m.reactions ?? {})) {
+      if (REACTIONS.some((r) => r.key === k)) given.set(k, (given.get(k) ?? 0) + 1);
+    }
+    return REACTIONS.filter((r) => given.has(r.key)).map((r) => ({
+      key: r.key, label: r.label, count: given.get(r.key) ?? 0, mine: (m.reactions ?? {})[me] === r.key
+    }));
+  }
+
+  protected myFace(m: ChatMessage): ReactionKind | null {
+    return (m.reactions ?? {})[this.me() ?? ''] ?? null;
+  }
+
+  /** Tapping a face you already gave takes it back, like the post tray. */
+  protected async react(m: ChatMessage, key: ReactionKind): Promise<void> {
+    await this.chat.reactMessage(m.id, this.myFace(m) === key ? null : key);
+    this.openActs.set('');
+  }
+
+  protected toggleActs(m: ChatMessage): void {
+    this.openActs.set(this.openActs() === m.id ? '' : m.id);
+  }
+
+  /** Only your own, only a message that still has words, never a system note. */
+  protected canManage(m: ChatMessage): boolean {
+    return m.fromUserId === this.me() && m.kind === 'text' && !m.unsent;
+  }
+
+  protected startEdit(m: ChatMessage): void {
+    this.edit.set(m);
+    this.editText.set(m.body);
+    this.openActs.set('');
+  }
+
+  protected cancelEdit(): void {
+    this.edit.set(null);
+    this.editText.set('');
+  }
+
+  protected async saveEdit(): Promise<void> {
+    const m = this.edit();
+    const body = this.editText().trim();
+    if (!m || !body) return;
+    if (await this.chat.editMessage(m.id, body)) this.cancelEdit();
+    else {
+      this.sendError.set('That message could not be changed. It may have been unsent, or saved somewhere else first.');
+      this.cancelEdit();
+    }
+  }
+
+  /**
+   * One tap, no dialog. LinkedIn's unsend is immediate and says so in the gap it
+   * leaves; a confirmation here would only hide what happened.
+   */
+  protected async unsend(m: ChatMessage): Promise<void> {
+    if (this.edit()?.id === m.id) this.cancelEdit();
+    await this.chat.unsendMessage(m.id);
+    this.openActs.set('');
+  }
+
+  protected unsentLabel(m: ChatMessage): string {
+    return m.fromUserId === this.me() ? 'You unsent a message' : this.peerName() + ' unsent a message';
+  }
+
+  /**
+   * The read marker a thread carries is a flag, not a timestamp, so the line says
+   * Seen and not Seen at 14:32 - a time we do not have would be a made-up one.
+   */
+  protected tick(m: ChatMessage): string {
+    return m.read ? 'Seen' : 'Delivered';
+  }
+
+  /** The tick belongs under the last thing you sent, not under all of them. */
+  readonly lastMine = computed(() => {
+    const me = this.me();
+    return [...this.chat.messages()].reverse().find((m) => m.fromUserId === me && m.kind !== 'system')?.id ?? '';
+  });
+
+  protected isLastMine(m: ChatMessage): boolean {
+    return m.id === this.lastMine() && !m.unsent;
+  }
+
+  protected async copy(m: ChatMessage): Promise<void> {
+    try {
+      await navigator.clipboard?.writeText(m.body);
+      this.copied.set(m.id);
+      setTimeout(() => { if (this.copied() === m.id) this.copied.set(''); }, 1600);
+    } catch {
+      this.sendError.set('Your browser would not let LulaFind copy that. Long-press the message instead.');
+    }
+    this.openActs.set('');
+  }
+
+  protected toggleSearch(): void {
+    const next = !this.searchOpen();
+    this.searchOpen.set(next);
+    if (!next) this.query.set('');
+  }
+
+  protected closeSearch(): void {
+    this.searchOpen.set(false);
+    this.query.set('');
+  }
+
+  protected setQuery(value: string): void {
+    this.query.set(value);
+  }
+
+  /** Every keystroke leaves a marker for the other side, at most one every 2s. */
+  protected onType(value: string): void {
+    this.draft = value;
+    this.chat.noteTyping();
+  }
+
+  protected addEmoji(e: string): void {
+    this.draft = `${this.draft}${e}`;
+    this.chat.noteTyping();
+  }
 
   readonly me = computed(() => this.auth.viewerId);
   readonly thread = computed(() => this.chat.threads().find((t) => t.id === this.route.snapshot.paramMap.get('threadId')));
@@ -245,6 +494,8 @@ export class ChatRoomComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     clearInterval(this.timer);
+    // A marker left behind would keep saying "typing" to the other person.
+    this.chat.stopTyping();
     void this.chat.close();
   }
 
@@ -263,7 +514,7 @@ export class ChatRoomComponent implements OnInit, OnDestroy {
 
   /** Show one sender line for a run of messages, like a professional inbox thread. */
   showMessageHeader(index: number): boolean {
-    const messages = this.chat.messages();
+    const messages = this.shown();
     const current = messages[index];
     const previous = messages[index - 1];
     return !previous || !current || previous.kind === 'system' || current.kind === 'system'
@@ -272,7 +523,7 @@ export class ChatRoomComponent implements OnInit, OnDestroy {
 
   /** A visible date divider keeps long conversations readable. */
   dayBoundary(index: number): string | null {
-    const messages = this.chat.messages();
+    const messages = this.shown();
     const current = messages[index];
     const previous = messages[index - 1];
     if (!current) return null;
@@ -289,10 +540,6 @@ export class ChatRoomComponent implements OnInit, OnDestroy {
     return new Intl.DateTimeFormat('en-ZA', {
       weekday: 'short', day: 'numeric', month: 'short', ...(day.getFullYear() !== today.getFullYear() ? { year: 'numeric' } : {})
     }).format(day);
-  }
-
-  protected addEmoji(e: string): void {
-    this.draft = `${this.draft}${e}`;
   }
 
   /** Attach a photo from the gallery, or straight from the camera. */

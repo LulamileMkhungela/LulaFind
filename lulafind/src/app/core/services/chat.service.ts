@@ -1,6 +1,6 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { LULA_API } from '../data/api';
-import { ChatMessage, ChatThread, MediaItem, Post } from '../models/types';
+import { ChatMessage, ChatThread, MediaItem, Post, ReactionKind } from '../models/types';
 import { uid } from '../utils/format';
 import { AuthService } from './auth.service';
 
@@ -36,6 +36,33 @@ export class ChatService {
     const me = this.auth.viewerId;
     if (!me) return 0;
     return this.threads().reduce((sum, t) => sum + (t.unread[me] ?? 0), 0);
+  });
+
+  /**
+   * LinkedIn's "Seen": your last real message, read. There is no per-message tick
+   * in this app and none should be invented - one line, on the last thing you sent.
+   */
+  readonly peerSeen = computed(() => {
+    const me = this.auth.viewerId;
+    const list = this.messages();
+    for (let i = list.length - 1; i >= 0; i--) {
+      const m = list[i];
+      if (m.kind === 'system' || m.fromUserId !== me) continue;
+      return m.read;
+    }
+    return false;
+  });
+
+  /** Who is typing right now in the open thread - their id, or ''. */
+  readonly typingPeer = computed(() => {
+    const me = this.auth.viewerId;
+    const typing = this.threads().find((t) => t.id === this.openThreadId())?.typing;
+    if (!typing) return '';
+    const now = Date.now();
+    for (const [id, at] of Object.entries(typing)) {
+      if (id !== me && now - at < 6_000) return id;
+    }
+    return '';
   });
 
   async load(): Promise<void> {
@@ -181,10 +208,113 @@ export class ChatService {
         media: media ?? null
       });
       this.messages.set(await this.api.messages(threadId));
+      // Out with the message goes the "typing" marker, so the other side stops
+      // watching dots that have nothing behind them.
+      await this.writeTyping(threadId, me, 0);
       await this.load();
     } finally {
       this.sending.set(false);
     }
+  }
+
+  /* --------------------- the message's own actions --------------------- */
+
+  /**
+   * The reaction a message keeps: one per person, keyed by who reacted, so the
+   * bubble shows small faces the way LinkedIn's does. Tapping the kind you already
+   * chose takes it off.
+   */
+  async reactMessage(messageId: string, kind: ReactionKind | null): Promise<boolean> {
+    const me = this.auth.viewerId;
+    const threadId = this.openThreadId();
+    if (!me || !threadId) return false;
+    const message = (await this.api.messages(threadId)).find((m) => m.id === messageId);
+    if (!message || message.kind === 'system' || message.unsent) return false;
+    const reactions = { ...(message.reactions ?? {}) };
+    if (kind && reactions[me] === kind) delete reactions[me];
+    else if (kind) reactions[me] = kind;
+    else delete reactions[me];
+    await this.api.saveMessage({ ...message, reactions });
+    this.messages.set(await this.api.messages(threadId));
+    return true;
+  }
+
+  /** Editing is text-only and yours only. LinkedIn stamps the row "Edited". */
+  async editMessage(messageId: string, body: string): Promise<boolean> {
+    const me = this.auth.viewerId;
+    const threadId = this.openThreadId();
+    const text = body.trim();
+    if (!me || !threadId || !text) return false;
+    const message = (await this.api.messages(threadId)).find((m) => m.id === messageId);
+    if (!message || message.fromUserId !== me || message.kind !== 'text' || message.unsent) return false;
+    if (message.body === text) return true;
+    await this.api.saveMessage({ ...message, body: text, editedAt: Date.now() });
+    this.messages.set(await this.api.messages(threadId));
+    return true;
+  }
+
+  /**
+   * "Unsend" for both sides at once. The row stays so the thread still lines up -
+   * the words, the attachment and the reactions go, and what is left says what
+   * happened. That is LinkedIn's behaviour, and it is the honest one: a message
+   * that silently disappears leaves the other person wondering about a bug.
+   */
+  async unsendMessage(messageId: string): Promise<boolean> {
+    const me = this.auth.viewerId;
+    const threadId = this.openThreadId();
+    if (!me || !threadId) return false;
+    const message = (await this.api.messages(threadId)).find((m) => m.id === messageId);
+    if (!message || message.fromUserId !== me || message.kind === 'system' || message.unsent) return false;
+    await this.api.saveMessage({ ...message, unsent: true, body: '', media: null, reactions: {}, editedAt: null });
+    this.messages.set(await this.api.messages(threadId));
+    return true;
+  }
+
+  /* ----------------------------- typing ----------------------------- */
+
+  private typedAt = 0;
+  private typingStop?: ReturnType<typeof setTimeout>;
+
+  /**
+   * Called on every keystroke in an open room. It writes at most one marker every
+   * couple of seconds, and schedules the clear - so "typing" ends even if the
+   * person walks away mid-sentence.
+   */
+  noteTyping(): void {
+    const me = this.auth.viewerId;
+    const threadId = this.openThreadId();
+    if (!me || !threadId) return;
+    const now = Date.now();
+    if (now - this.typedAt > 2_000) {
+      this.typedAt = now;
+      void this.writeTyping(threadId, me, now);
+    }
+    clearTimeout(this.typingStop);
+    this.typingStop = setTimeout(() => {
+      this.typedAt = 0;
+      void this.writeTyping(threadId, me, 0);
+    }, 3_000);
+  }
+
+  /** Leaving the room: no stale dots for whoever opens it next. */
+  stopTyping(): void {
+    const me = this.auth.viewerId;
+    const threadId = this.openThreadId();
+    clearTimeout(this.typingStop);
+    this.typedAt = 0;
+    if (me && threadId) void this.writeTyping(threadId, me, 0);
+  }
+
+  private async writeTyping(threadId: string, userId: string, at: number): Promise<void> {
+    try {
+      const thread = await this.api.thread(threadId);
+      if (!thread) return;
+      const typing = { ...(thread.typing ?? {}) };
+      if (at === 0) delete typing[userId];
+      else typing[userId] = at;
+      // lastMessageAt must not move: a typing marker is not a message.
+      await this.api.saveThread({ ...thread, typing });
+    } catch { /* a typing marker is the least important write in the app */ }
   }
 
   /**
