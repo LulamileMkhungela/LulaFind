@@ -330,3 +330,41 @@ jobs:
           prerelease: true
           body_path: release-notes.md
           files: dist-mobile/*
+
+      # The numbered release above is the record of a build. This one is the
+      # thing to put on a phone: one address, always the newest APK, so a link
+      # can be kept, typed on a phone or handed to somebody once. The asset
+      # name is fixed for the same reason - the file it points at is replaced,
+      # not the address - and it is deliberately not a pre-release so that
+      # GitHub's own /releases/latest/download/... also lands here.
+      - name: Point the permanent link at this build
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -o pipefail
+          TAG=apk-latest
+          APK=$(ls dist-mobile/*.apk | head -1)
+          cp "$APK" dist-mobile/LulaFind.apk
+          SHA=$(sha256sum dist-mobile/LulaFind.apk | cut -d' ' -f1)
+          SIZE=$(stat -c %s dist-mobile/LulaFind.apk)
+          NOTES=$(printf '%s\n' \
+            'The Android app, rebuilt and replaced by every push - this address never changes.' \
+            '' \
+            "Built from \`$GITHUB_SHA\` (test build $GITHUB_RUN_NUMBER)." \
+            '' \
+            "| APK | |" \
+            "|---|---|" \
+            "| name | \`LulaFind.apk\` |" \
+            "| size | $SIZE bytes |" \
+            "| sha256 | \`$SHA\` |" \
+            '' \
+            'Download it on the phone, tap it, and allow "install unknown apps" when Android asks.')
+
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            gh release edit "$TAG" --title "LulaFind for Android (newest build)" --notes "$NOTES"
+          else
+            gh release create "$TAG" --title "LulaFind for Android (newest build)" --notes "$NOTES" --target "$GITHUB_SHA"
+          fi
+          gh release upload "$TAG" dist-mobile/LulaFind.apk --clobber
+          gh release view "$TAG" --json url,assets \
+            --jq '"permanent link: \(.url)", (.assets[] | "  \(.name) | \(.size) bytes")'
