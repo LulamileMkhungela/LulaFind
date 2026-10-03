@@ -47,6 +47,7 @@ import { SendSheetComponent } from '../shared/components/send-sheet.component';
 import { EmojiRowComponent } from '../shared/components/emoji-row.component';
 import { UserHoverDirective, UserHoverCardComponent } from '../shared/components/user-hover-card.component';
 import { UserHoverService } from '../core/services/user-hover.service';
+import { NotificationsComponent } from '../pages/notifications/notifications.component';
 import { ChatThread } from '../core/models/types';
 import { SUPPORT_EMAIL } from './config';
 import { ActivatedRoute, convertToParamMap } from '@angular/router';
@@ -2284,6 +2285,67 @@ describe('Mentions in a comment', () => {
       f.detectChanges();
     }
     expect(chips()).toContain('+ Follow');
+  });
+
+  it('filters notifications and groups the list by day', async () => {
+    const data = TestBed.inject(DataService);
+    await data.loadFeed();
+    await TestBed.inject(AuthService).signInDemo();
+    // Calendar-anchored, so the assertions hold whatever hour the suite runs at.
+    const noon = (daysBack: number): number => {
+      const d = new Date();
+      d.setDate(d.getDate() - daysBack);
+      d.setHours(12, 0, 0, 0);
+      return d.getTime();
+    };
+    const at = Date.now();
+    db.pushNotification({ id: 'n_x_older', userId: 'u_demo', kind: 'missing', title: 'New case within your alert radius', body: 'A boy was last seen at the taxi rank.', at: noon(8), read: true, route: '/post/p_thato', postId: 'p_thato' });
+    db.pushNotification({ id: 'n_x_yest', userId: 'u_demo', kind: 'follow', title: 'Ayanda K. started following you', body: '', at: noon(1), read: false, route: '/user/u_ayanda', postId: null });
+    db.pushNotification({ id: 'n_x_share', userId: 'u_demo', kind: 'share', title: 'Kabelo N. sent you a post', body: 'This one is near you.', at: at - 60_000, read: true, route: '/post/p_thato', postId: 'p_thato' });
+    db.pushNotification({ id: 'n_x_mention', userId: 'u_demo', kind: 'mention', title: 'Lerato Dlamini mentioned you in a comment', body: '@you - the clinic opens at seven', at, read: false, route: '/post/p_thato', postId: 'p_thato' });
+    await data.loadUserScoped();
+
+    const f = TestBed.createComponent(NotificationsComponent);
+    f.detectChanges();
+    await f.whenStable();
+    const el = f.nativeElement as HTMLElement;
+    const text = (): string => el.textContent ?? '';
+    const days = (): string[] => [...el.querySelectorAll('.day')].map((d) => (d.textContent ?? '').trim());
+
+    // The day lines are the three the app knows, each once - grouped, not stamped
+    // on every row like a receipt.
+    expect(days(), text()).toEqual([...new Set(data.notifications().map((n) => f.componentInstance.dayLabel(n.at)))]);
+    expect(days()).toContain('Today');
+    expect(days()).toContain('Yesterday');
+    expect(days()).toContain('Earlier');
+    expect(days()[0], 'the newest day heads the list').toBe('Today');
+
+    // Mentions is its own filter: being named is not the same as being replied to.
+    expect(text()).toContain('Mark all as read');
+    f.componentInstance.filter.set('mentions');
+    f.detectChanges();
+    await f.whenStable();
+    expect(text()).toContain('mentioned you in a comment');
+    expect(text()).not.toContain('sent you a post');
+    expect(days().length).toBe(1);
+
+    // Posts is what people did on the cases you follow - comments, reactions,
+    // reposts, shares - and not a follow or a chat reply.
+    f.componentInstance.filter.set('posts');
+    f.detectChanges();
+    await f.whenStable();
+    expect(text()).toContain('sent you a post');
+    expect(text()).not.toContain('started following you');
+    expect(text()).not.toContain('mentioned you in a comment');
+
+    // Marking all read takes the button away with it, and the tint.
+    f.componentInstance.filter.set('all');
+    await f.componentInstance.readAll();
+    f.detectChanges();
+    await f.whenStable();
+    expect(f.nativeElement.textContent).not.toContain('Mark all as read');
+    expect(data.notifications().every((n) => n.read)).toBe(true);
+    expect(el.querySelectorAll('.row.unread').length).toBe(0);
   });
 });
 

@@ -155,6 +155,47 @@ thread instead of replacing it. Supabase upserts by id, so this was the
 device-only path — and the room would have shown a message twice. It now replaces
 in place and leaves the inbox preview alone.
 
+## 7. Two size numbers, and which one the picker uses
+
+They are not the same rule and were never meant to be merged into one:
+
+| number | where | what it is for |
+| --- | --- | --- |
+| **2 MB** photo / **3 MB** video | `core/models/media-rules.ts` | what a person is offered: the picker refuses a 12 MB clip *before* reading it, and says `Choose a video smaller than 3 MB` |
+| **4.8 MB** | `core/utils/media-encode.ts` | what the bucket will take: the encode aim, and the last word when a file cannot be shrunk or is the wrong type |
+
+The bug this settles was a *sequence* one: the identity gate in `uploadMedia` ran
+before either check, so an oversized clip on a half-verified account was reported as
+"your account cannot attach a photo yet". Now a video is judged on its own bytes
+first (it cannot be re-encoded in a browser, so the size *is* the whole answer), the
+photo is re-encoded, and only the sign-in question is asked after there is a blob
+worth uploading. `loadImage` in the encoder also gives up after 1.5 seconds — in a
+headless test, or a webview that will not load a data-url image, the decoder never
+answers, and a composer that spins forever is a worse failure than one that refuses
+the photo out loud.
+
+## 8. Notifications: the grouping is the feature
+
+The screen had what the app had always emitted - flat rows, unread tint, a Mark-all
+button - and nothing to sort them with. It now has LinkedIn's two things:
+
+- **A day line per day**, `Today` / `Yesterday` / `This week` / `Earlier`, computed
+  from the *filtered* list so it never repeats, and compared by calendar date rather
+  than a 24-hour window: a 22:00 alert is still `Yesterday` at 01:00. `dayLabel()` is
+  public so the test can name the rule instead of trusting the render.
+- **Four pills** - All / Unread / Mentions / Posts - with the unread and mention
+  counts inside them. `Posts` is a set, not a prefix match: votes, comments, reposts,
+  shares, outcomes, claims, missing-person alerts, lookouts, escalations, moderation
+  and spotlight notes are "about a case"; a follow or a chat reply is not. Every
+  filter has its own empty sentence, because "No alerts yet" is a lie when there are
+  alerts and you just filtered them out.
+- **Mark all as read** shows only while something is unread, and reads
+  `DataService.unreadNotifications()` - the same number the tab bell carries.
+
+What was *not* copied: tapping one alert marks the whole list read. That is the
+existing single policy-checked write, and a per-row version needs a new RPC to be
+honest about it. The comment in `go()` says so, so it does not read as an oversight.
+
 ## Still with the operator
 
 The deployed schema cannot be read from here, so this round ships SQL that is safe
@@ -168,7 +209,7 @@ page says out loud.
 ```bash
 cd lulafind
 npx ng build --configuration development   # no errors
-npx ng test --watch=false                  # 232 tests
+npx ng test --watch=false                  # 298 tests
 npm run lint                               # clean
 ```
 
@@ -176,4 +217,5 @@ The suite covers the rules that were broken: a photo on its own being a post, a
 title derived for it, joining when the server refuses the write, a suspended
 account being told instead of faked, comment attachments that half-upload, the
 `storage://` marker being signed (and retried) before it reaches an `<img>`, the
-community hub's tabs, and the Send list being mutual-follows only.
+community hub's tabs, the Send list being mutual-follows only, and the
+notifications list grouping by day while each filter shows only what belongs to it.

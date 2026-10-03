@@ -1,3 +1,63 @@
+# Session state — 2026-10-03 (round 6): the merge, and the notifications screen
+
+`git merge origin/main` — main had 62 commits since the base and had moved on in 23
+of the 32 files this branch touched, so every one of them was a decision, not a
+resolution. The rule used: **main wins the app** (its post card, both Spotlight
+pages, the flat comment style, `media-rules.ts` as the one size rule, the composer
+keyboard hints, its Send picker, its +378 lines of `DataService` and +924 lines of
+specs), **this branch keeps what main does not have** (the whole message row, `@`
+mentions, the follow chip, the one hover card, `lf-emoji-row`, `media-encode.ts`,
+`storage://` render-time signing, `LocalDb.upsertMessage`). Where both added
+something at the same spot, both were kept. The commit message for `597afa2` lists
+each file's outcome; the three places where the two sides actually disagreed about
+behaviour are worth restating here:
+
+1. **`uploadMedia`**: main's product caps (photo 2 MB, video 3 MB) are now enforced
+   on the bytes, the photo is still re-encoded through `storableBlob` rather than
+   refused outright, and `storageReport()` is consulted before anything is said about
+   a policy refusal. The unverified-email gate moved *after* the encode — a file that
+   is too big is about the file, not about your account, and dressing one up as the
+   other is exactly the kind of message this app has been fixing all round.
+2. **`loadImage` in `media-encode.ts` grew a 1.5 s timeout.** In jsdom, and in a
+   webview that will not load a data-url image, the decoder never reports back at
+   all; the encode then hangs and the composer spins forever. A decoder that does not
+   answer is treated as one that cannot do it, which is what main's own size test was
+   accidentally proving when it timed out.
+3. **The chat room keeps main's rule** — the keyboard *is* the emoji picker there
+   (a keypad button crowds the send affordance) — while the comment box keeps the
+   face row, because LinkedIn's comment composer has one. The custom keypad was
+   deleted from the chat room rather than merged in beside it.
+
+`docs/SCREEN-AUDIT.md` took main's captures wholesale: they predate these screens and
+need a re-run with `tools/e2e-*.mjs` against a browser. See *Still with the operator*.
+
+## Notifications, as asked
+
+`pages/notifications/notifications.component.ts`:
+
+- **Grouped by day** — `Today` / `Yesterday` / `This week` / `Earlier`, one line per
+  day (`.day`, with a hairline rule) rather than a stamp on each row. The rule is
+  calendar-based, so a 22:00 notification is not "Today" at 01:00. `dayLabel()` is
+  public because the grouping *is* the feature and the test has to be able to name it.
+- **Filters**: All / Unread / Mentions / Posts, as pills with the unread and mention
+  counts in them. `POST_KINDS` is the set that counts as "about a case" — votes,
+  comments, reposts, shares, outcomes, claims, missing-person alerts, lookouts,
+  escalations, moderation, spotlight — while a follow or a chat reply is not.
+  Each filter has its own empty-state sentence.
+- **Mark all as read** sits top-right, and only while there is something unread.
+  `unreadCount` reads `DataService.unreadNotifications()`, the same number the tab
+  bell carries, so the two cannot disagree.
+- Tapping a row still marks **all** of them read, not just that one. That is
+  deliberate and unchanged: `markNotificationsRead` is one write with a security
+  policy on it, and a per-row version would need a new RPC to be done honestly. The
+  comment in `go()` says so, so nobody reads it as an oversight.
+
+Verified: `npx ng build --configuration development` clean (and the stale `IonTextarea`
+import in the Spotlight hub is gone, so no NG8113 left); `npx ng test --watch=false`
+**298 passed** in 8 files; `npm run lint` clean.
+
+---
+
 # Session state — 2026-10-03 (round 5)
 
 The parity line, finished: everything a LinkedIn message row lets you do, plus the
@@ -27,7 +87,9 @@ the code moved here:
   `core/components.spec.ts` (232 in total now).
 
 Deliberate differences from LinkedIn, still: the reaction set (idea / like /
-support / sad, "Have an idea" as the default), a reaction never unlocking chat,
+support / sad — `origin/main` has since moved the default tap back to **Like**, with
+"Have an idea" offered in the tray instead, so the card's button now reads "Like" as
+LinkedIn's does), a reaction never unlocking chat,
 Send only to mutual follows, `Seen` without a timestamp, and mentions only reaching
 people already in the thread.
 
