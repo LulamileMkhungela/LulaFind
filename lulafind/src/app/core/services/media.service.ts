@@ -1,6 +1,7 @@
 import { Injectable, inject, signal } from '@angular/core';
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 import { Capacitor } from '@capacitor/core';
+import { PHOTO_MAX_BYTES, PICK_MAX_BYTES, VIDEO_MAX_BYTES } from '../models/media-rules';
 import { MediaItem } from '../models/types';
 import { uid } from '../utils/format';
 import { PlatformService } from './platform.service';
@@ -18,6 +19,16 @@ import { PlatformService } from './platform.service';
  *
  * Web: <input type=file>, which is the browser's own picker/camera sheet.
  */
+/**
+ * The numbers live in models/media-rules.ts; this service is where they are
+ * applied. A photo is downscaled and re-encoded before it is uploaded, so the
+ * picker accepts a generous original; a video cannot be re-encoded in a
+ * browser, so it is refused at the picker when it is too big, with a message
+ * the person can act on rather than a stall on a huge file.
+ */
+const IMAGE_PICK_MAX_BYTES = PICK_MAX_BYTES;
+const VIDEO_PICK_MAX_BYTES = VIDEO_MAX_BYTES;
+
 @Injectable({ providedIn: 'root' })
 export class MediaService {
   private platform = inject(PlatformService);
@@ -56,7 +67,7 @@ export class MediaService {
             const asked = await Camera.requestPermissions({ permissions: ['camera'] }).catch(() => null);
             if (asked && asked.camera !== 'granted') {
               this.notice.set('Camera access is off. Your phone’s photo chooser will open instead.');
-              return await this.pickViaInput('image/*', false);
+              return await this.pickViaInput('image/*', false, IMAGE_PICK_MAX_BYTES);
             }
           }
         }
@@ -76,13 +87,13 @@ export class MediaService {
           this.notice.set(MediaService.pluginMissing(e)
             ? 'This build has no camera module. Your phone’s own photo chooser will open instead.'
             : 'The camera did not open. Your phone’s photo chooser will open instead.');
-          return await this.pickViaInput('image/*', false);
+          return await this.pickViaInput('image/*', false, IMAGE_PICK_MAX_BYTES);
         }
       }
       if (fromCamera && this.platform.isNative && !this.cameraAvailable) {
         this.notice.set('This build has no camera module. Your phone’s own photo chooser will open instead.');
       }
-      return await this.pickViaInput('image/*', false);
+      return await this.pickViaInput('image/*', false, IMAGE_PICK_MAX_BYTES);
     } catch (e: unknown) {
       const msg = String((e as Error)?.message ?? '').toLowerCase();
       if (msg.includes('cancel') || msg.includes('no image picked') || msg.includes('user denied')) {
@@ -101,7 +112,7 @@ export class MediaService {
     this.lastError.set(null);
     this.notice.set(null);
     try {
-      return await this.pickViaInput('video/*');
+      return await this.pickViaInput('video/*', false, VIDEO_PICK_MAX_BYTES);
     } catch (e: unknown) {
       if (!String((e as Error)?.message ?? '').toLowerCase().includes('cancel')) {
         this.lastError.set((e as Error)?.message ?? 'Could not pick video');
@@ -124,7 +135,7 @@ export class MediaService {
     return err?.code === 'UNIMPLEMENTED' || msg.includes('not implemented') || msg.includes('unimplemented') || msg.includes('not available');
   }
 
-  private pickViaInput(accept = 'image/*', capture = false): Promise<MediaItem | null> {
+  private pickViaInput(accept = 'image/*', capture = false, maxBytes = 0): Promise<MediaItem | null> {
     return new Promise((resolve) => {
       const input = document.createElement('input');
       input.type = 'file';
@@ -151,6 +162,16 @@ export class MediaService {
       const onChange = (): void => {
         const file = input.files?.[0];
         if (!file) { finish(null); return; }
+        // Refuse a file that is too big before reading it into memory: a 200 MB
+        // video would otherwise be turned into a data URL and stall the phone
+        // long before the upload had a chance to reject it.
+        if (maxBytes && file.size > maxBytes) {
+          const size = Math.max(1, Math.round(file.size / (1024 * 1024)));
+          const cap = Math.round(maxBytes / (1024 * 1024));
+          this.lastError.set(`That file is about ${size} MB. Choose one smaller than ${cap} MB.`);
+          finish(null);
+          return;
+        }
         const reader = new FileReader();
         reader.onload = () => finish({
           id: uid('m'),
@@ -170,23 +191,69 @@ export class MediaService {
     });
   }
 
-  /** Downscales a data-uri so localStorage / Firestore documents stay small. */
-  async compress(src: string, maxDim = 1200): Promise<string> {
+  /**
+   * Downscales a data-uri and keeps re-encoding until it fits `maxBytes`.
+   *
+   * The old version tried once - 1200px at quality 0.82 - and returned whatever
+   * that happened to weigh. Almost always that was far under the limit, but a
+   * dense or already-compressed photo could land over it and the person was then
+   * told to "choose a photo smaller than 2 MB" from a phone that cannot resize
+   * anything. Now the composer guarantees the size, so that message is only ever
+   * about a file the picker refused, never about a photo that was accepted.
+   */
+  async compress(src: string, maxDim = 1200, maxBytes = PHOTO_MAX_BYTES): Promise<string> {
     if (!src.startsWith('data:image')) return src;
-    return new Promise((resolve) => {
-      const img = new Image();
-      img.onload = () => {
-        const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
-        const canvas = document.createElement('canvas');
-        canvas.width = Math.round(img.width * scale);
-        canvas.height = Math.round(img.height * scale);
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return resolve(src);
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        resolve(canvas.toDataURL('image/jpeg', 0.82));
-      };
-      img.onerror = () => resolve(src);
-      img.src = src;
+    const img = await new Promise<HTMLImageElement | null>((resolve) => {
+      const el = new Image();
+      el.onload = () => resolve(el);
+      el.onerror = () => resolve(null);
+      el.src = src;
     });
+    if (!img) return src;
+    const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(img.width * scale));
+    canvas.height = Math.max(1, Math.round(img.height * scale));
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return src;
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+    let smallest = src;
+    let smallestBytes = MediaService.dataUrlBytes(src) || Number.MAX_SAFE_INTEGER;
+    for (const quality of [0.82, 0.7, 0.6, 0.5, 0.4]) {
+      const out = canvas.toDataURL('image/jpeg', quality);
+      const bytes = MediaService.dataUrlBytes(out);
+      if (bytes < smallestBytes) { smallest = out; smallestBytes = bytes; }
+      if (bytes <= maxBytes) break;
+    }
+    return smallest;
+  }
+
+  /**
+   * Exports a canvas within the photo limit, as JPEG.
+   *
+   * A generated poster is 1080x1350; as a PNG - which is what it used to be -
+   * one with a photo in it routinely weighs more than the 2 MB rule, so the
+   * poster was refused by the very limit it had to obey. Stepping the quality
+   * down keeps every design inside the rule instead of failing at upload.
+   */
+  async exportCanvas(canvas: HTMLCanvasElement, maxBytes = PHOTO_MAX_BYTES): Promise<Blob | null> {
+    let smallest: Blob | null = null;
+    for (const quality of [0.92, 0.85, 0.75, 0.62, 0.5]) {
+      const blob = await new Promise<Blob | null>((resolve) => {
+        try { canvas.toBlob((b) => resolve(b), 'image/jpeg', quality); } catch { resolve(null); }
+      });
+      if (!blob) return smallest;
+      if (!smallest || blob.size < smallest.size) smallest = blob;
+      if (blob.size <= maxBytes) return blob;
+    }
+    return smallest;
+  }
+
+  /** Bytes inside a data-uri - what the file will weigh once decoded. */
+  private static dataUrlBytes(dataUrl: string): number {
+    const comma = dataUrl.indexOf(',');
+    if (comma < 0) return 0;
+    return Math.floor((dataUrl.length - comma - 1) * 3 / 4);
   }
 }

@@ -3,6 +3,7 @@ import {
   ReactionKind, UserProfile, defaultPrivacy, isReaction
 } from '../models/types';
 import { seedComments, seedPosts, seedSpotlights, seedStories, seedTips, seedUsers } from './seed';
+import { canReadPostAudience } from '../utils/audience';
 import { answerBlocker, hasAnswered, withAnswer } from '../utils/lookout';
 import { lookoutCasePost } from '../utils/lookout-case';
 
@@ -386,6 +387,33 @@ export class LocalDb {
     this.persist();
   }
 
+  /**
+   * Free-text search over every stored post.
+   *
+   * Uses the same matcher as the feed's `query` filter, so a search behaves the
+   * same wherever it is typed. Cases held for review stay hidden from the
+   * public; the caller merges in whatever the viewer's own feed may show them.
+   */
+  searchPosts(q: string, limit = 40): Post[] {
+    const needle = q.trim().toLowerCase();
+    if (needle.length < 2) return [];
+    return this.db.posts
+      .filter((p) => p.status !== 'under_review' && this.matchesQuery(p, needle))
+      .sort((a, b) => b.updatedAt - a.updatedAt)
+      .slice(0, limit)
+      .map((p) => clone(p));
+  }
+
+  /** Free-text search over members by name, surname or handle. */
+  searchUsers(q: string, limit = 20): UserProfile[] {
+    const needle = q.trim().toLowerCase().replace(/^@/, '');
+    if (!needle) return [];
+    return this.db.users
+      .filter((u) => !u.suspended && `${u.displayName} ${u.surname} ${u.handle}`.toLowerCase().includes(needle))
+      .slice(0, limit)
+      .map((u) => clone(u));
+  }
+
   /* ------------------------- posts ------------------------- */
   posts(): Post[] { return this.db.posts.map((p) => clone(p)); }
   postsByAuthor(authorId: string): Post[] { return this.db.posts.filter((p) => p.authorId === authorId).map((p) => clone(p)); }
@@ -545,32 +573,12 @@ export class LocalDb {
 
     if (f.query.trim()) {
       const q = f.query.trim().toLowerCase();
-      list = list.filter((p) => {
-        const author = this.user(p.authorId);
-        return (
-          p.title.toLowerCase().includes(q) ||
-          p.body.toLowerCase().includes(q) ||
-          p.town.toLowerCase().includes(q) ||
-          (p.subject?.name.toLowerCase().includes(q) ?? false) ||
-          (p.subject?.surname.toLowerCase().includes(q) ?? false) ||
-          (p.caseNumber?.toLowerCase().includes(q) ?? false) ||
-          (author?.displayName.toLowerCase().includes(q) ?? false)
-        );
-      });
+      list = list.filter((p) => this.matchesQuery(p, q));
     }
 
-    // audience enforcement
-    list = list.filter((p) => {
-      if (p.authorId === viewerId) return true;
-      if (p.audience === 'public') return true;
-      if (p.audience === 'followers') return following.has(p.authorId);
-      if (p.audience === 'surname') {
-        if (!p.spotlightId) return false;
-        const sp = this.spotlight(p.spotlightId);
-        return !!sp && (!viewer?.surname || sp.surname.toLowerCase() === viewer.surname.toLowerCase() || sp.memberIds.includes(viewerId ?? ''));
-      }
-      return true;
-    });
+    // audience enforcement - the shared rule, so this backend and the live one
+    // cannot answer the same question differently.
+    list = list.filter((p) => canReadPostAudience(p, { viewerId, following }));
 
     switch (f.sort) {
       case 'hot':
@@ -593,6 +601,20 @@ export class LocalDb {
     return (p.upvotes * 3 + p.commentCount * 5 + p.shares * 2) / Math.pow(ageH, 0.55);
   }
 
+  /**
+   * What "free text" means for a case: the words on the poster, the case number
+   * quoted by SAPS, the town, the last-seen town, and the author's name.
+   * One definition, so the feed filter and search can never drift apart.
+   */
+  private matchesQuery(p: Post, needle: string): boolean {
+    const author = this.user(p.authorId);
+    const hay = [
+      p.title, p.body, p.town, p.caseNumber ?? '',
+      p.subject?.name ?? '', p.subject?.surname ?? '', author?.displayName ?? ''
+    ].join(' ').toLowerCase();
+    return hay.includes(needle);
+  }
+
   /* ------------------------- comments ------------------------- */
   comments(): Comment[] { return this.db.comments.map((c) => clone(c)); }
   commentsFor(postId: string): Comment[] {
@@ -610,6 +632,20 @@ export class LocalDb {
 
   /* ------------------------- spotlights ------------------------- */
   spotlights(): Spotlight[] { return this.db.spotlights.map((s) => clone(s)); }
+
+  /**
+   * Posts filed to one Spotlight, newest first.
+   *
+   * No audience test: a Spotlight page is a public noticeboard, and everyone
+   * who opens it sees what the community filed there. Joining is what lets you
+   * add to it. Review rules still apply - see `searchPosts`.
+   */
+  postsInSpotlight(spotlightId: string): Post[] {
+    return this.db.posts
+      .filter((p) => p.spotlightId === spotlightId)
+      .sort((a, b) => b.createdAt - a.createdAt)
+      .map((p) => clone(p));
+  }
   spotlight(id: string): Spotlight | undefined {
     const sp = this.db.spotlights.find((x) => x.id === id);
     return sp ? clone(sp) : undefined;

@@ -97,7 +97,11 @@ if (!capSyncSkipped) {
                     standardOutput = System.out
                     errorOutput = System.err
                 }
-            } catch (org.gradle.process.ExecException e) {
+            } catch (Exception e) {
+                // Was org.gradle.process.ExecException, which Gradle 8 does not
+                // have - so this script failed to compile before it could ever
+                // run, and the APK went stale. Any failure here means the same
+                // thing to the reader: the web app could not be built or copied.
                 throw new GradleException(
                     'capSync could not run "npm run android:prepare", so this APK would be packaged with stale ' +
                     'web assets and without the Capacitor plugin registry (which is what causes ' +

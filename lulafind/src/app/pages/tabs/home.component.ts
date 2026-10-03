@@ -16,7 +16,7 @@ import { DataService } from '../../core/services/data.service';
 import { AuthService } from '../../core/services/auth.service';
 import { ChatService } from '../../core/services/chat.service';
 import { PlatformService } from '../../core/services/platform.service';
-import { Post, ReactionKind } from '../../core/models/types';
+import { Post, ReactionKind, provinceName } from '../../core/models/types';
 import { feedWithRails } from '../../core/utils/feed';
 import { LookoutService } from '../../core/services/lookout.service';
 import { timeAgo } from '../../core/utils/format';
@@ -47,6 +47,40 @@ import { timeAgo } from '../../core/utils/format';
           </div>
           <lf-icon name="chevronRight" [size]="16" />
         </a>
+      }
+
+      <!-- While you were away: the honest answer to "what did I miss?" - new
+           cases (and how many are in your own province), movement on the cases
+           you follow, and anything new in the Spotlights you are part of. -->
+      @if (catchUpOpen() && catchUp().total) {
+        <section class="catchup" aria-label="While you were away">
+          <div class="catchup__head">
+            <lf-icon name="sparkle" [size]="18" />
+            <strong>While you were away</strong>
+            <button type="button" class="catchup__x" (click)="dismissCatchUp()" aria-label="Dismiss">
+              <lf-icon name="x" [size]="16" />
+            </button>
+          </div>
+          <ul class="catchup__list">
+            @if (catchUp().newCases; as n) {
+              @if (n) {
+                <li>
+                  <a [routerLink]="'/home'" (click)="dismissCatchUp()">
+                    <strong>{{ n }} new {{ n === 1 ? 'case' : 'cases' }}</strong>
+                    @if (catchUp().nearYou) { <span>· {{ catchUp().nearYou }} in {{ myProvinceName() }}, near you</span> }
+                  </a>
+                </li>
+              }
+            }
+            @if (catchUp().followed; as n) {
+              @if (n) { <li><a [routerLink]="'/saved'" (click)="dismissCatchUp()"><strong>{{ n }} {{ n === 1 ? 'update' : 'updates' }}</strong> <span>on cases you follow</span></a></li> }
+            }
+            @if (catchUp().spotlight; as n) {
+              @if (n) { <li><a [routerLink]="'/spotlight'" (click)="dismissCatchUp()"><strong>{{ n }} new {{ n === 1 ? 'post' : 'posts' }}</strong> <span>in your Spotlights</span></a></li> }
+            }
+          </ul>
+          <button type="button" class="lf-btn lf-btn--ghost lf-btn--sm" (click)="dismissCatchUp()">Dismiss</button>
+        </section>
       }
 
       <!-- Facebook Feed Filter Chips -->
@@ -104,6 +138,15 @@ import { timeAgo } from '../../core/utils/format';
     </ion-content>
   `,
   styles: [`
+    .catchup { margin: 10px var(--lf-gap) 0; padding: 12px 14px; border-radius: var(--lf-radius);
+      background: var(--lf-card); box-shadow: var(--lf-shadow); display: flex; flex-direction: column; gap: 8px; }
+    .catchup__head { display: flex; align-items: center; gap: 8px; }
+    .catchup__head strong { flex: 1; font-size: 15px; }
+    .catchup__x { border: 0; background: transparent; color: var(--lf-muted); cursor: pointer; padding: 2px; }
+    .catchup__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
+    .catchup__list a { color: inherit; text-decoration: none; font-size: 14px; }
+    .catchup__list strong { font-weight: 700; }
+    .catchup__list span { color: var(--lf-muted); }
     .checkprompt { display: flex; align-items: center; gap: 12px; margin: 10px var(--lf-gap); padding: 13px 14px;
       border-radius: var(--lf-radius); background: color-mix(in srgb, var(--lf-beacon) 16%, var(--lf-card));
       color: inherit; text-decoration: none; box-shadow: var(--lf-shadow); }
@@ -133,6 +176,34 @@ import { timeAgo } from '../../core/utils/format';
 export class HomeComponent {
   protected data = inject(DataService);
   protected auth = inject(AuthService);
+
+  /**
+   * "While you were away" - what is new since this account last looked.
+   *
+   * Shown until it is dismissed, and dismissing is what moves the marker, so
+   * nobody is told the same news twice. A brand-new account has no marker yet
+   * and sees nothing, which is right: there is nothing behind them.
+   */
+  readonly catchUp = computed(() => {
+    const s = this.data.sinceLastVisit();
+    return {
+      newCases: s.newCases.length,
+      nearYou: s.nearYou,
+      followed: s.followed.length,
+      spotlight: s.spotlight.length,
+      total: s.newCases.length + s.followed.length + s.spotlight.length
+    };
+  });
+  readonly catchUpOpen = signal(true);
+
+  myProvinceName(): string {
+    return provinceName(this.auth.user()?.province ?? 'GP');
+  }
+
+  dismissCatchUp(): void {
+    this.catchUpOpen.set(false);
+    this.data.markVisited();
+  }
   protected lookouts = inject(LookoutService);
   protected chat = inject(ChatService);
   private platform = inject(PlatformService);

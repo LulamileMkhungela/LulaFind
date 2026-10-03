@@ -8,6 +8,7 @@ import { PushService } from './core/services/push.service';
 import { PrefetchService } from './core/services/prefetch.service';
 import { BACKGROUNDS, SettingsService } from './core/services/settings.service';
 import { RepostSheetComponent } from './shared/components/repost-sheet.component';
+import { SendSheetComponent } from './shared/components/send-sheet.component';
 import { LogoComponent } from './shared/components/logo.component';
 import { supabaseNotice } from './core/data/supabase-client';
 import { demoMode, localMode } from './core/data/demo';
@@ -15,7 +16,7 @@ import { demoMode, localMode } from './core/data/demo';
 @Component({
   selector: 'lf-root',
   standalone: true,
-  imports: [IonApp, IonRouterOutlet, RepostSheetComponent, LogoComponent],
+  imports: [IonApp, IonRouterOutlet, RepostSheetComponent, SendSheetComponent, LogoComponent],
   template: `
     <ion-app>
       @if (demoMode()) {
@@ -49,6 +50,7 @@ import { demoMode, localMode } from './core/data/demo';
 
       <ion-router-outlet></ion-router-outlet>
       <lf-repost-sheet />
+      <lf-send-sheet />
     </ion-app>
   `,
   styles: [`
@@ -128,17 +130,18 @@ export class AppComponent implements OnInit {
   constructor() {
     this.prefetch.start(0);
 
-    // Once auth is restored, start the fade-out sequence and route to login if not signed in.
+    // Once auth is restored, fade the splash out.
+    //
+    // The splash is what covers the first moment of a cold start, when nobody
+    // knows yet whether there is a session. Nothing navigates from here: the
+    // route guard on the app shell waits for the same signal and makes the
+    // decision before the first page paints, so a visitor who is not signed in
+    // goes to the login screen without Home ever appearing behind it.
     effect(() => {
       if (!this.auth.ready()) return;
       this.splashFading.set(true);
-      // Remove from DOM after the CSS transition finishes (580ms) and redirect if needed.
-      setTimeout(() => {
-        this.splashVisible.set(false);
-        if (!this.auth.signedIn()) {
-          void this.router.navigate(['/auth']);
-        }
-      }, 580);
+      // Remove from DOM after the CSS transition finishes (580ms).
+      setTimeout(() => this.splashVisible.set(false), 580);
     });
 
     // Signed in but not onboarded -> straight into the Snapchat-style walkthrough.

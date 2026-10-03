@@ -12,6 +12,7 @@ import { AvatarComponent } from '../../shared/components/avatar.component';
 import { ReactionsSheetComponent } from '../../shared/components/reactions-sheet.component';
 import { ReactionButtonComponent } from '../../shared/components/reaction-button.component';
 import { ReactionIconComponent } from '../../shared/components/reaction-icon.component';
+import { PHOTO_MAX_BYTES, POST_MAX_PHOTOS, VIDEO_MAX_BYTES, mb } from '../../core/models/media-rules';
 import { DataService } from '../../core/services/data.service';
 import { AuthService } from '../../core/services/auth.service';
 import { ChatService, ChatGate } from '../../core/services/chat.service';
@@ -158,10 +159,23 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
 
           <div class="actions">
             <lf-reaction-button [value]="myVote()" (react)="react($event)" />
-            <button class="act" type="button" (click)="focusComment()"><lf-icon name="comment" [size]="20" /><span>Comment</span></button>
-            <button class="act" type="button" (click)="repost()"><lf-icon name="repost" [size]="20" /><span>Repost</span></button>
-            <button class="act" type="button" (click)="send()"><lf-icon name="send" [size]="19" /><span>Send</span></button>
+            <button class="act" type="button" (click)="focusComment()" aria-label="Comment"><lf-icon name="comment" [size]="20" /><span>Comment</span></button>
+            <button class="act" type="button" (click)="repost()" aria-label="Repost"><lf-icon name="repost" [size]="20" /><span>Repost</span></button>
+            <button class="act" type="button" (click)="send()" aria-label="Send"><lf-icon name="send" [size]="19" /><span>Send</span></button>
           </div>
+
+          @if (!isMine() || p()!.status === 'active') {
+            <!-- Following a case is the reason to come back to the app: it is
+                 what makes the updates arrive, and what the catch-up counts. -->
+            <button class="followline" type="button" [class.on]="followingCase()" (click)="toggleFollowCase()">
+              <lf-icon name="bell" [size]="16" [filled]="followingCase()" />
+              <span>
+                @if (followingCase()) { Following this case - we will tell you when something changes }
+                @else { Follow this case and be told when something changes }
+              </span>
+              <strong>{{ followingCase() ? 'Following' : 'Follow' }}</strong>
+            </button>
+          }
 
           @if (leads().length) {
             <button class="leads" type="button" (click)="openLeads()">
@@ -289,7 +303,7 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
                     </div>
                   }
                   <div class="attach-actions">
-                    <button type="button" (click)="addCommentPhoto()" [disabled]="posting() || media.busy() || commentMedia().length >= 4 || hasCommentVideo()">
+                    <button type="button" (click)="addCommentPhoto()" [disabled]="posting() || media.busy() || commentMedia().length >= maxPhotos || hasCommentVideo()">
                       <lf-icon name="image" [size]="17" /> Photo
                     </button>
                     <button type="button" (click)="addCommentVideo()" [disabled]="posting() || media.busy() || commentMedia().length > 0">
@@ -305,8 +319,6 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
               <div class="sort">
                 <button type="button" (click)="toggleSort()">{{ sort() === 'relevant' ? 'Most relevant' : 'Most recent' }} <lf-icon name="chevronDown" [size]="14" /></button>
               </div>
-            } @else {
-              <p class="empty">No comments yet. Start the conversation.</p>
             }
 
             @for (c of sorted(); track c.id) {
@@ -315,7 +327,9 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
                 <div class="cmsg__body">
                   @if (editingId() === c.id) {
                     <div class="edit">
-                      <textarea rows="2" [value]="editDraft()" (input)="editDraft.set($any($event.target).value)" aria-label="Edit your comment"></textarea>
+                      <textarea rows="2" inputmode="text" autocorrect="on" autocomplete="on"
+                                autocapitalize="sentences" spellcheck="true"
+                                [value]="editDraft()" (input)="editDraft.set($any($event.target).value)" aria-label="Edit your comment"></textarea>
                       <div class="edit__row">
                         <button type="button" class="pill" (click)="editingId.set(null)">Cancel</button>
                         <button type="button" class="pill pill--go" [disabled]="!editDraft().trim()" (click)="saveEdit(c)">Save</button>
@@ -392,7 +406,9 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
                             <div class="cmsg__body">
                               @if (editingId() === r.id) {
                                 <div class="edit">
-                                  <textarea rows="2" [value]="editDraft()" (input)="editDraft.set($any($event.target).value)" aria-label="Edit your reply"></textarea>
+                                  <textarea rows="2" inputmode="text" autocorrect="on" autocomplete="on"
+                                            autocapitalize="sentences" spellcheck="true"
+                                            [value]="editDraft()" (input)="editDraft.set($any($event.target).value)" aria-label="Edit your reply"></textarea>
                                   <div class="edit__row">
                                     <button type="button" class="pill" (click)="editingId.set(null)">Cancel</button>
                                     <button type="button" class="pill pill--go" [disabled]="!editDraft().trim()" (click)="saveEdit(r)">Save</button>
@@ -443,7 +459,6 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
           }
         </section>
 
-        <p class="fine">LulaFind is a community tool. It does not replace SAPS. In an emergency call <strong>10111</strong>.</p>
       }
     </ion-content>
 
@@ -498,6 +513,13 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
       background: color-mix(in srgb, var(--lf-ubuntu) 16%, transparent); color: var(--lf-ubuntu); font-size: 14px; }
     .title { margin: 4px var(--edge) 6px; font-size: 20px; line-height: 1.25; font-weight: 700; letter-spacing: -.2px; }
     .text { margin: 0 var(--edge) 12px; font-size: 16px; line-height: 1.45; white-space: pre-line; word-break: break-word; }
+    .followline { display: flex; align-items: center; gap: 8px; width: 100%; margin: 6px 0 0; padding: 10px 12px;
+      border: 0; border-radius: var(--lf-radius); background: var(--lf-card-2); color: var(--ion-text-color);
+      font: inherit; font-size: 13.5px; text-align: left; cursor: pointer; }
+    .followline span { flex: 1; color: var(--lf-muted); }
+    .followline strong { color: var(--lf-link); font-weight: 700; white-space: nowrap; }
+    .followline.on { background: var(--lf-primary-soft); }
+    .followline.on strong { color: var(--lf-link); }
     .media { margin: 4px 0 0; }
     .media img, .media video { display: block; width: 100%; max-height: 640px; object-fit: contain; background: #000; }
     .media.multi { display: flex; gap: 2px; overflow-x: auto; scroll-snap-type: x mandatory; }
@@ -522,12 +544,15 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
     .stack { display: inline-flex; }
     .stack lf-reaction-icon + lf-reaction-icon { margin-left: -6px; }
     .stats__right { display: inline-flex; align-items: center; gap: 12px; }
-    .actions { display: flex; align-items: center; gap: 2px; margin: 0 6px; padding: 4px 0; border-top: 1px solid var(--lf-line-soft); }
-    .act { flex: 0 0 auto; min-width: 0; height: 40px; border: 0; background: transparent; color: var(--lf-muted); font-family: inherit;
-      font-size: 14px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; gap: 5px; cursor: pointer; border-radius: 4px; }
+    /* React - Comment - Repost - Send, the four actions spread the full width
+       the way LinkedIn draws them, instead of bunched at the start. */
+    .actions { display: flex; align-items: center; margin: 0 8px; padding: 4px 0; border-top: 1px solid var(--lf-line-soft); }
+    .act { flex: 1 1 0; min-width: 0; height: 44px; border: 0; background: transparent; color: var(--lf-muted); font-family: inherit;
+      font-size: 14px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; gap: 6px; cursor: pointer; border-radius: 6px; }
     .act:hover, .act:active { background: var(--lf-hover); }
-    @media (max-width: 430px) { .actions { margin: 0 2px; gap: 0; } .act { font-size: 12.5px; gap: 4px; padding: 0 2px; } }
-    @media (max-width: 360px) { .act { font-size: 11.5px; } }
+    .act.on { color: var(--lf-primary); }
+    @media (max-width: 430px) { .actions { margin: 0 4px; } .act { font-size: 12.5px; gap: 4px; } }
+    @media (max-width: 360px) { .act { font-size: 11.5px; gap: 3px; } }
     .chatline { display: flex; align-items: center; justify-content: center; gap: 8px; width: calc(100% - 24px); margin: 4px 12px 12px;
       height: 38px; border: 1px solid var(--lf-line); border-radius: 6px; background: transparent; color: var(--ion-text-color);
       font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
@@ -569,7 +594,6 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
     .composer textarea, .composer .fld { border-radius: 999px !important; }
     .sort { display: flex; justify-content: flex-end; margin: 12px 0 2px; }
     .sort button { display: inline-flex; align-items: center; gap: 5px; border: 0; background: transparent; color: var(--lf-muted); font: inherit; font-size: 13px; cursor: pointer; }
-    .empty { margin: 12px 0 0; color: var(--lf-muted); font-size: 14px; }
     .cmsg { display: flex; align-items: flex-start; gap: 8px; margin-top: 14px; }
     .cmsg__body { flex: 1; min-width: 0; }
     .cmsg--reply { margin-top: 9px; }
@@ -617,7 +641,6 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
     .pill { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px; border: 1px solid var(--lf-line); border-radius: 15px;
       background: transparent; color: var(--ion-text-color); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
     .pill--go { background: var(--lf-primary-fill); border-color: var(--lf-primary-fill); color: #fff; }
-    .fine { margin: 12px var(--edge) 28px; font-size: 12px; text-align: center; color: var(--lf-muted); }
 
     .sheetwrap { position: fixed; inset: 0; z-index: 40; background: var(--lf-scrim); display: flex; align-items: flex-end; justify-content: center; }
     .sheet { width: 100%; max-width: 520px; max-height: 88vh; overflow-y: auto; background: var(--lf-card); border-radius: 18px 18px 0 0; padding: 18px 18px 28px; display: flex; flex-direction: column; gap: 8px; }
@@ -654,6 +677,8 @@ export class PostDetailComponent implements OnInit {
 
   protected readonly compact = compact;
   protected readonly timeAgo = timeAgo;
+  /** Whether this account asked to hear about changes to this case. */
+  readonly followingCase = computed(() => !!this.p() && this.data.isFollowingCase(this.p()!.id));
   protected readonly headingIsNew = headingIsNewFn;
   protected readonly dayMonth = dayMonth;
   protected readonly provinceName = provinceName;
@@ -687,6 +712,11 @@ export class PostDetailComponent implements OnInit {
   readonly authorAvatar = computed(() => this.data.avatarFor(this.p()?.anonymous && !this.isMine() ? null : this.author()));
   readonly authorLink = computed(() => (this.p()?.anonymous && !this.isMine() ? ['/post', this.p()!.id] : ['/user', this.p()?.authorId ?? '']));
   readonly myAvatar = computed(() => this.data.avatarFor(this.auth.user()));
+
+  /** The attachment rule, shared with the composer: three photos, one video. */
+  readonly maxPhotos = POST_MAX_PHOTOS;
+  readonly photoMb = mb(PHOTO_MAX_BYTES);
+  readonly videoMb = mb(VIDEO_MAX_BYTES);
   readonly myName = computed(() => this.auth.user()?.displayName ?? 'Me');
   readonly latestStillSearching = computed(() => (this.p()?.events ?? [])
     .filter((event) => event.kind === 'still_searching')
@@ -882,7 +912,7 @@ export class PostDetailComponent implements OnInit {
   hasCommentVideo(): boolean { return this.commentMedia().some((item) => item.kind === 'video'); }
 
   async addCommentPhoto(): Promise<void> {
-    if (this.posting() || this.media.busy() || this.commentMedia().length >= 4 || this.hasCommentVideo()) return;
+    if (this.posting() || this.media.busy() || this.commentMedia().length >= this.maxPhotos || this.hasCommentVideo()) return;
     const item = await this.media.pickImage({ quality: 76 });
     const notice = this.media.notice();
     if (notice) await this.say(notice);
@@ -1244,6 +1274,34 @@ export class PostDetailComponent implements OnInit {
     if (g.step === 'sign_in') return 'Sign in to message';
     if (g.step === 'follow') return 'Follow each other to message';
     return 'Messaging unavailable';
+  }
+
+  /**
+   * Follow / unfollow this case.
+   *
+   * Following is what earns an alert when the case moves: a new lead, a
+   * reaction, a sighting, or the person being found. It is stored per account on
+   * this device and read by the catch-up card on Home.
+   */
+  async toggleFollowCase(): Promise<void> {
+    const post = this.p();
+    if (!post) return;
+    if (!this.auth.signedIn()) {
+      await this.router.navigate(['/auth'], { queryParams: { next: `/post/${post.id}` } });
+      return;
+    }
+    try {
+      const now = await this.data.toggleFollowCase(post.id);
+      const t = await this.toast.create({
+        message: now ? 'Following this case. You will be told when something changes.' : 'You stopped following this case.',
+        duration: 2200,
+        position: 'bottom'
+      });
+      await t.present();
+    } catch (e: unknown) {
+      const t = await this.toast.create({ message: e instanceof Error ? e.message : 'Could not change that', duration: 2400, position: 'bottom' });
+      await t.present();
+    }
   }
 
   async openChat(): Promise<void> {

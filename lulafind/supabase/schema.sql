@@ -222,9 +222,11 @@ returns boolean language sql stable security definer set search_path = pg_catalo
           or (p.payload->>'audience' = 'followers'
             and public.lula_is_self(person)
             and public.lula_follows_accepted(person, p.payload->>'authorId'))
+          -- A Spotlight post is readable by anyone: the page is public and
+          -- joining is only what allows posting to it. See
+          -- supabase/spotlight-public-read.sql for the same change on its own.
           or (p.payload->>'audience' = 'surname'
-            and public.lula_is_self(person)
-            and public.lula_spotlight_member(person, p.payload->>'spotlightId'))
+            and coalesce(p.payload->>'spotlightId', '') <> '')
         )
     );
 $$;

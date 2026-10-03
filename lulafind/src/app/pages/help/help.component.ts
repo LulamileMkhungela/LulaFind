@@ -57,7 +57,9 @@ import {
       <section>
         <h2>Private note</h2>
         <p class="note">Saved on this phone only. Not posted. Someone who can unlock this phone can still open it. This is not an encrypted vault.</p>
-        <textarea [value]="note" (input)="note = $any($event.target).value" rows="4" placeholder="What happened, in your words"></textarea>
+        <textarea [value]="note" (input)="note = $any($event.target).value" rows="4"
+                  inputmode="text" autocorrect="on" autocomplete="on" autocapitalize="sentences" spellcheck="true"
+                  placeholder="What happened, in your words"></textarea>
         <button class="lf-btn lf-btn--sm" type="button" (click)="saveNote()">Save on this phone</button>
       </section>
 

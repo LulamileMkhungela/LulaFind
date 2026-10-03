@@ -120,6 +120,34 @@ export class FirebaseApi implements LulaApi {
   async saveUser(u: UserProfile) { await this.set(`users/${u.id}`, u as unknown as Record<string, unknown>); }
   async deleteUser(id: string) { await this.remove(`users/${id}`); }
 
+  /* search */
+  /**
+   * Firestore has no full-text search (and no paid extension in this project),
+   * so the newest slice is pulled and refined the same way the feed query
+   * refines it. Every word of the query is looked for, not the whole phrase, so
+   * "Thabo Ndlela" still finds a poster written "Ndlela, Thabo".
+   */
+  async searchPosts(q: string, limit = 40) {
+    const words = searchWords(q);
+    if (!words.length) return [];
+    return (await this.posts())
+      .filter((p) => {
+        const hay = [p.title, p.body, p.town, p.caseNumber ?? '', p.subject?.name ?? '',
+          p.subject?.surname ?? '', p.lastSeenWhere ?? ''].join(' ').toLowerCase();
+        return words.every((w) => hay.includes(w));
+      })
+      .slice(0, limit);
+  }
+  /** Members whose name, surname or handle contains every word typed. */
+  async searchUsers(q: string, limit = 20) {
+    const words = searchWords(q, 1);
+    if (!words.length) return [];
+    return (await this.users())
+      .filter((u) => !u.suspended && words.every((w) =>
+        `${u.displayName} ${u.surname} ${u.handle}`.toLowerCase().includes(w)))
+      .slice(0, limit);
+  }
+
   /* posts */
   async post(id: string) { return this.getOne<Post>(`posts/${id}`); }
   async posts() {
@@ -267,6 +295,8 @@ export class FirebaseApi implements LulaApi {
   /* spotlights */
   async spotlights() { return this.getList<Spotlight>(this.col('spotlights')); }
   async spotlight(id: string) { return this.getOne<Spotlight>(`spotlights/${id}`); }
+  /** Posts filed to one Spotlight. Reading is public; posting needs membership. */
+  async postsInSpotlight(spotlightId: string) { return (await this.posts()).filter((p) => p.spotlightId === spotlightId); }
   async linkSpotlightPost(spotlightId: string, postId: string, linking: boolean): Promise<void> {
     const sp = await this.spotlight(spotlightId);
     if (!sp) return;
@@ -396,4 +426,13 @@ export class FirebaseApi implements LulaApi {
   async tips() { return this.getList<Tip>(this.col('tips')); }
 
   changes(): Observable<number> { return this.rx.asObservable(); }
+}
+
+/**
+ * Split what was typed into the words that must all appear, so a search is as
+ * forgiving as the search page: "Thabo Ndlela" finds a poster titled
+ * "Ndlela, Thabo" and a handle pasted with its @ still matches.
+ */
+function searchWords(q: string, minLength = 2): string[] {
+  return q.trim().toLowerCase().replace(/^@/, '').split(/\s+/).filter((w) => w.length >= minLength);
 }

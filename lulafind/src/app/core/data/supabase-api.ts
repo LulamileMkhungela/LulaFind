@@ -5,6 +5,8 @@ import { LulaApi, SavePostOptions } from './api';
 import { answerBlocker } from '../utils/lookout';
 import { SUPABASE_URL, SUPABASE_KEY, supabaseNotice } from './supabase-client';
 import { LocalDb } from './local-db';
+import { canReadPostAudience } from '../utils/audience';
+import { PHOTO_MAX_BYTES, VIDEO_MAX_BYTES } from '../models/media-rules';
 import {
   ChatMessage, ChatThread, Lookout, Comment, FeedFilter, FollowEdge, MediaItem,
   Notification, Post, Spotlight, Story, StoryReply, StoryView, Tip, UserProfile
@@ -18,8 +20,34 @@ import {
  * also what an upsert of a brand-new story or post produces — that case is
  * avoided by inserting first (see `putRecord`), not by signing out.
  */
+/**
+ * What a person is told when the database cannot see who they are.
+ *
+ * Shown as the banner and thrown as the error - the same string, so the two can
+ * never tell them different things. It names what was tried (a fresh sign-in
+ * token, sent again) so the next step is a real next step, not a guess.
+ */
+export const IDENTITY_REFUSED_COPY =
+  'The database could not see who this account is, so that was not saved. ' +
+  'LulaFind refreshed your sign-in and sent it again — please try once more.';
+
 function isIdentityError(message: string): boolean {
   return /row-level security|invalid JWT|JWT expired|not authenticated|401|PGRST301/i.test(message ?? '');
+}
+
+/**
+ * Has this database got the function at all?
+ *
+ * PostgREST answers 404 / PGRST202 when a function is not in its schema cache,
+ * and Postgres itself says "function public.x(...) does not exist". A database
+ * created before a migration legitimately has neither, which must not read to
+ * the person as "your change failed".
+ */
+function isMissingFunction(error: { message: string; code?: string }, name: string): boolean {
+  const m = error?.message ?? '';
+  const missing = error?.code === 'PGRST202'
+    || /could not find the function|does not exist/i.test(m);
+  return missing && m.includes(name);
 }
 
 /**
@@ -183,7 +211,7 @@ export class SupabaseApi implements LulaApi {
     }
     return {
       ok: false,
-      message: 'lula_debug_storage() is not installed. Run supabase/fix-photo-uploads.sql in the Supabase SQL editor.',
+      message: 'The database has no photo-upload policies installed. Run supabase/fix-photo-uploads.sql in the Supabase SQL editor, then try again.',
       details: { error: error?.message ?? 'no data returned', appUid }
     };
   }
@@ -409,11 +437,23 @@ export class SupabaseApi implements LulaApi {
    */
   private explain(collection: string, message: string, owner: string | null): string {
     if (isIdentityError(message)) {
-      supabaseNotice.set(
-        'That save was refused by the database, so nothing was stored. Try again. ' +
-        'If it keeps happening, sign out and sign in so the database can see this account.'
-      );
-      return 'Nothing was saved. Try again — you do not need to sign out first.';
+      /*
+       * The banner and the error are the same sentence, on purpose.
+       *
+       * They used to disagree: the banner told the person to sign out and sign
+       * in, while the error told them they did not need to. Both were wrong in
+       * a different way - `write()` has already refreshed the ID token and sent
+       * the write once more before this runs, so signing out is not the fix, and
+       * telling someone to do it makes them lose their place for nothing.
+       *
+       * It also said "Nothing was saved" without qualification. That is true of
+       * this failure (the retry also came back refused), but a sentence that
+       * appears whether or not a change landed is how the app came to deny a
+       * save it had actually made. One sentence, used in both places, keeps them
+       * from drifting apart again.
+       */
+      supabaseNotice.set(IDENTITY_REFUSED_COPY);
+      return IDENTITY_REFUSED_COPY;
     }
     if (/row-level security/i.test(message)) {
       return `LulaFind could not save this because the database would not accept it. Please try again.`;
@@ -573,8 +613,20 @@ export class SupabaseApi implements LulaApi {
       post_id: id,
       patch: { ...patch, id } as unknown as Record<string, unknown>
     });
-    if (error) throw new Error(error.message);
-    return this.post(id);
+    if (!error) return this.post(id);
+
+    if (isMissingFunction(error, 'lula_patch_post')) {
+      // This database has not had supabase/lula-patch-post.sql run on it yet.
+      // The merge-in-the-database is the better way to do this (two writers
+      // cannot clobber each other), but the feature still has to work, so fall
+      // back to reading the row and writing it back with the change applied.
+      console.warn('lula_patch_post is missing; falling back to a read-and-write. Run supabase/lula-patch-post.sql to restore the atomic merge.');
+      const current = await this.post(id);
+      if (!current) throw new Error('That post is no longer available.');
+      await this.savePost({ ...current, ...patch } as Post);
+      return this.post(id);
+    }
+    throw new Error(error.message);
   }
 
   async queryFeed(f: FeedFilter, viewerId: string | null): Promise<Post[]> {
@@ -589,23 +641,11 @@ export class SupabaseApi implements LulaApi {
         .limit(300);
       if (error) throw new Error(error.message);
       let posts = await Promise.all((data ?? []).map((row) => this.signRecordMedia('posts', row.payload as Post)));
-      const [viewer, spots, people] = await Promise.all([
+      const [viewer, people] = await Promise.all([
         viewerId ? this.user(viewerId) : Promise.resolve(undefined),
-        f.spotlightId || posts.some((p) => p.audience === 'surname') ? this.spotlights() : Promise.resolve([]),
         f.query.trim() ? this.users() : Promise.resolve([])
       ]);
-      const following = new Set<string>();
-      if (viewerId) {
-        await Promise.all(posts.filter((p) => p.authorId !== viewerId && p.audience === 'followers')
-          .map(async (p) => { if (await this.isFollowing(viewerId, p.authorId)) following.add(p.authorId); }));
-      }
-      posts = posts.filter((p) => {
-        if (p.status === 'under_review' && p.authorId !== viewerId) return false;
-        if (p.audience === 'followers' && p.authorId !== viewerId && !following.has(p.authorId)) return false;
-        if (p.audience === 'surname' && p.authorId !== viewerId) {
-          const spot = spots.find((s) => s.id === p.spotlightId);
-          if (!viewerId || !spot || !spot.memberIds.includes(viewerId)) return false;
-        }
+      posts = (await this.applyVisibility(posts, viewerId)).filter((p) => {
         if (f.type !== 'all' && p.type !== f.type) return false;
         if (f.province !== 'all' && p.province !== f.province) return false;
         if (f.spotlightId && p.spotlightId !== f.spotlightId) return false;
@@ -643,6 +683,95 @@ export class SupabaseApi implements LulaApi {
       if (f.status === 'found') posts = posts.filter((p) => p.status === 'found');
       if (f.spotlightId) posts = posts.filter((p) => p.spotlightId === f.spotlightId);
       return posts;
+    }
+  }
+
+  /**
+   * The review and audience rules the feed applies, in one place.
+   *
+   * Search uses this too, so a result can never be more visible than the post
+   * is in the feed: a child case held for review, a followers-only update and a
+   * surname-only Spotlight post all stay exactly as private as they were.
+   */
+  private async applyVisibility(posts: Post[], viewerId: string | null): Promise<Post[]> {
+    const following = new Set<string>();
+    if (viewerId) {
+      await Promise.all(posts.filter((p) => p.authorId !== viewerId && p.audience === 'followers')
+        .map(async (p) => { if (await this.isFollowing(viewerId, p.authorId)) following.add(p.authorId); }));
+    }
+    return posts.filter((p) => {
+      if (p.status === 'under_review' && p.authorId !== viewerId) return false;
+      // The audience rule lives in core/utils/audience.ts, shared with the
+      // offline backend, because the database and the app must agree. This used
+      // to hide a Spotlight post from anyone who had not joined the community,
+      // which contradicted both the offline backend and the SQL - so a shared
+      // link to a Spotlight looked empty to everyone the family sent it to.
+      return canReadPostAudience(p, { viewerId, following });
+    });
+  }
+
+  /* ─── search ────────────────────────────────────────────────────────────── */
+
+  /**
+   * Search the whole posts collection on the server.
+   *
+   * Records live as jsonb in `payload`, so the query is
+   * `payload->>field ilike %needle%`. PostgREST splits its `or(...)` expression
+   * on commas and parentheses, and LIKE treats `%` and `_` as wildcards, so the
+   * needle is escaped first - a surname with an apostrophe or a `%` in a case
+   * number must not change the shape of the query. RLS decides which rows this
+   * viewer may read at all; the audience and review rules are then applied
+   * exactly as they are for the feed.
+   */
+  async searchPosts(q: string, limit = 40): Promise<Post[]> {
+    const needle = q.trim();
+    if (needle.length < 2) return [];
+    const pattern = likePattern(needle);
+    try {
+      const { data, error } = await this.client
+        .from('records')
+        .select('payload')
+        .eq('collection', 'posts')
+        .or(SEARCH_POST_FIELDS.map((field) => `payload->>${field}.ilike.${pattern}`).join(','))
+        .order('updated_at', { ascending: false })
+        .limit(limit * 2);
+      if (error) throw new Error(error.message);
+      const viewerId = await this.currentUid();
+      const rows = await Promise.all((data ?? []).map((row) => this.signRecordMedia('posts', row.payload as Post)));
+      return (await this.applyVisibility(rows, viewerId)).slice(0, limit);
+    } catch (e: any) {
+      // The network is the only thing that failed: answer from what is stored
+      // on this device rather than showing an empty search.
+      console.warn('Supabase searchPosts fallback:', e?.message);
+      return this.localDb.searchPosts(q, limit);
+    }
+  }
+
+  /**
+   * Search members by name, surname or handle.
+   *
+   * The public profiles view keeps one jsonb `payload` per member, so the same
+   * escaping rules apply. Suspended accounts are filtered out here as well as
+   * locally, so a suspended member cannot surface through search.
+   */
+  async searchUsers(q: string, limit = 20): Promise<UserProfile[]> {
+    const needle = q.trim().replace(/^@/, '');
+    if (!needle) return [];
+    const pattern = likePattern(needle);
+    try {
+      const { data, error } = await this.client
+        .from('lula_user_profiles_public')
+        .select('payload')
+        .or(SEARCH_USER_FIELDS.map((field) => `payload->>${field}.ilike.${pattern}`).join(','))
+        .limit(limit * 2);
+      if (error) throw new Error(error.message);
+      return (data ?? [])
+        .map((row) => row.payload as UserProfile)
+        .filter((u) => !u.suspended)
+        .slice(0, limit);
+    } catch (e: any) {
+      console.warn('Supabase searchUsers fallback:', e?.message);
+      return this.localDb.searchUsers(q, limit);
     }
   }
 
@@ -781,6 +910,31 @@ export class SupabaseApi implements LulaApi {
     return this.getOne<Spotlight>('spotlights', id);
   }
 
+
+  /**
+   * Posts filed to one Spotlight, read from the whole collection.
+   *
+   * A Spotlight page is public reading: joining is what lets you post. The
+   * server-side rule lives in `lula_post_visible`; run
+   * supabase/spotlight-public-read.sql so the database agrees with this query.
+   */
+  async postsInSpotlight(spotlightId: string): Promise<Post[]> {
+    try {
+      const { data, error } = await this.client
+        .from('records')
+        .select('payload')
+        .eq('collection', 'posts')
+        .eq('payload->>spotlightId', spotlightId)
+        .order('updated_at', { ascending: false })
+        .limit(200);
+      if (error) throw new Error(error.message);
+      return await Promise.all((data ?? []).map((row) => this.signRecordMedia('posts', row.payload as Post)));
+    } catch (e: any) {
+      console.warn('Supabase postsInSpotlight fallback:', e?.message);
+      return this.localDb.postsInSpotlight(spotlightId);
+    }
+  }
+
   async saveSpotlight(s: Spotlight): Promise<void> {
     await this.upsert('spotlights', s, s.ownerId);
   }
@@ -807,7 +961,16 @@ export class SupabaseApi implements LulaApi {
     if (item.src.startsWith('data:')) {
       if (!ownerId) throw new Error('Sign in before uploading media');
       const blob = await fetch(item.src).then((response) => response.blob());
-      if (blob.size > 5 * 1024 * 1024) throw new Error('Choose a file smaller than 5 MB');
+      // The last line of defence for the size rules in models/media-rules.ts.
+      // A photo normally arrives here already compressed to fit; a video cannot
+      // be re-encoded in a browser, so it is checked where it stands.
+      const limit = item.kind === 'video' ? VIDEO_MAX_BYTES : PHOTO_MAX_BYTES;
+      if (blob.size > limit) {
+        const mb = Math.round(limit / (1024 * 1024));
+        throw new Error(item.kind === 'video'
+          ? `Choose a video smaller than ${mb} MB`
+          : `Choose a photo smaller than ${mb} MB`);
+      }
       const extension = blob.type.split('/')[1]?.replace('jpeg', 'jpg') || (item.kind === 'video' ? 'mp4' : 'jpg');
       path = `${ownerId}/${item.id}.${extension}`;
       const { error } = await this.client.storage.from('photos').upload(path, blob, {
@@ -816,11 +979,20 @@ export class SupabaseApi implements LulaApi {
       if (error) {
         // Row-level security here means the bucket policy refused the folder,
         // which is an identity or setup problem - not a problem with the photo.
-        // Say so, and point at the one command that names the exact cause.
+        //
+        // The old message told the person to run a console command, which is
+        // impossible on a phone: the installed app has no console (Android ships
+        // with webContentsDebuggingEnabled off, and iOS has none at all). So ask
+        // the database itself and put the verdict in the message the person
+        // already sees - it can be read, copied, and sent on.
         const rls = /row-level security|violates/i.test(error.message);
-        throw new Error(rls
-          ? 'Photo upload was refused by the database. In the app console run: await window.__lulaDebugStorage()'
-          : `Could not upload media: ${error.message}`);
+        if (!rls) throw new Error(`Could not upload media: ${error.message}`);
+        const report = await this.storageReport().catch(() => null);
+        throw new Error(
+          report?.message
+            ? `Photo upload was refused by the database. ${report.message}`
+            : 'Photo upload was refused by the database. Run supabase/fix-photo-uploads.sql in the Supabase SQL editor.'
+        );
       }
     }
     if (!path) return item;
@@ -971,8 +1143,32 @@ export class SupabaseApi implements LulaApi {
     return this.getAllWhere<Notification>('notifications', 'userId', userId);
   }
 
+  /**
+   * Write a notification for its recipient.
+   *
+   * The row's owner must be the person writing it - the actor - because the
+   * insert policy compares owner_id with the caller. The old code fell back to
+   * the *recipient* when the actor could not be read, which produces a row the
+   * database can only refuse. And because every caller awaits this right after
+   * saving something real (a post, a comment, a follow), that refusal came back
+   * as "Nothing was saved" on an action that had in fact been saved - the post
+   * was there when the person went back for it.
+   *
+   * Delivering a notification is a side effect of someone else's action, so it
+   * is now best-effort: a failure is logged and never thrown on to the save that
+   * caused it.
+   */
   async pushNotification(n: Notification): Promise<void> {
-    await this.upsert('notifications', n, (await this.currentUid()) ?? n.userId);
+    const actor = await this.currentUid();
+    if (!actor) {
+      console.warn(`pushNotification(${n.kind}) skipped: no signed-in identity to own the row.`);
+      return;
+    }
+    try {
+      await this.upsert('notifications', n, actor);
+    } catch (e) {
+      console.warn(`pushNotification(${n.kind}) could not be written:`, (e as Error)?.message ?? e);
+    }
   }
 
   async markNotificationsRead(userId: string): Promise<void> {
@@ -1041,4 +1237,25 @@ export class SupabaseApi implements LulaApi {
       return [];
     }
   }
+}
+
+/**
+ * The fields a free-text post search looks at. Kept in step with LocalDb's
+ * matcher so the same words find the same case on any backend.
+ */
+const SEARCH_POST_FIELDS = ['title', 'body', 'town', 'caseNumber', 'subject', 'lastSeenWhere'] as const;
+
+/** The fields a member search looks at. */
+const SEARCH_USER_FIELDS = ['displayName', 'surname', 'handle'] as const;
+
+/**
+ * Escape a search needle for PostgREST and SQL LIKE.
+ *
+ * In `or=(...)` PostgREST uses commas and parentheses to separate expressions,
+ * and LIKE reads `%` and `_` as wildcards. A needle containing any of them -
+ * "50%" in a case note, an address in brackets - is quoted with a backslash so
+ * it is searched for literally instead of changing the query.
+ */
+export function likePattern(needle: string): string {
+  return `%${needle.replace(/([\\%_,()])/g, '\\$1')}%`;
 }

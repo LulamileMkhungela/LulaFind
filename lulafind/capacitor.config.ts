@@ -3,13 +3,17 @@ import type { CapacitorConfig } from '@capacitor/cli';
 const config: CapacitorConfig = {
   appId: 'com.lulafind.app',
   appName: 'LulaFind',
-  // The Angular build writes to www/browser (outputMode: static), so this has
-  // to point there - with plain 'www' cap sync finds no index.html and fails.
-  webDir: 'www/browser',
+  // Where `ng build` actually writes (angular.json: outputPath browser = '').
+  // This said 'www/browser', which is not a directory this project ever
+  // produces, so `cap sync` failed before it could copy a single asset.
+  webDir: 'www',
   server: { androidScheme: 'https', iosScheme: 'https' },
   android: {
     allowMixedContent: false,
-    captureInput: true,
+    // `captureInput: true` used to sit here. It is not an option in Capacitor 8
+    // - nothing in @capacitor/* reads it - so it was silently doing nothing.
+    // The phone keyboard is handled by windowSoftInputMode in the manifest and
+    // by the Keyboard plugin below.
     webContentsDebuggingEnabled: false
   },
   ios: {

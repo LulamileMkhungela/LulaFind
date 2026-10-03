@@ -45,7 +45,8 @@ import { timeAgo } from '../../core/utils/format';
           </div>
         </div>
 
-        <textarea class="thoughts" rows="5" maxlength="1500" placeholder="What do you want to talk about?"
+        <textarea class="thoughts" rows="5" placeholder="What do you want to talk about?"
+                  inputmode="text" autocorrect="on" autocomplete="on" autocapitalize="sentences" spellcheck="true"
                   [value]="text()" (input)="text.set($any($event.target).value)" aria-label="Your thoughts"></textarea>
 
         @if (error()) { <p class="err" role="alert"><lf-icon name="alert" [size]="15" /> {{ error() }}</p> }

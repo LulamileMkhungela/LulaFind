@@ -12,9 +12,10 @@ import { ToastController } from '@ionic/angular/toast-controller';
 import { IconComponent } from '../../shared/components/icon.component';
 import { TopNavComponent } from '../../shared/components/top-nav.component';
 import { EmptyComponent } from '../../shared/components/empty.component';
+import { PostCardComponent } from '../../shared/components/post-card.component';
 import { DataService } from '../../core/services/data.service';
 import { AuthService } from '../../core/services/auth.service';
-import { PROVINCES, ProvinceCode, Spotlight, provinceName } from '../../core/models/types';
+import { Post, PROVINCES, ProvinceCode, ReactionKind, Spotlight, provinceName } from '../../core/models/types';
 import { cover } from '../../core/data/seed';
 
 const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
@@ -32,28 +33,29 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
   standalone: true,
   imports: [
     IonContent, TopNavComponent, IonInput, IonTextarea, IonSelect,
-    IonSelectOption, IonItem, IonLabel, IonSearchbar, RouterLink, IconComponent, EmptyComponent, KeyboardDirective],
+    IonSelectOption, IonItem, IonLabel, IonSearchbar, RouterLink, IconComponent, EmptyComponent, PostCardComponent, KeyboardDirective],
   template: `
     <lf-top-nav />
 
     <ion-content class="lf-page">
       <h1 class="page-title">Spotlight</h1>
-      <!-- Two jobs only: find a surname, or start one. -->
-      <div class="seg" role="tablist" aria-label="Spotlight">
-        <button role="tab" class="seg__btn" [class.on]="mode() === 'view'" [attr.aria-selected]="mode() === 'view'"
-                (click)="mode.set('view')">
-          <lf-icon name="search" [size]="18" [weight]="2.2" /> View
-        </button>
-        <button role="tab" class="seg__btn" [class.on]="mode() === 'create'" [attr.aria-selected]="mode() === 'create'"
-                (click)="openCreate()">
-          <lf-icon name="plus" [size]="18" [weight]="2.4" /> Create
-        </button>
-      </div>
 
       @if (mode() === 'view') {
         <div class="find">
-          <ion-searchbar placeholder="Search a surname, e.g. Ndlela" [debounce]="150" [value]="query()"
-                         (ionInput)="query.set($any($event.detail).value ?? '')" animated="true"></ion-searchbar>
+          <div class="find__row">
+            <ion-searchbar placeholder="Search spotlights, cases, posts" [debounce]="200" [value]="query()"
+                           (ionInput)="onQuery($any($event.detail).value ?? '')" animated="true"></ion-searchbar>
+            <label class="prov-filter">
+              <lf-icon name="pin" [size]="15" />
+              <select [value]="province()" (change)="province.set($any($event.target).value)"
+                      aria-label="Filter spotlights by province">
+                <option value="all">All provinces</option>
+                @for (p of provinces; track p.code) {
+                  <option [value]="p.code">{{ p.name }}</option>
+                }
+              </select>
+            </label>
+          </div>
           <div class="letters" role="group" aria-label="Filter by first letter">
             <button class="pill" [class.on]="letter() === 'all'" (click)="letter.set('all')">All</button>
             @for (l of alphabet; track l) {
@@ -100,7 +102,7 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
         }
 
         <h3 class="section">
-          {{ query() ? 'Results' : letter() === 'all' ? 'All spotlights' : 'Surnames starting with ' + letter() }}
+          {{ query() ? 'Spotlights' : letter() === 'all' ? 'All spotlights' : 'Surnames starting with ' + letter() }}
           <span class="lf-muted lf-tiny">{{ list().length }}</span>
         </h3>
         @if (!list().length) {
@@ -108,7 +110,7 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
                     message="Create it and it becomes the home for every post with that surname."
                     actionLabel="Create a spotlight" (action)="openCreate(query())" />
         }
-        <div class="grid lf-safe-bottom">
+        <div class="grid" [class.lf-safe-bottom]="!posts().length">
           @for (s of list(); track s.id) {
             <a class="tile" [routerLink]="'/spotlight/' + s.id">
               <img [src]="coverOf(s.surname, s.coverHue)" [alt]="s.surname" loading="lazy" />
@@ -122,6 +124,28 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
             </a>
           }
         </div>
+
+        <!-- A surname search also answers "where is this case?" - the posts
+             come from the database, and each one says which Spotlight it was
+             filed to, so a result is never a dead end. -->
+        @if (query().trim().length >= 2) {
+          @if (searching()) {
+            <p class="search-state" role="status">Searching posts…</p>
+          } @else if (posts().length) {
+            <h3 class="section">Posts <span class="lf-muted lf-tiny">{{ posts().length }}</span></h3>
+            @for (p of posts(); track p.id) {
+              <div class="post-result">
+                @if (spotlightOf(p); as sp) {
+                  <a class="filed-at" [routerLink]="'/spotlight/' + sp.id">
+                    <lf-icon name="award" [size]="13" /> Filed to the {{ sp.surname }} Spotlight
+                  </a>
+                }
+                <lf-post-card [post]="p" [author]="data.authorOf(p.authorId) ?? null" chatState="off"
+                              (vote)="vote(p, $event)" (comment)="openPost(p)" />
+              </div>
+            }
+          }
+        }
       } @else {
         <section class="form lf-safe-bottom">
           <p class="lf-muted lf-small intro">
@@ -166,6 +190,10 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
           <button class="lf-btn lf-btn--primary lf-btn--block create" [disabled]="!!duplicate() || busy()" (click)="submit()">
             {{ busy() ? 'Creating…' : 'Create spotlight' }}
           </button>
+          <!-- Leaving is always allowed, and never asks twice. -->
+          <button type="button" class="lf-btn lf-btn--ghost lf-btn--block cancel" [disabled]="busy()" (click)="cancelCreate()">
+            Cancel
+          </button>
         </section>
       }
     </ion-content>
@@ -177,7 +205,20 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
       background: var(--lf-card-2); color: var(--ion-text-color); transition: background .15s, color .15s; }
     .seg__btn.on { background: var(--lf-primary-soft); color: var(--lf-link); }
     .find { background: var(--lf-card); padding: 8px 0 10px; margin-bottom: 8px; box-shadow: var(--lf-shadow); }
-    .find ion-searchbar { padding: 0 var(--lf-gap) !important; --border-radius: 999px; height: 40px; }
+    .find__row { display: flex; align-items: center; gap: 8px; padding: 0 var(--lf-gap); }
+    .find__row ion-searchbar { flex: 1; min-width: 0; padding: 0 !important; --border-radius: 999px; height: 40px; }
+    /* The province filter sits at the end of the search row, where the eye
+       lands after typing: search first, then narrow where. */
+    .prov-filter { flex: none; display: inline-flex; align-items: center; gap: 4px; max-width: 46%;
+      height: 36px; padding: 0 8px; border-radius: 999px; background: var(--lf-card-2); color: var(--ion-text-color);
+      font-size: 13px; font-weight: 600; }
+    .prov-filter select { border: 0; outline: 0; background: transparent; color: inherit; font: inherit;
+      appearance: none; cursor: pointer; max-width: 120px; }
+    .post-result { position: relative; }
+    .filed-at { display: inline-flex; align-items: center; gap: 4px; margin: 6px var(--lf-gap) -2px;
+      padding: 3px 9px; border-radius: 999px; background: var(--lf-primary-soft); color: var(--lf-link);
+      font-size: 12px; font-weight: 700; text-decoration: none; }
+    .search-state { margin: 14px var(--lf-gap); font-size: 14px; color: var(--lf-muted); }
     .letters { display: flex; gap: 6px; overflow-x: auto; padding: 8px var(--lf-gap) 0; scrollbar-width: none; }
     .letters::-webkit-scrollbar { display: none; }
     .pill { flex: none; min-width: 36px; height: 32px; padding: 0 12px; border: 0; border-radius: 999px; cursor: pointer;
@@ -211,6 +252,7 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
       display: flex; align-items: center; gap: 5px; text-decoration: none; }
     .err { display: flex; align-items: center; gap: 8px; color: var(--lf-signal); font-size: 13px; margin: 4px 0 0; }
     .create { margin-top: 16px; }
+    .cancel { margin-top: 8px; }
   `]
 })
 export class SpotlightComponent {
@@ -220,7 +262,14 @@ export class SpotlightComponent {
   private toast = inject(ToastController);
 
   query = signal('');
+  /** '' while the list is shown; 'create' while the form is open. */
   mode = signal<'view' | 'create'>('view');
+  /** 'all' or a province code - the filter that sits beside the search field. */
+  province = signal<'all' | ProvinceCode>('all');
+  /** Case results for the same query, so a surname search also finds the post. */
+  readonly posts = signal<Post[]>([]);
+  readonly searching = signal(false);
+  private searchSeq = 0;
   busy = signal(false);
   error = signal('');
   letter = signal<'all' | string>('all');
@@ -234,12 +283,62 @@ export class SpotlightComponent {
   readonly list = computed(() => {
     const q = this.query().trim().toLowerCase();
     const l = this.letter();
+    const province = this.province();
     return this.data
       .spotlights()
       .filter((s) => (l === 'all' ? true : s.surname.trim().charAt(0).toUpperCase() === l))
+      .filter((s) => province === 'all' || s.province === province)
       .filter((s) => !q || s.surname.toLowerCase().includes(q) || s.tagline.toLowerCase().includes(q))
       .sort((a, b) => a.surname.localeCompare(b.surname));
   });
+
+  /** The community a case result was filed to, so the card can say where. */
+  spotlightOf(p: Post): Spotlight | null {
+    return p.spotlightId ? this.data.spotlights().find((s) => s.id === p.spotlightId) ?? null : null;
+  }
+
+  /**
+   * Search the surnames and the posts together.
+   *
+   * The surname list narrows on the keystroke (it is already on the device);
+   * cases come from the database, the same query the Search page runs. The
+   * newest keystroke always wins, so a slow reply cannot overwrite it.
+   */
+  private async runSearch(q: string): Promise<void> {
+    const needle = q.trim();
+    if (needle.length < 2) {
+      this.posts.set([]);
+      this.searching.set(false);
+      return;
+    }
+    const token = ++this.searchSeq;
+    this.searching.set(true);
+    const found = await this.data.searchPosts(needle).catch(() => [] as Post[]);
+    if (token !== this.searchSeq) return;
+    this.posts.set(found);
+    this.searching.set(false);
+  }
+
+  onQuery(value: string): void {
+    this.query.set(value);
+    void this.runSearch(value);
+  }
+
+  vote(p: Post, v: ReactionKind): void {
+    void this.data.vote(p.id, v);
+  }
+
+  openPost(p: Post): void {
+    void this.router.navigate(['/post', p.id]);
+  }
+
+  /** Leave the create form without creating anything. */
+  cancelCreate(): void {
+    this.mode.set('view');
+    this.error.set('');
+    this.touched = { surname: false, province: false };
+    this.form = { surname: '', tagline: '', about: '', province: null };
+  }
 
   readonly mine = computed(() => {
     const me = this.auth.viewerId;
@@ -313,6 +412,7 @@ export class SpotlightComponent {
     try {
       const sp = await this.data.createSpotlight(this.form as any);
       this.mode.set('view');
+      this.form = { surname: '', tagline: '', about: '', province: null };
       const t = await this.toast.create({ message: `${sp.surname} spotlight created. You are the first member.`, duration: 2400, position: 'bottom' });
       await t.present();
       await this.router.navigate(['/spotlight', sp.id]);

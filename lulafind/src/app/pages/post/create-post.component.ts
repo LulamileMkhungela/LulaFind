@@ -11,6 +11,7 @@ import { AvatarComponent } from '../../shared/components/avatar.component';
 import { AuthService } from '../../core/services/auth.service';
 import { DataService } from '../../core/services/data.service';
 import { MediaService } from '../../core/services/media.service';
+import { PHOTO_MAX_BYTES, POST_MAX_PHOTOS, VIDEO_MAX_BYTES, mb } from '../../core/models/media-rules';
 import {
   Audience, MediaItem, Post, PostPoster, PostType, PROVINCES, ProvinceCode
 } from '../../core/models/types';
@@ -295,7 +296,7 @@ interface MissingField { key: string; label: string; }
             }
             <textarea class="body-input" [class.body-input--template]="!editing()" [rows]="editing() ? 5 : 13"
                       inputmode="text" autocorrect="on" autocomplete="on" autocapitalize="sentences" spellcheck="true"
-                      maxlength="5000" data-field="body" [placeholder]="editing() ? bodyPlaceholder() : ''"
+                      data-field="body" [placeholder]="editing() ? bodyPlaceholder() : ''"
                       [value]="f().body" (input)="patch({ body: $any($event.target).value })"
                       aria-label="Post text template"></textarea>
             @if (fieldError('body')) { <p class="field-error">{{ fieldError('body') }}</p> }
@@ -340,7 +341,7 @@ interface MissingField { key: string; label: string; }
 
             <div class="attachment-actions">
               <button type="button" class="attachment-button" (click)="addPhoto()"
-                      [disabled]="busy() || hasVideo() || f().media.length >= 4">
+                      [disabled]="busy() || hasVideo() || f().media.length >= maxPhotos">
                 <lf-icon name="image" [size]="18" /> <span>Photo</span>
               </button>
               <button type="button" class="attachment-button" (click)="addVideo()"
@@ -352,7 +353,7 @@ interface MissingField { key: string; label: string; }
                   <lf-icon name="layout" [size]="18" /> <span>Generate</span>
                 </button>
               }
-              <span class="attachment-hint">Up to 4 photos or 1 video</span>
+              <span class="attachment-hint">Up to {{ maxPhotos }} photos ({{ photoMb }} MB each) or 1 video ({{ videoMb }} MB)</span>
             </div>
             @if (posterTemplate()) {
               <p class="generated-selection" role="status"><lf-icon name="check" [size]="15" /> {{ selectedTemplateName() }} design will be published with this post.
@@ -381,7 +382,7 @@ interface MissingField { key: string; label: string; }
                         <option value="unknown">Not specified</option><option value="female">Female</option><option value="male">Male</option><option value="other">Other</option>
                       </select></label>
                     </div>
-                    <label class="field full"><span>Clothing or identifying details</span><textarea rows="2" placeholder="What were they wearing? Any details that could help identify them?" [value]="s().clothing" (input)="patchSubject({ clothing: $any($event.target).value })"></textarea></label>
+                    <label class="field full"><span>Clothing or identifying details</span><textarea rows="2" inputmode="text" autocorrect="on" autocomplete="on" autocapitalize="sentences" spellcheck="true" placeholder="What were they wearing? Any details that could help identify them?" [value]="s().clothing" (input)="patchSubject({ clothing: $any($event.target).value })"></textarea></label>
                     @if (type() === 'missing') {
                       <label class="field full"><span>Private identifying detail <small>(kept off the public poster)</small></span><input placeholder="A mark only the family knows" [value]="s().distinguishing" (input)="patchSubject({ distinguishing: $any($event.target).value })" /></label>
                     }
@@ -750,7 +751,7 @@ export class CreatePostComponent implements OnInit {
       if (!f.town.trim()) out.push({ key: 'town', label: 'Add the town or suburb' });
     } else if (type) {
       const values = this.templateValues();
-      if (values.happened.trim().length < 30) out.push({ key: 'body', label: 'Add at least 30 characters about what happened' });
+      if (values.happened.trim().length < 20) out.push({ key: 'body', label: 'Add at least 20 characters about what happened' });
       if (!values.town || !values.province) out.push({ key: 'location', label: 'Complete the location line with a town and province' });
       if (this.childCase() && !f.guardianConsent) out.push({ key: 'consent', label: 'Confirm guardian permission for this child’s case' });
     }
@@ -798,8 +799,8 @@ export class CreatePostComponent implements OnInit {
       if (photoAttachment?.kind === 'image' && photoAttachment.src) {
         const existingMedia = this.f().media;
         if (!existingMedia.some((item) => item.id === photoAttachment.id)) {
-          if (existingMedia.length >= 4 || existingMedia.some((item) => item.kind === 'video')) {
-            this.error.set('This draft already has a video or the four-photo limit. Remove existing media before adding this photo.');
+          if (existingMedia.length >= POST_MAX_PHOTOS || existingMedia.some((item) => item.kind === 'video')) {
+            this.error.set(`This draft already has a video or its ${POST_MAX_PHOTOS} photos. Remove one before adding this photo.`);
           } else {
             this.invalidateGenerated();
             this.f.update((form) => ({ ...form, media: [...form.media, photoAttachment] }));
@@ -976,7 +977,9 @@ export class CreatePostComponent implements OnInit {
     if (src && !image) throw new Error('The photo could not be opened for the generated image');
     const content = posterContent(post, this.platform.link(`/post/${post.id}`), src);
     drawPoster(canvas, templateId, content, image);
-    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
+    // Exported within the photo rule: a 1080x1350 PNG with a photo in it is
+    // routinely larger than 2 MB, and would be refused at upload.
+    const blob = await this.media.exportCanvas(canvas);
     if (!blob) throw new Error('The generated image could not be exported');
     const dataUrl = await new Promise<string>((resolve, reject) => {
       const reader = new FileReader();
@@ -1031,6 +1034,11 @@ export class CreatePostComponent implements OnInit {
 
   hasVideo(): boolean { return this.f().media.some((item) => item.kind === 'video'); }
 
+  /** The attachment rules, so the hint cannot drift from what is enforced. */
+  readonly maxPhotos = POST_MAX_PHOTOS;
+  readonly photoMb = mb(PHOTO_MAX_BYTES);
+  readonly videoMb = mb(VIDEO_MAX_BYTES);
+
   /** A case about someone under 18: the poster must confirm they may publish it. */
   childCase(): boolean {
     const type = this.type();
@@ -1041,7 +1049,7 @@ export class CreatePostComponent implements OnInit {
 
   async addPhoto(): Promise<void> {
     const f = this.f();
-    if (f.media.length >= 4 || this.hasVideo()) return;
+    if (f.media.length >= POST_MAX_PHOTOS || this.hasVideo()) return;
     const item = await this.media.pickImage({ quality: 76 });
     if (this.media.notice()) this.notice.set(this.media.notice()!);
     if (!item) {

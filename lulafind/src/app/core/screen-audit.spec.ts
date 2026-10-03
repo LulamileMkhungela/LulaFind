@@ -1,7 +1,8 @@
 import { Component, Type } from '@angular/core';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import { describe, expect, it, beforeEach } from 'vitest';
-import { provideRouter, ActivatedRoute } from '@angular/router';
+import { provideRouter, ActivatedRoute, convertToParamMap } from '@angular/router';
+import { of } from 'rxjs';
 import { provideIonicAngular } from '@ionic/angular';
 import { writeFileSync, mkdirSync } from 'node:fs';
 
@@ -104,7 +105,10 @@ function bed(): void {
             paramMap: { get: () => routeId },
             queryParamMap: { get: () => null },
             data: {}
-          }
+          },
+          // Screens that follow ?q= (Search) subscribe to the live query map, so
+          // the stub has to answer with one rather than only its snapshot.
+          queryParamMap: of(convertToParamMap({}))
         }
       }
     ]

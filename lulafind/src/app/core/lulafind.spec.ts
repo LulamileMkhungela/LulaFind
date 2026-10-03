@@ -6,6 +6,7 @@ import { provideRouter } from '@angular/router';
 import { LocalDb } from './data/local-db';
 import { LULA_API, MockApi } from './data/api';
 import { AuthService } from './services/auth.service';
+import { PHOTO_MAX_BYTES, PICK_MAX_BYTES, POST_MAX_PHOTOS, STORY_MAX_PHOTOS, VIDEO_MAX_BYTES, mb } from './models/media-rules';
 import { DataService } from './services/data.service';
 import { ChatService } from './services/chat.service';
 import { EscalationService } from './services/escalation.service';
@@ -19,6 +20,7 @@ import { drawPoster, posterContent, publicPoster, POSTER_TEMPLATES } from './uti
 import { leadMarkView } from './utils/mark-check';
 import { GBV_CHANNEL_NOTE, HELP_LINES } from './data/sa-help';
 import { avatar, STORY_BLACK, storyBg } from './data/seed';
+import { likePattern } from './data/supabase-api';
 import { FAQ_TOPICS } from './data/faq-topics';
 import { feedWithRails } from './utils/feed';
 
@@ -964,6 +966,15 @@ describe('Posting rules', () => {
     expect(ok.media.length).toBe(1);
   });
 
+  it('allows one video on a case and refuses a second', async () => {
+    const data = svc<DataService>(DataService);
+    await svc<AuthService>(AuthService).signInDemo();
+    const video = { id: 'v1', kind: 'video' as const, src: 'data:video/mp4,' };
+    const post = await data.createPost({ ...base, media: [video] });
+    expect(post.media.length).toBe(1);
+    await expect(data.createPost({ ...base, media: [video, { ...video, id: 'v2' }] })).rejects.toThrow(/not both/i);
+  });
+
   it('lets the author edit a post but not its votes', async () => {
     const data = svc<DataService>(DataService);
     await svc<AuthService>(AuthService).signInDemo();
@@ -1000,17 +1011,40 @@ describe('Posting rules', () => {
     await expect(data.updatePost(post.id, { title: 'Hijacked title here' })).rejects.toThrow(/Only the person/i);
   });
 
-  it('allows up to three story photos and rejects a fourth', async () => {
+  it('allows one story photo and rejects a second', async () => {
     const data = svc<DataService>(DataService);
     await svc<AuthService>(AuthService).signInDemo();
-    const photos = [1, 2, 3].map((n) => ({
-      id: `story-photo-${n}`, kind: 'image' as const, src: `data:image/jpeg;base64,photo${n}`
-    }));
-    const story = await data.createStory({ text: 'Three photos are allowed', media: photos, bgHue: 220 });
-    expect(story.media).toHaveLength(3);
+    const photo = { id: 'story-photo-1', kind: 'image' as const, src: 'data:image/jpeg;base64,photo1' };
+    const story = await data.createStory({ text: 'One photo is the story', media: [photo], bgHue: 220 });
+    expect(story.media).toHaveLength(1);
     await expect(data.createStory({
-      text: 'Four photos are not allowed', media: [...photos, { ...photos[0], id: 'story-photo-4' }], bgHue: 220
-    })).rejects.toThrow(/up to three photos/i);
+      text: 'Two photos are not allowed', media: [photo, { ...photo, id: 'story-photo-2' }], bgHue: 220
+    })).rejects.toThrow(/one photo/i);
+  });
+
+  it('rejects a fourth photo on a case, and accepts three', async () => {
+    const data = svc<DataService>(DataService);
+    await svc<AuthService>(AuthService).signInDemo();
+    const photos = [1, 2, 3, 4].map((n) => ({
+      id: `case-photo-${n}`, kind: 'image' as const, src: `data:image/jpeg;base64,photo${n}`
+    }));
+    const post = await data.createPost({ ...base, media: photos.slice(0, 3) });
+    expect(post.media).toHaveLength(3);
+    await expect(data.createPost({ ...base, media: photos })).rejects.toThrow(/up to 3 photos/i);
+  });
+
+  it('keeps the size rules in one place: 2 MB per photo, 3 MB per video, 3 photos, 1 story photo', () => {
+    // These numbers are enforced in the picker, the composer, the uploader and
+    // the storage bucket. This test is what stops one of those drifting.
+    expect(PHOTO_MAX_BYTES).toBe(2 * 1024 * 1024);
+    expect(VIDEO_MAX_BYTES).toBe(3 * 1024 * 1024);
+    expect(POST_MAX_PHOTOS).toBe(3);
+    expect(STORY_MAX_PHOTOS).toBe(1);
+    expect(mb(PHOTO_MAX_BYTES)).toBe(2);
+    expect(mb(VIDEO_MAX_BYTES)).toBe(3);
+    // A phone camera writes files larger than the upload rule, so the picker
+    // must still accept them: the composer re-encodes the photo down to size.
+    expect(PICK_MAX_BYTES).toBeGreaterThan(PHOTO_MAX_BYTES);
   });
 
   it('keeps story replies and the viewer list private to the author', async () => {
@@ -2060,3 +2094,249 @@ describe('Bugs the browser found', () => {
   });
 });
 
+describe('Search is not limited to the page on screen', () => {
+  beforeEach(bed);
+
+  it('finds a case the feed hides, because it closed as found', async () => {
+    const api = TestBed.inject(LULA_API) as MockApi;
+    const inFeed = api.db.filtered(emptyFilter(), null, undefined).map((p) => p.id);
+    expect(inFeed, 'the feed is meant to hide found cases').not.toContain('p_found');
+    const hit = await api.searchPosts('Anele');
+    expect(hit.map((p) => p.id)).toContain('p_found');
+  });
+
+  it('never hands an unchecked child case to a public search', async () => {
+    const api = TestBed.inject(LULA_API) as MockApi;
+    const base = api.db.posts().find((p) => p.type === 'missing')!;
+    // Exactly what moderation creates: a child case held until a human checks it.
+    const held: Post = { ...base, id: 'p_held_for_review', title: 'Unchecked child case Zzq', status: 'under_review' };
+    api.db.upsertPost(held);
+    expect(await api.searchPosts('zzzz', 100)).toEqual([]);
+    const found = await api.searchPosts('Zzq', 100);
+    expect(found.map((p) => p.id)).not.toContain('p_held_for_review');
+  });
+
+  it('finds people by surname and by handle, never a suspended member', async () => {
+    const api = TestBed.inject(LULA_API) as MockApi;
+    expect((await api.searchUsers('ndlela')).map((u) => u.id)).toContain('u_sipho');
+    expect((await api.searchUsers('@lerato.m')).map((u) => u.id)).toContain('u_lerato');
+    const target = api.db.users()[1];
+    api.db.upsertUser({ ...target, suspended: true });
+    expect((await api.searchUsers(target.displayName)).map((u) => u.id)).not.toContain(target.id);
+  });
+
+  it('ignores a one-character *post* query but still searches a name', async () => {
+    // Typing "a" must not pull the whole store for posts; a first letter of a
+    // name is a real question, and answering it with "no match" would be wrong.
+    const api = TestBed.inject(LULA_API) as MockApi;
+    expect(await api.searchPosts('a')).toEqual([]);
+    expect((await api.searchUsers('l')).length).toBeGreaterThan(0);
+    expect(await api.searchUsers('')).toEqual([]);
+  });
+
+  it('treats wildcards and PostgREST punctuation as literal text', () => {
+    // A description can contain "50%" or "(child)"; the database must be asked
+    // for those characters, not for a pattern that matches everything.
+    expect(likePattern('ORL/441')).toBe('%ORL/441%');
+    expect(likePattern('50%')).toBe('%50\\%%');
+    expect(likePattern('Ndlela, Thabo')).toBe('%Ndlela\\, Thabo%');
+    expect(likePattern('(child)')).toBe('%\\(child\\)%');
+    expect(likePattern('a_b')).toBe('%a\\_b%');
+  });
+});
+
+describe('Spotlights are public to read and members-only to post to', () => {
+  beforeEach(bed);
+
+  /** A post filed to a Spotlight, saved as the member's own writing. */
+  async function filedPost(data: DataService, spId: string, memberId: string): Promise<Post> {
+    const db = (TestBed.inject(LULA_API) as MockApi).db;
+    const base = db.posts().find((p) => p.type === 'missing')!;
+    const post: Post = {
+      ...base, id: 'p_filed_spot', authorId: memberId, spotlightId: spId, audience: 'surname',
+      title: 'Filed only to the family community', status: 'active', media: []
+    };
+    db.upsertPost(post);
+    return post;
+  }
+
+  it('lets someone who has not joined read the posts in a Spotlight', async () => {
+    const data = TestBed.inject(DataService);
+    await data.loadStatic();
+    const sp = data.spotlights()[0];
+    const member = data.spotlights()[0].memberIds[0] ?? 'u_demo';
+    await filedPost(data, sp.id, member);
+    // nobody is signed in here: a guest, exactly like a shared link
+    expect(TestBed.inject(AuthService).signedIn()).toBe(false);
+    const posts = await data.postsForSpotlight(sp);
+    expect(posts.map((p) => p.id)).toContain('p_filed_spot');
+  });
+
+  it('shows a Spotlight case in the feed to a guest and to someone who never joined', async () => {
+    // The feed is where a shareable link lands. Hiding it from anyone who had
+    // not joined the community is what made a family's Spotlight page look
+    // empty to the people they sent it to - in the live backend only, because
+    // the offline backend already allowed it. Both now use one rule.
+    const data = TestBed.inject(DataService);
+    const auth = TestBed.inject(AuthService);
+    await data.loadStatic();
+    // A community the demo account is not part of, so "non-member" is real.
+    const sp = data.spotlights().find((s) => !s.memberIds.includes('u_demo')) ?? data.spotlights()[1];
+    const member = sp.memberIds[0];
+    await filedPost(data, sp.id, member);
+
+    // A guest, exactly like someone who was sent the link.
+    expect(auth.signedIn()).toBe(false);
+    const asGuest = await data.loadFeed({ ...emptyFilter(), status: 'active', sort: 'recent' });
+    expect(asGuest.map((p) => p.id)).toContain('p_filed_spot');
+
+    // Signed in, but not a member of that community.
+    await auth.signInDemo();
+    expect(sp.memberIds.includes(auth.viewerId!)).toBe(false);
+    const asOutsider = await data.loadFeed({ ...emptyFilter(), status: 'active', sort: 'recent' });
+    expect(asOutsider.map((p) => p.id)).toContain('p_filed_spot');
+  });
+
+  it('keeps a followers-only case private under the same rule', async () => {
+    const data = TestBed.inject(DataService);
+    const api = TestBed.inject(LULA_API);
+    await data.loadStatic();
+    const db = (TestBed.inject(LULA_API) as MockApi).db;
+    // u_demo follows nobody by default here, and u_zanele is not in the seeded
+    // network - so "does not follow the author" is the real state.
+    const author = 'u_zanele';
+    const base = db.posts().find((p) => p.type === 'missing')!;
+    db.upsertPost({
+      ...base, id: 'p_followers_only', authorId: author, audience: 'followers',
+      spotlightId: null, title: 'Only for people who follow me', media: []
+    } as Post);
+
+    const asGuest = await data.loadFeed({ ...emptyFilter(), status: 'active', sort: 'recent' });
+    expect(asGuest.map((p) => p.id)).not.toContain('p_followers_only');
+
+    await TestBed.inject(AuthService).signInDemo();
+    const asStranger = await data.loadFeed({ ...emptyFilter(), status: 'active', sort: 'recent' });
+    expect(asStranger.map((p) => p.id)).not.toContain('p_followers_only');
+
+    // An accepted follow is what opens it - and nothing else.
+    await api.follow('u_demo', author);
+    const asFollower = await data.loadFeed({ ...emptyFilter(), status: 'active', sort: 'recent' });
+    expect(asFollower.map((p) => p.id)).toContain('p_followers_only');
+  });
+
+  it('answers the audience question in exactly one place, shared by both backends', async () => {
+    // The bug was the app and the database (and the two backends) disagreeing.
+    // One function now answers it, and this is what catches a second copy.
+    const { readFileSync } = await import('node:fs');
+    for (const file of ['src/app/core/data/supabase-api.ts', 'src/app/core/data/local-db.ts']) {
+      const text = readFileSync(`${process.cwd()}/${file}`, 'utf8');
+      expect(text, `${file} must use the shared audience rule`).toContain('canReadPostAudience(');
+    }
+    const api = readFileSync(`${process.cwd()}/src/app/core/data/supabase-api.ts`, 'utf8');
+    // The members-only gate that hid Spotlight posts from non-members.
+    expect(api, 'the members-only gate must not come back').not.toMatch(/audience === 'surname'[\s\S]{0,220}memberIds\.includes/);
+  });
+
+  it('still hides a case held for review from a guest reading a Spotlight', async () => {
+    const data = TestBed.inject(DataService);
+    await data.loadStatic();
+    const sp = data.spotlights()[0];
+    const member = sp.memberIds[0] ?? 'u_demo';
+    const post = await filedPost(data, sp.id, member);
+    (TestBed.inject(LULA_API) as MockApi).db.upsertPost({ ...post, status: 'under_review' });
+    const posts = await data.postsForSpotlight(sp);
+    expect(posts.map((p) => p.id)).not.toContain('p_filed_spot');
+  });
+
+  it('refuses a post to a Spotlight the writer has not joined', async () => {
+    const data = TestBed.inject(DataService);
+    await data.loadStatic();
+    await TestBed.inject(AuthService).signInDemo();
+    const sp = data.spotlights().find((s) => !s.memberIds.includes('u_demo'))!;
+    await expect(data.postToSpotlight(sp, {
+      type: 'sighting', title: 'Seen near the taxi rank', body: 'x'.repeat(40), town: 'Umlazi', media: []
+    })).rejects.toThrow(/join/i);
+  });
+
+  it('posts a member\'s words and media straight into the community', async () => {
+    const data = TestBed.inject(DataService);
+    await data.loadStatic();
+    await TestBed.inject(AuthService).signInDemo();
+    const sp = data.spotlights().find((s) => s.memberIds.includes('u_demo'))!;
+    const photo: MediaItem = { id: 'm_q', kind: 'image', src: 'data:image/png;base64,AAAA' };
+    const post = await data.postToSpotlight(sp, {
+      type: 'sighting', title: 'Search continues on Saturday', body: 'Meet at the hall at 8am, we will cover the east side.',
+      town: 'Umlazi', media: [photo]
+    });
+    expect(post.spotlightId).toBe(sp.id);
+    expect(post.audience).toBe('surname');
+    expect(post.media.length).toBe(1);
+    expect(post.province).toBe(sp.province);
+    // and it is on the page, for everyone
+    const onPage = await data.postsForSpotlight(sp);
+    expect(onPage.map((p) => p.id)).toContain(post.id);
+  });
+});
+
+describe('Following a case is what brings someone back', () => {
+  beforeEach(bed);
+
+  it('follows and unfollows, and remembers the choice for the account', async () => {
+    const data = TestBed.inject(DataService);
+    await TestBed.inject(AuthService).signInDemo();
+    await data.refresh();
+    const post = data.feed()[0];
+    expect(data.isFollowingCase(post.id)).toBe(false);
+    expect(await data.toggleFollowCase(post.id)).toBe(true);
+    expect(data.isFollowingCase(post.id)).toBe(true);
+    const loaded = await data.loadFollowedCases();
+    expect(loaded.map((p) => p.id)).toContain(post.id);
+    expect(await data.toggleFollowCase(post.id)).toBe(false);
+    expect(data.isFollowingCase(post.id)).toBe(false);
+  });
+
+  it('tells the follower when a case they follow moves', async () => {
+    const data = TestBed.inject(DataService);
+    await TestBed.inject(AuthService).signInDemo();
+    await data.refresh();
+    const post = data.feed().find((p) => p.authorId !== 'u_demo')!;
+    await data.toggleFollowCase(post.id);
+    const before = await data.checkWatched(true);
+    // the first run only takes the snapshot - a follow must not announce the past
+    expect(before).toBe(0);
+
+    const db = (TestBed.inject(LULA_API) as MockApi).db;
+    const fresh = db.post(post.id)!;
+    db.upsertPost({ ...fresh, upvotes: fresh.upvotes + 3 });
+    // a real phone learns about the new reactions when the feed refreshes
+    await data.loadPost(post.id);
+    const sent = await data.checkWatched(true);
+    expect(sent).toBeGreaterThan(0);
+    const note = data.notifications().find((n) => n.postId === post.id && n.kind === 'vote');
+    expect(note).toBeTruthy();
+    expect(note!.body).toContain('a case you follow');
+  });
+});
+
+describe('While you were away', () => {
+  beforeEach(bed);
+
+  it('counts what is new since the last visit and clears when told', async () => {
+    const data = TestBed.inject(DataService);
+    await TestBed.inject(AuthService).signInDemo();
+    await data.refresh();
+    // a marker in the past, as if the app was last opened yesterday
+    data.markVisited(Date.now() - 2 * 24 * 3600_000);
+    const seen = data.sinceLastVisit();
+    expect(seen.newCases.length).toBeGreaterThan(0);
+    // "near you" is exactly the cases in the viewer's own province - no more
+    const province = TestBed.inject(AuthService).user()?.province;
+    expect(seen.newCases.every((p) => p.createdAt > data.lastVisitAt())).toBe(true);
+    expect(seen.nearYou).toBe(seen.newCases.filter((p) => p.province === province).length);
+
+    data.markVisited();
+    const after = data.sinceLastVisit();
+    expect(after.newCases).toEqual([]);
+    expect(after.followed).toEqual([]);
+  });
+});

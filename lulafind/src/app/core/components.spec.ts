@@ -1,12 +1,16 @@
 import { Component } from '@angular/core';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import { describe, expect, it, beforeEach } from 'vitest';
-import { provideRouter } from '@angular/router';
+import { provideRouter, Router } from '@angular/router';
 import { provideIonicAngular } from '@ionic/angular';
 import { ToastController } from '@ionic/angular/toast-controller';
 
+import { PHOTO_MAX_BYTES, VIDEO_MAX_BYTES } from './models/media-rules';
 import { LocalDb } from './data/local-db';
+import { compact } from './utils/format';
 import { LULA_API, MockApi } from './data/api';
+import { IDENTITY_REFUSED_COPY, SupabaseApi } from './data/supabase-api';
+import { supabaseNotice } from './data/supabase-client';
 import { AuthService } from './services/auth.service';
 import { DataService } from './services/data.service';
 import { feedWithRails } from './utils/feed';
@@ -14,11 +18,16 @@ import { ChatService } from './services/chat.service';
 import { emptyFilter } from './models/types';
 import { FilterBarComponent } from '../shared/components/filter-bar.component';
 import { PostCardComponent } from '../shared/components/post-card.component';
+import { RepostSheetComponent } from '../shared/components/repost-sheet.component';
+import { SendSheetComponent } from '../shared/components/send-sheet.component';
+import { PostActionsService } from './services/post-actions.service';
+import { PlatformService } from './services/platform.service';
 import { AuthComponent } from '../pages/auth/auth.component';
 import { SpotlightComponent } from '../pages/tabs/spotlight.component';
 import { MeComponent } from '../pages/tabs/me.component';
 import { CreatePostComponent } from '../pages/post/create-post.component';
 import { CreateStoryComponent } from '../pages/story/create-story.component';
+import { RepostComponent } from '../pages/post/repost.component';
 import { StoryViewerComponent } from '../pages/story/story-viewer.component';
 import { SettingsService } from './services/settings.service';
 import { ProfileComponent } from '../pages/user/profile.component';
@@ -26,9 +35,13 @@ import { TermsComponent } from '../pages/terms/terms.component';
 import { PostDetailComponent } from '../pages/post/post-detail.component';
 import { ChatRoomComponent } from '../pages/chat/chat-room.component';
 import { HomeComponent } from '../pages/tabs/home.component';
+import { routes as APP_ROUTES } from '../app.routes';
+import { authGuard } from './guards/auth.guard';
 import { TabsComponent } from '../pages/tabs/tabs.component';
 import { ReactionsSheetComponent } from '../shared/components/reactions-sheet.component';
 import { AdminComponent } from '../pages/admin/admin.component';
+import { SearchComponent } from '../pages/search/search.component';
+import { ConnectionsComponent } from '../pages/connections/connections.component';
 import { SpotlightDetailComponent } from '../pages/spotlight/spotlight-detail.component';
 import { SUPPORT_EMAIL } from './config';
 import { ActivatedRoute, convertToParamMap } from '@angular/router';
@@ -140,15 +153,214 @@ describe('Components render', () => {
     expect(html).toContain('Missing person');
     expect(html).toContain('Gauteng');
     expect(html).not.toContain('fb-chips');
-    // The card carries no Like / Comment / Repost / Send row: those four live on
-    // the post page. Follow and … share one right-hand column.
+    // The card carries LinkedIn's action bar: react (with its label), Comment,
+    // Repost, Send - each with an icon and a word. Follow and … share one
+    // right-hand column above it.
+    expect(html).toContain('fb-actions');
+    expect(html).toContain('Comment');
+    expect(html).toContain('Repost');
+    expect(html).toContain('Send');
     expect(html).not.toContain('fb-actions-row');
-    expect(html).not.toContain('fb-action-btn');
     expect(html).toContain('fb-head-actions');
     expect(html).toContain('fb-more-btn');
     // the seeded latest activity shows above the post, LinkedIn-style
     expect(html).toContain('Lerato Mahlangu');
     expect(html).toContain('commented on this');
+  });
+
+  it('shows what a person sees on a LinkedIn card: reactions, comments, reposts, and the four actions', async () => {
+    const data = TestBed.inject(DataService);
+    await data.loadFeed();
+    // Real reactions from real people: the stack must reflect what they chose.
+    const post = { ...(await data.loadPost('p_thato'))! };
+    post.voterIds = { u_a: 'like', u_b: 'like', u_c: 'support' };
+    post.upvotes = 3;
+    post.commentCount = 2;
+    post.shares = 1;
+
+    const f = TestBed.createComponent(PostCardComponent);
+    f.componentInstance.post = post;
+    f.componentInstance.author = (await data.profile(post.authorId))!;
+    f.detectChanges();
+    await f.whenStable();
+    f.detectChanges();
+
+    const el = f.nativeElement as HTMLElement;
+    const text = (el.textContent ?? '').replace(/\s+/g, ' ').trim();
+
+    // The reaction stack shows the kinds people actually gave: two Likes, then Support.
+    expect(el.querySelectorAll('.fb-stack lf-reaction-icon').length).toBe(2);
+    // Counts, with LinkedIn's separator: "3 ... 2 comments · 1 repost".
+    expect(text).toContain('3');
+    expect(text).toContain('2 comments');
+    expect(text).toContain('1 repost');
+    expect(el.querySelector('.fb-stats-right .fb-dot')).toBeTruthy();
+    // The four actions, each with its word.
+    const actions = [...el.querySelectorAll('.fb-act')].map((b) => (b.textContent ?? '').trim());
+    expect(actions).toEqual(['Like', 'Comment', 'Repost', 'Send']);
+  });
+
+  it('leaves the long text boxes uncapped and gives every one of them the phone keyboard features', async () => {
+    // Two standing rules, checked where a person would notice them breaking:
+    // captured content has no upper limit, and every text box must allow
+    // autocorrect, word suggestions, the keyboard's own emoji key and paste.
+    const longForm = async (component: unknown, selector: string, label: string, setup?: (f: ComponentFixture<unknown>) => void): Promise<void> => {
+      const f = TestBed.createComponent(component as never);
+      if (setup) setup(f);
+      f.detectChanges();
+      await f.whenStable();
+      f.detectChanges();
+      const box = (f.nativeElement as HTMLElement).querySelector(selector) as HTMLTextAreaElement | null;
+      expect(box, `${label}: ${selector} not found`).toBeTruthy();
+      expect(box!.getAttribute('maxlength'), `${label} must have no upper limit`).toBeNull();
+      expect(box!.getAttribute('inputmode'), label).toBe('text');
+      expect(box!.getAttribute('autocorrect'), label).toBe('on');
+      expect(box!.getAttribute('autocomplete'), label).toBe('on');
+      expect(box!.getAttribute('spellcheck'), label).toBe('true');
+      // Paste is a browser default and was never blocked; the attribute that
+      // switches autocorrect off is what would look like "paste is broken".
+      expect(box!.getAttribute('autocorrect')).not.toBe('off');
+    };
+
+    // The composer shows the body box once a category is chosen, as it does for
+    // anyone actually writing a post.
+    await longForm(CreatePostComponent, 'textarea[data-field="body"]', 'the case description',
+      (f) => (f.componentInstance as CreatePostComponent).setType('missing'));
+    await longForm(CreateStoryComponent, 'textarea.caption', 'the story caption');
+    await longForm(RepostComponent, 'textarea.thoughts', 'repost thoughts');
+  });
+
+  it('keeps the SQL handed to the database free of transaction control that would undo it', async () => {
+    // A SQL script run as one piece is one transaction, so a `rollback;` at the
+    // end of it silently undoes everything above - the file looks like it ran,
+    // and the database is left exactly as it was. An earlier version of the
+    // Spotlight file did that: its self-test ended in a rollback, which rolled
+    // back the two functions and the policy with it.
+    const { readFileSync } = await import('node:fs');
+    const read = (name: string): string => readFileSync(`${process.cwd()}/supabase/${name}`, 'utf8');
+
+    const main = read('spotlight-public-read.sql');
+    expect(main, 'spotlight-public-read.sql must not contain begin/rollback/commit')
+      .not.toMatch(/^\s*(begin|rollback|commit)\s*;/im);
+    expect(main, 'and it must install the widening policy').toContain('lula spotlight posts are public reading');
+    // Comments explain which helpers are missing, so only the statements are
+    // checked - a mention in prose is not a call.
+    const statements = main.replace(/^\s*--.*$/gm, '');
+    expect(statements, 'and it must not call a helper this database does not have')
+      .not.toMatch(/lula_is_self|public\.lula_spotlight_member/);
+
+    // The self-test is a separate file precisely because it rolls back.
+    const selfTest = read('spotlight-selftest.sql');
+    expect(selfTest).toMatch(/^\s*begin\s*;/im);
+    expect(selfTest).toMatch(/^\s*rollback\s*;/im);
+  });
+
+  it('never caps attachments with a number written into a file: the rule lives in one place', async () => {
+    // The 3-photo cap was written as a literal 4 in four separate files, and in
+    // the composer the guard said 4 while the error message next to it said 3 -
+    // so a person could add a fourth photo and be told off about "its 3 photos".
+    // Every cap now reads POST_MAX_PHOTOS / STORY_MAX_PHOTOS from
+    // models/media-rules.ts, and this walks the source to keep it that way.
+    const { readdirSync, readFileSync, statSync } = await import('node:fs');
+    const { fileURLToPath } = await import('node:url');
+    const candidates: string[] = [`${process.cwd()}/src/app`, `${process.cwd()}/lulafind/src/app`];
+    // The runner may serve this file from memory, in which case import.meta.url
+    // is not a file: URL and only the working directory can be trusted.
+    try { candidates.unshift(fileURLToPath(new URL('..', import.meta.url))); } catch { /* use cwd */ }
+    const isDir = (p: string): boolean => { try { return statSync(p).isDirectory(); } catch { return false; } };
+    const root = candidates.find(isDir);
+    expect(root, 'the app source folder must be reachable from the test').toBeTruthy();
+
+    const walk = (dir: string): string[] => readdirSync(dir).flatMap((name) => {
+      const full = `${dir}/${name}`;
+      if (isDir(full)) return walk(full);
+      return full.endsWith('.ts') && !full.endsWith('.spec.ts') ? [full] : [];
+    });
+
+    // A cap looks like `something.media.length >= 4`. `x.length >= 2` on a search
+    // needle or a list of cleared cases is not a media cap and is left alone.
+    const literalCap = /(?:\bmedia\b|\bphotos?\b|\bimages?\b|\battachments?\b|commentMedia\(\)|existingMedia)(?:\([^)]*\))?(?:\.\w+)*\.length\s*>=\s*\d/;
+    const offenders: string[] = [];
+    for (const file of walk(root!)) {
+      readFileSync(file, 'utf8').split('\n').forEach((line, i) => {
+        if (literalCap.test(line)) offenders.push(`${file.split('/').slice(-2).join('/')}:${i + 1} ${line.trim()}`);
+      });
+    }
+    expect(offenders, 'use POST_MAX_PHOTOS / STORY_MAX_PHOTOS instead of a literal cap').toEqual([]);
+  });
+
+  it('lets a person see who reacted, with each reaction counted, from the card', async () => {
+    const data = TestBed.inject(DataService);
+    await data.loadFeed();
+    const post = { ...(await data.loadPost('p_thato'))! };
+    // Three real members, two Likes and one Support - the sheet must say so.
+    post.voterIds = { u_lerato: 'like', u_kabelo: 'like', u_sipho: 'support' };
+    post.upvotes = 3;
+
+    const f = TestBed.createComponent(PostCardComponent);
+    f.componentInstance.post = post;
+    f.componentInstance.author = (await data.profile(post.authorId))!;
+    f.detectChanges();
+    await f.whenStable();
+
+    const el = f.nativeElement as HTMLElement;
+    // The count opens the sheet, exactly as LinkedIn's does.
+    const opener = el.querySelector('.fb-stats-likes [role="button"]') as HTMLElement;
+    expect(opener).toBeTruthy();
+    opener.click();
+    f.detectChanges();
+    await f.whenStable();
+    f.detectChanges();
+
+    const text = (f.nativeElement as HTMLElement).textContent?.replace(/\s+/g, ' ') ?? '';
+    expect(text).toContain('Reactions');
+    expect(text).toContain('All 3');
+    expect(text).toContain('Lerato Mahlangu');
+    expect(text).toContain('Kabelo');
+    // The per-reaction tabs carry their own counts: two Likes, one Support.
+    const tabs = [...(f.nativeElement as HTMLElement).querySelectorAll('.tabs [role="tab"]')]
+      .map((t) => (t.textContent ?? '').replace(/\s+/g, ' ').trim());
+    expect(tabs).toContain('All 3');
+    expect(tabs.filter((t) => t.endsWith('2')).length).toBe(1);
+    expect(tabs.filter((t) => t.endsWith('1')).length).toBe(1);
+  });
+
+  it('shows the most-relevant comment on the card, as LinkedIn does, and nothing when there is none', async () => {
+    const data = TestBed.inject(DataService);
+    await TestBed.inject(AuthService).signInDemo();
+    await data.loadFeed();
+    const post = { ...(await data.loadPost('p_thato'))! };
+    const author = (await data.profile(post.authorId))!;
+    const api = TestBed.inject(LULA_API);
+
+    // The seeded post already carries real comments, so this is the real thing.
+    // Stand one comment above every other by likes, the way LinkedIn picks the
+    // one it shows, and check that the card shows that one.
+    const written = await data.addComment({ postId: post.id, body: 'A neighbour saw him at the clinic on Monday.' });
+    await api.saveComment({ ...written, upvotes: 9999, likedIds: ['u_a', 'u_b'] });
+
+    const withComments = TestBed.createComponent(PostCardComponent);
+    withComments.componentInstance.post = post;
+    withComments.componentInstance.author = author;
+    withComments.detectChanges();
+    await withComments.whenStable();
+    withComments.detectChanges();
+
+    const el = withComments.nativeElement as HTMLElement;
+    const text = (el.textContent ?? '').replace(/\s+/g, ' ').trim();
+    expect(el.querySelector('.fb-comment')).toBeTruthy();
+    expect(text).toContain('A neighbour saw him at the clinic on Monday.');
+    // Compacted the way LinkedIn writes big numbers ("10k"), not "9999".
+    expect(text).toContain(`${compact(9999)} likes`);
+
+    // With nothing written yet there is no preview - no empty frame, no title.
+    const empty = TestBed.createComponent(PostCardComponent);
+    empty.componentInstance.post = { ...post, id: 'p_no_comments', commentCount: 0, voterIds: {}, upvotes: 0, shares: 0 };
+    empty.componentInstance.author = author;
+    empty.detectChanges();
+    await empty.whenStable();
+    empty.detectChanges();
+    expect((empty.nativeElement as HTMLElement).querySelector('.fb-comment')).toBeNull();
   });
 
   it('shows a selected generated poster in the feed card', async () => {
@@ -266,6 +478,364 @@ describe('Components render', () => {
     if (post.upvotes > voters.length) expect(el.textContent).toContain('reacted from outside this network');
   });
 
+  it('spreads the four post actions across the width, LinkedIn-style', async () => {
+    const data = TestBed.inject(DataService);
+    await data.loadFeed();
+    const post = data.feed().find((p) => !p.repostOf)!;
+    await TestBed.inject(AuthService).signInDemo();
+    const f = TestBed.createComponent(PostDetailComponent);
+    f.componentInstance.p.set(post);
+    await settle(f);
+    const el = f.nativeElement as HTMLElement;
+
+    const bar = el.querySelector('.actions');
+    expect(bar, 'the action bar is rendered').toBeTruthy();
+    const labels = [...bar!.querySelectorAll('button')].map((b) => b.textContent?.trim()).filter(Boolean);
+    // React is the reaction button; the other three are plain buttons.
+    expect(labels.join(' ')).toContain('Comment');
+    expect(labels.join(' ')).toContain('Repost');
+    expect(labels.join(' ')).toContain('Send');
+    expect(el.querySelector('lf-reaction-button'), 'React sits in the bar too').toBeTruthy();
+  });
+
+  it('keeps the post detail screen free of the community-tool footer and comments filler', async () => {
+    const data = TestBed.inject(DataService);
+    await data.loadFeed();
+    const post = data.feed().find((p) => !p.repostOf)!;
+    const f = TestBed.createComponent(PostDetailComponent);
+    f.componentInstance.p.set(post);
+    await settle(f);
+    const text = (f.nativeElement as HTMLElement).textContent ?? '';
+    expect(text).not.toContain('community tool');
+    expect(text).not.toContain('No comments yet');
+  });
+
+  it('offers read more only when the text is actually cut off', async () => {
+    const data = TestBed.inject(DataService);
+    await data.loadFeed();
+    const short = { ...data.feed().find((p) => !p.repostOf)!, body: 'Short update about the search.' };
+    const f = TestBed.createComponent(PostCardComponent);
+    f.componentRef.setInput('post', short);
+    await settle(f);
+    expect(f.nativeElement.querySelector('.fb-readmore'), 'no read-more on text that fits').toBe(null);
+
+    // jsdom has no layout, so give the paragraph the measurements a browser
+    // would produce for text that is cut off, then re-render: the component
+    // measures the element after every render.
+    const text = f.nativeElement.querySelector('.fb-post-text') as HTMLElement;
+    Object.defineProperty(text, 'clientHeight', { value: 60, configurable: true });
+    Object.defineProperty(text, 'scrollHeight', { value: 300, configurable: true });
+    f.detectChanges();
+    expect(f.nativeElement.querySelector('.fb-readmore')?.textContent).toContain('see more');
+    f.componentInstance.toggleExpand(new Event('click'));
+    f.detectChanges();
+    expect(f.nativeElement.querySelector('.fb-readmore')?.textContent).toContain('see less');
+  });
+
+  it('still saves a case update on a database without lula_patch_post', async () => {
+    // The live database was never given the function, and "Still searching"
+    // answered with "could not find function public.lula_patch_post". The app
+    // must not be blocked on a migration: it falls back to a read-and-write.
+    const api = new SupabaseApi();
+    const writes: string[] = [];
+    (api as unknown as { client: unknown }).client = {
+      rpc: async () => ({ error: { message: 'Could not find the function public.lula_patch_post(post_id, patch) in the schema cache', code: 'PGRST202' } })
+    };
+    (api as unknown as { post: unknown }).post = async (id: string) => ({ id, authorId: 'u_1', body: 'b' });
+    (api as unknown as { savePost: unknown }).savePost = async (p: { id: string }) => { writes.push(p.id); return true; };
+
+    const out = await api.patchPost('p_1', { outcomeNudgeAt: 5 });
+    expect(writes, 'the change was written the ordinary way').toEqual(['p_1']);
+    expect(out?.id).toBe('p_1');
+  });
+
+  it('explains a refused photo upload on the screen, not in a console', async () => {
+    // The old message told the person to run a console command - impossible on a
+    // phone, where the installed app has no console at all. The app now asks the
+    // database for the verdict and shows it.
+    const api = new SupabaseApi();
+    const verdict = 'FAIL - the photos storage policies are missing. This script creates them.';
+    (api as unknown as { client: unknown }).client = {
+      storage: { from: () => ({ upload: async () => ({ error: { message: 'new row violates row-level security policy' } }) }) },
+      rpc: async () => ({ data: { verdict, dbUid: null }, error: null })
+    };
+    (api as unknown as { currentUid: unknown }).currentUid = async () => 'u_1';
+    (api as unknown as { storageReport: unknown }).storageReport = async () => ({ ok: false, message: verdict, details: {} });
+
+    await expect(api.uploadMedia('u_1', { id: 'm_1', kind: 'image', src: 'data:image/png;base64,AAAA' } as never))
+      .rejects.toThrow(new RegExp(verdict.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  });
+
+  it('says which script to run when the database has no photo policies at all', async () => {
+    const api = new SupabaseApi();
+    (api as unknown as { client: unknown }).client = {
+      storage: { from: () => ({ upload: async () => ({ error: { message: 'new row violates row-level security policy' } }) }) },
+      rpc: async () => ({ data: null, error: { message: 'Could not find the function public.lula_debug_storage(app_uid) in the schema cache' } })
+    };
+    (api as unknown as { currentUid: unknown }).currentUid = async () => 'u_1';
+
+    await expect(api.uploadMedia('u_1', { id: 'm_1', kind: 'image', src: 'data:image/png;base64,AAAA' } as never))
+      .rejects.toThrow(/fix-photo-uploads\.sql/);
+  });
+
+  it('tells the person the same thing in the error and the banner when the database cannot see them', async () => {
+    // The banner used to say "sign out and sign in" while the error said "you do
+    // not need to sign out first" - two halves of the screen contradicting each
+    // other, and neither the fix. Now it is one sentence in both places.
+    const api = new SupabaseApi();
+    const refused = { message: 'new row violates row-level security policy for table "records"', code: '42501' };
+    (api as unknown as { client: unknown }).client = {
+      from: () => ({ insert: async () => ({ error: refused }), update: () => ({ eq: () => ({ eq: async () => ({ error: refused }) }) }) })
+    };
+    (api as unknown as { authBridge: unknown }).authBridge = null;
+    supabaseNotice.set('');
+
+    let thrown = '';
+    try {
+      await api.saveComment({
+        id: 'c_x', postId: 'p_thato', parentId: null, authorId: 'u_demo', body: 'A comment that the database refuses.',
+        createdAt: Date.now(), upvotes: 0, isLead: false
+      } as never);
+    } catch (e) {
+      thrown = (e as Error).message;
+    }
+
+    expect(thrown).toBe(IDENTITY_REFUSED_COPY);
+    expect(supabaseNotice()).toBe(IDENTITY_REFUSED_COPY);
+    // And the words that used to contradict each other are gone for good.
+    expect(thrown).not.toMatch(/sign out/i);
+    expect(thrown).not.toMatch(/nothing was saved/i);
+  });
+
+  it('refuses a photo over 2 MB and a video over 3 MB, and accepts both at the limit', async () => {
+    // The size rule, end to end. A real blob is fetched from the data-uri, so
+    // the byte counts here are bytes, not a mocked number.
+    const api = new SupabaseApi();
+    const uploaded: { path: string }[] = [];
+    (api as unknown as { client: unknown }).client = {
+      storage: { from: () => ({
+        upload: async (path: string) => { uploaded.push({ path }); return { error: null }; }
+      }) },
+      rpc: async () => ({ data: { verdict: 'PASS - uploads should work.' }, error: null })
+    };
+    (api as unknown as { signedStorageUrl: unknown }).signedStorageUrl = async () => 'signed://photos/ok';
+
+    const fake = (kind: 'image' | 'video', bytes: number): string =>
+      `data:${kind === 'video' ? 'video/mp4' : 'image/jpeg'};base64,` + Buffer.alloc(bytes).toString('base64');
+
+    await expect(api.uploadMedia('u_1', { id: 'p_big', kind: 'image', src: fake('image', PHOTO_MAX_BYTES + 1) } as never))
+      .rejects.toThrow(/smaller than 2 MB/i);
+    await expect(api.uploadMedia('u_1', { id: 'v_big', kind: 'video', src: fake('video', VIDEO_MAX_BYTES + 1) } as never))
+      .rejects.toThrow(/smaller than 3 MB/i);
+
+    // Exactly at the limits: accepted, which is what "must not exceed" means.
+    await api.uploadMedia('u_1', { id: 'p_ok', kind: 'image', src: fake('image', PHOTO_MAX_BYTES) } as never);
+    await api.uploadMedia('u_1', { id: 'v_ok', kind: 'video', src: fake('video', VIDEO_MAX_BYTES) } as never);
+    expect(uploaded.map((u) => u.path)).toEqual(['u_1/p_ok.jpg', 'u_1/v_ok.mp4']);
+  });
+
+  it('writes a notification owned by the actor, never by the recipient', async () => {
+    // The recipient can never own the row: the insert policy compares owner_id
+    // with the caller. Falling back to them produced a write the database could
+    // only refuse - and every caller awaited it right after saving something.
+    const api = new SupabaseApi();
+    const written: { collection: string; owner: string | null }[] = [];
+    (api as unknown as { putRecord: unknown }).putRecord = async (row: { collection: string; owner_id: string | null }) => {
+      written.push({ collection: row.collection, owner: row.owner_id });
+      return { error: null };
+    };
+    const note = {
+      id: 'n_1', userId: 'u_recipient', kind: 'missing' as const,
+      title: 'A new missing case nearby', body: 'Open the case for the poster.',
+      at: Date.now(), read: false, route: '/post/p_1', postId: 'p_1'
+    };
+
+    (api as unknown as { authBridge: unknown }).authBridge = { uid: async () => 'u_actor' };
+    await api.pushNotification(note);
+    expect(written.length, 'the notification was written').toBe(1);
+    expect(written[0].owner, 'owned by the actor').toBe('u_actor');
+
+    // No signed-in identity: write nothing rather than a row nobody may own.
+    (api as unknown as { authBridge: unknown }).authBridge = { uid: async () => null };
+    await api.pushNotification(note);
+    expect(written.length, 'nothing written without an actor').toBe(1);
+  });
+
+  it('keeps a post that was saved even when the alert fan-out fails', async () => {
+    // This is the bug people hit: the post is stored, then the notification
+    // fan-out that follows it is refused by the database, and the whole action
+    // reports "Nothing was saved. Try again" - while the post is right there in
+    // the feed. A failed alert must not rewrite history about the post.
+    const auth = TestBed.inject(AuthService);
+    await auth.signInDemo();
+    const api = TestBed.inject(LULA_API);
+    const data = TestBed.inject(DataService);
+    await data.loadFeed();
+    const me = auth.user()!;
+    const realPush = api.pushNotification.bind(api);
+    api.pushNotification = async () => { throw new Error('new row violates row-level security policy'); };
+
+    try {
+      const post = await data.createPost({
+        type: 'missing', title: 'Thandi Mokoena last seen in Soweto',
+        body: 'She was last seen near the taxi rank in Soweto wearing a blue school uniform.',
+        media: [], province: 'GP', town: 'Soweto',
+        lastSeenAt: Date.now(), lastSeenWhere: 'Soweto taxi rank', geo: null,
+        contactLabel: 'Family contact', contactValue: '082 555 0101',
+        contactVisibleTo: 'verified', caseNumber: null, reward: null, guardianConsent: false,
+        subject: null, vehicleDetails: null, audience: 'public', spotlightId: null,
+        chatEnabled: true, allowComments: true, anonymous: false, askWanted: false,
+        khumbu: null, danger: null
+      });
+      // It came back rather than throwing, it is stored, and it is in the feed.
+      expect(post.id).toBeTruthy();
+      expect(await api.post(post.id)).toBeTruthy();
+      expect(data.feed().some((p) => p.id === post.id), 'the saved post is in the feed').toBe(true);
+      expect(post.authorId).toBe(me.id);
+    } finally {
+      api.pushNotification = realPush;
+    }
+  });
+
+  it('Send opens a picker: your people in the app, or other apps on the phone', async () => {
+    const auth = TestBed.inject(AuthService);
+    const data = TestBed.inject(DataService);
+    const actions = TestBed.inject(PostActionsService);
+    await auth.signInDemo();
+    await data.loadFeed();
+    await data.loadUserScoped();
+
+    // A follower and a connection to choose between: the demo account starts
+    // with neither, so make one of each - someone who follows me, and someone
+    // we follow each other.
+    const me = auth.viewerId!;
+    const api = TestBed.inject(LULA_API);
+    const others = (await api.users()).filter((u) => u.id !== me);
+    const follower = others[0];
+    const connection = others[1] ?? others[0];
+    await api.follow(follower.id, me);
+    await api.follow(me, connection.id);
+    await api.follow(connection.id, me);
+    await data.loadUserScoped();
+
+    const post = data.feed().find((p) => !p.repostOf && p.authorId !== me) ?? data.feed()[0];
+    await actions.send(post);
+    expect(actions.sendTarget()?.id, 'the sheet opened on that post').toBe(post.id);
+    for (let i = 0; i < 60 && actions.sendLoading(); i++) await new Promise((r) => setTimeout(r, 5));
+    expect(actions.sendPeople().length, 'people can be sent to').toBeGreaterThan(0);
+    expect(actions.sendPeople().some((p) => p.connection), 'a connection is marked as such').toBe(true);
+
+    // Anyone shown can receive it; those you follow each other also get a chat.
+    for (const person of actions.sendPeople()) {
+      expect(person.profile.id, 'never yourself').not.toBe(me);
+    }
+
+    // The sheet itself: the people list, and the way out to other apps.
+    const f = TestBed.createComponent(SendSheetComponent);
+    f.detectChanges();
+    await f.whenStable();
+    const sheet = (f.nativeElement as HTMLElement).textContent ?? '';
+    expect(sheet).toContain('Send');
+    const search = f.nativeElement.querySelector('input[type="search"]') as HTMLInputElement;
+    expect(search?.placeholder, 'there is a search box for people').toBe('Search people');
+    expect(sheet).toContain('Share to other apps');
+    expect(sheet).toContain('WhatsApp');
+
+    const recipient = actions.sendPeople()[0];
+    {
+      expect(sheet, 'the people you can send to are listed').toContain(recipient.profile.displayName);
+      const delivered: { userId: string; title: string; postId: string | null }[] = [];
+      api.pushNotification = async (n) => { delivered.push({ userId: n.userId, title: n.title, postId: n.postId }); };
+      await actions.sendToUser(recipient);
+      expect(delivered.length, 'the post reached them as a notification').toBe(1);
+      expect(delivered[0].userId).toBe(recipient.profile.id);
+      expect(delivered[0].title).toContain(auth.user()!.displayName);
+      expect(delivered[0].postId).toBe(post.id);
+      expect(actions.sendTarget(), 'the sheet closed itself').toBe(null);
+    }
+
+    // The other half of LinkedIn's Send: the phone's own share sheet.
+    let shared: { title: string; url?: string } | null = null;
+    const platform = TestBed.inject(PlatformService);
+    platform.share = async (title: string, _text: string, url?: string) => { shared = { title, url }; return 'native'; };
+    await actions.send(post);
+    await actions.shareExternally();
+    expect(shared, 'Share to other apps asked the phone to share').toBeTruthy();
+    expect(shared!.url).toContain(`/post/${post.id}`);
+  });
+
+  it('searches the Send picker by name', async () => {
+    const auth = TestBed.inject(AuthService);
+    const data = TestBed.inject(DataService);
+    const actions = TestBed.inject(PostActionsService);
+    await auth.signInDemo();
+    await data.loadFeed();
+    await data.loadUserScoped();
+    await actions.send(data.feed()[0]);
+    const all = actions.sendPeople();
+    if (!all.length) return;
+    const first = all[0].profile.displayName;
+    expect(actions.matches(first.slice(0, 4)).some((p) => p.profile.displayName === first)).toBe(true);
+    expect(actions.matches('zzzz-no-such-person').length).toBe(0);
+  });
+
+  it('offers the whole LinkedIn repost sheet: Repost, with your thoughts, and Undo', async () => {
+    const auth = TestBed.inject(AuthService);
+    const data = TestBed.inject(DataService);
+    const actions = TestBed.inject(PostActionsService);
+    await auth.signInDemo();
+    await data.loadFeed();
+    const post = data.feed().find((p) => !p.repostOf && p.authorId !== auth.viewerId)!;
+
+    await actions.openRepost(post);
+    const f = TestBed.createComponent(RepostSheetComponent);
+    TestBed.flushEffects?.();
+    f.detectChanges();
+    await f.whenStable();
+    let text = (f.nativeElement as HTMLElement).textContent ?? '';
+    expect(actions.repostTarget()?.id).toBe(post.id);
+    expect(text).toContain('Repost');
+    expect(text).toContain('Repost with your thoughts');
+    expect(text).toContain('Instantly bring this post to others');
+
+    // Reposting puts it on your feed, and the sheet then offers to undo it.
+    await actions.repostNow();
+    expect(data.feed().some((p) => p.repostOf === post.id), 'the repost is in the feed').toBe(true);
+    await actions.openRepost(post);
+    f.detectChanges();
+    await f.whenStable();
+    text = (f.nativeElement as HTMLElement).textContent ?? '';
+    expect(text).toContain('Undo repost');
+  });
+
+  it('offers React, Comment, Repost and Send on every feed card', async () => {
+    const data = TestBed.inject(DataService);
+    await data.loadFeed();
+    const post = data.feed().find((p) => !p.repostOf)!;
+    const f = TestBed.createComponent(PostCardComponent);
+    f.componentRef.setInput('post', post);
+    await settle(f);
+    const el = f.nativeElement as HTMLElement;
+
+    // The bar exists in the markup, not only in the component's handlers.
+    const labels = [...el.querySelectorAll('.fb-actions .fb-act')].map((b) => b.textContent?.trim());
+    expect(labels, 'LinkedIn calls the first action Like').toContain('Like');
+    expect(labels).toContain('Comment');
+    expect(labels).toContain('Repost');
+    expect(labels).toContain('Send');
+
+    // Tapping React emits the reaction the app records, and Comment opens the
+    // post's comments - the two things a feed post must be able to do.
+    const votes: string[] = [];
+    const comments: number[] = [];
+    f.componentInstance.vote.subscribe((v) => votes.push(v));
+    f.componentInstance.comment.subscribe(() => comments.push(1));
+    (el.querySelector('.fb-actions .fb-act') as HTMLButtonElement).click();
+    ([...el.querySelectorAll('.fb-actions .fb-act')][1] as HTMLButtonElement).click();
+    expect(votes.length).toBe(1);
+    expect(comments.length).toBe(1);
+  });
+
   it('does not insert a story rail before the feed reaches post eight', async () => {
     const data = TestBed.inject(DataService);
     await data.loadFeed();
@@ -282,6 +852,36 @@ describe('Components render', () => {
     const html: string = (f.nativeElement as HTMLElement).innerHTML;
     expect(html).toContain('lf-post-card');
     if (feed.length >= 8) expect(html).toContain('lf-story-rail');
+  });
+
+  it('sends a visitor who is not signed in to the login screen, not to Home', async () => {
+    const auth = TestBed.inject(AuthService);
+    expect(auth.signedIn()).toBe(false);
+    // The whole app shell is guarded: Home, Spotlight, Chats, Discover and the
+    // menu live under it, so none of them can paint for a visitor without an
+    // account. Only the auth screen itself stays open.
+    const shell = APP_ROUTES.find((r) => r.path === '')!;
+    expect(shell.canActivate, 'the app shell must require an account').toContain(authGuard);
+    expect(APP_ROUTES.find((r) => r.path === 'auth')!.canActivate ?? []).toEqual([]);
+
+    const decision = await TestBed.runInInjectionContext(() =>
+      authGuard({} as never, { url: '/home' } as never));
+    // A UrlTree, not a boolean: the router sends them to the login screen and
+    // remembers where they were going.
+    expect(String(decision)).toContain('/auth');
+    expect(String(decision)).toContain('next');
+  });
+
+  it('waits for the session check before deciding, so a reload never throws a member out', async () => {
+    const auth = TestBed.inject(AuthService);
+    await auth.signInDemo(); // a real stored session, as after signing in yesterday
+    // Enter a guarded route during a cold start, before the check has landed:
+    // signedIn() is false at this instant even though the member is signed in.
+    expect(auth.ready()).toBe(false);
+    const decision = await TestBed.runInInjectionContext(() =>
+      authGuard({} as never, { url: '/home' } as never));
+    expect(auth.ready(), 'the guard waited for the real answer').toBe(true);
+    expect(decision, 'a signed-in member goes straight in').toBe(true);
   });
 
   it('renders the LulaFind welcome and login screens', async () => {
@@ -309,6 +909,37 @@ describe('Components render', () => {
     expect(loginHtml).toContain('Forgot your password?');
   });
 
+  it('offers Create Account on the login screen instead of the save-login-info tick', async () => {
+    const f = TestBed.createComponent(AuthComponent);
+    f.detectChanges();
+    await f.whenStable();
+    f.componentInstance.mode.set('signin');
+    f.detectChanges();
+    await f.whenStable();
+    const el = f.nativeElement as HTMLElement;
+
+    expect(el.innerHTML).not.toContain('Save Login Info');
+    expect(el.querySelector('input[type="checkbox"]'), 'no tick box on the login form').toBe(null);
+    expect(el.textContent).toContain("Don't have an account?");
+    const link = [...el.querySelectorAll('button')].find((b) => b.textContent?.trim() === 'Create Account');
+    expect(link, 'Create Account must be a real button').toBeTruthy();
+    link!.click();
+    f.detectChanges();
+    await f.whenStable();
+    // It takes you to the sign-up flow, not to a dead end.
+    expect(f.componentInstance.mode()).toBe('signup');
+  });
+
+  it('still keeps the login on the device after signing in', async () => {
+    // The row that said "Save Login Info on your device" is gone, but the
+    // session is still remembered by the sign-in itself - it must not be lost.
+    const auth = TestBed.inject(AuthService);
+    await auth.signInDemo();
+    expect(localStorage.getItem('lulafind.auth.signedIn'), 'sign-in marker written').toBeTruthy();
+    const stored = JSON.parse(localStorage.getItem('lulafind.auth.session') ?? 'null');
+    expect(stored, 'session kept on the device').toBeTruthy();
+  });
+
   it('shows the five-step LulaFind signup flow', async () => {
     const f = TestBed.createComponent(AuthComponent);
     f.detectChanges();
@@ -332,15 +963,17 @@ describe('Components render', () => {
     expect(f.componentInstance.usernamePreview()).toBe('doe');
   });
 
-  it('renders the Spotlight tab with View / Create and A-Z letters', async () => {
+  it('renders the Spotlight tab as one searchable list with A-Z letters', async () => {
     const data = TestBed.inject(DataService);
     await data.loadStatic();
     const f = TestBed.createComponent(SpotlightComponent);
     f.detectChanges();
     await f.whenStable();
     const html: string = (f.nativeElement as HTMLElement).innerHTML;
-    expect(html).toContain('View');
-    expect(html).toContain('Create');
+    // The View / Create toggle is gone: the list is the page, and the filter
+    // sits beside the search field.
+    expect(html).not.toContain('>View<');
+    expect(html).toContain('All provinces');
     expect(html).toContain('Ndlela');
     // picking a letter narrows the list
     f.componentInstance.letter.set('N');
@@ -349,6 +982,58 @@ describe('Components render', () => {
     f.componentInstance.letter.set('B');
     f.detectChanges();
     expect(f.componentInstance.list().map((s) => s.surname)).toEqual(['Botha']);
+  });
+
+  it('filters the Spotlight list by province, including every province', async () => {
+    const data = TestBed.inject(DataService);
+    await data.loadStatic();
+    const f = TestBed.createComponent(SpotlightComponent);
+    f.detectChanges();
+    await f.whenStable();
+    const all = f.componentInstance.list().length;
+    const provinces = [...new Set(data.spotlights().map((s) => s.province))];
+    const one = provinces.find((p) => p)!;
+    f.componentInstance.province.set(one);
+    f.detectChanges();
+    const narrowed = f.componentInstance.list();
+    expect(narrowed.length).toBeLessThan(all);
+    expect(narrowed.every((s) => s.province === one)).toBe(true);
+    f.componentInstance.province.set('all');
+    f.detectChanges();
+    expect(f.componentInstance.list().length).toBe(all);
+  });
+
+  it('searches posts from the Spotlight tab and says where each was filed', async () => {
+    const data = TestBed.inject(DataService);
+    await data.refresh();
+    const f = TestBed.createComponent(SpotlightComponent);
+    f.detectChanges();
+    await f.whenStable();
+    f.componentInstance.onQuery('Ndlela');
+    await f.whenStable();
+    const filed = data.spotlights().find((s) => s.surname === 'Ndlela');
+    expect(filed).toBeTruthy();
+    // every post result filed to a Spotlight can name it
+    for (const p of f.componentInstance.posts()) {
+      if (p.spotlightId) expect(f.componentInstance.spotlightOf(p)?.id).toBe(p.spotlightId);
+    }
+    f.componentInstance.onQuery('');
+    expect(f.componentInstance.posts()).toEqual([]);
+  });
+
+  it('cancels out of the create Spotlight form without creating anything', async () => {
+    await TestBed.inject(AuthService).signInDemo();
+    const f = TestBed.createComponent(SpotlightComponent);
+    f.detectChanges();
+    await f.whenStable();
+    f.componentInstance.openCreate('Mkhungela');
+    f.detectChanges();
+    expect(f.componentInstance.mode()).toBe('create');
+    expect((f.nativeElement as HTMLElement).innerHTML).toContain('Cancel');
+    f.componentInstance.cancelCreate();
+    f.detectChanges();
+    expect(f.componentInstance.mode()).toBe('view');
+    expect(f.componentInstance.form.surname).toBe('');
   });
 
   it('flags a duplicate surname in the same province while you type', async () => {
@@ -756,6 +1441,48 @@ describe('Search boxes actually search', () => {
     expect(f.componentInstance.list().length).toBe(all);
   });
 
+  it('shows a Spotlight to a guest, with posting locked behind joining', async () => {
+    const data = TestBed.inject(DataService);
+    await data.refresh();
+    const sp = data.spotlights().find((s) => s.surname === 'Ndlela')!;
+    const f = TestBed.createComponent(SpotlightDetailComponent);
+    f.componentInstance.sp.set(sp);
+    await f.componentInstance.reloadPosts();
+    f.detectChanges();
+    await f.whenStable();
+    const html = (f.nativeElement as HTMLElement).innerHTML;
+    // reading is open, posting is not
+    expect(html).toContain('Join the Ndlela community to post here');
+    expect(html).toContain('Anyone can read what is posted.');
+    expect(f.componentInstance.posts().length).toBeGreaterThan(0);
+  });
+
+  it('gives a member the short composer and searches people inside the Spotlight', async () => {
+    await TestBed.inject(AuthService).signInDemo();
+    const data = TestBed.inject(DataService);
+    await data.refresh();
+    const sp = data.spotlights().find((s) => s.memberIds.includes('u_demo'))!;
+    const f = TestBed.createComponent(SpotlightDetailComponent);
+    f.componentInstance.sp.set(sp);
+    await f.componentInstance.reloadPosts();
+    f.detectChanges();
+    await f.whenStable();
+    const html = (f.nativeElement as HTMLElement).innerHTML;
+    expect(html).toContain('Post to the ' + sp.surname + ' community');
+    expect(html).toContain('Photo');
+    expect(html).toContain('Video');
+    // searching inside the community finds the people in it
+    const memberId = sp.memberIds.find((id) => id !== 'u_demo')!;
+    const member = await data.people([memberId]);
+    const needle = member[0].displayName.split(' ')[0];
+    f.componentInstance.onSearch(needle);
+    await f.whenStable();
+    expect(f.componentInstance.people().map((u) => u.id)).toContain(memberId);
+    f.componentInstance.onSearch('');
+    await f.whenStable();
+    expect(f.componentInstance.people()).toEqual([]);
+  });
+
   it('narrows the posts inside a Spotlight when you type', async () => {
     const data = TestBed.inject(DataService);
     await data.refresh();
@@ -794,6 +1521,59 @@ describe('Search boxes actually search', () => {
     expect(f.componentInstance.posts()).toEqual([]);
     type(f, '');
     expect(f.componentInstance.posts().length).toBe(all);
+  });
+
+  it('searches the whole store from the search page as you type', async () => {
+    const data = TestBed.inject(DataService);
+    await data.refresh();
+    const f = TestBed.createComponent(SearchComponent);
+    f.detectChanges();
+    await f.whenStable();
+    expect(f.componentInstance.posts()).toEqual([]);
+    type(f, 'ORL/441');
+    await f.whenStable();
+    expect(f.componentInstance.posts().map((p) => p.id)).toContain('p_thato');
+    // one character is not a search: nothing is asked of the database
+    type(f, 'O');
+    expect(f.componentInstance.posts()).toEqual([]);
+  });
+
+  it('finds people by name and by handle, not only post authors', async () => {
+    const data = TestBed.inject(DataService);
+    await data.refresh();
+    const f = TestBed.createComponent(SearchComponent);
+    f.detectChanges();
+    await f.whenStable();
+    type(f, 'ndlela');
+    await f.whenStable();
+    expect(f.componentInstance.users().map((u) => u.id)).toContain('u_sipho');
+    type(f, '@lerato.m');
+    await f.whenStable();
+    expect(f.componentInstance.users().map((u) => u.id)).toContain('u_lerato');
+    type(f, 'zzzznobody');
+    await f.whenStable();
+    expect(f.componentInstance.users()).toEqual([]);
+  });
+
+  it('narrows the Friends page to the name you type', async () => {
+    await TestBed.inject(AuthService).signInDemo();
+    const data = TestBed.inject(DataService);
+    await data.refresh();
+    const f = TestBed.createComponent(ConnectionsComponent);
+    f.detectChanges();
+    await f.whenStable();
+    f.componentInstance.tab.set('following');
+    f.detectChanges();
+    await f.whenStable();
+    const rows = f.componentInstance.rows();
+    expect(rows.length).toBeGreaterThan(0);
+    const one = rows.find((r) => !!r.u)!;
+    type(f, (one.u!.displayName.split(' ')[0]));
+    expect(f.componentInstance.matchingRows().map((r) => r.id)).toContain(one.id);
+    type(f, 'zzzznothingmatches');
+    expect(f.componentInstance.matchingRows()).toEqual([]);
+    type(f, '');
+    expect(f.componentInstance.matchingRows().length).toBe(rows.length);
   });
 });
 
@@ -1066,5 +1846,52 @@ describe('Email and Google sign-in', () => {
     expect(u.email).toBe('google.user@gmail.com');
     expect(auth.viewerId).toBe('u_demo');
     expect(auth.pendingProvider()).toBe(null);
+  });
+});
+
+/**
+ * The wiring, not just the unit: these navigate with the app's real route table,
+ * so they fail if the guard is ever dropped from the shell again.
+ */
+describe('Route protection', () => {
+  const realBed = (): void => {
+    try {
+      Object.keys(localStorage)
+        .filter((k) => k.startsWith('lulafind.'))
+        .forEach((k) => localStorage.removeItem(k));
+    } catch { /* node */ }
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter(APP_ROUTES),
+        provideIonicAngular(),
+        { provide: LULA_API, useValue: new MockApi(new LocalDb(true)) }
+      ]
+    });
+  };
+
+  beforeEach(realBed);
+
+  it('a guest who opens Home lands on the login screen instead', async () => {
+    const router = TestBed.inject(Router);
+    await router.navigateByUrl('/home');
+    // Sign in and you are returned to where you were going.
+    expect(router.url).toContain('/auth');
+    expect(router.url).toContain('next=%2Fhome');
+  });
+
+  it('a guest who opens the app at the root also lands on login', async () => {
+    const router = TestBed.inject(Router);
+    await router.navigateByUrl('/');
+    expect(router.url).toContain('/auth');
+  });
+
+  it('a signed-in member reloading straight onto Home stays there', async () => {
+    const auth = TestBed.inject(AuthService);
+    await auth.signInDemo(); // stored session, checked before the route resolves
+    const router = TestBed.inject(Router);
+    await router.navigateByUrl('/home');
+    expect(auth.signedIn()).toBe(true);
+    expect(router.url).toBe('/home');
   });
 });

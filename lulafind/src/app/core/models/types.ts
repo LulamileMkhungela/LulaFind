@@ -746,7 +746,9 @@ export interface Notification {
     | 'vote' | 'comment' | 'follow' | 'chat' | 'system'
     | 'escalation' | 'location_consent' | 'claim' | 'outcome' | 'spotlight'
     | 'checkin' | 'moderation' | 'danger' | 'story_reply' | 'repost' | 'missing'
-    | 'lookout';
+    | 'lookout'
+    /** Someone sent you a post from the Send picker. */
+    | 'share';
   title: string;
   body: string;
   at: number;

@@ -114,10 +114,13 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
               <span>Continue with Google</span>
             </button>
 
-            <label class="snap-checkbox-row">
-              <input type="checkbox" [checked]="saveLoginInfo" (change)="saveLoginInfo = $any($event.target).checked" />
-              <span>Save Login Info on your device</span>
-            </label>
+            <!-- Login info is kept on the device by the sign-in flow itself
+                 (AuthService.rememberSignIn), so there is nothing to tick here.
+                 This row is the way across to sign-up instead. -->
+            <p class="snap-alt-row">
+              Don't have an account?
+              <button class="snap-text-link" type="button" (click)="mode.set('signup')">Create Account</button>
+            </p>
 
             @if (error()) { <p class="err-msg"><lf-icon name="alert" [size]="15" /> {{ error() }}</p> }
             @if (notice()) { <p class="ok-msg"><lf-icon name="check" [size]="15" /> {{ notice() }}</p> }
@@ -514,12 +517,14 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
     .snap-divider::before, .snap-divider::after { content: ''; flex: 1; height: 1px; background: var(--lf-line-soft); }
     .snap-bottom-cta .snap-divider { margin: 4px 0; }
 
-    .snap-checkbox-row {
-      display: flex; align-items: center; gap: 10px;
+    /* "Don't have an account? Create Account" - sits where the old
+       save-login-info row was, at the foot of the login form. */
+    .snap-alt-row {
+      display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+      justify-content: center; margin-top: 18px;
       font-size: 14px; color: var(--lf-muted);
-      margin-top: 18px; justify-content: center;
     }
-    .snap-checkbox-row input { accent-color: var(--lf-primary); width: 18px; height: 18px; }
+    .snap-alt-row .snap-text-link { margin-top: 0; font-size: 14px; }
 
     .snap-ident-card {
       display: flex; align-items: center; gap: 14px;
@@ -574,7 +579,6 @@ export class AuthComponent implements OnInit {
   readonly emailError = signal('');
   over18 = false;
   terms = false;
-  saveLoginInfo = true;
   showPass = signal(false);
   private next = '/home';
 

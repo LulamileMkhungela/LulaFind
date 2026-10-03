@@ -1,6 +1,7 @@
-import { Component, EventEmitter, Input, OnChanges, OnInit, Output, computed, inject, signal } from '@angular/core';
+import { AfterViewChecked, Component, EventEmitter, Input, OnChanges, OnInit, Output, ViewChild, computed, inject, signal } from '@angular/core';
+import type { ElementRef } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
-import { DEFAULT_REACTION, Post, POST_TYPE_META, REACTIONS, ReactionKind, UserProfile, isReaction, provinceName } from '../../core/models/types';
+import { DEFAULT_REACTION, DEFAULT_REACTION_LABEL, Comment, Post, POST_TYPE_META, REACTIONS, ReactionKind, UserProfile, isReaction, provinceName } from '../../core/models/types';
 import { alreadySaid, compact, headingIsNew, timeAgo } from '../../core/utils/format';
 import { AvatarComponent } from './avatar.component';
 import { IconComponent } from './icon.component';
@@ -93,9 +94,11 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
         <!-- A repost: the reposter's own words, then the original inside a frame. -->
         @if (post.body.trim()) {
           <div class="fb-card-body fb-card-body--thoughts" [routerLink]="'/post/' + post.id">
-            <p class="fb-post-text" [class.fb-clamp]="!expanded()">{{ post.body }}</p>
-            @if (longBody() && !expanded()) {
+            <p class="fb-post-text" #bodyEl [class.fb-clamp]="!expanded()">{{ post.body }}</p>
+            @if (!expanded() && textOverflows()) {
               <button class="fb-readmore" (click)="toggleExpand($event)">…see more</button>
+            } @else if (expanded() && textOverflows()) {
+              <button class="fb-readmore" (click)="toggleExpand($event)">see less</button>
             }
           </div>
         }
@@ -113,6 +116,8 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
             <p class="fb-embed__text">{{ o.body }}</p>
             @if (o.poster?.media?.src) {
               <img class="fb-embed__img fb-embed__poster" [src]="o.poster!.media.src" [alt]="'LulaFind poster: ' + o.title" loading="lazy" />
+            } @else if (o.media.length && o.media[0].kind === 'video') {
+              <video class="fb-embed__img" [src]="o.media[0].src" muted playsinline preload="metadata"></video>
             } @else if (o.media.length) { <img class="fb-embed__img" [src]="o.media[0].src" [alt]="o.title" loading="lazy" /> }
           </a>
         } @else {
@@ -144,15 +149,24 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
             <span>Last seen: {{ post.lastSeenWhere || post.town }}</span>
           </div>
         }
-        <p class="fb-post-text" [class.fb-clamp]="!expanded()">{{ post.body }}</p>
-        @if (longBody() && !expanded()) {
+        <p class="fb-post-text" #bodyEl [class.fb-clamp]="!expanded()">{{ post.body }}</p>
+        @if (!expanded() && textOverflows()) {
           <button class="fb-readmore" (click)="toggleExpand($event)">…see more</button>
+        } @else if (expanded() && textOverflows()) {
+          <button class="fb-readmore" (click)="toggleExpand($event)">see less</button>
         }
       </div>
 
       @if (post.poster?.media?.src) {
         <div class="fb-media fb-media--poster" [routerLink]="'/post/' + post.id">
           <img class="fb-media-img" [src]="post.poster!.media.src" [alt]="'LulaFind poster: ' + post.title" loading="lazy" />
+        </div>
+      } @else if (post.media.length === 1 && post.media[0].kind === 'video') {
+        <!-- One video: its own controls are the point, so it is not wrapped in
+             the card's link - tapping play must play, not navigate. -->
+        <div class="fb-media">
+          <video class="fb-media-video" [src]="post.media[0].src" controls playsinline preload="metadata"
+                 [attr.aria-label]="'Video attached to: ' + post.title"></video>
         </div>
       } @else if (post.media.length) {
         <div class="fb-media" [routerLink]="'/post/' + post.id">
@@ -162,7 +176,11 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
             <div class="fb-grid" [attr.data-count]="visibleMedia().length">
               @for (m of visibleMedia(); track m.id; let i = $index) {
                 <div class="fb-grid__tile">
-                  <img [src]="m.src" [alt]="m.caption ?? ''" loading="lazy" />
+                  @if (m.kind === 'video') {
+                    <video [src]="m.src" muted playsinline preload="metadata" [attr.aria-label]="'Video: ' + post.title"></video>
+                  } @else {
+                    <img [src]="m.src" [alt]="m.caption ?? ''" loading="lazy" />
+                  }
                   @if (i === visibleMedia().length - 1 && extraMedia() > 0) {
                     <span class="fb-grid__more">+{{ extraMedia() }}</span>
                   }
@@ -187,9 +205,48 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
           </div>
           <div class="fb-stats-right">
             @if (post.commentCount > 0) { <span>{{ compact(post.commentCount) }} {{ post.commentCount === 1 ? 'comment' : 'comments' }}</span> }
+            @if (post.commentCount > 0 && post.shares > 0) { <span class="fb-dot">·</span> }
             @if (post.shares > 0) { <span>{{ compact(post.shares) }} {{ post.shares === 1 ? 'repost' : 'reposts' }}</span> }
           </div>
         </div>
+      }
+
+      <!-- The action bar this component's own header describes: react (hold
+           for the tray) - Comment - Repost - Send. It went missing from the
+           markup, so a post in the feed had no way to be reacted to or
+           commented on even though every handler below still existed. -->
+      <div class="fb-actions" (click)="$event.stopPropagation()">
+        <button class="fb-act" type="button" [class.on]="!!myReaction()"
+                (click)="quickReact()" (contextmenu)="openReactions($event)"
+                [attr.aria-label]="myReaction() ? 'Your reaction: ' + reactionWord() : 'Like'">
+          <lf-reaction-icon [kind]="myReaction() ?? defaultReaction" [size]="20" />
+          <span>{{ reactionWord() }}</span>
+        </button>
+        <button class="fb-act" type="button" (click)="comment.emit()" aria-label="Comment">
+          <lf-icon name="comment" [size]="20" /><span>Comment</span>
+        </button>
+        <button class="fb-act" type="button" (click)="onRepost()" aria-label="Repost">
+          <lf-icon name="repost" [size]="20" /><span>Repost</span>
+        </button>
+        <button class="fb-act" type="button" (click)="onSend()" aria-label="Send">
+          <lf-icon name="send" [size]="19" /><span>Send</span>
+        </button>
+      </div>
+
+      <!-- LinkedIn's comment preview: the most-relevant comment sits under the
+           action bar, so the conversation is visible without opening the post. -->
+      @if (topComment(); as c) {
+        <a class="fb-comment" [routerLink]="'/post/' + post.id">
+          <lf-avatar [src]="commenterAvatar(c)" [name]="commenterName(c)" [size]="32" />
+          <div class="fb-comment__body">
+            <span class="fb-comment__who">{{ commenterName(c) }}</span>
+            <p class="fb-comment__text">{{ c.body }}</p>
+            <span class="fb-comment__meta">
+              {{ timeAgo(c.createdAt) }}
+              @if (c.upvotes > 0) { <span class="fb-dot">·</span> {{ compact(c.upvotes) }} {{ c.upvotes === 1 ? 'like' : 'likes' }} }
+            </span>
+          </div>
+        </a>
       }
 
       @if (post.chatEnabled && !isMine() && !post.repostOf) {
@@ -315,12 +372,13 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
 
     .fb-media { width: 100%; overflow: hidden; background: var(--lf-card-2); cursor: pointer; }
     .fb-media-img { width: 100%; object-fit: cover; max-height: 520px; display: block; }
+    .fb-media-video { width: 100%; max-height: 520px; display: block; background: #000; }
     .fb-media--poster { background: #101116; }
     .fb-media--poster .fb-media-img { object-fit: contain; max-height: 720px; }
     .fb-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2px; }
     .fb-grid[data-count="3"] .fb-grid__tile:first-child { grid-column: 1 / -1; aspect-ratio: 2 / 1; }
     .fb-grid__tile { position: relative; aspect-ratio: 1 / 1; overflow: hidden; }
-    .fb-grid__tile img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .fb-grid__tile img, .fb-grid__tile video { width: 100%; height: 100%; object-fit: cover; display: block; }
     .fb-grid__more {
       position: absolute; inset: 0;
       display: flex; align-items: center; justify-content: center;
@@ -375,7 +433,35 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
       display: inline-flex; align-items: center; justify-content: center;
       box-shadow: 0 0 0 2px var(--lf-card);
     }
-    .fb-stats-right { display: flex; align-items: center; gap: 12px; }
+    .fb-stats-right { display: flex; align-items: center; gap: 6px; }
+    /* The comment preview under the action bar, LinkedIn's most-relevant comment. */
+    .fb-comment {
+      display: flex; gap: 8px; align-items: flex-start;
+      margin: 0 16px; padding: 10px 0 12px;
+      border-top: 1px solid var(--lf-line);
+      color: inherit; text-decoration: none;
+    }
+    .fb-comment__body { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 2px; }
+    .fb-comment__who { font-size: 13.5px; font-weight: 600; }
+    .fb-comment__text {
+      margin: 0; font-size: 13.5px; line-height: 1.4;
+      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    }
+    .fb-comment__meta { font-size: 12.5px; color: var(--lf-muted); display: flex; align-items: center; gap: 5px; }
+
+    /* React - Comment - Repost - Send, the bar LinkedIn puts under every post. */
+    .fb-actions {
+      display: flex; align-items: center; margin: 6px 8px 8px; padding-top: 2px;
+      border-top: 1px solid var(--lf-line-soft);
+    }
+    .fb-act {
+      flex: 1 1 0; min-width: 0; height: 40px; border: 0; background: transparent; color: var(--lf-muted);
+      font-family: inherit; font-size: 13.5px; font-weight: 600; cursor: pointer; border-radius: 6px;
+      display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    }
+    .fb-act:hover, .fb-act:active { background: var(--lf-hover); }
+    .fb-act.on { color: var(--lf-primary); }
+    @media (max-width: 380px) { .fb-act { font-size: 12px; gap: 4px; } }
 
     .fb-chat-cta {
       display: flex; align-items: center; justify-content: center; gap: 8px;
@@ -388,7 +474,10 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
 
   `]
 })
-export class PostCardComponent implements OnInit, OnChanges {
+export class PostCardComponent implements OnInit, OnChanges, AfterViewChecked {
+  /** The post text, measured to decide whether "…see more" is honest. */
+  @ViewChild('bodyEl') private bodyRef?: ElementRef<HTMLElement>;
+
   private router = inject(Router);
   private lookOn = signal<boolean | null>(null);
   @Input({ required: true }) post!: Post;
@@ -404,6 +493,9 @@ export class PostCardComponent implements OnInit, OnChanges {
   private data = inject(DataService);
   private auth = inject(AuthService);
   private actions = inject(PostActionsService);
+
+  /** Template-visible copy of DEFAULT_REACTION: module constants are not. */
+  readonly defaultReaction = DEFAULT_REACTION;
 
   /** Set once this card's post was deleted, so it disappears at once. */
   readonly gone = signal(false);
@@ -459,7 +551,14 @@ export class PostCardComponent implements OnInit, OnChanges {
   readonly authorRoute = computed(() =>
     this.post?.anonymous && !this.isMine() ? ['/post/' + this.post.id] : ['/user/' + (this.author?.id ?? '')]
   );
-  readonly longBody = computed(() => (this.post?.body?.trim().length ?? 0) > 120);
+  /**
+   * True when the text is actually cut off at three lines.
+   *
+   * This used to be `body.length > 120`, which is a guess: on a wide screen a
+   * 200-character post can fit, and "…see more" would be offered for a tap that
+   * changes nothing. Ask the element instead.
+   */
+  readonly textOverflows = signal(false);
 
   /** LinkedIn's second header line: the poster's own line about themselves. */
   readonly authorHeadline = computed(() =>
@@ -488,12 +587,44 @@ export class PostCardComponent implements OnInit, OnChanges {
   async ngOnInit(): Promise<void> {
     this.syncFollow();
     this.loadOriginal();
+    this.loadComment();
     this.saved.set(this.data.savedIds().includes(this.post?.id ?? ''));
   }
 
   ngOnChanges(): void {
     this.syncFollow();
     this.loadOriginal();
+    this.loadComment();
+  }
+
+  /**
+   * Ask for this post's comments once, for the preview under the card - but
+   * only when the post claims to have any. A card with no comments does no work.
+   */
+  private loadComment(): void {
+    if (this.post?.commentCount > 0) void this.data.loadCommentsFor(this.post.id);
+  }
+
+  /**
+   * The comment LinkedIn would show: the one the most people stood behind, and
+   * the oldest of those if there is a tie. Replies hang off a parent, so only
+   * top-level comments are candidates - a reply shown on its own reads as a
+   * sentence with its beginning cut off.
+   */
+  readonly topComment = computed<Comment | null>(() => {
+    const list = this.data.commentsFor(this.post?.id ?? '');
+    const top = list
+      .filter((c) => !c.parentId && c.body.trim())
+      .sort((a, b) => b.upvotes - a.upvotes || a.createdAt - b.createdAt);
+    return top[0] ?? null;
+  });
+
+  commenterName(c: Comment): string {
+    return this.data.authorOf(c.authorId)?.displayName ?? 'A neighbour';
+  }
+
+  commenterAvatar(c: Comment): string {
+    return this.data.avatarFor(this.data.authorOf(c.authorId));
   }
 
   /** LinkedIn's line above a post: who commented on it or reacted to it last. Not shown on your own activity or on reposts. */
@@ -586,6 +717,21 @@ export class PostCardComponent implements OnInit, OnChanges {
     }
   }
 
+  /**
+   * Runs after every render: while the text is clamped, does it overflow?
+   * Only written when the answer changes, so a render cannot chase itself.
+   */
+  ngAfterViewChecked(): void {
+    const el = this.bodyRef?.nativeElement;
+    if (!el || this.expanded()) return;
+    // Where there is no layout to measure (tests, a hidden tab), fall back to
+    // the length rule this used to use rather than claiming the text fits.
+    const over = el.clientHeight > 0
+      ? el.scrollHeight > el.clientHeight + 2
+      : (this.post?.body?.trim().length ?? 0) > 120;
+    if (over !== this.textOverflows()) this.textOverflows.set(over);
+  }
+
   toggleExpand(e: Event): void {
     e.preventDefault();
     e.stopPropagation();
@@ -594,6 +740,22 @@ export class PostCardComponent implements OnInit, OnChanges {
 
   onReact(kind: ReactionKind): void {
     this.vote.emit(kind);
+  }
+
+  /** The reaction this viewer already gave, or null. */
+  myReaction(): ReactionKind | null {
+    return this.post ? this.data.myVote(this.post) : null;
+  }
+
+  /** "Like" until you have reacted, the reaction's own name after that. */
+  reactionWord(): string {
+    const mine = this.myReaction();
+    return mine ? REACTIONS.find((r) => r.key === mine)?.label ?? DEFAULT_REACTION_LABEL : DEFAULT_REACTION_LABEL;
+  }
+
+  /** A tap applies the default reaction; holding opens the tray. */
+  quickReact(): void {
+    this.onReact(this.myReaction() ?? DEFAULT_REACTION);
   }
 
   onRepost(): void { void this.actions.openRepost(this.post); }
