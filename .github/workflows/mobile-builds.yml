@@ -12,6 +12,7 @@ on:
   push:
     branches:
       - arena/01a0fc52-lulafind
+      - arena/01a1032d-lulafind
     paths:
       - 'lulafind/src/**'
       - 'lulafind/android/**'
