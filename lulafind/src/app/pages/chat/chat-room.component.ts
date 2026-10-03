@@ -8,6 +8,7 @@ import { IonBackButton } from '@ionic/angular/ion-back-button';
 import { IonTextarea } from '@ionic/angular/ion-textarea';
 import { IconComponent } from '../../shared/components/icon.component';
 import { AvatarComponent } from '../../shared/components/avatar.component';
+import { MediaImageComponent, MediaVideoComponent } from '../../shared/components/media-image.component';
 import { ChatService } from '../../core/services/chat.service';
 import { DataService } from '../../core/services/data.service';
 import { AuthService } from '../../core/services/auth.service';
@@ -18,7 +19,7 @@ import { MediaService } from '../../core/services/media.service';
 @Component({
   selector: 'lf-chat-room',
   standalone: true,
-  imports: [IonContent, IonHeader, IonToolbar, IonButtons, IonBackButton, IonTextarea, RouterLink, IconComponent, AvatarComponent],
+  imports: [IonContent, IonHeader, IonToolbar, IonButtons, IonBackButton, IonTextarea, RouterLink, IconComponent, AvatarComponent, MediaImageComponent, MediaVideoComponent],
   template: `
     <ion-header [translucent]="false">
       <ion-toolbar>
@@ -73,9 +74,9 @@ import { MediaService } from '../../core/services/media.service';
                   }
                   <div class="bubble">
                     @if (m.media?.kind === 'video') {
-                      <video [src]="m.media!.src" controls playsinline preload="metadata" aria-label="Video sent in this chat"></video>
+                      <lf-media-video [src]="m.media!.src" label="Video sent in this chat" />
                     } @else if (m.media) {
-                      <a [href]="m.media.src" target="_blank" rel="noopener"><img [src]="m.media.src" alt="Photo sent in this chat" loading="lazy" /></a>
+                      <lf-media-img [src]="m.media.src" alt="Photo sent in this chat" />
                     }
                     @if (m.body) { <p>{{ m.body }}</p> }
                     <span class="msg-time">{{ clockTime(m.at) }}</span>

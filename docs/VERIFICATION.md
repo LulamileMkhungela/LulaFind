@@ -54,7 +54,7 @@ Post5Thandi MokoenaCommunity organiser. If you see something, say something. Ubu
 ### 11. A closed case, as the family sees it
 
 ```text
-Post5Thandi MokoenaCommunity organiser. If you see something, say something. Ubuntu. now  · Gauteng · Found · Home in Soweto  · 30 Sept 2026 Help find Thandi Mokoena in SowetoShe was last seen walking to the taxi rank after work on Tuesday evening.Have an ideaCommentRepostSendFound. The family confirmed it. To take the case off the police circulation list, complete a SAPS 92 with the investigating officer. Photo  Video Attachments stay with this commentNo comments yet. Start the conversation.LulaFind is a community tool. It does not replace SAPS. In an emergency call 10111.
+Post5Thandi MokoenaCommunity organiser. If you see something, say something. Ubuntu. now  · Gauteng · Found · Home in Soweto  · 03 Oct 2026 Help find Thandi Mokoena in SowetoShe was last seen walking to the taxi rank after work on Tuesday evening.Have an ideaCommentRepostSendFound. The family confirmed it. To take the case off the police circulation list, complete a SAPS 92 with the investigating officer. Photo  Video Attachments stay with this commentNo comments yet. Start the conversation.LulaFind is a community tool. It does not replace SAPS. In an emergency call 10111.
 ```
 
 ### 12a. Closed cases the *feed* holds - the reason the page cannot be built from the feed

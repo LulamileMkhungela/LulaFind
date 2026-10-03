@@ -5,6 +5,7 @@ import { alreadySaid, compact, headingIsNew, timeAgo, urgency } from '../../core
 import { AvatarComponent } from './avatar.component';
 import { IconComponent } from './icon.component';
 import { ReactionsSheetComponent } from './reactions-sheet.component';
+import { MediaImageComponent, MediaVideoComponent } from './media-image.component';
 import { ReactionButtonComponent } from './reaction-button.component';
 import { ReactionIconComponent } from './reaction-icon.component';
 import { DataService } from '../../core/services/data.service';
@@ -32,7 +33,8 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
 @Component({
   selector: 'lf-post-card',
   standalone: true,
-  imports: [RouterLink, IconComponent, AvatarComponent, ReactionButtonComponent, ReactionIconComponent, ReactionsSheetComponent],
+  imports: [RouterLink, IconComponent, AvatarComponent, ReactionButtonComponent, ReactionIconComponent,
+    ReactionsSheetComponent, MediaImageComponent, MediaVideoComponent],
   template: `
     @if (!gone()) {
     <article class="fb-card lf-fade-in"
@@ -87,7 +89,7 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
           <div class="fb-card-body fb-card-body--thoughts" [routerLink]="'/post/' + post.id">
             <p class="fb-post-text" [class.fb-clamp]="!expanded()">{{ post.body }}</p>
             @if (longBody()) {
-              <button class="fb-readmore" (click)="toggleExpand($event)">{{ expanded() ? 'See less' : 'Read more' }}</button>
+              <button class="fb-readmore" (click)="toggleExpand($event)" [attr.aria-expanded]="expanded()">…{{ expanded() ? 'see less' : 'see more' }}</button>
             }
           </div>
         }
@@ -104,8 +106,8 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
             <h3 class="fb-post-title">{{ o.title }}</h3>
             <p class="fb-embed__text">{{ o.body }}</p>
             @if (o.poster?.media?.src) {
-              <img class="fb-embed__img fb-embed__poster" [src]="o.poster!.media.src" [alt]="'LulaFind poster: ' + o.title" loading="lazy" />
-            } @else if (o.media.length) { <img class="fb-embed__img" [src]="o.media[0].src" [alt]="o.title" loading="lazy" /> }
+              <lf-media-img class="fb-embed__img fb-embed__poster" [src]="o.poster!.media.src" [alt]="'LulaFind poster: ' + o.title" fit="contain" />
+            } @else if (o.media.length) { <lf-media-img class="fb-embed__img" [src]="o.media[0].src" [alt]="o.title" /> }
           </a>
         } @else {
           <div class="fb-embed fb-embed--gone">
@@ -145,25 +147,33 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
         }
         <p class="fb-post-text" [class.fb-clamp]="!expanded()">{{ post.body }}</p>
         @if (longBody()) {
-          <button class="fb-readmore" (click)="toggleExpand($event)">
-            {{ expanded() ? 'See less' : 'Read more' }}
+          <button class="fb-readmore" (click)="toggleExpand($event)" [attr.aria-expanded]="expanded()">
+            …{{ expanded() ? 'see less' : 'see more' }}
           </button>
         }
       </div>
 
       @if (post.poster?.media?.src) {
         <div class="fb-media fb-media--poster" [routerLink]="'/post/' + post.id">
-          <img class="fb-media-img" [src]="post.poster!.media.src" [alt]="'LulaFind poster: ' + post.title" loading="lazy" />
+          <lf-media-img class="fb-media-img" fit="contain" [src]="post.poster!.media.src" [alt]="'LulaFind poster: ' + post.title" />
         </div>
       } @else if (post.media.length) {
         <div class="fb-media" [routerLink]="'/post/' + post.id">
           @if (post.media.length === 1) {
-            <img class="fb-media-img" [src]="post.media[0].src" [alt]="post.title" loading="lazy" />
+            @if (post.media[0].kind === 'video') {
+              <lf-media-video class="fb-media-img" [src]="post.media[0].src" label="Video in this post" />
+            } @else {
+              <lf-media-img class="fb-media-img" [src]="post.media[0].src" [alt]="post.title" />
+            }
           } @else {
             <div class="fb-grid" [attr.data-count]="visibleMedia().length">
               @for (m of visibleMedia(); track m.id; let i = $index) {
                 <div class="fb-grid__tile">
-                  <img [src]="m.src" [alt]="m.caption ?? ''" loading="lazy" />
+                  @if (m.kind === 'video') {
+                    <lf-media-video [src]="m.src" label="Video in this post" />
+                  } @else {
+                    <lf-media-img [src]="m.src" [alt]="m.caption ?? ''" />
+                  }
                   @if (i === visibleMedia().length - 1 && extraMedia() > 0) {
                     <span class="fb-grid__more">+{{ extraMedia() }}</span>
                   }
@@ -318,13 +328,15 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
     .fb-readmore:hover { text-decoration: underline; }
 
     .fb-media { width: 100%; overflow: hidden; background: var(--lf-card-2); cursor: pointer; }
-    .fb-media-img { width: 100%; object-fit: cover; max-height: 520px; display: block; }
+    /* The media components render their own <img>/<video>, so the frame is set on
+       their host: a phone-width card crops a tall photo the way LinkedIn does. */
+    .fb-media-img { width: 100%; max-height: 520px; display: block; overflow: hidden; }
     .fb-media--poster { background: #101116; }
-    .fb-media--poster .fb-media-img { object-fit: contain; max-height: 720px; }
+    .fb-media--poster .fb-media-img { max-height: 720px; }
     .fb-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2px; }
     .fb-grid[data-count="3"] .fb-grid__tile:first-child { grid-column: 1 / -1; aspect-ratio: 2 / 1; }
     .fb-grid__tile { position: relative; aspect-ratio: 1 / 1; overflow: hidden; }
-    .fb-grid__tile img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .fb-grid__tile lf-media-img, .fb-grid__tile lf-media-video { width: 100%; height: 100%; display: block; }
     .fb-grid__more {
       position: absolute; inset: 0;
       display: flex; align-items: center; justify-content: center;
@@ -509,7 +521,13 @@ export class PostCardComponent implements OnInit, OnChanges {
   readonly authorRoute = computed(() =>
     this.post?.anonymous && !this.isMine() ? ['/post/' + this.post.id] : ['/user/' + (this.author?.id ?? '')]
   );
-  readonly longBody = computed(() => (this.post?.body?.trim().length ?? 0) > 120);
+  /**
+   * Whether the caption is long enough that the three-line clamp is hiding
+   * something. Measuring the rendered <p> would be more honest, but it reads as
+   * zero-height in the test renderer, so this stays an estimate: three lines of
+   * a phone-width card is about 130 characters.
+   */
+  readonly longBody = computed(() => (this.post?.body?.trim().length ?? 0) > 130);
 
   /** LinkedIn's second header line: the poster's own line about themselves. */
   readonly authorHeadline = computed(() =>
@@ -632,7 +650,8 @@ export class PostCardComponent implements OnInit, OnChanges {
   }
 
   onRepost(): void { void this.actions.openRepost(this.post); }
-  onSend(): void { void this.actions.send(this.post); }
+  /** LinkedIn's Send: a person chooses who gets it, in a thread. Not the OS sheet. */
+  onSend(): void { this.actions.openSend(this.post); }
 
   onSave(): void {
     this.saved.update((s) => !s);

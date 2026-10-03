@@ -3,6 +3,7 @@ import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 import { Capacitor } from '@capacitor/core';
 import { MediaItem } from '../models/types';
 import { uid } from '../utils/format';
+import { jpegUnder, MAX_STORED_BYTES } from '../utils/media-encode';
 import { PlatformService } from './platform.service';
 
 /**
@@ -151,6 +152,18 @@ export class MediaService {
       const onChange = (): void => {
         const file = input.files?.[0];
         if (!file) { finish(null); return; }
+        // A clip cannot be shrunk in a browser and the bucket stops at 5 MB, so the
+        // only honest answer is no - said here, before the whole file is read into
+        // a data URL and the upload fails two seconds later with a message about bytes.
+        if (file.type.startsWith('video') && file.size > MAX_STORED_BYTES) {
+          const mb = (bytes: number): string => (bytes / 1_048_576).toFixed(1).replace(/\.0$/, '');
+          this.lastError.set(
+            `That clip is ${mb(file.size)} MB and LulaFind stores ${mb(MAX_STORED_BYTES)} MB at most. ` +
+            'Post a shorter clip, or a photo of the same thing.'
+          );
+          finish(null);
+          return;
+        }
         const reader = new FileReader();
         reader.onload = () => finish({
           id: uid('m'),
@@ -170,23 +183,16 @@ export class MediaService {
     });
   }
 
-  /** Downscales a data-uri so localStorage / Firestore documents stay small. */
-  async compress(src: string, maxDim = 1200): Promise<string> {
+  /**
+   * Downscales a data-uri so localStorage, the composer draft and the record
+   * itself stay small. `maxBytes` is the second limit: a phone photo that fits in
+   * pixels but not in bytes is stepped down further, so the upload never has to
+   * refuse it. A picture this browser cannot decode comes back unchanged and the
+   * upload layer makes the last attempt at the storage edge.
+   */
+  async compress(src: string, maxDim = 1200, maxBytes = 1_400_000): Promise<string> {
     if (!src.startsWith('data:image')) return src;
-    return new Promise((resolve) => {
-      const img = new Image();
-      img.onload = () => {
-        const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
-        const canvas = document.createElement('canvas');
-        canvas.width = Math.round(img.width * scale);
-        canvas.height = Math.round(img.height * scale);
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return resolve(src);
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        resolve(canvas.toDataURL('image/jpeg', 0.82));
-      };
-      img.onerror = () => resolve(src);
-      img.src = src;
-    });
+    const encoded = await jpegUnder(src, maxBytes, maxDim);
+    return encoded ?? src;
   }
 }

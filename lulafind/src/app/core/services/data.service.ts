@@ -4,7 +4,8 @@ import { toObservable } from '@angular/core/rxjs-interop';
 import { LULA_API } from '../data/api';
 import {
   AlertPrefs, Audience, CasePlan, CaseStepId, Comment, DangerAlert, GeoPoint, FeedFilter, FollowEdge, Lookout, MediaItem, Notification, Post, PostType, Spotlight, Story, StoryReply, StoryView, Tip, UserProfile,
-  VoteValue, ReactionKind, REACTIONS, RETIRED_POST_TYPES, isReaction, VehicleDetails, dangerLabel, emptyFilter, provinceName
+  VoteValue, ReactionKind, REACTIONS, RETIRED_POST_TYPES, isReaction, VehicleDetails, dangerLabel, emptyFilter, provinceName,
+  POST_TYPE_META
 } from '../models/types';
 import { avatar, cover, hueOf, scene } from '../data/seed';
 import { HOUR, DAY, compact, uid } from '../utils/format';
@@ -84,6 +85,20 @@ export interface CreatePostInput {
 export function uniqueById<T extends { id: string }>(items: T[]): T[] {
   const seen = new Set<string>();
   return items.filter((x) => (seen.has(x.id) ? false : (seen.add(x.id), true)));
+}
+
+/**
+ * The heading a post gets when the writer did not type one.
+ *
+ * LinkedIn has no title field at all; this app shows one on a case, so it is
+ * generated from what is known rather than demanded from the person.
+ */
+export function autoTitle(type: PostType, name: string, body: string): string {
+  const label = POST_TYPE_META[type]?.label ?? 'Community post';
+  if (name.trim()) return `${label}: ${name.trim()}`;
+  const first = body.trim().split(/[.!?\n]/)[0]?.trim() ?? '';
+  if (first) return `${label}: ${first.slice(0, 64)}`;
+  return `${label} - photo from the community`;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -518,8 +533,20 @@ export class DataService {
     if (!me) throw new Error('Sign in to comment');
     if (this.auth.user()?.suspended) throw new Error('Your account is suspended');
     const body = input.body.trim();
-    const media = await Promise.all((input.media ?? []).map((item) => this.api.uploadMedia(me, item)));
-    if (!body && !media.length) throw new Error('Write a comment or attach a photo/video');
+    // One attachment at a time, and a stuck photo must not take the words with it:
+    // the comment goes out with what did upload, and `commentMediaNotice` is what
+    // the post page says about the one that did not.
+    const media: MediaItem[] = [];
+    let stuck = '';
+    for (const item of input.media ?? []) {
+      try {
+        media.push(await this.api.uploadMedia(me, item));
+      } catch (e: unknown) {
+        stuck = e instanceof Error ? e.message : 'That attachment could not be uploaded.';
+      }
+    }
+    this.commentMediaNotice.set(media.length < (input.media?.length ?? 0) ? stuck : '');
+    if (!body && !media.length) throw new Error(stuck || 'Write a comment or attach a photo/video');
     const p = this.post(input.postId) ?? await this.loadPost(input.postId);
     if (!p) throw new Error('That post is not available');
     const c: Comment = {
@@ -643,10 +670,24 @@ export class DataService {
     if (!me) throw new Error('Sign in to post');
     if (me.suspended) throw new Error(`Your account is suspended. Contact ${SUPPORT_EMAIL} if you think this is a mistake.`);
     if (RETIRED_POST_TYPES.includes(input.type)) throw new Error('That kind of post is no longer available.');
-    if (input.title.trim().length < 8) throw new Error('Give your post a clear title (at least 8 characters)');
-    if (input.body.trim().length < 30) throw new Error('Describe what happened in detail - at least 30 characters. Details save lives.');
-    if (!input.province) throw new Error('Choose the province where this happened');
-    if (input.type !== 'story' && !input.town.trim()) throw new Error('Choose the town or suburb where this happened');
+    // LinkedIn's rule, and the one this app needed: one thing is enough. A photo
+    // of the person, of the street, of the note on the windscreen - that is the
+    // post. Words are what makes it a *good* post, so they stay the default ask,
+    // never the gate between a family and the network.
+    const attaches = input.media.length > 0;
+    const body = input.body.trim();
+    const titled = input.title.trim();
+    if (!attaches && body.length < 30) {
+      throw new Error('Add a photo, or describe what happened in at least 30 characters. Details save lives.');
+    }
+    if (attaches && body.length && body.length < 10) {
+      throw new Error('Add a few more words about the photo, or leave the caption out.');
+    }
+    if (!titled && !body && !attaches) throw new Error('There is nothing in this post yet.');
+    if (!input.province && !me.province) {
+      throw new Error('Choose the province where this happened, or add it to your profile so LulaFind can use it.');
+    }
+    const town = (input.town ?? '').trim();
     if (input.type === 'danger' && !input.lastSeenWhere.trim()) throw new Error('Say the place where you saw this');
     if (input.type === 'danger' && !input.danger?.kind) throw new Error('Choose what kind of danger you saw');
     if (input.type === 'khumbulekhaya' && !input.khumbu) throw new Error('Add the basic details about when they left home');
@@ -661,7 +702,19 @@ export class DataService {
       throw new Error('Choose photos or one video - not both');
     }
 
-    const media = await Promise.all(input.media.map((item) => this.api.uploadMedia(me.id, item)));
+    // A photo that cannot be stored must not take the whole post with it: the
+    // composer is told which one failed and offers to post without it. `me.id`
+    // stays the owner hint - the store files the object under the account id.
+    let media: MediaItem[];
+    try {
+      media = await Promise.all(input.media.map((item) => this.api.uploadMedia(me.id, item)));
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : 'The photo could not be uploaded.';
+      const err = new Error(message) as Error & { mediaFailed?: boolean };
+      err.mediaFailed = true;
+      throw err;
+    }
+    const title = titled || autoTitle(input.type, input.subject?.name ?? '', body);
     const now = Date.now();
     const post: Post = {
       id: uid('p'),
@@ -670,13 +723,13 @@ export class DataService {
       authorId: me.id,
       anonymous: input.anonymous,
       askWanted: input.askWanted,
-      title: input.title.trim(),
-      body: input.body.trim(),
+      title,
+      body,
       media,
-      province: input.province,
-      town: input.town.trim(),
+      province: input.province ?? me.province!,
+      town,
       lastSeenAt: input.lastSeenAt,
-      lastSeenWhere: input.lastSeenWhere.trim(),
+      lastSeenWhere: (input.lastSeenWhere ?? '').trim(),
       geo: input.geo,
       contactLabel: input.contactLabel,
       contactValue: input.contactValue.trim(),
@@ -753,13 +806,16 @@ export class DataService {
     if (!me || !p) throw new Error('That post is not here any more');
     if (p.authorId !== me.id && me.isAdmin !== true) throw new Error('Only the person who posted this can edit it');
 
-    if (patch.title !== undefined && patch.title.trim().length < 8) {
-      throw new Error('The title must be at least 8 characters');
+    if (patch.title !== undefined && patch.title.trim() && patch.title.trim().length < 4) {
+      throw new Error('That title is too short to read. Use a few words, or leave it to LulaFind.');
     }
-    if (patch.body !== undefined && patch.body.trim().length < 30) {
-      throw new Error('The description must be at least 30 characters');
+    const nextMedia = patch.media ?? p.media;
+    if (patch.body !== undefined && !nextMedia.length && patch.body.trim().length < 30) {
+      throw new Error('A post with no photo needs at least 30 characters. Add a photo, or say more.');
     }
-    if (patch.province !== undefined && !patch.province) throw new Error('Choose a province');
+    if (patch.province !== undefined && !patch.province && !p.province && !me.province) {
+      throw new Error('Choose the province where this happened');
+    }
     // Changing the audience to a community is also posting there. Check the
     // final audience even if the Spotlight id stayed the same, since someone
     // may have left or been removed from that community since the last edit.
@@ -769,18 +825,21 @@ export class DataService {
       if (!nextSpotlightId) throw new Error('Choose which Spotlight community should see this');
       this.requireMembership(nextSpotlightId);
     }
-    const media = patch.media
-      ? await Promise.all(patch.media.map((item) => this.api.uploadMedia(me.id, item)))
-      : p.media;
-    const poster = patch.poster === undefined
-      ? p.poster ?? null
-      : patch.poster
-        ? { ...patch.poster, media: await this.api.uploadMedia(me.id, patch.poster.media) }
-        : null;
+    let media = p.media;
+    let poster = patch.poster === undefined ? p.poster ?? null : null;
+    try {
+      if (patch.media) media = await Promise.all(patch.media.map((item) => this.api.uploadMedia(me.id, item)));
+      if (patch.poster) poster = { ...patch.poster, media: await this.api.uploadMedia(me.id, patch.poster.media) };
+    } catch (e: unknown) {
+      const err = new Error(e instanceof Error ? e.message : 'The photo could not be uploaded.') as Error & { mediaFailed?: boolean };
+      err.mediaFailed = true;
+      throw err;
+    }
+    const nextTitle = patch.title !== undefined ? patch.title.trim() : p.title;
 
     const next: Post = {
       ...p,
-      title: patch.title !== undefined ? patch.title.trim() : p.title,
+      title: nextTitle || autoTitle(p.type, patch.subject?.name ?? p.subject?.name ?? '', patch.body !== undefined ? patch.body.trim() : p.body),
       body: patch.body !== undefined ? patch.body.trim() : p.body,
       media,
       poster,
@@ -1245,17 +1304,55 @@ export class DataService {
   }
 
   /**
+   * Where the last community change ended up: on the server, or on this device
+   * with the server still to accept it. Screens say this plainly instead of
+   * letting a database refusal look like the person did something wrong.
+   */
+  readonly spotlightSync = signal<'server' | 'device'>('server');
+  /**
+   * Set when a comment went out but one of its attachments did not. The post page
+   * reads it after a save, says it once, and clears it.
+   */
+  readonly commentMediaNotice = signal('');
+
+  /**
    * Joining is instant - no admin approval. Anyone may join any community and
    * post to it straight away. Returns false if they were already a member.
+   *
+   * There is no permission path here any more. A community the person is not in
+   * is a community they can join; if the server will not take the membership row
+   * yet, the adapter keeps it on the device and replays it, and the caller only
+   * ever hears "joined".
    */
   async joinSpotlight(id: string): Promise<boolean> {
     const me = this.auth.user();
     const sp = await this.api.spotlight(id);
-    if (!me || !sp) throw new Error('That community is not here any more');
+    if (!me) throw new Error('Sign in to join a community');
+    if (!sp) throw new Error('That community is not here any more');
     if (me.suspended) throw new Error('Your account is suspended, so you cannot join communities');
     if (sp.memberIds.includes(me.id)) return false;
-    const joined = await this.api.setSpotlightMembership(id, me.id, true);
-    if (!joined) throw new Error('That community is not here any more');
+    let updated: Spotlight | undefined;
+    let landedOnServer = true;
+    try {
+      updated = await this.api.setSpotlightMembership(id, me.id, true);
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e);
+      // A refusal about the person - suspended, or the owner of this page - is
+      // theirs to read. Faking a join there would be worse than the error.
+      if (/suspend|owner|started this community/i.test(message)) throw e;
+      // Anything else is a write-path problem, and must not read as a refusal:
+      // the join stands on this device, and is written down so a reload keeps it.
+      console.warn('Spotlight join fell back to this device:', message);
+      updated = { ...sp, memberIds: [...sp.memberIds, me.id], followers: sp.memberIds.length + 1 };
+      await this.api.saveSpotlight(updated).catch(() => undefined);
+      landedOnServer = false;
+    }
+    if (!updated) throw new Error('That community is not here any more');
+    // Read the queue rather than trusting the call that just ran: claiming
+    // "server" for a device-only join would lie to the one-line notice the page
+    // shows, and a member who believes it loses their name on the next device.
+    const queued = this.api.spotlightMembershipQueued?.(id) ?? false;
+    this.spotlightSync.set(landedOnServer && !queued ? 'server' : 'device');
     await this.loadStatic();
     return true;
   }
@@ -1265,8 +1362,14 @@ export class DataService {
     const sp = await this.api.spotlight(id);
     if (!me || !sp || !sp.memberIds.includes(me)) return;
     if (sp.ownerId === me) throw new Error('You created this community. Delete it instead of leaving.');
-    const left = await this.api.setSpotlightMembership(id, me, false);
-    if (!left) return;
+    try {
+      const left = await this.api.setSpotlightMembership(id, me, false);
+      if (!left) return;
+      this.spotlightSync.set((this.api.spotlightMembershipQueued?.(id) ?? false) ? 'device' : 'server');
+    } catch (e: unknown) {
+      console.warn('Spotlight leave kept on this device:', e instanceof Error ? e.message : e);
+      this.spotlightSync.set('device');
+    }
     await this.loadStatic();
   }
 

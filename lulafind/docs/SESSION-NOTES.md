@@ -1,3 +1,45 @@
+# Session state — 2026-10-03 (round 4)
+
+Four complaints, one audit: joining a Spotlight said "permission denied"; a photo
+upload errored; a photo alone was not allowed to be a post; the Spotlight pages
+were not a community. `docs/DESIGN-audit-and-fixes.md` has the causes and the
+reasoning for each. What belongs here is where the code moved.
+
+- **A membership never depends on one RPC again.** `SupabaseApi.setSpotlightMembership`
+  goes RPC → narrow row update (CAS on `records.updated_at`) → device queue, and only
+  a refusal *about the person* (suspended, owner leaving) still reaches them.
+  `DataService.spotlightSync()` is what a page shows as a one-line notice, and it is
+  read from the queue, not from which call just ran. `spotlightMembershipQueued()` is
+  the API seam for that; Mock and Supabase implement it, Firebase inherits false.
+- **Media has one size ceiling and no `fetch()`.** `core/utils/media-encode.ts`
+  (`jpegUnder`, `storableBlob`, `dataUrlToBlob`, `approxBytes`, `MAX_STORED_BYTES`)
+  replaced the `fetch(data:)` call that made every upload throw; the picker refuses an
+  over-ceiling clip by size before reading it; `MAX_UPLOAD_BYTES` derives from the same
+  number, so the client cannot promise past the bucket's 5 MB.
+- **`lf-media-img` / `lf-media-video`** resolve `storage://photos/…` at render time,
+  retry an expired signature once, and then say "not available here yet" with a retry.
+  They replaced raw `<img>`/`<video>` in the feed card, the post page (post media, the
+  repost embed, comments and replies) and chat. Both extend one `@Directive` base — an
+  undecorated abstract class is invisible to the template compiler (NG8002).
+- **A photo is a post.** `createPost` needs title, body or attachment — one of them;
+  `autoTitle()` derives the headline; province is inherited from the profile and the
+  town is optional. A stuck attachment no longer takes the post down with it
+  (`MediaUploadError.recoverable` → "Post without the photo" / "Try again"), and
+  comments upload each file on their own (`commentMediaNotice`).
+- **Send is a sheet** (`lf-send-sheet`, mounted once in `app.component.ts`, driven by
+  `PostActionsService.sendTarget()`): the post, the mutual-follow list, a note, Send.
+  `ChatService.sendPost` returns false when it is not allowed instead of throwing.
+- **Spotlight rebuilt as a hub and a directory** (`pages/spotlight/spotlight-detail.component.ts`,
+  `pages/tabs/spotlight.component.ts`), with `?spotlight=` prefilling the composer's
+  audience and `?tab=members` deep-linking the member list.
+- **SQL that is safe to re-run**: `"lula spotlight join"` (a member may rewrite a
+  spotlight row only to move themselves in `memberIds`), the membership function's
+  execute grant, and check 9 in `check-setup.sql`.
+
+The card's `…see more` threshold went 120 → 150 → **130**: it is an estimate of three
+clamped lines on a phone-width card, and the test renderer reports zero height, so
+measuring is not available here. `components.spec.ts` pins the label's wording.
+
 # Session state — 2026-09-29 (round 3)
 
 ## Post card, checked against LinkedIn line by line

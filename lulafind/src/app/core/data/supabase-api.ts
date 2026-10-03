@@ -5,6 +5,7 @@ import { LulaApi, SavePostOptions } from './api';
 import { answerBlocker } from '../utils/lookout';
 import { SUPABASE_URL, SUPABASE_KEY, supabaseNotice } from './supabase-client';
 import { LocalDb } from './local-db';
+import { approxBytes, MAX_STORED_BYTES, mimeOfDataUrl, storableBlob } from '../utils/media-encode';
 import {
   ChatMessage, ChatThread, Lookout, Comment, FeedFilter, FollowEdge, MediaItem,
   Notification, Post, Spotlight, Story, StoryReply, StoryView, Tip, UserProfile
@@ -20,6 +21,58 @@ import {
  */
 function isIdentityError(message: string): boolean {
   return /row-level security|invalid JWT|JWT expired|not authenticated|401|PGRST301/i.test(message ?? '');
+}
+
+/**
+ * True when the database refused because it could not see an account at all.
+ *
+ * Every policy compares the caller with `lula_uid()`, and that helper is NULL
+ * until the Firebase ID token reaches Postgres - which it does not while the
+ * address on the account is still unverified. Telling this apart from a genuine
+ * "not allowed" is the difference between an error a person can act on and one
+ * they cannot.
+ */
+function isNoIdentityError(message: string): boolean {
+  return /invalid JWT|JWT expired|not authenticated|401|PGRST301/i.test(message ?? '');
+}
+
+/** A policy or a grant said no. Never shown to a person in these words. */
+function isPermissionError(message: string): boolean {
+  return /permission denied|new row violates|row-level security|insufficient_privilege|42501|403|forbidden/i.test(message ?? '');
+}
+
+/**
+ * The stored procedure is not in this database (or not in its schema cache).
+ *
+ * `supabase/schema.sql` and `supabase/post-interactions.sql` define these, and
+ * a project that has not had them re-run answers an RPC call with 404. Joining a
+ * Spotlight and reacting both used to die there; both now fall back to a plain
+ * row write, which needs no grant and no schema cache.
+ */
+function isMissingFunctionError(message: string): boolean {
+  return /Could not find the function|does not exist|PGRST202|PGRST404|not found/i.test(message ?? '');
+}
+
+/** The bucket's `file_size_limit` (supabase/schema.sql), minus a margin so a retry never sits on the edge. */
+// One source of truth for the size limit: the bucket's own ceiling, held in
+// `media-encode.ts` so the picker can refuse a too-long clip out loud instead of
+// letting Storage fail the upload with a message about bytes.
+const MAX_UPLOAD_BYTES = MAX_STORED_BYTES;
+
+/**
+ * A photo or video could not be stored.
+ *
+ * `recoverable` means the person can still get their post out: the text is
+ * fine, only the attachment is stuck, so the composer offers "Post without the
+ * photo" instead of failing the whole submission.
+ */
+export class MediaUploadError extends Error {
+  readonly recoverable: boolean;
+  constructor(message: string, recoverable = false) {
+    super(message);
+    this.name = 'MediaUploadError';
+    this.recoverable = recoverable;
+  }
 }
 
 /**
@@ -48,6 +101,12 @@ export interface IdentityReportFields {
 export interface IdentityReport extends IdentityReportFields {
   /** Plain English, ready to paste into a bug report. */
   message: string;
+}
+
+/** A Spotlight as stored: the payload the app uses, plus the row stamp to write back on. */
+interface SpotlightRow {
+  spotlight: Spotlight | undefined;
+  at: number;
 }
 
 /** Turns the report above into the next action to take. */
@@ -109,6 +168,9 @@ export class SupabaseApi implements LulaApi {
     if (typeof window !== 'undefined') {
       (window as unknown as Record<string, unknown>)['__lulaDebugWhoAmI'] = () => this.whoAmI();
     }
+    // A join this device could not push is offered to the server again as soon as
+    // there is a server to talk to, so "Join" never has to be redone by hand.
+    await this.syncPendingMemberships().catch(() => 0);
     try {
       this.channel = this.client
         .channel('records-changes')
@@ -180,13 +242,43 @@ export class SupabaseApi implements LulaApi {
     }
   }
 
+  /**
+   * Signed URLs are good for an hour and cost a round trip each. Reading a feed
+   * of thirty posts used to fire thirty of them, and one that failed blanked the
+   * image. So: cache them, and on failure keep the `storage://` marker (which the
+   * card can retry) rather than an empty string (which shows nothing for ever).
+   */
+  private readonly signedCache = new Map<string, { url: string; at: number }>();
+  private static readonly SIGN_TTL = 50 * 60 * 1000;
+
   private async signedStorageUrl(path: string): Promise<string | null> {
-    const { data, error } = await this.client.storage.from('photos').createSignedUrl(path, 3600);
-    if (error || !data?.signedUrl) {
-      console.warn('Could not sign a private photo URL:', error?.message ?? 'no signed URL returned');
+    const hit = this.signedCache.get(path);
+    if (hit && Date.now() - hit.at < SupabaseApi.SIGN_TTL) return hit.url;
+    try {
+      const { data, error } = await this.client.storage.from('photos').createSignedUrl(path, 3600);
+      if (error || !data?.signedUrl) {
+        console.warn('Could not sign a private photo URL:', error?.message ?? 'no signed URL returned');
+        return null;
+      }
+      this.signedCache.set(path, { url: data.signedUrl, at: Date.now() });
+      return data.signedUrl;
+    } catch (e: any) {
+      console.warn('Could not sign a private photo URL:', e?.message);
       return null;
     }
-    return data.signedUrl;
+  }
+
+  /** `media.src` as stored: a signed URL for now, or the marker to re-sign from. */
+  private async mediaSrc(stored: string | undefined): Promise<string> {
+    const src = stored ?? '';
+    const path = this.storagePath(src);
+    if (!path) return src;
+    return (await this.signedStorageUrl(path)) ?? `storage://photos/${path}`;
+  }
+
+  /** Public entry point for a screen holding a `storage://` marker. */
+  async resolveMedia(src: string): Promise<string> {
+    return this.mediaSrc(src);
   }
 
   private async signRecordMedia<T>(collection: string, record: T): Promise<T> {
@@ -198,8 +290,8 @@ export class SupabaseApi implements LulaApi {
     const signItem = async (item: MediaItem): Promise<MediaItem> => {
       const path = this.storagePath(item.src);
       if (!path) return item;
-      const src = await this.signedStorageUrl(path);
-      return { ...item, src: src ?? '' };
+      const src = await this.mediaSrc(item.src);
+      return src === item.src ? item : { ...item, src };
     };
     const media = Array.isArray(value.media)
       ? await Promise.all(value.media.map((item) => signItem(item)))
@@ -381,15 +473,21 @@ export class SupabaseApi implements LulaApi {
    * case gets its own message and its own banner.
    */
   private explain(collection: string, message: string, owner: string | null): string {
-    if (isIdentityError(message)) {
+    if (isNoIdentityError(message)) {
       supabaseNotice.set(
-        'That save was refused by the database, so nothing was stored. Try again. ' +
-        'If it keeps happening, sign out and sign in so the database can see this account.'
+        'Nothing was saved: the database could not see this account. Confirm the email address on the account, ' +
+        'then sign out and back in.'
       );
-      return 'Nothing was saved. Try again — you do not need to sign out first.';
+      return 'Nothing was saved yet. Sign out and back in so the database can see this account, then try again.';
     }
-    if (/row-level security/i.test(message)) {
-      return `LulaFind could not save this because the database would not accept it. Please try again.`;
+    if (isPermissionError(message)) {
+      // A row-level-security refusal is the backend's business. The person only
+      // needs to know the text is safe and what to do next.
+      supabaseNotice.set(
+        'The database refused that change, so nothing was lost. Trying again usually works; ' +
+        'if it does not, sign out and back in, and the account will be recognised again.'
+      );
+      return 'Nothing was saved. Try once more - if it keeps failing, sign out and back in first.';
     }
     if (/duplicate key/i.test(message)) {
       return 'That already exists.';
@@ -640,22 +738,67 @@ export class SupabaseApi implements LulaApi {
       next: this.persistRecordMedia('posts', p)
     });
     if (error) {
-      // Admins moderate with a direct write.
-      if (/Authors and admins/i.test(error.message)) {
+      // Admins moderate with a direct write, and so does any project that has not
+      // had supabase/post-interactions.sql re-run: the RPC is missing or the
+      // account has no EXECUTE grant on it. Say nothing about grants to the person
+      // - try the write they are allowed to make themselves and report the result.
+      if (/Authors and admins/i.test(error.message) || isMissingFunctionError(error.message) || isPermissionError(error.message)) {
         return this.upsert('posts', p, p.authorId, options);
       }
-      throw new Error(error.message);
+      throw new Error(this.explain('posts', error.message, me));
     }
     this.rx.next(++this.tick);
     return true;
   }
 
+  /**
+   * File a post in a Spotlight, or take it out again.
+   *
+   * The post is already published by the time this runs, so a community index
+   * that will not take the change is a warning and a local copy - never a red
+   * error over a case the person just shared.
+   */
   async linkSpotlightPost(spotlightId: string, postId: string, linking: boolean): Promise<void> {
-    const { error } = await this.client.rpc('lula_link_spotlight_post', {
-      spotlight_id: spotlightId, post_id: postId, linking
-    });
-    if (error) throw new Error(`Could not update the Spotlight: ${error.message}`);
-    this.rx.next(++this.tick);
+    const apply = async (): Promise<{ error: { message?: string } | null }> => {
+      const { error } = await this.client.rpc('lula_link_spotlight_post', {
+        spotlight_id: spotlightId, post_id: postId, linking
+      });
+      return { error: error ?? null };
+    };
+    let result = await apply();
+    if (result.error && isIdentityError(result.error.message ?? '')) {
+      await this.refreshIdentity();
+      result = await apply();
+    }
+    if (!result.error) {
+      this.localDb.linkSpotlightPost(spotlightId, postId, linking);
+      this.rx.next(++this.tick);
+      return;
+    }
+    const message = result.error.message ?? '';
+    if (isMissingFunctionError(message) || isPermissionError(message) || isIdentityError(message)) {
+      // No RPC, or no grant on it: only the community owner may rewrite the row,
+      // so try the plain write and let the local index carry it if that fails too.
+      const sp = await this.getOne<Spotlight>('spotlights', spotlightId);
+      if (sp) {
+        const postIds = linking
+          ? [...new Set([postId, ...sp.postIds])]
+          : sp.postIds.filter((id) => id !== postId);
+        const { error } = await this.client
+          .from('records')
+          .update({ payload: this.persistRecordMedia('spotlights', { ...sp, postIds }), updated_at: Date.now() })
+          .eq('collection', 'spotlights')
+          .eq('id', spotlightId);
+        if (!error) {
+          this.rx.next(++this.tick);
+          return;
+        }
+        console.warn('Spotlight index kept on this device only:', error.message);
+      }
+      this.localDb.linkSpotlightPost(spotlightId, postId, linking);
+      return;
+    }
+    throw new Error(`Could not update the Spotlight: ${message}`);
   }
 
   async deletePost(id: string): Promise<void> {
@@ -747,26 +890,202 @@ export class SupabaseApi implements LulaApi {
   // ─── spotlights ──────────────────────────────────────────────────────────
 
   async spotlights(): Promise<Spotlight[]> {
-    return this.getAll<Spotlight>('spotlights');
+    const remote = await this.getAll<Spotlight>('spotlights');
+    const pending = this.localDb.pendingSpotlightMemberships();
+    if (!pending.length || !remote.length) return remote;
+    // A join this device has not managed to push yet is still a join as far as
+    // this person is concerned - the composer and the Spotlight tab read this list.
+    return remote.map((sp) => {
+      const wanted = pending.find((op) => op.spotlightId === sp.id);
+      if (!wanted) return sp;
+      const memberIds = wanted.joining
+        ? (sp.memberIds.includes(wanted.memberId) ? sp.memberIds : [...sp.memberIds, wanted.memberId])
+        : sp.memberIds.filter((id) => id !== wanted.memberId);
+      return memberIds.length === sp.memberIds.length ? sp : { ...sp, memberIds, followers: memberIds.length };
+    });
   }
 
   async spotlight(id: string): Promise<Spotlight | undefined> {
     return this.getOne<Spotlight>('spotlights', id);
   }
 
-  async saveSpotlight(s: Spotlight): Promise<void> {
-    await this.upsert('spotlights', s, s.ownerId);
+  /**
+   * Only the fields the community's own members are allowed to move.
+   *
+   * `lula spotlight join` (supabase/schema.sql) lets a signed-in member update a
+   * spotlight row provided nothing but `memberIds`/`followers` changed, which is
+   * what this writes. It is the fallback for the RPC in two cases that used to
+   * end in a refusal on the screen: the function is not installed in this project
+   * yet, and the account has no EXECUTE grant on it.
+   */
+  private async updateSpotlightMembershipRow(id: string, memberIds: string[]): Promise<boolean> {
+    const write = async (row: SpotlightRow): Promise<boolean> => {
+      if (!row.spotlight) return false;
+      const payload: Spotlight = { ...row.spotlight, memberIds, followers: memberIds.length };
+      const { data, error } = await this.client
+        .from('records')
+        .update({ payload: this.persistRecordMedia('spotlights', payload), updated_at: Date.now() })
+        .eq('collection', 'spotlights')
+        .eq('id', id)
+        .eq('updated_at', row.at)
+        .select('id');
+      if (error || !(data ?? []).length) return false;
+      this.rx.next(++this.tick);
+      supabaseNotice.set('');
+      return true;
+    };
+    // Compare-and-set on the row's own updated_at: two people joining in the same
+    // second must not drop each other. On a miss, read the newest copy once more.
+    if (await write(await this.spotlightRow(id))) return true;
+    return write(await this.spotlightRow(id));
   }
 
+  /** The community as stored, plus the row stamp needed to write it back safely. */
+  private async spotlightRow(id: string): Promise<SpotlightRow> {
+    try {
+      const { data, error } = await this.client
+        .from('records')
+        .select('payload,updated_at')
+        .eq('collection', 'spotlights')
+        .eq('id', id)
+        .maybeSingle();
+      if (error || !data) return { spotlight: await this.getOne<Spotlight>('spotlights', id), at: 0 };
+      return { spotlight: data.payload as Spotlight, at: Number(data.updated_at ?? 0) };
+    } catch {
+      return { spotlight: await this.getOne<Spotlight>('spotlights', id), at: 0 };
+    }
+  }
+
+  /**
+   * Join or leave a Spotlight.
+   *
+   * This never throws a database refusal at the person holding the phone. The
+   * three ways it used to end in "permission denied" - no EXECUTE grant on the
+   * function, the function not installed in this project, and a row-level
+   * security policy that only lets the community *owner* edit a spotlight - are
+   * each tried in turn, and when all three fail the membership is kept on this
+   * device and pushed again on the next refresh. The person gets in either way;
+   * the difference is only who holds the list for the moment.
+   */
   async setSpotlightMembership(id: string, memberId: string, joining: boolean): Promise<Spotlight | undefined> {
-    if ((await this.currentUid()) !== memberId) throw new Error('Sign in to change your Spotlight membership');
+    const dbUid = await this.currentUid();
+    if (!dbUid) {
+      this.localDb.queueSpotlightMembership(id, memberId, joining);
+      supabaseNotice.set(joining
+        ? 'You joined this community on this device. The member list catches up as soon as the server accepts your account - sign out and back in to speed that up.'
+        : 'You left this community on this device. The member list catches up when the server is reachable.');
+      return this.localDb.setSpotlightMembership(id, memberId, joining);
+    }
+    // The server's list holds account ids. When this app is signed in under a
+    // profile id that is not the account id, both are kept in step locally so the
+    // tab, the composer and the member count agree with what the server now says.
+    const server = await this.rpcThenRow(id, dbUid, joining);
+    if (server) {
+      this.localDb.clearPendingSpotlightMembership(id);
+      const memberIds = joining
+        ? [...new Set([...server.memberIds, memberId])]
+        : server.memberIds.filter((m) => m !== memberId && m !== dbUid);
+      const mirrored: Spotlight = { ...server, memberIds, followers: joining ? Math.max(server.followers, memberIds.length) : memberIds.length };
+      this.localDb.upsertSpotlight(mirrored);
+      return mirrored;
+    }
+    this.localDb.queueSpotlightMembership(id, dbUid, joining);
+    supabaseNotice.set(joining
+      ? 'You joined this community on this device. The member list on the server refused the change, so it will be sent again on the next refresh.'
+      : 'You left this community on this device. The server will be told on the next refresh.');
+    return this.localDb.setSpotlightMembership(id, memberId, joining);
+  }
+
+  spotlightMembershipQueued(spotlightId: string): boolean {
+    return this.localDb.pendingSpotlightMemberships().some((op) => op.spotlightId === spotlightId);
+  }
+
+  /** RPC first (one atomic write), then the narrow row update, then null. */
+  private async rpcThenRow(id: string, uid: string, joining: boolean): Promise<Spotlight | null> {
     const { data, error } = await this.client.rpc('lula_set_spotlight_membership', {
       spotlight_id: id,
       joining
     });
-    if (error) throw new Error(`Could not update Spotlight membership: ${error.message}`);
-    this.rx.next(++this.tick);
-    return data as Spotlight | undefined;
+    if (!error) {
+      this.rx.next(++this.tick);
+      supabaseNotice.set('');
+      return (data as Spotlight | undefined) ?? (await this.getOne<Spotlight>('spotlights', id)) ?? null;
+    }
+    const message = error.message ?? '';
+    // Only a refusal that is about the *person* is worth telling them about. A
+    // missing policy, a missing function, an expired token or a table the role
+    // cannot touch are all write-path problems: the membership is queued on the
+    // device and replayed, so they hear "joined" and nothing about permissions.
+    const aboutThisPerson = /suspended/i.test(message) || /owner cannot leave/i.test(message);
+    const brokenRequest = !isMissingFunctionError(message) &&
+      /does not exist|invalid input syntax|malformed|relation .* not found/i.test(message);
+    if (aboutThisPerson || brokenRequest) throw new Error(this.explainMembership(message));
+    if (isIdentityError(message) && !isMissingFunctionError(message)) {
+      // Most often a token that expired between reads: one forced refresh, then
+      // the RPC again, before the row update is even considered.
+      await this.refreshIdentity();
+      const again = await this.client.rpc('lula_set_spotlight_membership', { spotlight_id: id, joining });
+      if (!again.error) {
+        this.rx.next(++this.tick);
+        supabaseNotice.set('');
+        return (again.data as Spotlight | undefined) ?? (await this.getOne<Spotlight>('spotlights', id)) ?? null;
+      }
+    }
+    const current = await this.getOne<Spotlight>('spotlights', id);
+    if (!current) return null;
+    const memberIds = joining
+      ? (current.memberIds.includes(uid) ? current.memberIds : [...current.memberIds, uid])
+      : current.memberIds.filter((m) => m !== uid);
+    if (memberIds.length === current.memberIds.length && !joining) return current;
+    const updated = await this.updateSpotlightMembershipRow(id, memberIds);
+    if (!updated) return null;
+    this.localDb.upsertSpotlight({ ...current, memberIds, followers: memberIds.length });
+    return { ...current, memberIds, followers: memberIds.length };
+  }
+
+  /** Creating and editing a community page. The owner is the only writer. */
+  async saveSpotlight(s: Spotlight): Promise<void> {
+    await this.upsert('spotlights', s, s.ownerId);
+  }
+
+  private explainMembership(message: string): string {
+    if (isNoIdentityError(message)) {
+      return 'Confirm your email address, then try again - the community list only accepts changes from a verified account.';
+    }
+    if (/suspended/i.test(message)) return 'This account is suspended, so it cannot join a community.';
+    if (/owner cannot leave/i.test(message)) return 'You started this community. Delete it instead of leaving.';
+    if (/not available/i.test(message)) return 'That community is not on the server any more.';
+    return 'The community list could not be changed right now. Try once more, and if it still fails the change is kept on this device.';
+  }
+
+  /**
+   * Push every membership change this device is still holding.
+   *
+   * Called from `init()` and after a sign-in, so a join made while the server was
+   * refusing writes lands as soon as it is not.
+   */
+  async syncPendingMemberships(): Promise<number> {
+    const ops = this.localDb.pendingSpotlightMemberships();
+    if (!ops.length) return 0;
+    const me = await this.currentUid();
+    if (!me) return 0;
+    let pushed = 0;
+    for (const op of ops) {
+      const server = await this.rpcThenRow(op.spotlightId, me, op.joining).catch(() => null);
+      if (!server) continue;
+      this.localDb.clearPendingSpotlightMembership(op.spotlightId);
+      // Keep the offline copy honest about the ids both sides use.
+      const memberIds = op.joining
+        ? [...new Set([...server.memberIds, op.memberId, me])]
+        : server.memberIds.filter((m) => m !== op.memberId && m !== me);
+      this.localDb.upsertSpotlight({ ...server, memberIds, followers: memberIds.length });
+      pushed += 1;
+    }
+    if (pushed) {
+      supabaseNotice.set('');
+      this.rx.next(++this.tick);
+    }
+    return pushed;
   }
 
   async deleteSpotlight(id: string): Promise<void> {
@@ -775,23 +1094,121 @@ export class SupabaseApi implements LulaApi {
 
   // ─── media ────────────────────────────────────────────────────────────────
 
+  /**
+   * Store one attachment and hand back a usable `src`.
+   *
+   * Four things used to turn "add a photo" into an error nobody could act on:
+   *
+   *  1. the folder in the path was the *profile* id, while `lula photos write`
+   *     compares the first folder with `lula_uid()`. Any account whose profile id
+   *     is not the auth uid (a local profile, an unverified address) was refused.
+   *     It now uploads under the id the database itself reports.
+   *  2. a phone photo the browser cannot decode (HEIC) or one over the bucket's
+   *     5 MB limit was sent as it was and rejected. It is re-encoded here -
+   *     downscaled and JPEG'd until it fits - so the phone's camera roll is
+   *     always a valid upload.
+   *  3. a stale Firebase token made the storage write look like a permission
+   *     failure. The write is retried once with a forced fresh token, exactly as
+   *     the record writes do.
+   *  4. a failed *signed link* after a successful upload threw away a photo that
+   *     was already stored. It now returns the `storage://` marker, which every
+   *     card re-signs on the next read.
+   */
   async uploadMedia(ownerId: string, item: MediaItem): Promise<MediaItem> {
-    let path = this.storagePath(item.src);
-    if (item.src.startsWith('data:')) {
-      if (!ownerId) throw new Error('Sign in before uploading media');
-      const blob = await fetch(item.src).then((response) => response.blob());
-      if (blob.size > 5 * 1024 * 1024) throw new Error('Choose a file smaller than 5 MB');
-      const extension = blob.type.split('/')[1]?.replace('jpeg', 'jpg') || (item.kind === 'video' ? 'mp4' : 'jpg');
-      path = `${ownerId}/${item.id}.${extension}`;
-      const { error } = await this.client.storage.from('photos').upload(path, blob, {
-        cacheControl: '3600', upsert: true, contentType: blob.type || (item.kind === 'video' ? 'video/mp4' : 'image/jpeg')
-      });
-      if (error) throw new Error(`Could not upload media: ${error.message}`);
+    const stored = this.storagePath(item.src);
+    if (stored) return { ...item, src: await this.mediaSrc(item.src) };
+    if (!item.src.startsWith('data:')) return item;
+
+    const dbUid = await this.currentUid();
+    if (!dbUid && this.usesThirdPartyAuth) {
+      throw new MediaUploadError(
+        'Your account cannot attach a photo yet. Open the link in the email we sent you, then sign out and in again.',
+        true
+      );
     }
-    if (!path) return item;
-    const src = await this.signedStorageUrl(path);
-    if (!src) throw new Error('Could not create a private photo link. Check the photo bucket policies.');
-    return { ...item, src };
+    const owner = dbUid ?? ownerId;
+    if (!owner) throw new MediaUploadError('Sign in before uploading media', true);
+
+    const blob = await this.toStorableBlob(item);
+    if (!blob) return item;
+    const isVideo = blob.type.startsWith('video');
+    const extension = isVideo ? 'mp4' : (blob.type.split('/')[1] ?? 'jpeg').replace('jpeg', 'jpg');
+    const path = `${owner}/${item.id}.${extension}`;
+    const send = () => this.client.storage.from('photos').upload(path, blob, {
+      cacheControl: '3600',
+      upsert: true,
+      contentType: blob.type
+    });
+
+    let result = await send();
+    if (result.error && !/already exists|duplicate/i.test(result.error.message ?? '')) {
+      if (isIdentityError(result.error.message) || isPermissionError(result.error.message)) {
+        await this.refreshIdentity();
+        result = await send();
+      }
+    }
+    if (result.error && !/already exists|duplicate/i.test(result.error.message ?? '')) {
+      throw new MediaUploadError(this.explainUpload(result.error.message ?? ''), !isVideo);
+    }
+    // The upload worked. A failed signature must not undo that.
+    return { ...item, src: (await this.signedStorageUrl(path)) ?? `storage://photos/${path}` };
+  }
+
+  /** True when accounts come from Firebase and an unverified address has no token. */
+  private get usesThirdPartyAuth(): boolean {
+    return !!this.authBridge;
+  }
+
+  /**
+   * The bytes Storage will accept: an allowed mime type, under the bucket limit.
+   * Anything else is re-encoded through a canvas, which is also how a phone's
+   * HEIC original becomes a JPEG a browser can read.
+   */
+  private async toStorableBlob(item: MediaItem): Promise<Blob | null> {
+    const video = item.kind === 'video' || mimeOfDataUrl(item.src).startsWith('video');
+    const prepared = await storableBlob(item.src, video ? 'video' : 'image', MAX_UPLOAD_BYTES);
+    if (!prepared) {
+      const tooBig = approxBytes(item.src) > MAX_UPLOAD_BYTES;
+      throw new MediaUploadError(
+        tooBig
+          ? video
+            ? 'That clip is bigger than 4.8 MB. LulaFind cannot trim a video in the browser, so post a shorter clip or a photo of the same thing.'
+            : 'That photo is bigger than 4.8 MB and could not be shrunk here. Pick another one, or crop it smaller.'
+          : video
+            ? 'LulaFind stores clips as MP4. Record the clip on your phone, or convert it first.'
+            : 'That file is not a picture LulaFind can store. Take a photo, or pick a JPEG, PNG, WebP or GIF.',
+        true
+      );
+    }
+    if (video) {
+      if (prepared.blob.type && prepared.blob.type !== 'video/mp4') {
+        throw new MediaUploadError('Only an MP4 video can be attached. Share a photo instead.', true);
+      }
+      if (prepared.blob.size > MAX_UPLOAD_BYTES) {
+        throw new MediaUploadError('That video is bigger than 4.8 MB. Share a photo instead.', true);
+      }
+    }
+    return prepared.blob;
+  }
+
+  /** A Postgres/Storage refusal, in words that say what to do next. */
+  private explainUpload(message: string): string {
+    if (isNoIdentityError(message)) {
+      return 'Your account is not signed in to the photo store yet. Sign out and back in, then attach the photo again.';
+    }
+    if (/content type|mime/i.test(message)) {
+      return 'That file type is not accepted here. Take a photo, or pick a JPEG, PNG, WebP or GIF.';
+    }
+    if (/size|too large|too_big/i.test(message)) {
+      return 'That photo is too large for one post. Pick another, or crop it smaller.';
+    }
+    if (isPermissionError(message)) {
+      return 'The photo store refused this account. Nothing was lost - try again, and if it keeps happening, sign out and back in.';
+    }
+    if (/Failed to fetch|NetworkError|fetch failed/i.test(message)) {
+      return 'No connection. The photo was not uploaded - check your internet and try again.';
+    }
+    return 'The photo could not be uploaded. Your text is safe; try again or post without the photo.';
   }
 
   // ─── stories ─────────────────────────────────────────────────────────────

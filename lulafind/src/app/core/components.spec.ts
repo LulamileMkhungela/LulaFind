@@ -28,6 +28,9 @@ import { HomeComponent } from '../pages/tabs/home.component';
 import { TabsComponent } from '../pages/tabs/tabs.component';
 import { AdminComponent } from '../pages/admin/admin.component';
 import { SpotlightDetailComponent } from '../pages/spotlight/spotlight-detail.component';
+import { MediaImageComponent, MediaVideoComponent } from '../shared/components/media-image.component';
+import { SendSheetComponent } from '../shared/components/send-sheet.component';
+import { PostActionsService } from '../core/services/post-actions.service';
 import { SUPPORT_EMAIL } from './config';
 import { ActivatedRoute, convertToParamMap } from '@angular/router';
 
@@ -127,11 +130,11 @@ describe('Components render', () => {
     expect(html).toContain('Have an idea');
     expect(html).not.toContain('No idea');
     // LinkedIn's card anatomy: the poster's headline under their name, the
-    // three-line clamp with a muted "Read more", a stats line and the four
-    // action buttons.
+    // three-line clamp with LinkedIn's own mobile label - a lower-case
+    // "see more" behind an ellipsis - a stats line and the action buttons.
     expect(html).toContain('Community organiser');
     expect(html).toContain('fb-clamp');
-    expect(html).toContain('Read more');
+    expect(html).toContain('see more');
     expect(html).toContain('fb-stats-bar');
     expect(html).toContain('Comment');
     expect(html).toContain('Repost');
@@ -279,15 +282,17 @@ describe('Components render', () => {
     expect(f.componentInstance.usernamePreview()).toBe('doe');
   });
 
-  it('renders the Spotlight tab with View / Create and A-Z letters', async () => {
+  it('renders the Spotlight tab as a community directory: create, search, A-Z', async () => {
     const data = TestBed.inject(DataService);
     await data.loadStatic();
     const f = TestBed.createComponent(SpotlightComponent);
     f.detectChanges();
     await f.whenStable();
     const html: string = (f.nativeElement as HTMLElement).innerHTML;
-    expect(html).toContain('View');
-    expect(html).toContain('Create');
+    expect(html).toContain('Create a spotlight');
+    expect(html).toContain('Find a surname');
+    expect(html).toContain('Search a surname');
+    expect(html).toContain('letter-pill');
     expect(html).toContain('Ndlela');
     // picking a letter narrows the list
     f.componentInstance.letter.set('N');
@@ -440,7 +445,7 @@ describe('Components render', () => {
     card.componentInstance.post = post!;
     card.componentInstance.author = data.authorOf(post!.authorId) ?? null;
     card.detectChanges();
-    expect((card.nativeElement as HTMLElement).innerHTML).toContain('Read more');
+    expect((card.nativeElement as HTMLElement).innerHTML).toContain('see more');
   });
 
   it('organizes the Menu into shortcuts, posts, and saved sections', async () => {
@@ -1013,5 +1018,237 @@ describe('Email and Google sign-in', () => {
     expect(u.email).toBe('google.user@gmail.com');
     expect(auth.viewerId).toBe('u_demo');
     expect(auth.pendingProvider()).toBe(null);
+  });
+});
+
+describe('Stored media renders from a signed link', () => {
+  beforeEach(bed);
+
+  /** Only `resolveMedia` matters here, so the API is a one-method fake. */
+  function apiWith(resolve: (src: string) => Promise<string>): void {
+    TestBed.overrideProvider(LULA_API, { useValue: { resolveMedia: resolve } });
+  }
+
+  it('signs a storage:// marker before it reaches the <img>', async () => {
+    apiWith(async (src) => src.replace('storage://photos/', 'https://signed.test/'));
+    const f = TestBed.createComponent(MediaImageComponent);
+    f.componentRef.setInput('src', 'storage://photos/u_demo/a.jpg');
+    f.detectChanges();
+    await f.whenStable();
+    f.detectChanges();
+    expect((f.nativeElement as HTMLElement).querySelector('img')?.getAttribute('src')).toBe('https://signed.test/u_demo/a.jpg');
+  });
+
+  it('passes a data: or https link straight through, unsigned', async () => {
+    let resolved = 0;
+    apiWith(async () => {
+      resolved++;
+      return 'https://signed.test/nope';
+    });
+    const f = TestBed.createComponent(MediaImageComponent);
+    f.componentRef.setInput('src', 'data:image/jpeg;base64,AAA');
+    f.detectChanges();
+    await f.whenStable();
+    f.detectChanges();
+    expect((f.nativeElement as HTMLElement).querySelector('img')?.getAttribute('src')).toBe('data:image/jpeg;base64,AAA');
+    expect(resolved).toBe(0);
+  });
+
+  it('offers a retry instead of a broken image when the link is refused', async () => {
+    let calls = 0;
+    apiWith(async () => (++calls === 1 ? '' : 'https://signed.test/back.jpg'));
+    const f = TestBed.createComponent(MediaImageComponent);
+    f.componentRef.setInput('src', 'storage://photos/u_demo/a.jpg');
+    f.detectChanges();
+    await f.whenStable();
+    f.detectChanges();
+    const el = f.nativeElement as HTMLElement;
+    expect(el.textContent).toContain('Photo not available here yet');
+    expect(el.querySelector('img')).toBeNull();
+    el.querySelector<HTMLButtonElement>('button.stub--failed')?.click();
+    f.detectChanges();
+    await f.whenStable();
+    f.detectChanges();
+    expect((f.nativeElement as HTMLElement).querySelector('img')?.getAttribute('src')).toBe('https://signed.test/back.jpg');
+    expect(calls).toBe(2);
+  });
+
+  it('re-signs a clip the same way, and says so when it cannot', async () => {
+    apiWith(async () => '');
+    const f = TestBed.createComponent(MediaVideoComponent);
+    f.componentRef.setInput('src', 'storage://photos/u_demo/clip.mp4');
+    f.detectChanges();
+    await f.whenStable();
+    f.detectChanges();
+    const el = f.nativeElement as HTMLElement;
+    expect(el.textContent).toContain('Video not available here yet');
+    expect(el.querySelector('video')).toBeNull();
+
+    f.componentRef.setInput('src', 'https://cdn.test/clip.mp4');
+    f.detectChanges();
+    await f.whenStable();
+    f.detectChanges();
+    expect((f.nativeElement as HTMLElement).querySelector('video')?.getAttribute('src')).toBe('https://cdn.test/clip.mp4');
+  });
+});
+
+describe('The Spotlight page is a community hub', () => {
+  /**
+   * `bed()` builds the module, so the route has to be replaced before anything is
+   * injected from it - hence one helper that does all three steps in order.
+   */
+  async function hub(query: Record<string, string> = {}, params: Record<string, string> = { id: 'sp_ndlela' }) {
+    bed();
+    TestBed.overrideProvider(ActivatedRoute, {
+      useValue: { snapshot: { paramMap: convertToParamMap(params), queryParamMap: convertToParamMap(query), fragment: null } }
+    });
+    const stub = { create: async () => ({ present: async () => undefined, onDidDismiss: async () => ({}) }) };
+    TestBed.overrideProvider(ToastController, { useValue: stub });
+    const auth = TestBed.inject(AuthService);
+    const data = TestBed.inject(DataService);
+    await auth.signInDemo();
+    await data.loadStatic();
+    return { auth, data };
+  }
+
+  it('shows the surname, the join button, and Posts / Members / About', async () => {
+    const { data } = await hub();
+    expect(data.isMember('sp_ndlela')).toBe(false);
+    const f = TestBed.createComponent(SpotlightDetailComponent);
+    f.detectChanges();
+    await f.whenStable();
+    f.detectChanges();
+    const text = () => (f.nativeElement as HTMLElement).textContent ?? '';
+    expect(text()).toContain('Ndlela');
+    expect(text()).toContain('Spotlight');
+    expect(text()).toContain('Join this community');
+    expect(text()).toContain('Joining is instant, and you can post as soon as you have joined');
+    // a stranger is not offered the composer
+    expect(text()).not.toContain('Start a post in Ndlela');
+  });
+
+  it('joining from the page works, and opens the composer row', async () => {
+    await hub();
+    const f = TestBed.createComponent(SpotlightDetailComponent);
+    f.detectChanges();
+    await f.whenStable();
+    expect(f.componentInstance.member()).toBe(false);
+    await f.componentInstance.join();
+    f.detectChanges();
+    await f.whenStable();
+    expect(f.componentInstance.member()).toBe(true);
+    expect(f.componentInstance.notice()).not.toMatch(/denied|permission|failed/i);
+    const text = (f.nativeElement as HTMLElement).textContent ?? '';
+    expect(text).toContain('Start a post in Ndlela');
+    expect(text).toContain('no approval queue');
+  });
+
+  it('opens the Members tab from ?tab=members and searches it', async () => {
+    await hub({ tab: 'members' });
+    const f = TestBed.createComponent(SpotlightDetailComponent);
+    f.detectChanges();
+    await f.whenStable();
+    f.detectChanges();
+    expect(f.componentInstance.section()).toBe('members');
+    f.componentInstance.memberQuery.set('nobody-here');
+    f.detectChanges();
+    expect((f.nativeElement as HTMLElement).textContent).toContain('Nobody by that name is in this community yet');
+  });
+
+  it('preselects the community in the composer when the post starts there', async () => {
+    const { data } = await hub({ spotlight: 'sp_ndlela' }, { type: 'missing' });
+    expect(data.isMember('sp_ndlela')).toBe(false);
+    const f = TestBed.createComponent(CreatePostComponent);
+    f.detectChanges();
+    await f.whenStable();
+    expect(f.componentInstance.f().spotlightId).toBeNull();
+    expect(f.componentInstance.error()).toMatch(/join that community/i);
+
+    await data.joinSpotlight('sp_ndlela');
+    expect(data.isMember('sp_ndlela')).toBe(true);
+    const g = TestBed.createComponent(CreatePostComponent);
+    g.detectChanges();
+    await g.whenStable();
+    expect(g.componentInstance.f().audience).toBe('surname');
+    expect(g.componentInstance.f().spotlightId).toBe('sp_ndlela');
+    expect(g.componentInstance.error()).toBe('');
+  });
+});
+
+describe('The Send sheet', () => {
+  /** Both directions of a follow, written straight into the store. */
+  function followBoth(a: string, b: string): void {
+    db.removeFollow(a, b);
+    db.removeFollow(b, a);
+    db.upsertFollow({ id: `f_${a}_${b}`, followerId: a, followingId: b, at: Date.now(), status: 'accepted' });
+    db.upsertFollow({ id: `f_${b}_${a}`, followerId: b, followingId: a, at: Date.now(), status: 'accepted' });
+  }
+
+  async function ready(): Promise<void> {
+    bed();
+    TestBed.overrideProvider(ToastController, { useValue: { create: async () => ({ present: async () => undefined }) } });
+    const auth = TestBed.inject(AuthService);
+    const data = TestBed.inject(DataService);
+    await auth.signInDemo();
+    await data.loadFeed();
+    followBoth('u_demo', 'u_lindiwe');
+    await data.loadUserScoped();
+  }
+
+  it('offers only the connections who follow you back', async () => {
+    await ready();
+    const actions = TestBed.inject(PostActionsService);
+    const data = TestBed.inject(DataService);
+    const list = await actions.sendRecipients();
+    expect(list.map((r) => r.id)).toContain('u_lindiwe');
+    for (const r of list) expect(await data.mutualFollow(r.id)).toBe(true);
+
+    // someone who stops following you drops out of the list
+    db.removeFollow('u_lindiwe', 'u_demo');
+    await data.loadUserScoped();
+    expect((await actions.sendRecipients()).map((r) => r.id)).not.toContain('u_lindiwe');
+    db.upsertFollow({ id: 'f_back_again', followerId: 'u_lindiwe', followingId: 'u_demo', at: Date.now(), status: 'accepted' });
+    await data.loadUserScoped();
+
+    actions.openSend(data.post('p_khumalo')!);
+    const f = TestBed.createComponent(SendSheetComponent);
+    f.detectChanges();
+    await f.whenStable();
+    f.detectChanges();
+    const el = f.nativeElement as HTMLElement;
+    expect(el.textContent).toContain('Send this post to');
+    expect(f.componentInstance.recipients().map((r) => r.id)).toContain('u_lindiwe');
+    // nothing picked yet: Send is disabled
+    expect(el.querySelector<HTMLButtonElement>('button.go')?.disabled).toBe(true);
+    f.componentInstance.toggle('u_lindiwe');
+    f.detectChanges();
+    expect(el.querySelector<HTMLButtonElement>('button.go')?.disabled).toBe(false);
+    expect(el.textContent).toContain('1 person chosen');
+  });
+
+  it('writes the post into the thread, with the note above the title', async () => {
+    await ready();
+    const actions = TestBed.inject(PostActionsService);
+    const data = TestBed.inject(DataService);
+    const post = data.post('p_khumalo')!;
+    const sent = await actions.sendTo(post, ['u_lindiwe'], 'This is two streets from me');
+    expect(sent).toBe(1);
+    const thread = db.threads().find((t) => t.participantIds.includes('u_lindiwe') && t.postId === post.id);
+    expect(thread).toBeTruthy();
+    const last = db.messages(thread!.id).at(-1)!;
+    expect(last.fromUserId).toBe('u_demo');
+    expect(last.postId).toBe(post.id);
+    expect(last.body).toContain('This is two streets from me');
+    expect(last.body).toContain(post.title);
+  });
+
+  it('refuses a one-way follow instead of throwing', async () => {
+    await ready();
+    const actions = TestBed.inject(PostActionsService);
+    const data = TestBed.inject(DataService);
+    db.removeFollow('u_lindiwe', 'u_demo');
+    const post = data.post('p_khumalo')!;
+    expect(await actions.canSendTo('u_lindiwe')).toBe(false);
+    expect(await actions.sendTo(post, ['u_lindiwe'], 'hello')).toBe(0);
   });
 });

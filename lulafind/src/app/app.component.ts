@@ -8,13 +8,14 @@ import { PushService } from './core/services/push.service';
 import { PrefetchService } from './core/services/prefetch.service';
 import { BACKGROUNDS, SettingsService } from './core/services/settings.service';
 import { RepostSheetComponent } from './shared/components/repost-sheet.component';
+import { SendSheetComponent } from './shared/components/send-sheet.component';
 import { supabaseNotice } from './core/data/supabase-client';
 import { demoMode, localMode } from './core/data/demo';
 
 @Component({
   selector: 'lf-root',
   standalone: true,
-  imports: [IonApp, IonRouterOutlet, RepostSheetComponent],
+  imports: [IonApp, IonRouterOutlet, RepostSheetComponent, SendSheetComponent],
   template: `
     <ion-app>
       @if (demoMode()) {
@@ -54,6 +55,7 @@ import { demoMode, localMode } from './core/data/demo';
 
       <ion-router-outlet></ion-router-outlet>
       <lf-repost-sheet />
+      <lf-send-sheet />
     </ion-app>
   `,
   styles: [`

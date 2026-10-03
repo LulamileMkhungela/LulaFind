@@ -573,6 +573,35 @@ with check (
   )
 );
 
+-- Joining a surname community is not the owner's job, so a member may rewrite
+-- exactly one thing in the row: their own name in memberIds. Everything else in
+-- the payload must come back unchanged, which is what makes this safe to open to
+-- any signed-in person. The long reasoning is in post-interactions.sql.
+drop policy if exists "lula spotlight join" on public.records;
+create policy "lula spotlight join" on public.records
+for update to authenticated
+using (
+  collection = 'spotlights'
+  and (select public.lula_uid()) is not null
+)
+with check (
+  collection = 'spotlights'
+  and (select public.lula_uid()) is not null
+  and (payload - 'memberIds' - 'followers') = (old.payload - 'memberIds' - 'followers')
+  and not exists (
+    select 1 from jsonb_array_elements_text(coalesce(payload->'memberIds', '[]'::jsonb)) as added(id)
+    where added.id <> (select public.lula_uid())
+      and not (coalesce(old.payload->'memberIds', '[]'::jsonb) @> to_jsonb(added.id))
+  )
+  and not exists (
+    select 1 from jsonb_array_elements_text(coalesce(old.payload->'memberIds', '[]'::jsonb)) as gone(id)
+    where gone.id <> (select public.lula_uid())
+      and not (coalesce(payload->'memberIds', '[]'::jsonb) @> to_jsonb(gone.id))
+  )
+  and coalesce((payload->>'followers')::int, 0)
+      <= coalesce((old.payload->>'followers')::int, 0) + 1
+);
+
 drop policy if exists "lula delete" on public.records;
 create policy "lula delete" on public.records
 for delete to anon, authenticated

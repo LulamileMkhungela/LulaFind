@@ -21,6 +21,7 @@ import { GBV_CHANNEL_NOTE, HELP_LINES } from './data/sa-help';
 import { avatar, STORY_BLACK, storyBg } from './data/seed';
 import { askLula } from './data/ask-lula';
 import { feedWithRails } from './utils/feed';
+import { approxBytes, canUploadAsIs, dataUrlToBlob, isStoredImageType, mimeOfDataUrl, storableBlob } from './utils/media-encode';
 
 
 /** Pretend the point under the finger is a reaction option with this key. */
@@ -945,11 +946,29 @@ describe('Posting rules', () => {
     await expect(data.updatePost(post.id, { title: 'A member left this community' })).rejects.toThrow(/join .* community/i);
   });
 
-  it('refuses a post with no province or no town', async () => {
+  it('takes the province from the profile and needs no town', async () => {
+    const data = svc<DataService>(DataService);
+    const auth = svc<AuthService>(AuthService);
+    await auth.signInDemo();
+    const post = await data.createPost({ ...base, province: null as any, town: '' });
+    expect(post.province).toBe(auth.user()!.province);
+    expect(post.town).toBe('');
+  });
+
+  it('accepts a photo on its own, with no title and no caption', async () => {
     const data = svc<DataService>(DataService);
     await svc<AuthService>(AuthService).signInDemo();
-    await expect(data.createPost({ ...base, province: null as any })).rejects.toThrow(/province/i);
-    await expect(data.createPost({ ...base, town: '' })).rejects.toThrow(/town or suburb/i);
+    const photo = { id: 'a', kind: 'image' as const, src: 'data:image/svg+xml,' };
+    const post = await data.createPost({ ...base, title: '', body: '', media: [photo] });
+    expect(post.media.length).toBe(1);
+    expect(post.title.length).toBeGreaterThan(3);
+    expect(post.title.toLowerCase()).toContain('missing');
+  });
+
+  it('refuses a post that has neither words nor a photo', async () => {
+    const data = svc<DataService>(DataService);
+    await svc<AuthService>(AuthService).signInDemo();
+    await expect(data.createPost({ ...base, title: '', body: 'two' })).rejects.toThrow(/photo/i);
   });
 
   it('refuses photos and a video on the same post', async () => {
@@ -2064,3 +2083,137 @@ describe('Bugs the browser found', () => {
   });
 });
 
+describe('Joining a community the server will not write', () => {
+  beforeEach(bed);
+
+  const postShape = {
+    type: 'missing' as const, title: 'Help find a Ndlela cousin in Soweto',
+    body: 'This is a long enough description of what happened and when.',
+    media: [] as any[], province: 'GP' as const, town: 'Soweto',
+    lastSeenAt: Date.now(), lastSeenWhere: 'Orlando West', geo: null,
+    contactLabel: 'Call', contactValue: '0710000000', contactVisibleTo: 'everyone' as const,
+    caseNumber: null, reward: null, subject: null, audience: 'public' as const,
+    spotlightId: null, chatEnabled: true, allowComments: true, anonymous: false,
+    askWanted: false, khumbu: null
+  };
+
+  /** An API whose membership write is refused, exactly as a missing policy refuses it. */
+  function refuseMembership(reason: string): void {
+    const api = new MockApi(db);
+    api.setSpotlightMembership = async () => {
+      throw new Error(reason);
+    };
+    TestBed.overrideProvider(LULA_API, { useValue: api });
+  }
+
+  it('joins anyway, keeps it after a reload, and lets the person post', async () => {
+    refuseMembership('new row violates row-level security policy for table "spotlights"');
+    const data = svc<DataService>(DataService);
+    await svc<AuthService>(AuthService).signInDemo();
+    await data.loadStatic();
+    const target = data.spotlights().find((sp) => !data.isMember(sp.id))!;
+    expect(target.surname).toBe('Ndlela');
+
+    expect(await data.joinSpotlight(target.id)).toBe(true);
+    expect(data.spotlightSync()).toBe('device');
+    // the reload inside joinSpotlight must not undo it
+    expect(data.isMember(target.id)).toBe(true);
+
+    const post = await data.createPost({ ...postShape, audience: 'surname', spotlightId: target.id });
+    expect(post.spotlightId).toBe(target.id);
+    expect(post.audience).toBe('surname');
+  });
+
+  it('never shows the policy language, even in what it says out loud', async () => {
+    refuseMembership('permission denied for table spotlights');
+    const data = svc<DataService>(DataService);
+    await svc<AuthService>(AuthService).signInDemo();
+    await data.loadStatic();
+    const target = data.spotlights().find((sp) => !data.isMember(sp.id))!;
+    await expect(data.joinSpotlight(target.id)).resolves.toBe(true);
+    expect(data.spotlightSync()).toBe('device');
+  });
+
+  it('tells a suspended account instead of inventing a join', async () => {
+    refuseMembership('This account is suspended, so it cannot join a community.');
+    const data = svc<DataService>(DataService);
+    await svc<AuthService>(AuthService).signInDemo();
+    await data.loadStatic();
+    const target = data.spotlights().find((sp) => !data.isMember(sp.id))!;
+    await expect(data.joinSpotlight(target.id)).rejects.toThrow(/suspend/i);
+    expect(data.isMember(target.id)).toBe(false);
+  });
+});
+
+describe('The bytes a photo becomes', () => {
+  beforeEach(bed);
+
+  it('sends a small jpeg as it is, without re-encoding', async () => {
+    const src = 'data:image/jpeg;base64,' + btoa('a photo, more or less');
+    const out = await storableBlob(src, 'image', 4_800_000);
+    expect(out?.reencoded).toBe(false);
+    expect(out?.blob.type).toBe('image/jpeg');
+    expect(out!.blob.size).toBe('a photo, more or less'.length);
+  });
+
+  it('will not turn an https link into data', async () => {
+    expect(await storableBlob('https://cdn.test/a.mp4', 'video', 1024)).toBeNull();
+  });
+
+  it('reads the type and size of a data URL', () => {
+    expect(mimeOfDataUrl('data:image/png;base64,AAA')).toBe('image/png');
+    expect(mimeOfDataUrl('https://cdn.test/a.jpg')).toBe('');
+    expect(approxBytes('data:image/jpeg;base64,AAAA')).toBe(3);
+    expect(isStoredImageType('image/svg+xml')).toBe(false);
+    expect(isStoredImageType('image/webp')).toBe(true);
+    // a link already out there needs nothing; a data URL must be a storable type
+    expect(canUploadAsIs('https://cdn.test/a.heic', 10)).toBe(true);
+    expect(canUploadAsIs('data:image/heic;base64,' + btoa('x'.repeat(200)), 50)).toBe(false);
+    expect(dataUrlToBlob('data:image/jpeg')).toBeNull();
+  });
+});
+
+describe('Comment attachments', () => {
+  beforeEach(bed);
+
+  const photo = { id: 'a', kind: 'image' as const, src: 'data:image/svg+xml,' };
+  const clip = { id: 'b', kind: 'video' as const, src: 'data:video/mp4,' };
+
+  /** A store where the second upload is refused, as an oversize file is. */
+  function refuseSecond(reason: string): void {
+    refuseUploads(reason, 2);
+  }
+
+  /** A store that refuses the nth upload (every upload when `nth` is 0). */
+  function refuseUploads(reason: string, nth: number): void {
+    const api = new MockApi(db);
+    let calls = 0;
+    api.uploadMedia = async (_owner: string, item: MediaItem) => {
+      calls++;
+      if (calls === nth || nth === 0) throw new Error(reason);
+      return item;
+    };
+    TestBed.overrideProvider(LULA_API, { useValue: api });
+  }
+
+  it('sends the words with the photo that did upload, and says what did not', async () => {
+    refuseSecond('That clip is bigger than 4.8 MB. LulaFind cannot trim a video in the browser.');
+    const data = svc<DataService>(DataService);
+    await svc<AuthService>(AuthService).signInDemo();
+    await data.loadFeed();
+    const c = await data.addComment({ postId: 'p_thato', body: 'Two things from this morning', media: [photo, clip] });
+    expect(c.media?.map((m) => m.id)).toEqual(['a']);
+    expect(data.commentMediaNotice()).toContain('4.8 MB');
+    // the notice is a one-time thing
+    data.commentMediaNotice.set('');
+    expect(data.commentMediaNotice()).toBe('');
+  });
+
+  it('refuses a comment that was only the photo that failed, quoting why', async () => {
+    refuseUploads('That photo is bigger than 4.8 MB and could not be shrunk here.', 0);
+    const data = svc<DataService>(DataService);
+    await svc<AuthService>(AuthService).signInDemo();
+    await data.loadFeed();
+    await expect(data.addComment({ postId: 'p_thato', body: '', media: [photo, clip] })).rejects.toThrow(/4\.8 MB/);
+  });
+});

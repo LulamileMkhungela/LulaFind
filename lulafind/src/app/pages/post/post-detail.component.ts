@@ -10,6 +10,7 @@ import { IconComponent } from '../../shared/components/icon.component';
 import { TopNavComponent } from '../../shared/components/top-nav.component';
 import { AvatarComponent } from '../../shared/components/avatar.component';
 import { ReactionsSheetComponent } from '../../shared/components/reactions-sheet.component';
+import { MediaImageComponent, MediaVideoComponent } from '../../shared/components/media-image.component';
 import { ReactionButtonComponent } from '../../shared/components/reaction-button.component';
 import { ReactionIconComponent } from '../../shared/components/reaction-icon.component';
 import { DataService } from '../../core/services/data.service';
@@ -46,8 +47,8 @@ import { leadMarkView } from '../../core/utils/mark-check';
   standalone: true,
   imports: [
     IonContent, IonTextarea, IonSkeletonText, RouterLink, IconComponent, AvatarComponent,
-    TopNavComponent, ReactionButtonComponent, ReactionIconComponent, ReactionsSheetComponent
-  ],
+    TopNavComponent, ReactionButtonComponent, ReactionIconComponent, ReactionsSheetComponent,
+    MediaImageComponent, MediaVideoComponent],
   template: `
     <lf-top-nav title="Post" backTo="/home" />
 
@@ -115,7 +116,7 @@ import { leadMarkView } from '../../core/utils/mark-check';
                 </div>
                 <h2>{{ o.title }}</h2>
                 <p>{{ o.body }}</p>
-                @if (o.media.length) { <img [src]="o.media[0].src" [alt]="o.title" /> }
+                @if (o.media.length) { <lf-media-img [src]="o.media[0].src" [alt]="o.title" /> }
               </a>
             } @else {
               <p class="embed gone"><lf-icon name="info" [size]="16" /> This post is no longer available.</p>
@@ -128,9 +129,9 @@ import { leadMarkView } from '../../core/utils/mark-check';
               <div class="media" [class.multi]="p()!.media.length > 1">
                 @for (m of p()!.media; track m.id) {
                   @if (m.kind === 'video') {
-                    <video [src]="m.src" controls preload="metadata"></video>
+                    <lf-media-video [src]="m.src" label="Video in this post" />
                   } @else {
-                    <img [src]="m.src" [alt]="m.caption ?? p()!.title" />
+                    <lf-media-img [src]="m.src" [alt]="m.caption ?? p()!.title" />
                   }
                 }
               </div>
@@ -330,9 +331,9 @@ import { leadMarkView } from '../../core/utils/mark-check';
                         <div class="comment-media">
                           @for (item of c.media; track item.id) {
                             @if (item.kind === 'image') {
-                              <img [src]="item.src" alt="Photo attached to comment" loading="lazy" />
+                              <lf-media-img [src]="item.src" alt="Photo attached to comment" />
                             } @else {
-                              <video [src]="item.src" controls playsinline preload="metadata" aria-label="Video attached to comment"></video>
+                              <lf-media-video [src]="item.src" label="Video attached to comment" />
                             }
                           }
                         </div>
@@ -407,9 +408,9 @@ import { leadMarkView } from '../../core/utils/mark-check';
                                     <div class="comment-media">
                                       @for (item of r.media; track item.id) {
                                         @if (item.kind === 'image') {
-                                          <img [src]="item.src" alt="Photo attached to reply" loading="lazy" />
+                                          <lf-media-img [src]="item.src" alt="Photo attached to reply" />
                                         } @else {
-                                          <video [src]="item.src" controls playsinline preload="metadata" aria-label="Video attached to reply"></video>
+                                          <lf-media-video [src]="item.src" label="Video attached to reply" />
                                         }
                                       }
                                     </div>
@@ -495,9 +496,9 @@ import { leadMarkView } from '../../core/utils/mark-check';
     .title { margin: 4px var(--edge) 6px; font-size: 20px; line-height: 1.25; font-weight: 700; letter-spacing: -.2px; }
     .text { margin: 0 var(--edge) 12px; font-size: 16px; line-height: 1.45; white-space: pre-line; word-break: break-word; }
     .media { margin: 4px 0 0; }
-    .media img, .media video { display: block; width: 100%; max-height: 640px; object-fit: contain; background: #000; }
+    .media lf-media-img, .media lf-media-video { display: block; width: 100%; max-height: 640px; overflow: hidden; background: #000; }
     .media.multi { display: flex; gap: 2px; overflow-x: auto; scroll-snap-type: x mandatory; }
-    .media.multi img, .media.multi video { flex: 0 0 88%; scroll-snap-align: start; }
+    .media.multi lf-media-img, .media.multi lf-media-video { flex: 0 0 88%; scroll-snap-align: start; }
     .embed { display: block; margin: 0 var(--edge) 12px; padding: 12px; border: 1px solid var(--lf-line); border-radius: 8px; color: inherit; text-decoration: none; }
     .embed__head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
     .embed__who { display: flex; flex-direction: column; min-width: 0; }
@@ -576,7 +577,7 @@ import { leadMarkView } from '../../core/utils/mark-check';
     .tag { padding: 1px 6px; border-radius: 10px; background: var(--lf-primary-soft); color: var(--lf-primary-soft-text); font-size: 11px; font-weight: 700; }
     .ccard__text { margin: 5px 0 6px; font-size: 14.5px; line-height: 1.42; white-space: pre-line; word-break: break-word; }
     .comment-media { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr)); gap: 6px; margin: 8px 0; }
-    .comment-media img, .comment-media video { display: block; width: 100%; max-height: 360px; border-radius: 8px; background: #000; object-fit: contain; }
+    .comment-media lf-media-img, .comment-media lf-media-video { display: block; width: 100%; max-height: 360px; border-radius: 8px; overflow: hidden; background: #000; }
     .lead { display: inline-block; margin-bottom: 6px; padding: 1px 8px; border-radius: 10px; background: color-mix(in srgb, var(--lf-ubuntu) 18%, transparent); color: var(--lf-ubuntu); font-size: 11.5px; font-weight: 700; }
     .sighting { display: flex; align-items: center; gap: 5px; margin-bottom: 6px; font-size: 13px; color: var(--lf-muted); }
     .checked { display: flex; align-items: center; gap: 5px; margin: 0 0 6px; font-size: 13px; font-weight: 600; color: var(--lf-ubuntu); }
@@ -788,7 +789,7 @@ export class PostDetailComponent implements OnInit {
   }
 
   repost(): void { const p = this.p(); if (p) void this.actions.openRepost(p); }
-  send(): void { const p = this.p(); if (p) void this.actions.send(p).then(() => this.reload()); }
+  send(): void { const p = this.p(); if (p) this.actions.openSend(p); }
 
   async toggleFollow(): Promise<void> {
     if (!this.auth.signedIn()) return this.needAuth();
@@ -929,6 +930,13 @@ export class PostDetailComponent implements OnInit {
       });
       this.comments.set(await this.data.comments(p.id));
       this.p.set(this.data.post(p.id) ?? null);
+      // The comment is out and only an attachment is missing: say so once, in the
+      // words the uploader used, rather than leaving the writer to notice.
+      const stuck = this.data.commentMediaNotice();
+      if (stuck) {
+        this.data.commentMediaNotice.set('');
+        await this.say(stuck);
+      }
       if (reply) this.expand(reply.rootId);
       this.draft.set('');
       this.commentMedia.set([]);
@@ -993,6 +1001,13 @@ export class PostDetailComponent implements OnInit {
       await this.data.deleteComment(c);
       this.comments.set(await this.data.comments(p.id));
       this.p.set(this.data.post(p.id) ?? null);
+      // The comment is out and only an attachment is missing: say so once, in the
+      // words the uploader used, rather than leaving the writer to notice.
+      const stuck = this.data.commentMediaNotice();
+      if (stuck) {
+        this.data.commentMediaNotice.set('');
+        await this.say(stuck);
+      }
       await this.say(c.parentId ? 'Reply deleted' : 'Comment deleted');
     } catch (e: unknown) {
       await this.say(e instanceof Error ? `Not deleted: ${e.message}` : 'The comment was not deleted');

@@ -3,11 +3,22 @@ import { Router } from '@angular/router';
 import { ToastController } from '@ionic/angular/toast-controller';
 import { ActionSheetController } from '@ionic/angular/action-sheet-controller';
 import { AlertController } from '@ionic/angular/alert-controller';
-import { Post } from '../models/types';
+import { Post, UserProfile, provinceName } from '../models/types';
 import { DataService } from './data.service';
 import { AuthService } from './auth.service';
 import { PlatformService } from './platform.service';
 import { ModerationService } from './moderation.service';
+import { ChatService } from './chat.service';
+
+/** One row of the Send sheet. */
+export interface SendRecipient {
+  id: string;
+  name: string;
+  headline: string;
+  avatar: string;
+}
+
+const provinceNameOf = (code: UserProfile['province']): string => provinceName(code ?? undefined);
 
 /**
  * Everything you can do to a post from a menu: repost, send, save, edit,
@@ -22,6 +33,7 @@ export class PostActionsService {
   private router = inject(Router);
   private platform = inject(PlatformService);
   private mod = inject(ModerationService);
+  private chat = inject(ChatService);
   private toastCtl = inject(ToastController);
   private sheetCtl = inject(ActionSheetController);
   private alertCtl = inject(AlertController);
@@ -106,13 +118,69 @@ export class PostActionsService {
   }
 
   /* ------------------------------ send ------------------------------ */
+  /**
+   * LinkedIn's Send. The post goes to a person, into a thread you can both
+   * answer - not to the app's share sheet, which is what "Share" is for.
+   */
   async send(p: Post): Promise<void> {
     const target = p.repostOf ? (await this.data.loadPost(p.repostOf)) ?? p : p;
-    const text = `${target.title}\n\n${target.body.slice(0, 220)}\n\nShared from LulaFind`;
-    const mode = await this.platform.share(target.title, text, this.platform.link(`/post/${target.id}`));
+    const mode = await this.platform.share(target.title, `${target.title}\n\nShared from LulaFind`, this.platform.link(`/post/${target.id}`));
     await this.data.recordShare(target.id).catch(() => undefined);
     await this.toast(mode === 'clipboard' ? 'Link copied to clipboard' : 'Sent');
   }
+
+  /** Who a post may be sent to: the members who follow you and you follow back. */
+  async sendRecipients(query = ''): Promise<SendRecipient[]> {
+    const me = this.auth.viewerId;
+    if (!me) return [];
+    const mutual = this.data.followingIds().filter((id) => this.data.followerIds().includes(id) && id !== me);
+    const people = await this.data.people(mutual).catch(() => [] as UserProfile[]);
+    const byId = new Map(people.map((u) => [u.id, u]));
+    const needle = query.trim().toLowerCase();
+    return mutual
+      .map((id) => byId.get(id) ?? this.data.authorOf(id) ?? null)
+      .filter((u): u is UserProfile => !!u && !u.suspended)
+      .map((u) => ({
+        id: u.id,
+        name: u.displayName,
+        headline: (u.bio || provinceNameOf(u.province)).slice(0, 70),
+        avatar: this.data.avatarFor(u)
+      }))
+      .filter((r) => !needle || r.name.toLowerCase().includes(needle) || r.headline.toLowerCase().includes(needle))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  /**
+   * Send the post to the chosen people. Returns how many it reached, and tells
+   * each one in their own bell - the same message the thread carries.
+   */
+  async sendTo(post: Post, ids: string[], note = ''): Promise<number> {
+    const me = this.auth.user();
+    if (!me) throw new Error('Sign in to send a post');
+    const original = post.repostOf ? (await this.data.loadPost(post.repostOf)) ?? post : post;
+    let sent = 0;
+    for (const id of ids) {
+      const ok = await this.chat.sendPost(original, id, note.trim()).catch(() => false);
+      if (!ok) continue;
+      sent += 1;
+      await this.data.notify({
+        userId: id, kind: 'chat',
+        title: `${me.displayName} sent you a post`,
+        body: note.trim() || original.title,
+        route: `/post/${original.id}`, postId: original.id
+      }).catch(() => undefined);
+    }
+    if (sent) await this.data.recordShare(original.id).catch(() => undefined);
+    return sent;
+  }
+
+  /** Whether a post can be sent to a given member at all (used by the sheet's empty state). */
+  async canSendTo(peerId: string): Promise<boolean> {
+    const me = this.auth.viewerId;
+    if (!me || me === peerId) return false;
+    return this.data.mutualFollow(peerId);
+  }
+
 
   /* ------------------------------ menu ------------------------------ */
   /**
@@ -124,7 +192,10 @@ export class PostActionsService {
     const saved = this.data.savedIds().includes(p.id);
     const isRepost = !!p.repostOf;
     const buttons: { text: string; role?: string; icon?: string; handler?: () => void }[] = [
-      { text: saved ? 'Unsave' : 'Save', icon: 'bookmark', handler: () => void this.toggleSave(p) },
+      // LinkedIn's order: the two share paths first, then the private ones.
+      { text: 'Send this to a connection', icon: 'send', handler: () => this.openSend(p) },
+      { text: 'Share this post', icon: 'share', handler: () => void this.send(p) },
+      { text: saved ? 'Unsave post' : 'Save post', icon: 'bookmark', handler: () => void this.toggleSave(p) },
       { text: 'Copy link to post', icon: 'link', handler: () => void this.copyLink(p) }
     ];
     if (mine) {
@@ -134,11 +205,42 @@ export class PostActionsService {
         handler: () => void this.confirmDelete(p, onGone)
       });
     } else {
+      const author = this.data.authorOf(p.authorId);
+      if (!p.anonymous && author && author.id !== this.auth.viewerId) {
+        const following = await this.data.isFollowing(author.id);
+        buttons.push({
+          text: following ? `Unfollow ${author.displayName.split(' ')[0]}` : `Follow ${author.displayName.split(' ')[0]}`,
+          icon: 'user',
+          handler: () => void this.toggleFollow(author!.id)
+        });
+      }
       buttons.push({ text: 'Report post', role: 'destructive', icon: 'flag', handler: () => void this.report(p) });
     }
     buttons.push({ text: 'Cancel', role: 'cancel' });
     const sheet = await this.sheetCtl.create({ header: p.title.slice(0, 48), buttons: buttons as never });
     await sheet.present();
+  }
+
+  /** The post the Send sheet is open for. Rendered once by the shell (lf-send-sheet). */
+  readonly sendTarget = signal<Post | null>(null);
+
+  openSend(p: Post): void {
+    if (!this.auth.signedIn()) {
+      void this.needAuth();
+      return;
+    }
+    this.sendTarget.set(p);
+  }
+
+  closeSend(): void { this.sendTarget.set(null); }
+
+  private async toggleFollow(id: string): Promise<void> {
+    try {
+      const following = await this.data.toggleFollow(id);
+      await this.toast(following ? 'You will see their posts in your feed' : 'Unfollowed');
+    } catch (e: unknown) {
+      await this.toast(e instanceof Error ? e.message : 'Could not change that follow');
+    }
   }
 
   async toggleSave(p: Post): Promise<void> {

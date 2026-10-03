@@ -187,7 +187,42 @@ export class ChatService {
     }
   }
 
-  /** System message used to record consent/escalation milestones inside the chat. */
+  /**
+   * "Send" on LinkedIn: the post carried into a private thread as a message the
+   * other person can read and answer, with an optional note on top.
+   *
+   * LulaFind's one rule still applies - a thread exists between people who follow
+   * each other - so callers should only offer this for mutual follows and say so
+   * plainly when they cannot. Returns false rather than throwing when the two are
+   * not connected, because on LinkedIn a tap on Send always lands somewhere.
+   */
+  async sendPost(post: Post, peerId: string, note = ''): Promise<boolean> {
+    const me = this.auth.viewerId;
+    if (!me || me === peerId) return false;
+    const mutual = (await this.api.isFollowing(me, peerId)) && (await this.api.isFollowing(peerId, me));
+    if (!mutual) return false;
+    const thread = await this.ensureThread(post, peerId);
+    if (!thread) return false;
+    const text = note.trim() ? `${note.trim()}\n\n${post.title}` : post.title;
+    await this.storeMessage({
+      id: uid('m'),
+      threadId: thread.id,
+      fromUserId: me,
+      body: text,
+      at: Date.now(),
+      read: false,
+      kind: 'text',
+      postId: post.id
+    });
+    await this.openThread(thread.id);
+    return true;
+  }
+
+  /**
+   * The people a post can be sent to: everyone you follow who follows you back.
+   * Built in `PostActionsService`, which owns the caches the sheet renders from.
+   */
+
   async systemNote(threadId: string, body: string, postId?: string): Promise<void> {
     const now = Date.now();
     await this.storeMessage({

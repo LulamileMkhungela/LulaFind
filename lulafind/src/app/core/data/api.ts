@@ -93,12 +93,28 @@ export abstract class LulaApi {
   abstract saveSpotlight(s: Spotlight): Promise<void>;
   /** Update only the signed-in member's Spotlight membership. */
   abstract setSpotlightMembership(id: string, memberId: string, joining: boolean): Promise<Spotlight | undefined>;
+  /**
+   * Is a membership change for this community still waiting in the device queue?
+   * A join the phone has recorded but the server has not must not be presented as
+   * one the server has - that is the difference between "you are in" and a page
+   * that quietly loses the member list on the next device.
+   */
+  spotlightMembershipQueued?: (spotlightId: string) => boolean;
   abstract deleteSpotlight(id: string): Promise<void>;
   /** File (or unfile) a post in a Spotlight. Members may do this, not only the owner. */
   abstract linkSpotlightPost(spotlightId: string, postId: string, linking: boolean): Promise<void>;
 
   /* media */
   abstract uploadMedia(ownerId: string, item: MediaItem): Promise<MediaItem>;
+  /**
+   * Turn a stored media reference into a URL an `<img>` can load.
+   *
+   * Photos live in a private bucket, so what a record holds is `storage://photos/<path>`
+   * and each read swaps that for a link that expires. A card that gets the marker
+   * back - an offline phone, a signature the server refused - shows "photo not
+   * available here yet" and tries again instead of a broken image.
+   */
+  async resolveMedia(src: string): Promise<string> { return src; }
 
   /* stories */
   abstract stories(): Promise<Story[]>;
@@ -190,21 +206,17 @@ export class MockApi implements LulaApi {
   async spotlights() { return this.db.spotlights(); }
   async spotlight(id: string) { return this.db.spotlight(id); }
   async saveSpotlight(s: Spotlight) { this.db.upsertSpotlight(s); }
+  spotlightMembershipQueued(spotlightId: string): boolean {
+    return this.db.pendingSpotlightMemberships().some((op) => op.spotlightId === spotlightId);
+  }
   async setSpotlightMembership(id: string, memberId: string, joining: boolean) {
-    const spotlight = this.db.spotlight(id);
-    if (!spotlight) return undefined;
-    if (joining && !spotlight.memberIds.includes(memberId)) {
-      spotlight.memberIds = [...spotlight.memberIds, memberId];
-    } else if (!joining) {
-      spotlight.memberIds = spotlight.memberIds.filter((current) => current !== memberId);
-    }
-    spotlight.followers = spotlight.memberIds.length;
-    this.db.upsertSpotlight(spotlight);
-    return spotlight;
+    return this.db.setSpotlightMembership(id, memberId, joining);
   }
   async deleteSpotlight(id: string) { this.db.deleteSpotlight(id); }
 
   async uploadMedia(_ownerId: string, item: MediaItem) { return item; }
+  /** Nothing to sign: a device store holds the picture itself. */
+  async resolveMedia(src: string) { return src; }
   async stories() { return this.db.stories(); }
   async saveStory(s: Story) { this.db.upsertStory(s); }
   async storyRepliesFor(storyId: string) { return this.db.story(storyId)?.replies ?? []; }
@@ -259,10 +271,7 @@ export class MockApi implements LulaApi {
 
   async notifications(userId: string) { return this.db.notifications(userId); }
   async linkSpotlightPost(spotlightId: string, postId: string, linking: boolean): Promise<void> {
-    const sp = await this.spotlight(spotlightId);
-    if (!sp) return;
-    const rest = sp.postIds.filter((x) => x !== postId);
-    await this.saveSpotlight({ ...sp, postIds: linking ? [postId, ...rest] : rest });
+    this.db.linkSpotlightPost(spotlightId, postId, linking);
   }
   async pushNotification(n: Notification) { this.db.pushNotification(n); }
   async markNotificationsRead(userId: string) { this.db.markNotificationsRead(userId); }
