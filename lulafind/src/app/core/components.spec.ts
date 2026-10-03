@@ -230,6 +230,31 @@ describe('Components render', () => {
     await longForm(RepostComponent, 'textarea.thoughts', 'repost thoughts');
   });
 
+  it('keeps the SQL handed to the database free of transaction control that would undo it', async () => {
+    // A SQL script run as one piece is one transaction, so a `rollback;` at the
+    // end of it silently undoes everything above - the file looks like it ran,
+    // and the database is left exactly as it was. An earlier version of the
+    // Spotlight file did that: its self-test ended in a rollback, which rolled
+    // back the two functions and the policy with it.
+    const { readFileSync } = await import('node:fs');
+    const read = (name: string): string => readFileSync(`${process.cwd()}/supabase/${name}`, 'utf8');
+
+    const main = read('spotlight-public-read.sql');
+    expect(main, 'spotlight-public-read.sql must not contain begin/rollback/commit')
+      .not.toMatch(/^\s*(begin|rollback|commit)\s*;/im);
+    expect(main, 'and it must install the widening policy').toContain('lula spotlight posts are public reading');
+    // Comments explain which helpers are missing, so only the statements are
+    // checked - a mention in prose is not a call.
+    const statements = main.replace(/^\s*--.*$/gm, '');
+    expect(statements, 'and it must not call a helper this database does not have')
+      .not.toMatch(/lula_is_self|public\.lula_spotlight_member/);
+
+    // The self-test is a separate file precisely because it rolls back.
+    const selfTest = read('spotlight-selftest.sql');
+    expect(selfTest).toMatch(/^\s*begin\s*;/im);
+    expect(selfTest).toMatch(/^\s*rollback\s*;/im);
+  });
+
   it('never caps attachments with a number written into a file: the rule lives in one place', async () => {
     // The 3-photo cap was written as a literal 4 in four separate files, and in
     // the composer the guard said 4 while the error message next to it said 3 -

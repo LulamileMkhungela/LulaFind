@@ -124,32 +124,49 @@ revoke all on function public.lula_post_visible(text, text) from public;
 grant execute on function public.lula_post_visible(text, text) to anon, authenticated;
 
 -- ── 5. Prove it ─────────────────────────────────────────────────────────────
--- The first query runs as the `anon` role, so row-level security really applies:
--- this is what a signed-out visitor gets. Expect both numbers to be greater than
--- zero, and the two to match - every Spotlight case the database holds should be
--- one a guest can read.
+-- Read-only. `set role anon` means row-level security really applies, so these
+-- are the numbers a signed-out visitor gets - not the ones the editor sees.
+--
+-- How to read the result:
+--   a_signed_out_visitor_can_read > 0 ..... fixed. Guests can read the
+--                                           community's cases.
+--   ... = 0, held_for_review > 0 .......... those cases are waiting to be
+--                                           moderated. The app hides those from
+--                                           everyone but the author, which is
+--                                           correct, and it is not this fix
+--                                           failing.
+--   ... = 0, spotlight_cases_total = 0 .... nothing has been filed to a
+--                                           Spotlight yet, so run section 6 to
+--                                           prove the rule with a throwaway case.
+--
+-- The helper can count fewer than the policy allows: it also refuses a case held
+-- for review, and the policy does not. The app applies the same review rule, so
+-- the two agree in the end. That gap is expected, not a fault.
 set role anon;
 select
   count(*) filter (where payload->>'audience' = 'surname'
-                     and coalesce(payload->>'spotlightId', '') <> '') as spotlight_cases_a_guest_can_read,
+                     and coalesce(payload->>'spotlightId', '') <> '') as spotlight_cases_total,
+  count(*) filter (where payload->>'audience' = 'surname'
+                     and coalesce(payload->>'spotlightId', '') <> ''
+                     and public.lula_post_visible(id, null)) as a_signed_out_visitor_can_read,
+  count(*) filter (where payload->>'audience' = 'surname'
+                     and coalesce(payload->>'spotlightId', '') <> ''
+                     and coalesce(payload->>'status', 'active') = 'under_review') as held_for_review,
   count(*) filter (where payload->>'audience' = 'followers'
                      and payload->>'authorId' <> coalesce(auth.uid()::text, '')) as follower_only_still_hidden
 from public.records
 where collection = 'posts';
 reset role;
 
--- And the policies standing on that table, to show the new one is installed.
+-- The new policy, standing on the table. One row means it is installed.
 select policyname, cmd
 from pg_policies
 where schemaname = 'public' and tablename = 'records'
   and policyname = 'lula spotlight posts are public reading';
 
--- And the two-argument helper, asked about every Spotlight case by a signed-out
--- visitor. Expect the same number as the first query.
-set role anon;
-select count(*) as readable_via_the_two_argument_helper
-from public.records
-where collection = 'posts'
-  and payload->>'audience' = 'surname'
-  and public.lula_post_visible(id, null);
-reset role;
+-- ── 6. If every count above was zero ────────────────────────────────────────
+-- Then nothing has been filed to a Spotlight yet and there is nothing to count.
+-- supabase/spotlight-selftest.sql proves the rule with a throwaway case instead.
+-- It is a separate file on purpose: it ends in a rollback, and a rollback in
+-- this file would undo this whole file, because running a script as one piece
+-- makes it one transaction. Run it only if you want that proof.
