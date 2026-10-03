@@ -128,11 +128,29 @@ jobs:
 
           SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
           AAPT=$(ls "$SDK"/build-tools/*/aapt2 2>/dev/null | sort -V | tail -1)
-          APKSIGNER=$(ls "$SDK"/build-tools/*/apksigner 2>/dev/null | sort -V | tail -1)
           BADGING=$( { "$AAPT" dump badging "$APK" 2>/dev/null || echo "aapt2 could not read the file"; } \
             | grep -E "^package:|^sdkVersion:|^targetSdkVersion:|^application-label:" || true )
-          CERT=$( { "$APKSIGNER" verify --print-certs "$APK" 2>/dev/null || echo "apksigner could not read the file"; } \
-            | grep -m1 -E "Signer #1 certificate DN" || echo "no signature found" )
+
+          # An unsigned APK cannot be installed at all, so the signature is
+          # read two independent ways: the SDK tool where the runner has one,
+          # and the signing block Android itself looks for. The first run of
+          # this step printed "no signature found" - and "the tool said
+          # nothing" is not evidence of anything, hence both readings and a
+          # gate that fails rather than publishing a file that will not install.
+          APKSIGNER=$(ls "$SDK"/build-tools/*/apksigner 2>/dev/null | sort -V | tail -1)
+          APKSIGNER_JAR=$(ls "$SDK"/build-tools/*/lib/apksigner.jar 2>/dev/null | sort -V | tail -1)
+          if [ -x "$APKSIGNER" ]; then
+            CERT=$( { "$APKSIGNER" verify --print-certs "$APK" 2>&1 || true; } | head -6 )
+          elif [ -n "$APKSIGNER_JAR" ]; then
+            CERT=$( { java -jar "$APKSIGNER_JAR" verify --print-certs "$APK" 2>&1 || true; } | head -6 )
+          else
+            CERT="apksigner is not in the SDK on this runner"
+          fi
+          # apksigner's wording is "Verified using v2 scheme (APK Signature
+          # Scheme v2): true" - the scheme name sits between the two.
+          VERIFIED=$(printf '%s\n' "$CERT" | grep -cE "Verified using v[0-9]+ scheme.*: true" || true)
+          BLOCK=$(grep -a -c 'APK Sig Block 42' "$APK" || true)
+          V1=$(printf '%s\n' "$UNZIP" | grep -cE 'META-INF/.*\.(RSA|DSA|EC)$' || true)
 
           if [ "${INDEX:-0}" -lt 1 ] || [ "${JS:-0}" -lt 1 ]; then
             echo "::error::the APK carries no web app (index.html x$INDEX, js x$JS) - not publishing it"
@@ -140,6 +158,16 @@ jobs:
           fi
           if [ "${PLUGINS:-0}" -lt 1 ]; then
             echo "::error::the APK has no Capacitor plugin registry - every plugin call would fail on the phone"
+            exit 1
+          fi
+          if printf '%s\n' "$CERT" | grep -q "DOES NOT VERIFY"; then
+            echo "::error::the APK does not verify - Android will refuse to install it"
+            printf '%s\n' "$CERT"
+            exit 1
+          fi
+          if [ "${VERIFIED:-0}" -lt 1 ] && [ "${BLOCK:-0}" -lt 1 ]; then
+            echo "::error::no signature in the APK (v1 files x$V1) - Android will refuse to install it"
+            printf '%s\n' "$CERT"
             exit 1
           fi
 
@@ -150,7 +178,8 @@ jobs:
             printf '| size | %s bytes |\n' "$SIZE"
             printf '| sha256 | `%s` |\n' "$SHA"
             printf '| web files in the package | %s (index.html x%s, js x%s) |\n' "$WEBFILES" "$INDEX" "$JS"
-            printf '| plugins in the registry | %s |\n\n' "$PLUGINCOUNT"
+            printf '| plugins in the registry | %s |\n' "$PLUGINCOUNT"
+            printf '| signature | verified by tool x%s, signing block x%s, v1 files x%s |\n\n' "$VERIFIED" "$BLOCK" "$V1"
             printf '```text\n%s\n%s\n%s\n```\n' "$BADGING" "$CERT" "$(printf '%s\n' "$UNZIP" | grep -E 'assets/public/(index.html|main[^/]*\.js)$' || true)"
           } > /tmp/apk-report.md
           cat /tmp/apk-report.md
