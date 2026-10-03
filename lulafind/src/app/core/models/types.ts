@@ -718,7 +718,12 @@ export interface ChatThread {
   lastMessageAt: number;
   unread: Record<string, number>;
   /** How the thread opened. Reactions no longer unlock chat, so new threads say 'follow'. */
-  unlockedVia: 'vote' | 'follow' | 'friend';
+  /**
+   * How the thread came to exist. A reaction is not an option any more - chat
+   * opens on a mutual follow ('follow') or on a profile visit between people who
+   * follow each other ('friend').
+   */
+  unlockedVia: 'follow' | 'friend';
 }
 
 /**

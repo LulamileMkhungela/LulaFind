@@ -1144,7 +1144,7 @@ export class PostDetailComponent implements OnInit {
     if (next) this.p.set(next);
     await this.say(response === 'not_going_home' ? 'Your family has been told you are safe.' : 'Your family has been notified.');
     if (response === 'contact_me' && p.authorId) {
-      const thread = await this.chat.ensureThread(p, p.authorId, 'vote');
+      const thread = await this.chat.ensureThread(p, p.authorId);
       if (thread) await this.router.navigate(['/chats/thread', thread.id]);
     }
   }
@@ -1255,7 +1255,7 @@ export class PostDetailComponent implements OnInit {
     if (!p) return;
     const g = await this.chat.gate(p, p.khumbu?.claimedByUserId === this.auth.viewerId);
     if (g.allowed) {
-      const thread = await this.chat.ensureThread(p, p.authorId, 'vote');
+      const thread = await this.chat.ensureThread(p, p.authorId);
       if (thread) await this.router.navigate(['/chats/thread', thread.id]);
       return;
     }
