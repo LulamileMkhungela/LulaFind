@@ -5,6 +5,7 @@ import { LulaApi, SavePostOptions } from './api';
 import { answerBlocker } from '../utils/lookout';
 import { SUPABASE_URL, SUPABASE_KEY, supabaseNotice } from './supabase-client';
 import { LocalDb } from './local-db';
+import { canReadPostAudience } from '../utils/audience';
 import { PHOTO_MAX_BYTES, VIDEO_MAX_BYTES } from '../models/media-rules';
 import {
   ChatMessage, ChatThread, Lookout, Comment, FeedFilter, FollowEdge, MediaItem,
@@ -693,7 +694,6 @@ export class SupabaseApi implements LulaApi {
    * surname-only Spotlight post all stay exactly as private as they were.
    */
   private async applyVisibility(posts: Post[], viewerId: string | null): Promise<Post[]> {
-    const spots = posts.some((p) => p.audience === 'surname') ? await this.spotlights() : [];
     const following = new Set<string>();
     if (viewerId) {
       await Promise.all(posts.filter((p) => p.authorId !== viewerId && p.audience === 'followers')
@@ -701,12 +701,12 @@ export class SupabaseApi implements LulaApi {
     }
     return posts.filter((p) => {
       if (p.status === 'under_review' && p.authorId !== viewerId) return false;
-      if (p.audience === 'followers' && p.authorId !== viewerId && !following.has(p.authorId)) return false;
-      if (p.audience === 'surname' && p.authorId !== viewerId) {
-        const spot = spots.find((s) => s.id === p.spotlightId);
-        if (!viewerId || !spot || !spot.memberIds.includes(viewerId)) return false;
-      }
-      return true;
+      // The audience rule lives in core/utils/audience.ts, shared with the
+      // offline backend, because the database and the app must agree. This used
+      // to hide a Spotlight post from anyone who had not joined the community,
+      // which contradicted both the offline backend and the SQL - so a shared
+      // link to a Spotlight looked empty to everyone the family sent it to.
+      return canReadPostAudience(p, { viewerId, following });
     });
   }
 

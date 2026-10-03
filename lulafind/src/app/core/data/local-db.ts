@@ -3,6 +3,7 @@ import {
   ReactionKind, UserProfile, defaultPrivacy, isReaction
 } from '../models/types';
 import { seedComments, seedPosts, seedSpotlights, seedStories, seedTips, seedUsers } from './seed';
+import { canReadPostAudience } from '../utils/audience';
 import { answerBlocker, hasAnswered, withAnswer } from '../utils/lookout';
 import { lookoutCasePost } from '../utils/lookout-case';
 
@@ -575,18 +576,9 @@ export class LocalDb {
       list = list.filter((p) => this.matchesQuery(p, q));
     }
 
-    // audience enforcement
-    list = list.filter((p) => {
-      if (p.authorId === viewerId) return true;
-      if (p.audience === 'public') return true;
-      if (p.audience === 'followers') return following.has(p.authorId);
-      if (p.audience === 'surname') {
-        if (!p.spotlightId) return false;
-        const sp = this.spotlight(p.spotlightId);
-        return !!sp && (!viewer?.surname || sp.surname.toLowerCase() === viewer.surname.toLowerCase() || sp.memberIds.includes(viewerId ?? ''));
-      }
-      return true;
-    });
+    // audience enforcement - the shared rule, so this backend and the live one
+    // cannot answer the same question differently.
+    list = list.filter((p) => canReadPostAudience(p, { viewerId, following }));
 
     switch (f.sort) {
       case 'hot':

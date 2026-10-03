@@ -2172,6 +2172,71 @@ describe('Spotlights are public to read and members-only to post to', () => {
     expect(posts.map((p) => p.id)).toContain('p_filed_spot');
   });
 
+  it('shows a Spotlight case in the feed to a guest and to someone who never joined', async () => {
+    // The feed is where a shareable link lands. Hiding it from anyone who had
+    // not joined the community is what made a family's Spotlight page look
+    // empty to the people they sent it to - in the live backend only, because
+    // the offline backend already allowed it. Both now use one rule.
+    const data = TestBed.inject(DataService);
+    const auth = TestBed.inject(AuthService);
+    await data.loadStatic();
+    // A community the demo account is not part of, so "non-member" is real.
+    const sp = data.spotlights().find((s) => !s.memberIds.includes('u_demo')) ?? data.spotlights()[1];
+    const member = sp.memberIds[0];
+    await filedPost(data, sp.id, member);
+
+    // A guest, exactly like someone who was sent the link.
+    expect(auth.signedIn()).toBe(false);
+    const asGuest = await data.loadFeed({ ...emptyFilter(), status: 'active', sort: 'recent' });
+    expect(asGuest.map((p) => p.id)).toContain('p_filed_spot');
+
+    // Signed in, but not a member of that community.
+    await auth.signInDemo();
+    expect(sp.memberIds.includes(auth.viewerId!)).toBe(false);
+    const asOutsider = await data.loadFeed({ ...emptyFilter(), status: 'active', sort: 'recent' });
+    expect(asOutsider.map((p) => p.id)).toContain('p_filed_spot');
+  });
+
+  it('keeps a followers-only case private under the same rule', async () => {
+    const data = TestBed.inject(DataService);
+    const api = TestBed.inject(LULA_API);
+    await data.loadStatic();
+    const db = (TestBed.inject(LULA_API) as MockApi).db;
+    // u_demo follows nobody by default here, and u_zanele is not in the seeded
+    // network - so "does not follow the author" is the real state.
+    const author = 'u_zanele';
+    const base = db.posts().find((p) => p.type === 'missing')!;
+    db.upsertPost({
+      ...base, id: 'p_followers_only', authorId: author, audience: 'followers',
+      spotlightId: null, title: 'Only for people who follow me', media: []
+    } as Post);
+
+    const asGuest = await data.loadFeed({ ...emptyFilter(), status: 'active', sort: 'recent' });
+    expect(asGuest.map((p) => p.id)).not.toContain('p_followers_only');
+
+    await TestBed.inject(AuthService).signInDemo();
+    const asStranger = await data.loadFeed({ ...emptyFilter(), status: 'active', sort: 'recent' });
+    expect(asStranger.map((p) => p.id)).not.toContain('p_followers_only');
+
+    // An accepted follow is what opens it - and nothing else.
+    await api.follow('u_demo', author);
+    const asFollower = await data.loadFeed({ ...emptyFilter(), status: 'active', sort: 'recent' });
+    expect(asFollower.map((p) => p.id)).toContain('p_followers_only');
+  });
+
+  it('answers the audience question in exactly one place, shared by both backends', async () => {
+    // The bug was the app and the database (and the two backends) disagreeing.
+    // One function now answers it, and this is what catches a second copy.
+    const { readFileSync } = await import('node:fs');
+    for (const file of ['src/app/core/data/supabase-api.ts', 'src/app/core/data/local-db.ts']) {
+      const text = readFileSync(`${process.cwd()}/${file}`, 'utf8');
+      expect(text, `${file} must use the shared audience rule`).toContain('canReadPostAudience(');
+    }
+    const api = readFileSync(`${process.cwd()}/src/app/core/data/supabase-api.ts`, 'utf8');
+    // The members-only gate that hid Spotlight posts from non-members.
+    expect(api, 'the members-only gate must not come back').not.toMatch(/audience === 'surname'[\s\S]{0,220}memberIds\.includes/);
+  });
+
   it('still hides a case held for review from a guest reading a Spotlight', async () => {
     const data = TestBed.inject(DataService);
     await data.loadStatic();
