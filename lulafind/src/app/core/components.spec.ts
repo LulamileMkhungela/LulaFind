@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, ViewChild } from '@angular/core';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import { describe, expect, it, beforeEach } from 'vitest';
 import { provideRouter } from '@angular/router';
@@ -30,6 +30,10 @@ import { AdminComponent } from '../pages/admin/admin.component';
 import { SpotlightDetailComponent } from '../pages/spotlight/spotlight-detail.component';
 import { MediaImageComponent, MediaVideoComponent } from '../shared/components/media-image.component';
 import { SendSheetComponent } from '../shared/components/send-sheet.component';
+import { EmojiRowComponent } from '../shared/components/emoji-row.component';
+import { UserHoverDirective, UserHoverCardComponent } from '../shared/components/user-hover-card.component';
+import { UserHoverService } from '../core/services/user-hover.service';
+import { ChatThread } from '../core/models/types';
 import { PostActionsService } from '../core/services/post-actions.service';
 import { SUPPORT_EMAIL } from './config';
 import { ActivatedRoute, convertToParamMap } from '@angular/router';
@@ -1252,3 +1256,360 @@ describe('The Send sheet', () => {
     expect(await actions.sendTo(post, ['u_lindiwe'], 'hello')).toBe(0);
   });
 });
+/**
+ * LinkedIn's message row. A thread is not only the words: you react to one
+ * message, fix your own mistake, take one back, see whether it was read, and
+ * search the whole thing. All of it lives on the row itself, and none of it
+ * touches the other person's messages.
+ */
+describe('What you can do to a message', () => {
+  /** A room with three messages: one of them mine, unread by the other side. */
+  async function room() {
+    const database = new LocalDb(true);
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter(ROUTES),
+        provideIonicAngular(),
+        { provide: LULA_API, useValue: new MockApi(database) },
+        {
+          provide: ActivatedRoute,
+          useValue: { snapshot: { paramMap: convertToParamMap({ threadId: 'thread-acts' }), fragment: null } }
+        }
+      ]
+    });
+    const auth = TestBed.inject(AuthService);
+    await auth.signInDemo();
+    const me = auth.viewerId!;
+    const api = TestBed.inject(LULA_API);
+    const t0 = Date.now();
+    const thread: ChatThread = {
+      id: 'thread-acts', participantIds: [me, 'u_kabelo'], postId: null,
+      createdAt: t0 - 10_000, lastMessageAt: t0, unread: { [me]: 0, u_kabelo: 0 }, unlockedVia: 'follow'
+    };
+    await api.saveThread(thread);
+    await api.saveMessage({ id: 'a1', threadId: thread.id, fromUserId: 'u_kabelo', body: 'I saw your post about the station', at: t0 - 90_000, read: true, kind: 'text' });
+    await api.saveMessage({ id: 'a2', threadId: thread.id, fromUserId: me, body: 'Thank you. Can you describe the car?', at: t0 - 60_000, read: false, kind: 'text' });
+    await api.saveMessage({ id: 'a3', threadId: thread.id, fromUserId: 'u_kabelo', body: 'A silver hatchback, no plate', at: t0 - 5_000, read: false, kind: 'text' });
+    const chat = TestBed.inject(ChatService);
+    await chat.openThread(thread.id);
+    const f = TestBed.createComponent(ChatRoomComponent);
+    // Not whenStable(): the room asks ion-content for its scroll element, and in
+    // jsdom that promise never lands. A few macrotask turns render the thread.
+    for (let i = 0; i < 6; i++) {
+      await new Promise((r) => setTimeout(r, 0));
+      f.detectChanges();
+    }
+    return { f, chat, me, database, api };
+  }
+
+  const flush = (): Promise<unknown> => new Promise((r) => setTimeout(r, 0));
+
+  async function redraw(f: ComponentFixture<ChatRoomComponent>): Promise<void> {
+    for (let i = 0; i < 3; i++) {
+      await new Promise((r) => setTimeout(r, 0));
+      f.detectChanges();
+    }
+  }
+
+  it('puts a reaction on one message and takes it back', async () => {
+    const { f, chat, me, database } = await room();
+    const hers = chat.messages().find((m) => m.fromUserId === 'u_kabelo')!;
+    // The row is there for every message, quiet until you reach for it: four faces
+    // each, and the words-only actions on the one message that is ours.
+    const el0 = f.nativeElement as HTMLElement;
+    expect(el0.querySelectorAll('.acts .act[aria-pressed]').length).toBe(12);
+    expect([...el0.querySelectorAll('.act.txt')].filter((b) => b.textContent?.includes('Edit')).length).toBe(1);
+    expect([...el0.querySelectorAll('.act.txt')].filter((b) => b.textContent?.includes('Unsend')).length).toBe(1);
+    expect(await chat.reactMessage(hers.id, 'like')).toBe(true);
+    expect(database.messages('thread-acts').find((m) => m.id === hers.id)!.reactions?.[me]).toBe('like');
+    await redraw(f);
+    const pill = (f.nativeElement as HTMLElement).querySelector('.face');
+    expect(pill?.textContent).toContain('1');
+    // The same face again is LinkedIn's "remove", not a second one.
+    expect(await chat.reactMessage(hers.id, 'like')).toBe(true);
+    expect(database.messages('thread-acts').find((m) => m.id === hers.id)!.reactions).toEqual({});
+    // A system note is not a message anyone can react to.
+    expect(await chat.reactMessage('no-such-message', 'like')).toBe(false);
+    f.destroy();
+  });
+
+  it('lets you fix your own message and marks it Edited', async () => {
+    const { f, chat, me, database } = await room();
+    const mine = chat.messages().find((m) => m.fromUserId === me)!;
+    const hers = chat.messages().find((m) => m.fromUserId === 'u_kabelo')!;
+    expect(f.componentInstance.canManage(mine)).toBe(true);
+    expect(f.componentInstance.canManage(hers)).toBe(false);
+    f.componentInstance.startEdit(mine);
+    f.detectChanges();
+    expect((f.nativeElement as HTMLElement).textContent).toContain('Editing your message');
+    f.componentInstance.editText.set('Thank you. Can you describe the car and who was with it?');
+    await f.componentInstance.saveEdit();
+    const stored = database.messages('thread-acts').find((m) => m.id === mine.id)!;
+    expect(stored.body).toContain('who was with it');
+    expect(stored.editedAt).toBeGreaterThan(0);
+    await redraw(f);
+    expect((f.nativeElement as HTMLElement).textContent).toContain('Edited');
+    // The message is still one message, not the old one plus a new one.
+    expect(chat.messages().filter((m) => m.id === mine.id).length).toBe(1);
+    // Her words are not ours to rewrite, even called straight on the service.
+    expect(await chat.editMessage(hers.id, 'words she never typed')).toBe(false);
+    f.destroy();
+  });
+
+  it('unsends a message and says so in the gap it leaves', async () => {
+    const { f, chat, me } = await room();
+    const mine = chat.messages().find((m) => m.fromUserId === me)!;
+    await f.componentInstance.unsend(mine);
+    const after = chat.messages().find((m) => m.id === mine.id)!;
+    expect(after.unsent).toBe(true);
+    expect(after.body).toBe('');
+    // The row stays - a message that vanishes without a trace reads as a bug.
+    expect(chat.messages().length).toBe(3);
+    await redraw(f);
+    const html = (f.nativeElement as HTMLElement).innerHTML;
+    expect(html).toContain('You unsent a message');
+    expect(html).not.toContain('Can you describe the car');
+    expect(await chat.unsendMessage(chat.messages().find((m) => m.fromUserId === 'u_kabelo')!.id)).toBe(false);
+    f.destroy();
+  });
+
+  it('marks the last thing you sent Delivered, then Seen', async () => {
+    const { f, chat, me, database } = await room();
+    let html = (f.nativeElement as HTMLElement).innerHTML;
+    expect(html).toContain('Delivered');
+    expect(html).not.toContain('Seen');
+    const mine = chat.messages().filter((m) => m.fromUserId === me).at(-1)!;
+    // She opened the thread: the flag on the message is all the read state there is.
+    await TestBed.inject(LULA_API).saveMessage({ ...mine, read: true });
+    await chat.refreshOpenThread();
+    await redraw(f);
+    html = (f.nativeElement as HTMLElement).innerHTML;
+    expect(html).toContain('Seen');
+    expect(html).not.toContain('Delivered');
+    expect(chat.peerSeen()).toBe(true);
+    // Unsend it and the status line goes with it, so the count of ticks is one.
+    await f.componentInstance.unsend(mine);
+    await redraw(f);
+    expect((f.nativeElement as HTMLElement).querySelectorAll('.status').length).toBe(0);
+    expect(database.messages('thread-acts').length).toBe(3);
+    f.destroy();
+  });
+
+  it('shows typing dots for the other side, and ignores a stale marker', async () => {
+    const { f, chat, me, api } = await room();
+    const thread = (await api.thread('thread-acts'))!;
+    f.componentInstance.onType('One moment, I am looking');
+    await flush();
+    expect(((await api.thread('thread-acts'))!.typing ?? {})[me]).toBeGreaterThan(0);
+    chat.stopTyping();
+    await flush();
+    expect(((await api.thread('thread-acts'))!.typing ?? {})[me]).toBeUndefined();
+    // The typing marker must not move the thread in the inbox.
+    expect((await api.thread('thread-acts'))!.lastMessageAt).toBe(thread.lastMessageAt);
+    await api.saveThread({ ...thread, typing: { u_kabelo: Date.now() } });
+    await chat.load();
+    await redraw(f);
+    expect((f.nativeElement as HTMLElement).textContent).toContain('is typing');
+    // A marker from a minute ago is a crashed app, not a person typing.
+    await api.saveThread({ ...(await api.thread('thread-acts'))!, typing: { u_kabelo: Date.now() - 60_000 } });
+    await chat.load();
+    await redraw(f);
+    expect((f.nativeElement as HTMLElement).textContent).not.toContain('is typing');
+    f.destroy();
+  });
+
+  it('searches inside the conversation and keeps the day line honest', async () => {
+    const { f } = await room();
+    f.componentInstance.toggleSearch();
+    f.detectChanges();
+    expect((f.nativeElement as HTMLElement).querySelector('.find input')).toBeTruthy();
+    f.componentInstance.setQuery('hatchback');
+    await redraw(f);
+    expect(f.componentInstance.shown().length).toBe(1);
+    const html = (f.nativeElement as HTMLElement).innerHTML;
+    expect(html).toContain('A silver hatchback, no plate');
+    expect(html).not.toContain('I saw your post about the station');
+    // One message on screen means one divider, not one per day of the thread.
+    expect(f.nativeElement.querySelectorAll('.day-divider').length).toBe(1);
+    f.componentInstance.setQuery('nothing like this');
+    await redraw(f);
+    expect((f.nativeElement as HTMLElement).textContent).toContain('Nothing in this conversation says');
+    f.componentInstance.closeSearch();
+    f.detectChanges();
+    expect(f.componentInstance.shown().length).toBe(3);
+    f.destroy();
+  });
+});
+
+describe('The two rows a composer shares', () => {
+  beforeEach(bed);
+
+  it('hands the face it was given to whoever asked', async () => {
+    const f = TestBed.createComponent(EmojiRowComponent);
+    const seen: string[] = [];
+    f.componentInstance.picked.subscribe((e: string) => seen.push(e));
+    f.detectChanges();
+    await f.whenStable();
+    const buttons = (f.nativeElement as HTMLElement).querySelectorAll('button');
+    expect(buttons.length).toBe(16);
+    buttons[0].click();
+    buttons[2].click();
+    expect(seen).toEqual(['👍', '❤️']);
+  });
+
+  it('opens one profile card from a name, and closes it on Escape', async () => {
+    @Component({
+      standalone: true,
+      imports: [UserHoverDirective, UserHoverCardComponent],
+      template: `<a #name lfUserHover="u_kabelo">Kabelo Nkosi</a><lf-user-hover-host />`
+    })
+    class HostComponent {
+      @ViewChild('name', { static: true }) name!: { nativeElement: HTMLElement };
+    }
+    const data = TestBed.inject(DataService);
+    const kabelo = await data.profile('u_kabelo');
+    if (kabelo) data.touchAuthor(kabelo);
+    const f = TestBed.createComponent(HostComponent);
+    f.detectChanges();
+    await f.whenStable();
+    expect((f.nativeElement as HTMLElement).querySelector('.card')).toBeFalsy();
+    (f.nativeElement as HTMLElement).querySelector('[lfUserHover]')!.dispatchEvent(new MouseEvent('mouseenter'));
+    f.detectChanges();
+    await f.whenStable();
+    const card = (f.nativeElement as HTMLElement).querySelector('.card');
+    expect(card?.textContent).toContain('Kabelo Nkosi');
+    expect(card?.textContent).toContain('@kabelo');
+    expect(card?.querySelector('.acts')?.textContent).toContain('Follow');
+    // Nobody gets a button to follow themselves.
+    expect(TestBed.inject(UserHoverService).userId()).toBe('u_kabelo');
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    f.detectChanges();
+    expect(TestBed.inject(UserHoverService).userId()).toBeNull();
+    f.destroy();
+  });
+});
+
+/**
+ * @mentions. The whole point of the @ is that someone who is not looking gets
+ * told - so the test follows the words all the way to their notification.
+ */
+describe('Mentions in a comment', () => {
+  beforeEach(bed);
+
+  async function page() {
+    const database = new LocalDb(true);
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter(ROUTES),
+        provideIonicAngular(),
+        { provide: LULA_API, useValue: new MockApi(database) },
+        {
+          provide: ActivatedRoute,
+          useValue: { snapshot: { paramMap: convertToParamMap({ id: 'p_thato' }), fragment: null } }
+        }
+      ]
+    });
+    await TestBed.inject(AuthService).signInDemo();
+    const data = TestBed.inject(DataService);
+    await data.loadFeed();
+    await data.loadStatic();
+    const kabelo = await data.profile('u_kabelo');
+    if (kabelo) data.touchAuthor(kabelo);
+    // A commenter, so the mention list has somebody in it besides the author.
+    await TestBed.inject(LULA_API).saveComment({
+      id: 'c_mention_seed', postId: 'p_thato', parentId: null, authorId: 'u_kabelo',
+      body: 'He walks past the spaza on the corner most afternoons.', createdAt: Date.now() - 60_000,
+      upvotes: 0, likedIds: [], isLead: false
+    });
+    await data.loadFeed();
+    const f = TestBed.createComponent(PostDetailComponent);
+    // The page loads its comments through a chain of awaits, so give it turns
+    // rather than one detectChanges - a thread with no rows proves nothing.
+    for (let i = 0; i < 8; i++) {
+      f.detectChanges();
+      await new Promise((r) => setTimeout(r, 0));
+    }
+    return { f, database, data };
+  }
+
+  it('offers the people in this thread and inserts the one you pick', async () => {
+    const { f } = await page();
+    const box = (f.nativeElement as HTMLElement).querySelector('textarea')!;
+    box.value = 'Kabelo saw him ';
+    box.dispatchEvent(new Event('input'));
+    f.detectChanges();
+    expect((f.nativeElement as HTMLElement).querySelector('.who-list')).toBeFalsy();
+    box.value = 'Anyone seen @';
+    box.dispatchEvent(new Event('input'));
+    f.detectChanges();
+    const list = (f.nativeElement as HTMLElement).querySelector('.who-list')!;
+    expect(list.textContent).toContain('Kabelo Nkosi');
+    const option = [...list.querySelectorAll('button')].find((b) => b.textContent?.includes('Kabelo'))!;
+    option.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+    f.detectChanges();
+    expect(box.value).toContain('@Kabelo Nkosi ');
+    expect(f.componentInstance.mentionedIds(box.value)).toEqual(['u_kabelo']);
+  });
+
+  it('names the person in the words, links them, and tells them', async () => {
+    const { f, database } = await page();
+    const box = (f.nativeElement as HTMLElement).querySelector('textarea')!;
+    box.value = 'Please answer here @Kabelo Nkosi';
+    box.dispatchEvent(new Event('input'));
+    f.detectChanges();
+    await f.componentInstance.submitComment();
+    const saved = database.commentsFor('p_thato').find((c) => c.body.includes('@Kabelo'))!;
+    expect(saved.mentions).toEqual(['u_kabelo']);
+    const note = database.notifications('u_kabelo').find((n) => n.kind === 'mention');
+    expect(note?.body).toContain('@Kabelo Nkosi');
+    expect(note?.postId).toBe('p_thato');
+    f.detectChanges();
+    await f.whenStable();
+    const link = [...(f.nativeElement as HTMLElement).querySelectorAll('.ccard__text .mention')];
+    expect(link.some((a) => a.textContent?.includes('Kabelo'))).toBe(true);
+  });
+
+  it('does not turn an email address into a mention', async () => {
+    const { f } = await page();
+    expect(f.componentInstance.mentionedIds('write to support@lulafind.org please')).toEqual([]);
+    expect(f.componentInstance.mentionedIds('@Kabelo, and @nobody-here')).toEqual(['u_kabelo']);
+  });
+
+  it('puts a face in the comment box without a keyboard', async () => {
+    const { f } = await page();
+    const el = f.nativeElement as HTMLElement;
+    expect(el.querySelector('.em-toggle')).toBeTruthy();
+    const box = el.querySelector('textarea')! as HTMLTextAreaElement;
+    box.value = 'Thank you ';
+    box.dispatchEvent(new Event('input'));
+    f.componentInstance.addEmoji('🙏');
+    f.detectChanges();
+    await f.whenStable();
+    expect(box.value).toContain('🙏');
+    expect(el.querySelector('lf-emoji-row')).toBeFalsy();
+    el.querySelector<HTMLButtonElement>('.em-toggle')!.click();
+    f.detectChanges();
+    expect((f.nativeElement as HTMLElement).querySelector('lf-emoji-row')?.querySelectorAll('button').length).toBe(16);
+  });
+
+  it('offers a follow beside a commenter, and says Following when you already do', async () => {
+    const { f, database } = await page();
+    const chips = () => [...(f.nativeElement as HTMLElement).querySelectorAll('.cfollow')].map((b) => b.textContent?.trim());
+    // The seed has u_demo following u_kabelo, who commented here, so the chip on
+    // that row reads "Following" - and the row of my own comment has no chip at all.
+    expect(f.componentInstance.isFollowing('u_kabelo')).toBe(true);
+    expect(chips()).toContain('Following');
+    expect(chips()).not.toContain('undefined');
+    await f.componentInstance.followPerson('u_kabelo');
+    expect(database.follows().some((edge) => edge.followerId === 'u_demo' && edge.followingId === 'u_kabelo')).toBe(false);
+    expect(f.componentInstance.isFollowing('u_kabelo')).toBe(false);
+    for (let i = 0; i < 3; i++) {
+      await new Promise((r) => setTimeout(r, 0));
+      f.detectChanges();
+    }
+    expect(chips()).toContain('+ Follow');
+  });
+});
+

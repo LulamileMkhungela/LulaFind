@@ -762,7 +762,7 @@ export interface Notification {
   id: string;
   userId: string;
   kind:
-    | 'vote' | 'comment' | 'follow' | 'chat' | 'system'
+    | 'vote' | 'comment' | 'follow' | 'chat' | 'system' | 'mention'
     | 'escalation' | 'location_consent' | 'claim' | 'outcome' | 'spotlight'
     | 'checkin' | 'moderation' | 'danger' | 'story_reply' | 'repost' | 'missing'
     | 'lookout';

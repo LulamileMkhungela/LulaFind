@@ -528,6 +528,8 @@ export class DataService {
     sighting?: Comment['sighting'];
     markGuess?: string;
     media?: MediaItem[];
+    /** profiles the comment named with @ - they get the same nudge a commenter gets */
+    mentions?: string[];
   }): Promise<Comment> {
     const me = this.auth.viewerId;
     if (!me) throw new Error('Sign in to comment');
@@ -561,7 +563,8 @@ export class DataService {
       isLead: input.isLead ?? false,
       media: media.length ? media : undefined,
       sighting: input.sighting,
-      markGuess: input.markGuess || undefined
+      markGuess: input.markGuess || undefined,
+      mentions: input.mentions?.length ? input.mentions : undefined
     };
     await this.api.saveComment(c);
 
@@ -586,6 +589,23 @@ export class DataService {
       console.warn('Could not refresh the comment preview:', error);
     }
     this.replacePostViews(next);
+
+    // The @ list. Only people this comment can actually reach, and not the poster,
+    // who is already being told about it below.
+    const named = [...new Set(input.mentions ?? [])].filter((id) => id && id !== me && id !== p.authorId);
+    for (const id of named) {
+      void this.api.pushNotification({
+        id: uid('n'),
+        userId: id,
+        kind: 'mention',
+        title: `${this.auth.user()?.displayName ?? 'Someone'} mentioned you in a comment`,
+        body: c.body.slice(0, 110) || 'On a post you are part of',
+        at: Date.now(),
+        read: false,
+        route: `/post/${p.id}`,
+        postId: p.id
+      }).catch(() => undefined);
+    }
 
     if (p.authorId !== me) {
       void this.api.pushNotification({

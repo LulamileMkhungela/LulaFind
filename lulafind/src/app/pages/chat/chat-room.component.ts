@@ -231,7 +231,7 @@ import { MediaService } from '../../core/services/media.service';
     .ico:hover { background: var(--lf-hover); }
     .ico.on { background: var(--lf-primary-soft); }
     .em-btn { font-size: 19px; line-height: 1; }
-    .picker { width: 100%; padding: 4px 2px 6px; border-bottom: 1px solid var(--lf-line); }
+    .picker { width: 100%; margin: 0; padding: 4px 2px 6px; border-bottom: 1px solid var(--lf-line); }
     .pending { display: flex; align-items: center; gap: 9px; width: 100%; padding-bottom: 8px;
       border-bottom: 1px solid var(--lf-line); margin-bottom: 8px; }
     .pending img { width: 42px; height: 42px; object-fit: cover; border-radius: 9px; }
@@ -316,22 +316,22 @@ export class ChatRoomComponent implements OnInit, OnDestroy {
    * the same thing in either place. They come off the keyboard too - this row is
    * a shortcut, not the only way in.
    */
-  protected readonly EMOJIS = QUICK_EMOJIS;
+  public readonly EMOJIS = QUICK_EMOJIS;
 
   /**
    * In-thread search, LinkedIn's magnifier. Filtering the list rather than
    * stepping through hits keeps the day dividers honest: what you see is only
    * what matches.
    */
-  protected searchOpen = signal(false);
-  protected query = signal('');
+  public searchOpen = signal(false);
+  public query = signal('');
   /** The message whose action row is open. Touch has no hover, so it needs a tap. */
-  protected openActs = signal('');
+  public openActs = signal('');
   /** A message being edited in place, and the text in the box. */
-  protected edit = signal<ChatMessage | null>(null);
-  protected editText = signal('');
+  public edit = signal<ChatMessage | null>(null);
+  public editText = signal('');
   /** Which message was just copied, so the button can say so for a moment. */
-  protected copied = signal('');
+  public copied = signal('');
 
   /** The reaction faces offered on a message: the same set a post gets. */
   protected readonly REACTIONS = REACTIONS;
@@ -349,7 +349,7 @@ export class ChatRoomComponent implements OnInit, OnDestroy {
   });
 
   /** The four faces and who gave them, in the order the tray lists them. */
-  protected facesOn(m: ChatMessage): { key: ReactionKind; label: string; count: number; mine: boolean }[] {
+  public facesOn(m: ChatMessage): { key: ReactionKind; label: string; count: number; mine: boolean }[] {
     const me = this.me() ?? '';
     const given = new Map<ReactionKind, number>();
     for (const k of Object.values(m.reactions ?? {})) {
@@ -360,37 +360,37 @@ export class ChatRoomComponent implements OnInit, OnDestroy {
     }));
   }
 
-  protected myFace(m: ChatMessage): ReactionKind | null {
+  public myFace(m: ChatMessage): ReactionKind | null {
     return (m.reactions ?? {})[this.me() ?? ''] ?? null;
   }
 
   /** Tapping a face you already gave takes it back, like the post tray. */
-  protected async react(m: ChatMessage, key: ReactionKind): Promise<void> {
+  public async react(m: ChatMessage, key: ReactionKind): Promise<void> {
     await this.chat.reactMessage(m.id, this.myFace(m) === key ? null : key);
     this.openActs.set('');
   }
 
-  protected toggleActs(m: ChatMessage): void {
+  public toggleActs(m: ChatMessage): void {
     this.openActs.set(this.openActs() === m.id ? '' : m.id);
   }
 
   /** Only your own, only a message that still has words, never a system note. */
-  protected canManage(m: ChatMessage): boolean {
+  public canManage(m: ChatMessage): boolean {
     return m.fromUserId === this.me() && m.kind === 'text' && !m.unsent;
   }
 
-  protected startEdit(m: ChatMessage): void {
+  public startEdit(m: ChatMessage): void {
     this.edit.set(m);
     this.editText.set(m.body);
     this.openActs.set('');
   }
 
-  protected cancelEdit(): void {
+  public cancelEdit(): void {
     this.edit.set(null);
     this.editText.set('');
   }
 
-  protected async saveEdit(): Promise<void> {
+  public async saveEdit(): Promise<void> {
     const m = this.edit();
     const body = this.editText().trim();
     if (!m || !body) return;
@@ -405,13 +405,13 @@ export class ChatRoomComponent implements OnInit, OnDestroy {
    * One tap, no dialog. LinkedIn's unsend is immediate and says so in the gap it
    * leaves; a confirmation here would only hide what happened.
    */
-  protected async unsend(m: ChatMessage): Promise<void> {
+  public async unsend(m: ChatMessage): Promise<void> {
     if (this.edit()?.id === m.id) this.cancelEdit();
     await this.chat.unsendMessage(m.id);
     this.openActs.set('');
   }
 
-  protected unsentLabel(m: ChatMessage): string {
+  public unsentLabel(m: ChatMessage): string {
     return m.fromUserId === this.me() ? 'You unsent a message' : this.peerName() + ' unsent a message';
   }
 
@@ -419,7 +419,7 @@ export class ChatRoomComponent implements OnInit, OnDestroy {
    * The read marker a thread carries is a flag, not a timestamp, so the line says
    * Seen and not Seen at 14:32 - a time we do not have would be a made-up one.
    */
-  protected tick(m: ChatMessage): string {
+  public tick(m: ChatMessage): string {
     return m.read ? 'Seen' : 'Delivered';
   }
 
@@ -429,11 +429,11 @@ export class ChatRoomComponent implements OnInit, OnDestroy {
     return [...this.chat.messages()].reverse().find((m) => m.fromUserId === me && m.kind !== 'system')?.id ?? '';
   });
 
-  protected isLastMine(m: ChatMessage): boolean {
+  public isLastMine(m: ChatMessage): boolean {
     return m.id === this.lastMine() && !m.unsent;
   }
 
-  protected async copy(m: ChatMessage): Promise<void> {
+  public async copy(m: ChatMessage): Promise<void> {
     try {
       await navigator.clipboard?.writeText(m.body);
       this.copied.set(m.id);
@@ -444,28 +444,28 @@ export class ChatRoomComponent implements OnInit, OnDestroy {
     this.openActs.set('');
   }
 
-  protected toggleSearch(): void {
+  public toggleSearch(): void {
     const next = !this.searchOpen();
     this.searchOpen.set(next);
     if (!next) this.query.set('');
   }
 
-  protected closeSearch(): void {
+  public closeSearch(): void {
     this.searchOpen.set(false);
     this.query.set('');
   }
 
-  protected setQuery(value: string): void {
+  public setQuery(value: string): void {
     this.query.set(value);
   }
 
   /** Every keystroke leaves a marker for the other side, at most one every 2s. */
-  protected onType(value: string): void {
+  public onType(value: string): void {
     this.draft = value;
     this.chat.noteTyping();
   }
 
-  protected addEmoji(e: string): void {
+  public addEmoji(e: string): void {
     this.draft = `${this.draft}${e}`;
     this.chat.noteTyping();
   }

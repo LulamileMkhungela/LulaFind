@@ -22,11 +22,12 @@ export const QUICK_EMOJIS = ['👍', '🙏', '❤️', '😢', '😮', '🎉', '
     </div>
   `,
   styles: [`
+    :host { display: block; margin: 2px 0 4px; }
     .lf-emoji-row { display: flex; flex-wrap: wrap; gap: 2px; }
     .lf-emoji-row button { display: flex; align-items: center; justify-content: center; min-width: 34px; height: 30px;
       padding: 0 4px; border: none; border-radius: 8px; background: none; font: inherit; font-size: 19px; line-height: 1;
       cursor: pointer; }
-    .lf-emoji-row button:hover { background: var(--lf-surface-hover); }
+    .lf-emoji-row button:hover { background: var(--lf-hover); }
     .lf-emoji-row button:focus-visible { outline: 2px solid var(--lf-primary-fill); outline-offset: 1px; }
     .lf-emoji-row button:active { transform: scale(1.25); }
   `]

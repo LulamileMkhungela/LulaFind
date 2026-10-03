@@ -1,3 +1,38 @@
+# Session state — 2026-10-03 (round 5)
+
+The parity line, finished: everything a LinkedIn message row lets you do, plus the
+last three comment-box things. `docs/DESIGN-audit-and-fixes.md` §6 has the reasoning;
+the code moved here:
+
+- **`core/models/types.ts`**: `ChatMessage` gains `reactions` (one per person),
+  `editedAt`, `unsent`; `ChatThread` gains `typing`; `Comment` gains `mentions`;
+  `Notification['kind']` gains `mention` (no SQL CHECK on that column, so nothing to
+  re-run — the notification screen already falls back to a bell for an unknown kind).
+- **`ChatService`**: `reactMessage` / `editMessage` / `unsendMessage` /
+  `noteTyping` / `stopTyping`, plus `peerSeen` and `typingPeer` computeds. A write
+  that only sets a reaction never touches `lastMessageAt`.
+- **`pages/chat/chat-room.component.ts`**: per-message action row, reaction pills,
+  Seen/Delivered, Edited stamp, unsent gap, typing dots, in-thread search. The
+  members the tests drive are public; the rest stayed protected.
+- **`shared/components/emoji-row.component.ts`** (`lf-emoji-row`, `QUICK_EMOJIS`) is
+  the face row for both composers; **`shared/components/user-hover-card.component.ts`**
+  (`lfUserHover` + `lf-user-hover-host`, with `core/services/user-hover.service.ts`)
+  is the hover profile card, mounted once next to `lf-send-sheet`.
+- **`DataService.addComment`** takes `mentions` and notifies each named person;
+  **`post-detail`** has the `@` typeahead (arrow keys, Enter picks instead of
+  posting, Escape closes), renders `@name` as a profile link, and puts a
+  `+ Follow` / `Following` chip on every commenter who is not you.
+- **`LocalDb.upsertMessage`** had to actually upsert: it pushed a duplicate for
+  every reaction, edit and read mark. Found by the 13 new tests in
+  `core/components.spec.ts` (232 in total now).
+
+Deliberate differences from LinkedIn, still: the reaction set (idea / like /
+support / sad, "Have an idea" as the default), a reaction never unlocking chat,
+Send only to mutual follows, `Seen` without a timestamp, and mentions only reaching
+people already in the thread.
+
+---
+
 # Session state — 2026-10-03 (round 4)
 
 Four complaints, one audit: joining a Spotlight said "permission denied"; a photo

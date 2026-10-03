@@ -108,6 +108,53 @@ and in again, or have an admin run `supabase/schema.sql` and
 `supabase/post-interactions.sql`. The words "row-level security" never reach a
 person who cannot act on them.
 
+## 6. The rest of the parity line: cards, chats, comments
+
+The acceptance line was "post cards, chats, commenting, interactions on post
+cards and details, as per LinkedIn". Sections 4 and 5 covered the card and the
+comment thread; what was left was all in chat, plus three small things on the
+detail page.
+
+**Chat.** A room used to be a list of bubbles. On LinkedIn a message is a thing
+you can act on, so `ChatService` gained `reactMessage` (one reaction per person,
+keyed by who, the same shape a post's votes use), `editMessage` (yours, text
+only, stamped "Edited") and `unsendMessage`. Unsend keeps the row and writes
+"unsend" into the gap it leaves, because a message that vanishes silently reads
+as a bug on an app where people arrange to meet strangers. The room now shows
+reaction pills under a bubble, Delivered/Seen under the last thing you sent
+(the thread only carries a read *flag*, so the line says `Seen` and never a
+time we do not have), the other person's typing dots, an action row that appears
+on hover or focus and behind a `⋯` on touch, and a header magnifier that filters
+the thread to what matches — day dividers and sender lines read the filtered
+list, so a search does not print three "Today" lines for one hit.
+
+Typing markers live on the thread (`typing: { userId: at }`), are written at most
+once every 2 s, expire after 6 s in the reader, self-clear 3 s after the last
+keystroke, and never move `lastMessageAt` — a marker is not a message, and a
+thread that jumps to the top of the inbox because someone hesitated is worse
+than no indicator at all.
+
+**Comments.** The composer carries the same face row a message box does, from one
+component (`lf-emoji-row`), and an `@` typeahead. The list is deliberately not the
+address book: only the post's author and people already in this thread, which is
+what LinkedIn does and, on a missing-person post, the right rule — an `@` is how a
+stranger gets pulled into a case. Picking a name writes `@Name `, the ids land on
+`Comment.mentions`, and each named person who is not the poster gets a
+`mention` notification. `@` in the middle of an email address is not a mention.
+A commenter you do not follow gets a `+ Follow` chip beside their name.
+
+**Names.** One profile hovercard, mounted once by the shell (`lf-user-hover-host`,
+driven by `UserHoverService`), opened by `lfUserHover` on a card author, a
+reposted author, a commenter and a chat peer. One instance because a card's
+`overflow` would clip a popover of its own, and it never opens on tap: a thumb on
+a name means "open the profile", which the link under the finger already does.
+
+**A bug the tests found.** `LocalDb.upsertMessage` pushed unconditionally, so the
+first edit, reaction or read mark on a message added a *second copy* of it to the
+thread instead of replacing it. Supabase upserts by id, so this was the
+device-only path — and the room would have shown a message twice. It now replaces
+in place and leaves the inbox preview alone.
+
 ## Still with the operator
 
 The deployed schema cannot be read from here, so this round ships SQL that is safe
@@ -121,7 +168,7 @@ page says out loud.
 ```bash
 cd lulafind
 npx ng build --configuration development   # no errors
-npx ng test --watch=false                  # 219 tests
+npx ng test --watch=false                  # 232 tests
 npm run lint                               # clean
 ```
 

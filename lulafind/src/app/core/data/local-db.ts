@@ -692,6 +692,15 @@ export class LocalDb {
     return this.db.messages.filter((m) => m.threadId === threadId).sort((a, b) => a.at - b.at).map((m) => clone(m));
   }
   upsertMessage(m: ChatMessage): void {
+    // An id that is already in the thread is an edit, a reaction or a read mark,
+    // not a second copy of the message: replace it where it stands and leave the
+    // inbox preview alone, because that message arrived some time ago.
+    const at = this.db.messages.findIndex((x) => x.id === m.id);
+    if (at >= 0) {
+      this.db.messages[at] = m;
+      this.persist();
+      return;
+    }
     this.db.messages.push(m);
     const t = this.thread(m.threadId);
     if (t) {
