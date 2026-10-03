@@ -342,7 +342,16 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -o pipefail
+          # Every gh call names the repository. This job never checks the
+          # repository out - it only downloads artifacts - and gh will not fall
+          # back to GITHUB_REPOSITORY on its own: without a git directory it
+          # says "failed to run git: fatal: not a git repository" and the first
+          # run of this step failed on exactly that. The log is kept in a file
+          # so the failure can be posted to the commit, like the Android job's.
+          cat > /tmp/pin.sh <<'PIN'
+          set -euo pipefail
           TAG=apk-latest
+          REPO="$GITHUB_REPOSITORY"
           APK=$(ls dist-mobile/*.apk | head -1)
           cp "$APK" dist-mobile/LulaFind.apk
           SHA=$(sha256sum dist-mobile/LulaFind.apk | cut -d' ' -f1)
@@ -352,19 +361,37 @@ jobs:
             '' \
             "Built from \`$GITHUB_SHA\` (test build $GITHUB_RUN_NUMBER)." \
             '' \
-            "| APK | |" \
-            "|---|---|" \
-            "| name | \`LulaFind.apk\` |" \
+            '| APK | |' \
+            '|---|---|' \
+            '| name | `LulaFind.apk` |' \
             "| size | $SIZE bytes |" \
             "| sha256 | \`$SHA\` |" \
             '' \
             'Download it on the phone, tap it, and allow "install unknown apps" when Android asks.')
-
-          if gh release view "$TAG" > /dev/null 2>&1; then
-            gh release edit "$TAG" --title "LulaFind for Android (newest build)" --notes "$NOTES"
+          if gh release view "$TAG" --repo "$REPO" > /dev/null 2>&1; then
+            gh release edit "$TAG" --repo "$REPO" \
+              --title 'LulaFind for Android (newest build)' --notes "$NOTES"
           else
-            gh release create "$TAG" --title "LulaFind for Android (newest build)" --notes "$NOTES" --target "$GITHUB_SHA"
+            gh release create "$TAG" --repo "$REPO" \
+              --title 'LulaFind for Android (newest build)' --notes "$NOTES" \
+              --target "$GITHUB_SHA"
           fi
-          gh release upload "$TAG" dist-mobile/LulaFind.apk --clobber
-          gh release view "$TAG" --json url,assets \
+          gh release upload "$TAG" --repo "$REPO" dist-mobile/LulaFind.apk --clobber
+          gh release view "$TAG" --repo "$REPO" --json url,assets \
             --jq '"permanent link: \(.url)", (.assets[] | "  \(.name) | \(.size) bytes")'
+          PIN
+          bash /tmp/pin.sh 2>&1 | tee /tmp/ci-release.log
+          exit "${PIPESTATUS[0]}"
+
+      # The same reason the Android job reports its failures: CI logs live on a
+      # host the build agent's sandbox cannot read, so the tail goes where it
+      # can be picked up.
+      - name: Report a failure on the commit
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tail -c 3000 /tmp/ci-release.log > /tmp/tail.txt 2>/dev/null || echo "no log" > /tmp/tail.txt
+          gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/comments" \
+            -f body="$(printf '**Publishing the permanent link failed**\n\n```\n%s\n```' "$(cat /tmp/tail.txt)")" \
+            > /dev/null 2>&1 || true
