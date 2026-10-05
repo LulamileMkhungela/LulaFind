@@ -1479,6 +1479,22 @@ describe('Saved posts, watch alerts and followers', () => {
     expect(data.notifications().some((n) => n.postId === target.id && n.kind === 'vote' && /idea/i.test(n.title))).toBe(true);
   });
 
+  it('lets a neighbour volunteer near an open case without sharing live location', async () => {
+    signInAs('u_kabelo');
+    const data = svc<DataService>(DataService);
+    await data.refresh();
+    const target = data.feed().find((p) => p.type === 'missing' && p.authorId !== 'u_kabelo' && p.status === 'active')!;
+    expect(target).toBeTruthy();
+
+    expect(await data.markLooking(target.id)).toBe(true);
+    const looking = (await data.loadPost(target.id))!;
+    expect(looking.lookingIds).toContain('u_kabelo');
+    expect(db.notifications(target.authorId).some((n) => n.postId === target.id && /looking/i.test(n.title))).toBe(true);
+
+    expect(await data.markLooking(target.id)).toBe(false);
+    expect((await data.loadPost(target.id))!.lookingIds).not.toContain('u_kabelo');
+  });
+
   it('lets you remove a follower', async () => {
     signInAs('u_kabelo');
     const data = svc<DataService>(DataService);

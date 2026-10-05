@@ -182,6 +182,17 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
             </button>
           }
 
+          @if (isCase() && !isMine() && p()!.status === 'active') {
+            <button class="lookingline" type="button" [class.on]="looking()" [disabled]="lookingBusy()" (click)="toggleLooking()">
+              <lf-icon name="search" [size]="16" />
+              <span>
+                @if (looking()) { You are looking near this case }
+                @else { I’m looking near this case }
+              </span>
+              <strong>{{ lookingCount() }} {{ lookingCount() === 1 ? 'person' : 'people' }}</strong>
+            </button>
+          }
+
           @if (leads().length) {
             <button class="leads" type="button" (click)="openLeads()">
               <lf-icon name="search" [size]="16" />
@@ -570,6 +581,14 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
     .followline strong { color: var(--lf-link); font-weight: 700; white-space: nowrap; }
     .followline.on { background: var(--lf-primary-soft); }
     .followline.on strong { color: var(--lf-link); }
+    .lookingline { display: flex; align-items: center; gap: 8px; width: calc(100% - 24px); margin: 4px 12px 8px; padding: 10px 12px;
+      border: 1px solid var(--lf-line); border-radius: 8px; background: var(--lf-card-2); color: inherit;
+      font: inherit; font-size: 14px; text-align: left; cursor: pointer; }
+    .lookingline span { flex: 1; color: var(--lf-muted); }
+    .lookingline strong { color: var(--lf-link); font-size: 12px; font-weight: 700; white-space: nowrap; }
+    .lookingline.on { border-color: transparent; background: color-mix(in srgb, var(--lf-ubuntu) 12%, var(--lf-card)); }
+    .lookingline.on lf-icon, .lookingline.on strong { color: var(--lf-ubuntu); }
+    .lookingline:disabled { opacity: .65; cursor: wait; }
     .media { margin: 4px 0 0; }
     .media lf-media-img, .media lf-media-video { display: block; width: 100%; max-height: 640px; overflow: hidden; background: #000; }
     .media.multi { display: flex; gap: 2px; overflow-x: auto; scroll-snap-type: x mandatory; }
@@ -746,6 +765,12 @@ export class PostDetailComponent implements OnInit {
   protected readonly timeAgo = timeAgo;
   /** Whether this account asked to hear about changes to this case. */
   readonly followingCase = computed(() => !!this.p() && this.data.isFollowingCase(this.p()!.id));
+  /** Whether this account has volunteered to look near the last-seen area. */
+  readonly looking = computed(() => {
+    const me = this.auth.viewerId;
+    return !!me && !!this.p()?.lookingIds?.includes(me);
+  });
+  readonly lookingCount = computed(() => this.p()?.lookingIds?.length ?? 0);
   protected readonly headingIsNew = headingIsNewFn;
   protected readonly dayMonth = dayMonth;
   protected readonly provinceName = provinceName;
@@ -767,6 +792,7 @@ export class PostDetailComponent implements OnInit {
   asLead = signal(false);
   markGuess = signal('');
   posting = signal(false);
+  readonly lookingBusy = signal(false);
   khumbuNote = '';
 
   readonly me = computed(() => this.auth.viewerId);
@@ -908,6 +934,23 @@ export class PostDetailComponent implements OnInit {
     this.following.set(state === 'accepted');
     this.followRequested.set(state === 'pending');
     await this.refreshGate();
+  }
+
+  /** Tell the family you are checking the last-seen area, without exposing your live location. */
+  async toggleLooking(): Promise<void> {
+    if (!this.auth.signedIn()) return this.needAuth();
+    const p = this.p();
+    if (!p || this.lookingBusy()) return;
+    this.lookingBusy.set(true);
+    try {
+      const on = await this.data.markLooking(p.id);
+      await this.reload();
+      await this.say(on ? 'The family knows you are looking near the case.' : 'You are no longer marked as looking.');
+    } catch (e: unknown) {
+      await this.say(e instanceof Error ? e.message : 'Could not update the search team');
+    } finally {
+      this.lookingBusy.set(false);
+    }
   }
 
   more(): void {

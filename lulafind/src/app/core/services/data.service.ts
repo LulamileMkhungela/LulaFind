@@ -2672,7 +2672,7 @@ export class DataService {
         read: false,
         route: `/post/${p.id}`,
         postId: p.id
-      });
+      }).catch(() => undefined);
     }
     await this.loadFeed();
     return on;
