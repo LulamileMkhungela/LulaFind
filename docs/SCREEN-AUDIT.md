@@ -11,11 +11,11 @@ No screen may show a block of its *own* copy longer than 30 words. Text written 
 
 | Screen | Text | App paragraphs | Longest app copy | Longest user text |
 | --- | --- | --- | --- | --- |
-| Home / feed | 1151 words | 0 | none | 122w |
+| Home / feed | 1128 words | 0 | none | 122w |
 | Spotlight | 37 words | 0 | none | none |
 | Chats (list) | 31 words | 0 | none | none |
 | Me | 42 words | 0 | none | none |
-| Notifications | 107 words | 1 | 19w | none |
+| Notifications | 106 words | 1 | 19w | none |
 | Found (reunions) | 103 words | 1 | 20w | none |
 | Review queue | 26 words | 0 | none | none |
 | Post detail (my case) | 316 words | 0 | none | 122w |
@@ -37,7 +37,7 @@ No screen may show a block of its *own* copy longer than 30 words. Text written 
 ### Home / feed
 
 ```text
-15Pull to refreshFor youNetwork All  Missing people 4 Home Sweet Home  Sightings  Lost pets All provincesGautengKwaZulu-NatalWestern CapeEastern CapeFree StateLimpopoMpumalangaNorth WestNorthern Cape Most recent  Still missing  Reset Johan BothaFarm community watch.Free State· Missing person 9h· + Follow Hendrik Botha, 78, walked out of the house at 05:30 - WesselbronLast seen: Farm Weltevrede, R30My father Hendrik has early-stage dementia. He walked out of the farmhouse at 05:30 in his pyjamas and slippers. He believes it is 1974 and that he is walking to school.
+15Pull to refreshFor youNetworkJohan BothaFarm community watch.Free State· Missing person 9h· + Follow Hendrik Botha, 78, walked out of the house at 05:30 - WesselbronLast seen: Farm Weltevrede, R30My father Hendrik has early-stage dementia. He walked out of the farmhouse at 05:30 in his pyjamas and slippers. He believes it is 1974 and that he is walking to school.
 He answers to "Hennie". He is 1.78 m, thin, grey hair, and will be very confused and cold. The veld around the farm is open and there are two farm dams.
 We have searchers on the ground from 06:00. If you are on the R30 between Wesselbron and Bothaville, please slow down and look at the verges.…see more1892 comments·76 repostsLikeCommentRepostSendJohan BothaUPDATE: A farm worker on Weltevrede found footprints heading north-east towards the dam. Searchers are moving there now. Please stay off the R30 verges so the tracks are not disturbed. 4h · 71 likes  Follow each other to message Lerato Mahlangu commented on thisThandi MokoenaCommunity organiser. If you see something, say something. Ubuntu.Gauteng· Missing person 3d·Help find Thato Mokoena, 14 - last seen Orlando West, SowetoLast seen: Orlando taxi rank, SowetoThato left home on Tuesday morning for school at Orlando High and never arrived. She was wearing her full school uniform with a grey cardigan and black takkies.
 Her phone went off at 09:40 near the Orlando taxi rank. She was with her cousin Nokuthula, who says Thato said she was going to the clinic and would be back by 14:00. She never came home.
@@ -84,7 +84,7 @@ No app paragraphs - labels and values only.
 ### Notifications
 
 ```text
-Notifications5 Mark all as read  All Unread5 Mentions PostsTodayDid you get help finding Thato Mokoena?412 reactions and 3 comments. If Thato Mokoena is home, tap to mark them found.nowViolence nearbyBree taxi rank, north entrance, Johannesburg CBD. Stay away and do not approach.12mDid you get help?Hendrik Botha’s case is still open. Let us know if he is home so we can stop the search.1hYour case is trending in GautengHelp find Thato Mokoena has 412 reactions and 187 reposts.2hYesterdayStation case number savedORL/441/09/2026. LulaFind did not send this case.9hKabelo Nkosi added a leadWhite Quantum heading towards Roodepoort around 10:00 on Tuesday.20hThis weekNaledi Dlamini started following youNurse. Missing-persons volunteer since 2019.1d
+Notifications5 Mark all as read  All Unread5 Mentions PostsTodayDid you get help finding Thato Mokoena?412 reactions and 3 comments. If Thato Mokoena is home, tap to mark them found.nowViolence nearbyBree taxi rank, north entrance, Johannesburg CBD. Stay away and do not approach.12mDid you get help?Hendrik Botha’s case is still open. Let us know if he is home so we can stop the search.1hYour case is trending in GautengHelp find Thato Mokoena has 412 reactions and 187 reposts.2hStation case number savedORL/441/09/2026. LulaFind did not send this case.9hYesterdayKabelo Nkosi added a leadWhite Quantum heading towards Roodepoort around 10:00 on Tuesday.20hNaledi Dlamini started following youNurse. Missing-persons volunteer since 2019.1d
 ```
 - 19 words of app copy: "Hendrik Botha’s case is still open. Let us know if he is home so we can stop the search."
 
@@ -180,7 +180,7 @@ Settings5AppearanceThemeDark (default)LightMatch my phoneBackgroundPick the colo
 ### Safety centre
 
 ```text
-Safety & consent centre5 LulaFind never reads anyone's location without that person's own consent, and never sends a case to the police or an NGO. Get help has the real numbers. My locationPermission: unknownNo location has been read yet. Read my location  Forget my location Safety beaconSend "I am safe" check-ins with your location to people you choose. Off by default.Beacon enabled Send an "I am safe" check-in now Be on the lookout Tell your followers you may not feel safe where you are going. They see the area, and 24 hours later we ask them to check on you. Where are you going, or which area worries you?Anything your followers should know? (optional)Attach where I am now, so my followers see it Start the lookout If I go missing A lookout only becomes a case if a follower says something is wrong. This decides whether LulaFind may post that case, and who sees it. Let LulaFind post a case about meOff by default. Without it, a "no" answer never becomes a post.Being foundWe can ask you if a case is about you. Your account is never handed to the family.Allow name matchingConsent log on my casesFamily reported at the station and messaged Pink Ladies. LulaFind did not send the caseHelp find Thato Mokoena, 14 - last · 02 Oct 2026, 05:40expires 01 Nov 2026, 05:10Photos stay on this case unless the family shares the linkHelp find Thato Mokoena, 14 - last · 02 Oct 2026, 05:40expires 01 Nov 2026, 05:10 Privacy & data settings
+Safety & consent centre5 LulaFind never reads anyone's location without that person's own consent, and never sends a case to the police or an NGO. Get help has the real numbers. My locationPermission: unknownNo location has been read yet. Read my location  Forget my location Safety beaconSend "I am safe" check-ins with your location to people you choose. Off by default.Beacon enabled Send an "I am safe" check-in now Be on the lookout Tell your followers you may not feel safe where you are going. They see the area, and 24 hours later we ask them to check on you. Where are you going, or which area worries you?Anything your followers should know? (optional)Attach where I am now, so my followers see it Start the lookout If I go missing A lookout only becomes a case if a follower says something is wrong. This decides whether LulaFind may post that case, and who sees it. Let LulaFind post a case about meOff by default. Without it, a "no" answer never becomes a post.Being foundWe can ask you if a case is about you. Your account is never handed to the family.Allow name matchingConsent log on my casesFamily reported at the station and messaged Pink Ladies. LulaFind did not send the caseHelp find Thato Mokoena, 14 - last · 02 Oct 2026, 10:52expires 01 Nov 2026, 10:22Photos stay on this case unless the family shares the linkHelp find Thato Mokoena, 14 - last · 02 Oct 2026, 10:52expires 01 Nov 2026, 10:22 Privacy & data settings
 ```
 - 27 words of app copy: "Tell your followers you may not feel safe where you are going. They see the area, and 24 hours later we ask them to check on you."
 - 25 words of app copy: "LulaFind never reads anyone's location without that person's own consent, and never sends a case to the police or an NGO. has the real numbers."

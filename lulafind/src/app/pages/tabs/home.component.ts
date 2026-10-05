@@ -12,7 +12,6 @@ import { EmptyComponent } from '../../shared/components/empty.component';
 import { ChatState, PostCardComponent } from '../../shared/components/post-card.component';
 import { StoryRailComponent } from '../../shared/components/story-rail.component';
 import { PeopleRailComponent } from '../../shared/components/people-rail.component';
-import { FilterBarComponent } from '../../shared/components/filter-bar.component';
 import { DataService } from '../../core/services/data.service';
 import { AuthService } from '../../core/services/auth.service';
 import { ChatService } from '../../core/services/chat.service';
@@ -27,7 +26,7 @@ import { timeAgo } from '../../core/utils/format';
   standalone: true,
   imports: [
     IonContent, IonRefresher, IonRefresherContent, IonSkeletonText,
-    TopNavComponent, IconComponent, AvatarComponent, EmptyComponent, PostCardComponent, StoryRailComponent, PeopleRailComponent, FilterBarComponent,
+    TopNavComponent, IconComponent, AvatarComponent, EmptyComponent, PostCardComponent, StoryRailComponent, PeopleRailComponent,
     RouterLink
   ],
   template: `
@@ -138,13 +137,9 @@ import { timeAgo } from '../../core/utils/format';
         </section>
       }
 
-      <!-- Facebook Feed Filter Chips -->
-      <lf-filter-bar
-        [filter]="data.filter()"
-        [missingCount]="missingPip()"
-        (filterChange)="data.setFilter($event)"
-        (reset)="data.resetFilter()" />
-
+      <!-- The feed is intentionally not gated by visible chips or hidden
+           local filters. For you and Network are the only scopes; privacy and
+           audience rules remain enforced by the active backend. -->
       <!-- The network never answered: say so and offer a retry, never spin for ever. -->
       @if (data.connectionLost() && !data.feed().length && !data.loading()) {
         <div class="offline" role="alert">
@@ -168,8 +163,7 @@ import { timeAgo } from '../../core/utils/format';
 
       @if (!data.loading() && !data.feed().length && !data.connectionLost()) {
         <lf-empty icon="search" title="No cases here yet"
-                  message="Posts people create will show in this feed."
-                  actionLabel="Reset filters" (action)="data.resetFilter()" />
+                  message="Posts people create will show in this feed." />
       }
 
       <!-- Stories and People appear after every 8th post, and nowhere else. -->
@@ -307,10 +301,6 @@ export class HomeComponent {
       })
       .filter((p) => !!p.lookout);
   });
-
-  readonly missingPip = computed(() =>
-    this.data.feed().filter((p) => p.type === 'missing' && p.status === 'active').length
-  );
 
   readonly displayedFeed = computed(() => this.data.feed());
 

@@ -28,7 +28,7 @@ declare
   k text;
   allowed text[] := array[
     'voterIds', 'upvotes', 'commentCount', 'views', 'shares', 'lookingIds',
-    'searchParty', 'danger', 'khumbu', 'flags', 'events', 'lastComment', 'updatedAt', 'status', 'outcome'
+    'searchParty', 'danger', 'khumbu', 'flags', 'events', 'lastComment', 'lastLike', 'updatedAt', 'status', 'outcome'
   ];
   my_old text;
   my_new text;
@@ -37,6 +37,7 @@ declare
   is_claimed boolean;
   merged jsonb;
   last_comment jsonb;
+  last_like jsonb;
   n_old int;
 begin
   if me is null then
@@ -79,6 +80,28 @@ begin
   merged := jsonb_set(merged, '{voterIds}', coalesce(next->'voterIds', '{}'::jsonb), true);
   merged := jsonb_set(merged, '{upvotes}', to_jsonb(greatest(0,
     coalesce((cur->>'upvotes')::int, 0) + (case when my_new is not null then 1 else 0 end) - (case when my_old is not null and my_old <> 'down' then 1 else 0 end))), true);
+
+  -- Rebuild the preview from the authenticated member. The client can carry
+  -- lastLike optimistically, but cannot author its identity or display name.
+  if my_new is not null then
+    select jsonb_build_object(
+      'userId', me,
+      'displayName', coalesce(u.payload->>'displayName', 'Someone'),
+      'at', floor(extract(epoch from clock_timestamp()) * 1000)::bigint
+    ) into last_like
+    from public.records u
+    where u.collection = 'users' and u.id = me;
+    merged := jsonb_set(
+      merged,
+      '{lastLike}',
+      coalesce(last_like, jsonb_build_object(
+        'userId', me,
+        'displayName', 'Someone',
+        'at', floor(extract(epoch from clock_timestamp()) * 1000)::bigint
+      )),
+      true
+    );
+  end if;
 
   -- 3. Counters: comments are counted, views and shares go up by one at most.
   merged := jsonb_set(merged, '{commentCount}', to_jsonb((

@@ -10,12 +10,12 @@ import { AuthService } from '../../core/services/auth.service';
 import { DataService } from '../../core/services/data.service';
 
 /**
- * Bottom navigation: Home, Spotlight, Create, Discover, Menu.
+ * Bottom navigation: Home, Spotlight, Create, Network, Menu.
  *
  * Chats used to sit here. It moved to the top navigation beside the bell, where
  * it keeps its unread badge, and the Photo tab - which only duplicated Create -
- * became Discover: the people you follow, your followers, the follow requests
- * waiting on you, and members' statuses.
+ * became Network: discovery, people search, the people you follow, your
+ * followers, follow requests, stories and members' statuses.
  *
  * Menu is your own profile, which is where Settings and everything else lives.
  */
@@ -46,7 +46,7 @@ import { DataService } from '../../core/services/data.service';
             <lf-icon name="compass" [size]="24" [filled]="active() === 'discover'" />
             @if (requests() > 0) { <span class="tab-dot">{{ requests() > 99 ? '99+' : requests() }}</span> }
           </div>
-          <ion-label>Discover</ion-label>
+          <ion-label>Network</ion-label>
         </ion-tab-button>
 
         <button class="bar-btn menu" type="button" (click)="openMenu()" aria-label="Your profile and menu">

@@ -112,7 +112,7 @@ describe('Components render', () => {
     f.detectChanges();
     await f.whenStable();
     const html = (f.nativeElement as HTMLElement).innerHTML;
-    for (const label of ['Home', 'Spotlight', 'Create', 'Discover', 'Menu']) {
+    for (const label of ['Home', 'Spotlight', 'Create', 'Network', 'Menu']) {
       expect(html, label).toContain(label);
     }
     // Chats moved to the top navigation, and the Photo tab is gone.
