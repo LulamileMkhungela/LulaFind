@@ -674,8 +674,8 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
     .sighting-form__actions .big { min-width: 148px; height: 38px; font-size: 13px; }
     .cbox { position: sticky; top: 0; z-index: 5; display: flex; align-items: flex-start; gap: 8px; padding: 8px 0; background: var(--lf-card); overscroll-behavior: contain; }
     .compose { flex: 1; min-width: 0; }
-    .field { width: 100%; min-width: 0; box-sizing: border-box; display: flex; align-items: flex-end; gap: 6px; padding: 6px 6px 6px 14px; border: 1px solid var(--lf-line); border-radius: 20px; background: var(--lf-card); overscroll-behavior: contain; }
-    .field textarea { flex: 1; min-width: 0; max-height: 120px; padding: 6px 0; border: 0; outline: 0; resize: none; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; background: transparent; color: var(--ion-text-color); font: inherit; font-size: 15px; line-height: 1.35; }
+    .field { width: 100%; min-width: 0; box-sizing: border-box; display: flex; align-items: flex-end; gap: 6px; padding: 6px 6px 6px 14px; border: 1px solid var(--lf-line); border-radius: 20px; background: var(--lf-card); overscroll-behavior-y: contain; touch-action: pan-y; }
+    .field textarea { flex: 1; min-width: 0; max-height: 120px; padding: 6px 0; border: 0; outline: 0; resize: none; overflow-y: auto; overscroll-behavior-y: contain; -webkit-overflow-scrolling: touch; touch-action: pan-y; background: transparent; color: var(--ion-text-color); font: inherit; font-size: 15px; line-height: 1.35; }
     .field .post { height: 30px; padding: 0 14px; margin-bottom: 1px; border: 0; border-radius: 15px; background: var(--lf-primary-fill); color: #fff; font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; }
     .field .post:disabled { opacity: .6; }
     .attach-actions { display: flex; align-items: center; gap: 4px; min-height: 34px; padding: 3px 0; }
@@ -758,7 +758,7 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
     .dots { margin-left: auto; border: 0; background: transparent; color: var(--lf-muted); cursor: pointer; padding: 0; }
     .viewrep { display: inline-flex; align-items: center; gap: 6px; margin-top: 8px; border: 0; background: transparent; color: var(--lf-muted); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
     .edit { display: flex; flex-direction: column; gap: 6px; }
-    .edit textarea { width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1px solid var(--lf-line); border-radius: 8px; background: var(--lf-card-2); color: inherit; font: inherit; font-size: 14px; resize: vertical; }
+    .edit textarea { width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1px solid var(--lf-line); border-radius: 8px; background: var(--lf-card-2); color: inherit; font: inherit; font-size: 14px; resize: vertical; overscroll-behavior-y: contain; -webkit-overflow-scrolling: touch; touch-action: pan-y; }
     .edit__row { display: flex; gap: 8px; margin: 4px 0 0; }
     .pill { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px; border: 1px solid var(--lf-line); border-radius: 15px;
       background: transparent; color: var(--ion-text-color); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
