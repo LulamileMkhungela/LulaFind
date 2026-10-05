@@ -423,6 +423,36 @@ grant execute on function public.lula_in_thread(text, text) to anon, authenticat
 grant execute on function public.lula_follow_insert_allowed(text, text, text) to anon, authenticated;
 grant execute on function public.lula_media_visible(text, text) to anon, authenticated;
 
+-- The main read policy below references lookout visibility. Keep a small,
+-- dependency-free definition here so a fresh project can install the policy
+-- before the fuller lookout RPCs further down this file are created. The later
+-- CREATE OR REPLACE is the canonical copy and also installs its grants.
+create or replace function public.lula_lookout_visible(lookout_id text, viewer text)
+returns boolean language sql stable security definer set search_path = pg_catalog as $$
+  select viewer is not null and exists (
+    select 1
+    from public.records r
+    where r.collection = 'lookouts'
+      and r.id = lookout_id
+      and (
+        r.payload->>'userId' = viewer
+        or viewer in (
+          select jsonb_array_elements_text(
+            coalesce(r.payload->'askedIds', '[]'::jsonb)
+          )
+        )
+        or exists (
+          select 1
+          from public.records f
+          where f.collection = 'follows'
+            and f.payload->>'followingId' = r.payload->>'userId'
+            and f.payload->>'followerId' = viewer
+            and coalesce(f.payload->>'status', 'accepted') = 'accepted'
+        )
+      )
+  );
+$$;
+
 -- Remove earlier additive policies: permissive RLS policies are ORed together.
 drop policy if exists "lula stories audience read" on public.records;
 drop policy if exists "lula story replies read" on public.records;
