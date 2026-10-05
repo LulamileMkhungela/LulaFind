@@ -113,7 +113,7 @@ export class RepostComponent implements OnInit {
   readonly myAvatar = computed(() => this.data.avatarFor(this.auth.user()));
   readonly originalName = computed(() => {
     const o = this.original();
-    return o ? this.data.authorOf(o.authorId)?.displayName ?? 'LulaFind member' : '';
+    return o ? this.data.authorOf(o.authorId)?.displayName ?? 'Member' : '';
   });
   readonly originalAvatar = computed(() => {
     const o = this.original();

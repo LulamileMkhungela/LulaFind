@@ -113,6 +113,22 @@ describe('LocalDb (mock data layer)', () => {
     expect(found.map((p) => p.id)).toContain('p_found');
   });
 
+  it('Network contains both directions of the member graph and joined Spotlight posts', () => {
+    // Add a post by a stranger to a Spotlight the demo member has joined, so
+    // the three network sources are tested independently rather than inferred
+    // from the seeded author's identity.
+    db.upsertPost({
+      ...db.post('p_mokoena_tip')!, id: 'p_joined_spotlight', authorId: 'u_zanele', spotlightId: 'sp_mokoena'
+    });
+
+    const network = db.filtered({ ...emptyFilter(), scope: 'network' }, 'u_demo', db.user('u_demo'));
+    const ids = network.map((p) => p.id);
+    expect(ids).toContain('p_lindiwe'); // someone the demo member follows
+    expect(ids).toContain('p_sighting'); // someone who follows the demo member
+    expect(ids).toContain('p_joined_spotlight'); // a joined Spotlight post
+    expect(ids).not.toContain('p_johan'); // no follow edge and no joined Spotlight
+  });
+
   it('enforces followers-only audience', () => {
     const post: Post = { ...db.post('p_thato')!, id: 'p_private', audience: 'followers' };
     db.upsertPost(post);
@@ -166,7 +182,13 @@ describe('DataService voting and comments', () => {
     await data.vote('p_khumalo', 'support');
     const p1 = data.post('p_khumalo')!;
     expect(p1.upvotes).toBe(p0.upvotes + 1);
+    expect(p1.voterIds['u_demo']).toBe('support');
     expect(data.myVote(p1)).toBe('support');
+    // The selected reaction is not only optimistic UI state: the stored post
+    // carries the new kind and count through a subsequent feed read.
+    await data.loadFeed();
+    expect(data.myVote(data.post('p_khumalo')!)).toBe('support');
+    expect(data.post('p_khumalo')!.upvotes).toBe(p0.upvotes + 1);
     await data.vote('p_khumalo', 'support');
     expect(data.post('p_khumalo')!.upvotes).toBe(p0.upvotes);
   });
@@ -1233,6 +1255,22 @@ describe('I am looking', () => {
     signInAs('u_demo');
     await expect(data.markLooking('p_thato')).rejects.toThrow(/family/i);
   });
+
+  it('stores a structured sighting as a lead attached to the case', async () => {
+    const data = svc<DataService>(DataService);
+    signInAs('u_kabelo');
+    const when = Date.now() - 25 * 60_000;
+    const comment = await data.addComment({
+      postId: 'p_thato',
+      body: 'I saw someone matching the case near the taxi rank.',
+      isLead: true,
+      sighting: { place: 'Orlando taxi rank', province: 'GP', when, note: 'Heading toward the clinic.' }
+    });
+    expect(comment.isLead).toBe(true);
+    expect(comment.sighting?.place).toBe('Orlando taxi rank');
+    expect(comment.sighting?.when).toBe(when);
+    expect((await data.comments('p_thato')).some((c) => c.id === comment.id && c.sighting?.province === 'GP')).toBe(true);
+  });
 });
 
 describe('Safety check-ins', () => {
@@ -1477,6 +1515,22 @@ describe('Saved posts, watch alerts and followers', () => {
     signInAs(target.authorId);
     await data.loadUserScoped();
     expect(data.notifications().some((n) => n.postId === target.id && n.kind === 'vote' && /idea/i.test(n.title))).toBe(true);
+  });
+
+  it('lets a neighbour volunteer near an open case without sharing live location', async () => {
+    signInAs('u_kabelo');
+    const data = svc<DataService>(DataService);
+    await data.refresh();
+    const target = data.feed().find((p) => p.type === 'missing' && p.authorId !== 'u_kabelo' && p.status === 'active')!;
+    expect(target).toBeTruthy();
+
+    expect(await data.markLooking(target.id)).toBe(true);
+    const looking = (await data.loadPost(target.id))!;
+    expect(looking.lookingIds).toContain('u_kabelo');
+    expect(db.notifications(target.authorId).some((n) => n.postId === target.id && /looking/i.test(n.title))).toBe(true);
+
+    expect(await data.markLooking(target.id)).toBe(false);
+    expect((await data.loadPost(target.id))!.lookingIds).not.toContain('u_kabelo');
   });
 
   it('lets you remove a follower', async () => {

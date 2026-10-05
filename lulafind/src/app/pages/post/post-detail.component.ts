@@ -12,7 +12,6 @@ import { AvatarComponent } from '../../shared/components/avatar.component';
 import { ReactionsSheetComponent } from '../../shared/components/reactions-sheet.component';
 import { MediaImageComponent, MediaVideoComponent } from '../../shared/components/media-image.component';
 import { UserHoverDirective } from '../../shared/components/user-hover-card.component';
-import { EmojiRowComponent } from '../../shared/components/emoji-row.component';
 import { ReactionButtonComponent } from '../../shared/components/reaction-button.component';
 import { ReactionIconComponent } from '../../shared/components/reaction-icon.component';
 import { PHOTO_MAX_BYTES, POST_MAX_PHOTOS, VIDEO_MAX_BYTES, mb } from '../../core/models/media-rules';
@@ -25,9 +24,9 @@ import { LookoutService } from '../../core/services/lookout.service';
 import { MediaService } from '../../core/services/media.service';
 import { KvStore } from '../../core/data/local-db';
 import {
-  Comment, MediaItem, Post, REACTIONS, ReactionKind, UserProfile, isReaction, provinceName
+  Comment, MediaItem, Post, PROVINCES, ProvinceCode, REACTIONS, ReactionKind, Sighting, UserProfile,
+  isReaction, provinceName
 } from '../../core/models/types';
-import { QUICK_EMOJIS } from '../../shared/components/emoji-row.component';
 import { compact, dayMonth, headingIsNew as headingIsNewFn, timeAgo } from '../../core/utils/format';
 import { leadMarkView } from '../../core/utils/mark-check';
 
@@ -54,7 +53,7 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
   imports: [
     IonContent, IonTextarea, IonSkeletonText, RouterLink, IconComponent, AvatarComponent,
     TopNavComponent, ReactionButtonComponent, ReactionIconComponent, ReactionsSheetComponent, KeyboardDirective,
-    MediaImageComponent, MediaVideoComponent, UserHoverDirective, EmojiRowComponent],
+    MediaImageComponent, MediaVideoComponent, UserHoverDirective],
   template: `
     <lf-top-nav title="Post" backTo="/home" />
 
@@ -164,9 +163,9 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
 
           <div class="actions">
             <lf-reaction-button [value]="myVote()" (react)="react($event)" />
-            <button class="act" type="button" (click)="focusComment()" aria-label="Comment"><lf-icon name="comment" [size]="20" /><span>Comment</span></button>
-            <button class="act" type="button" (click)="repost()" aria-label="Repost"><lf-icon name="repost" [size]="20" /><span>Repost</span></button>
-            <button class="act" type="button" (click)="send()" aria-label="Send"><lf-icon name="send" [size]="19" /><span>Send</span></button>
+            <button class="act" type="button" (click)="focusComment()" aria-label="Comment" title="Comment"><lf-icon name="comment" [size]="20" /><span class="sr-only">Comment</span></button>
+            <button class="act" type="button" (click)="repost()" aria-label="Repost" title="Repost"><lf-icon name="repost" [size]="20" /><span class="sr-only">Repost</span></button>
+            <button class="act" type="button" (click)="send()" aria-label="Send" title="Send"><lf-icon name="send" [size]="19" /><span class="sr-only">Send</span></button>
           </div>
 
           @if (!isMine() || p()!.status === 'active') {
@@ -179,6 +178,17 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
                 @else { Follow this case and be told when something changes }
               </span>
               <strong>{{ followingCase() ? 'Following' : 'Follow' }}</strong>
+            </button>
+          }
+
+          @if (isCase() && !isMine() && p()!.status === 'active') {
+            <button class="lookingline" type="button" [class.on]="looking()" [disabled]="lookingBusy()" (click)="toggleLooking()">
+              <lf-icon name="search" [size]="16" />
+              <span>
+                @if (looking()) { You are looking near this case }
+                @else { I’m looking near this case }
+              </span>
+              <strong>{{ lookingCount() }} {{ lookingCount() === 1 ? 'person' : 'people' }}</strong>
             </button>
           }
 
@@ -267,6 +277,32 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
             @if (!auth.signedIn()) {
               <button class="signin" type="button" (click)="needAuth()">Sign in to comment</button>
             } @else {
+              @if (canLead() && !replyTo()) {
+                <button type="button" class="sighting-trigger" [class.on]="sightingOpen()" (click)="openSightingForm()">
+                  <lf-icon name="pin" [size]="16" />
+                  <span><strong>Report a sighting</strong><small>Share when and where you saw someone</small></span>
+                  <lf-icon [name]="sightingOpen() ? 'chevronDown' : 'chevronRight'" [size]="16" />
+                </button>
+                @if (sightingOpen()) {
+                  <section class="sighting-form" aria-label="Report a structured sighting">
+                    <p class="sighting-form__hint">Only report what you personally saw. Do not approach or confront anyone.</p>
+                    <label><span>Where did you see them?</span><input [value]="sightingPlace" placeholder="Public place or nearest landmark" (input)="sightingPlace = $any($event.target).value" /></label>
+                    <div class="sighting-form__two">
+                      <label><span>Province</span><select [value]="sightingProvince" (change)="sightingProvince = $any($event.target).value">
+                        @for (province of provinces; track province.code) { <option [value]="province.code">{{ province.name }}</option> }
+                      </select></label>
+                      <label><span>When?</span><input type="datetime-local" [value]="sightingWhen" (input)="sightingWhen = $any($event.target).value" /></label>
+                    </div>
+                    <label><span>What did you see?</span><textarea rows="3" [value]="sightingNote" placeholder="Direction of travel, clothing, vehicle or other facts" (input)="sightingNote = $any($event.target).value"></textarea></label>
+                    <div class="sighting-form__actions">
+                      <button type="button" class="textbtn" (click)="closeSightingForm()" [disabled]="posting()">Cancel</button>
+                      <button type="button" class="big big--go" (click)="reportSighting()" [disabled]="posting() || !sightingPlace.trim()">
+                        <lf-icon name="send" [size]="16" /> {{ posting() ? 'Sending…' : 'Submit sighting' }}
+                      </button>
+                    </div>
+                  </section>
+                }
+              }
               @if (replyTo(); as r) {
                 <div class="replying">Replying to <strong>{{ r.name }}</strong>
                   <button type="button" (click)="cancelReply()" aria-label="Cancel reply"><lf-icon name="x" [size]="14" /></button>
@@ -323,12 +359,7 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
                       }
                     </div>
                   }
-                  @if (emojiOpen()) {
-                    <lf-emoji-row class="emoji-row" [list]="EMOJIS" (picked)="addEmoji($event)" />
-                  }
                   <div class="attach-actions">
-                    <button type="button" class="em-toggle" [class.on]="emojiOpen()" (click)="emojiOpen.set(!emojiOpen())"
-                            aria-label="Emoji" [attr.aria-expanded]="emojiOpen()"><lf-icon name="smile" [size]="17" /></button>
                     <button type="button" (click)="addCommentPhoto()" [disabled]="posting() || media.busy() || commentMedia().length >= maxPhotos || hasCommentVideo()">
                       <lf-icon name="image" [size]="17" /> Photo
                     </button>
@@ -437,7 +468,7 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
                         <lf-icon name="repost" [size]="14" /> View all {{ repliesOf(c.id).length }} replies
                       </button>
                     } @else {
-                      <div class="replies">
+                      <div class="replies" [attr.aria-label]="'Replies to ' + nameOf(c.authorId)">
                         @for (r of repliesOf(c.id); track r.id) {
                           <div class="cmsg cmsg--reply">
                             <lf-avatar [src]="avatarOf(r.authorId)" [name]="nameOf(r.authorId)" [size]="32" />
@@ -570,6 +601,14 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
     .followline strong { color: var(--lf-link); font-weight: 700; white-space: nowrap; }
     .followline.on { background: var(--lf-primary-soft); }
     .followline.on strong { color: var(--lf-link); }
+    .lookingline { display: flex; align-items: center; gap: 8px; width: calc(100% - 24px); margin: 4px 12px 8px; padding: 10px 12px;
+      border: 1px solid var(--lf-line); border-radius: 8px; background: var(--lf-card-2); color: inherit;
+      font: inherit; font-size: 14px; text-align: left; cursor: pointer; }
+    .lookingline span { flex: 1; color: var(--lf-muted); }
+    .lookingline strong { color: var(--lf-link); font-size: 12px; font-weight: 700; white-space: nowrap; }
+    .lookingline.on { border-color: transparent; background: color-mix(in srgb, var(--lf-ubuntu) 12%, var(--lf-card)); }
+    .lookingline.on lf-icon, .lookingline.on strong { color: var(--lf-ubuntu); }
+    .lookingline:disabled { opacity: .65; cursor: wait; }
     .media { margin: 4px 0 0; }
     .media lf-media-img, .media lf-media-video { display: block; width: 100%; max-height: 640px; overflow: hidden; background: #000; }
     .media.multi { display: flex; gap: 2px; overflow-x: auto; scroll-snap-type: x mandatory; }
@@ -586,6 +625,7 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
     section.gone { display: flex; flex-direction: column; gap: 12px; align-items: flex-start; color: var(--lf-text); }
     section.gone p { margin: 0; color: var(--lf-muted); line-height: 1.5; }
 
+    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
     /* LinkedIn's stats line + action bar */
     .stats { display: flex; align-items: center; justify-content: space-between; padding: 8px var(--edge) 6px; font-size: 13px; color: var(--lf-muted); }
     .stats button { border: 0; background: transparent; color: inherit; font: inherit; cursor: pointer; padding: 0; }
@@ -618,11 +658,34 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
     .note { margin: 8px var(--edge); padding: 10px 12px; border-radius: 8px; background: var(--lf-card); color: var(--ion-text-color); font-size: 14px; line-height: 1.45; }
 
     /* Conversation thread - sender row, message bubble and compact Like/Reply actions. */
-    .comments { background: var(--lf-card); box-shadow: var(--lf-shadow); padding: 12px var(--edge) 18px; }
-    .cbox { display: flex; align-items: flex-start; gap: 8px; }
+    /* The comment composer belongs to the viewport, not the conversation. Keep
+       enough room in the thread for its fixed bottom bar so the last comment
+       can still be read above it. */
+    .comments { background: var(--lf-card); box-shadow: var(--lf-shadow); padding: 12px var(--edge) calc(116px + var(--lf-safe-bottom)); }
+    .sighting-trigger { display: flex; align-items: center; gap: 8px; width: 100%; margin: 0 0 10px; padding: 10px 12px; border: 1px solid var(--lf-line);
+      border-radius: 8px; background: var(--lf-card-2); color: inherit; font: inherit; text-align: left; cursor: pointer; }
+    .sighting-trigger span { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+    .sighting-trigger small { color: var(--lf-muted); font-size: 12px; }
+    .sighting-trigger.on { border-color: transparent; background: var(--lf-primary-soft); color: var(--lf-primary-soft-text); }
+    .sighting-form { display: flex; flex-direction: column; gap: 10px; margin: -2px 0 12px; padding: 12px; border: 1px solid var(--lf-line); border-radius: 9px; background: var(--lf-bg); }
+    .sighting-form label { display: flex; flex-direction: column; gap: 4px; color: var(--ion-text-color); font-size: 12px; font-weight: 700; }
+    .sighting-form input, .sighting-form select, .sighting-form textarea { width: 100%; box-sizing: border-box; min-height: 38px; padding: 8px 10px; border: 1px solid var(--lf-line); border-radius: 7px; background: var(--lf-card); color: inherit; font: inherit; font-size: 14px; font-weight: 400; }
+    .sighting-form textarea { min-height: 76px; resize: vertical; }
+    .sighting-form__two { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .sighting-form__hint { margin: 0; color: var(--lf-muted); font-size: 12px; line-height: 1.4; }
+    .sighting-form__actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
+    .sighting-form__actions .big { min-width: 148px; height: 38px; font-size: 13px; }
+    .cbox { position: fixed; inset-inline: 0; bottom: 0; z-index: 30; display: flex; align-items: flex-start; gap: 8px;
+      box-sizing: border-box; padding: 8px var(--edge) max(8px, var(--lf-safe-bottom));
+      background: color-mix(in srgb, var(--lf-card) 96%, transparent); box-shadow: 0 -4px 18px rgba(0,0,0,.12);
+      overscroll-behavior: contain; }
+    .cbox > .compose { width: min(100%, var(--lf-maxw)); margin: 0 auto; }
+    @media (min-width: 700px) {
+      .cbox { padding-inline: max(var(--edge), calc((100vw - var(--lf-maxw)) / 2 + var(--edge))); }
+    }
     .compose { flex: 1; min-width: 0; }
-    .field { width: 100%; min-width: 0; box-sizing: border-box; display: flex; align-items: flex-end; gap: 6px; padding: 6px 6px 6px 14px; border: 1px solid var(--lf-line); border-radius: 20px; background: var(--lf-card); }
-    .field textarea { flex: 1; min-width: 0; max-height: 120px; padding: 6px 0; border: 0; outline: 0; resize: none; background: transparent; color: var(--ion-text-color); font: inherit; font-size: 15px; line-height: 1.35; }
+    .field { width: 100%; min-width: 0; box-sizing: border-box; display: flex; align-items: flex-end; gap: 6px; padding: 6px 6px 6px 14px; border: 1px solid var(--lf-line); border-radius: 20px; background: var(--lf-card); overscroll-behavior-y: contain; touch-action: pan-y; }
+    .field textarea { flex: 1; min-width: 0; max-height: 120px; padding: 6px 0; border: 0; outline: 0; resize: none; overflow-y: auto; overscroll-behavior-y: contain; -webkit-overflow-scrolling: touch; touch-action: pan-y; background: transparent; color: var(--ion-text-color); font: inherit; font-size: 15px; line-height: 1.35; }
     .field .post { height: 30px; padding: 0 14px; margin-bottom: 1px; border: 0; border-radius: 15px; background: var(--lf-primary-fill); color: #fff; font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; }
     .field .post:disabled { opacity: .6; }
     .attach-actions { display: flex; align-items: center; gap: 4px; min-height: 34px; padding: 3px 0; }
@@ -647,12 +710,16 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
     .cmsg { display: flex; align-items: flex-start; gap: 8px; margin-top: 14px; }
     .cmsg__body { flex: 1; min-width: 0; }
     .cmsg--reply { margin-top: 9px; }
-    .replies { margin: 7px 0 0 15px; padding-left: 15px; border-left: 2px solid var(--lf-line-soft); }
+    .replies { position: relative; margin: 7px 0 0 15px; padding-left: 15px; border-left: 2px solid var(--lf-line-soft); }
+    /* Each horizontal branch makes the reply's parent relationship visible on
+       a phone, rather than relying on indentation alone. */
+    .cmsg--reply { position: relative; }
+    .replies .cmsg--reply::before { content: ''; position: absolute; left: -15px; top: 17px; width: 13px; border-top: 2px solid var(--lf-line-soft); }
     /* LinkedIn does not put a comment in a speech bubble - the text sits on the
        card, under the name, and the time lives in the action row with the
        buttons. A bubble read as a private message, which this is not. */
     .ccard { border: 0; border-radius: 0; background: transparent; padding: 0; }
-    .who-list { position: absolute; z-index: 12; left: 0; right: 0; top: calc(100% + 4px); display: flex; flex-direction: column;
+    .who-list { position: absolute; z-index: 12; left: 0; right: 0; bottom: calc(100% + 4px); display: flex; flex-direction: column;
       padding: 6px; border: 1px solid var(--lf-line-soft); border-radius: 10px; background: var(--lf-card); box-shadow: var(--lf-shadow); }
     .who-list button { display: flex; align-items: center; gap: 9px; width: 100%; padding: 7px 8px; border: none; border-radius: 8px;
       background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
@@ -663,7 +730,6 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
     .field { position: relative; }
     .mention { color: var(--lf-link); font-weight: 600; text-decoration: none; }
     .mention:hover { text-decoration: underline; }
-    .em-toggle.on { background: var(--lf-primary-soft); color: var(--lf-primary); }
     .cfollow { flex: none; border: 1px solid var(--lf-primary-text); border-radius: 999px; background: none; color: var(--lf-primary-text);
       font: inherit; font-size: 11.5px; font-weight: 600; line-height: 1; padding: 4px 9px; cursor: pointer; opacity: .55; }
     .ccard__top:hover .cfollow, .cfollow:focus-visible, .cfollow.on { opacity: 1; }
@@ -702,7 +768,7 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
     .dots { margin-left: auto; border: 0; background: transparent; color: var(--lf-muted); cursor: pointer; padding: 0; }
     .viewrep { display: inline-flex; align-items: center; gap: 6px; margin-top: 8px; border: 0; background: transparent; color: var(--lf-muted); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
     .edit { display: flex; flex-direction: column; gap: 6px; }
-    .edit textarea { width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1px solid var(--lf-line); border-radius: 8px; background: var(--lf-card-2); color: inherit; font: inherit; font-size: 14px; resize: vertical; }
+    .edit textarea { width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1px solid var(--lf-line); border-radius: 8px; background: var(--lf-card-2); color: inherit; font: inherit; font-size: 14px; resize: vertical; overscroll-behavior-y: contain; -webkit-overflow-scrolling: touch; touch-action: pan-y; }
     .edit__row { display: flex; gap: 8px; margin: 4px 0 0; }
     .pill { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px; border: 1px solid var(--lf-line); border-radius: 15px;
       background: transparent; color: var(--ion-text-color); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
@@ -743,8 +809,15 @@ export class PostDetailComponent implements OnInit {
 
   protected readonly compact = compact;
   protected readonly timeAgo = timeAgo;
+  protected readonly provinces = PROVINCES;
   /** Whether this account asked to hear about changes to this case. */
   readonly followingCase = computed(() => !!this.p() && this.data.isFollowingCase(this.p()!.id));
+  /** Whether this account has volunteered to look near the last-seen area. */
+  readonly looking = computed(() => {
+    const me = this.auth.viewerId;
+    return !!me && !!this.p()?.lookingIds?.includes(me);
+  });
+  readonly lookingCount = computed(() => this.p()?.lookingIds?.length ?? 0);
   protected readonly headingIsNew = headingIsNewFn;
   protected readonly dayMonth = dayMonth;
   protected readonly provinceName = provinceName;
@@ -766,13 +839,19 @@ export class PostDetailComponent implements OnInit {
   asLead = signal(false);
   markGuess = signal('');
   posting = signal(false);
+  readonly lookingBusy = signal(false);
+  readonly sightingOpen = signal(false);
+  sightingPlace = '';
+  sightingProvince: ProvinceCode = 'GP';
+  sightingWhen = '';
+  sightingNote = '';
   khumbuNote = '';
 
   readonly me = computed(() => this.auth.viewerId);
   readonly isMine = computed(() => this.p()?.authorId === this.auth.viewerId);
   readonly author = computed(() => (this.p() ? this.data.authorOf(this.p()!.authorId) ?? null : null));
   readonly authorName = computed(() =>
-    this.p()?.anonymous && !this.isMine() ? 'Anonymous' : this.author()?.displayName ?? 'LulaFind member');
+    this.p()?.anonymous && !this.isMine() ? 'Anonymous' : this.author()?.displayName ?? 'Member');
   readonly authorHeadline = computed(() =>
     this.p()?.anonymous && !this.isMine() ? '' : this.author()?.bio ?? '');
   readonly authorAvatar = computed(() => this.data.avatarFor(this.p()?.anonymous && !this.isMine() ? null : this.author()));
@@ -791,7 +870,7 @@ export class PostDetailComponent implements OnInit {
   readonly myVote = computed(() => (this.p() ? this.data.myVote(this.p()!) : null));
   readonly originalName = computed(() => {
     const o = this.original();
-    return o ? (o.anonymous ? 'Anonymous' : this.data.authorOf(o.authorId)?.displayName ?? 'LulaFind member') : '';
+    return o ? (o.anonymous ? 'Anonymous' : this.data.authorOf(o.authorId)?.displayName ?? 'Member') : '';
   });
   readonly originalAvatar = computed(() => {
     const o = this.original();
@@ -909,6 +988,80 @@ export class PostDetailComponent implements OnInit {
     await this.refreshGate();
   }
 
+  /** Tell the family you are checking the last-seen area, without exposing your live location. */
+  async toggleLooking(): Promise<void> {
+    if (!this.auth.signedIn()) return this.needAuth();
+    const p = this.p();
+    if (!p || this.lookingBusy()) return;
+    this.lookingBusy.set(true);
+    try {
+      const on = await this.data.markLooking(p.id);
+      await this.reload();
+      await this.say(on ? 'The family knows you are looking near the case.' : 'You are no longer marked as looking.');
+    } catch (e: unknown) {
+      await this.say(e instanceof Error ? e.message : 'Could not update the search team');
+    } finally {
+      this.lookingBusy.set(false);
+    }
+  }
+
+  /** Open the structured sighting sheet instead of forcing a family to parse free text. */
+  openSightingForm(): void {
+    if (this.sightingOpen()) {
+      this.closeSightingForm();
+      return;
+    }
+    const p = this.p();
+    if (!p) return;
+    this.sightingProvince = p.province;
+    this.sightingPlace = '';
+    this.sightingWhen = this.localDateTime(Date.now());
+    this.sightingNote = '';
+    this.sightingOpen.set(true);
+  }
+
+  closeSightingForm(): void {
+    this.sightingOpen.set(false);
+    this.sightingPlace = '';
+    this.sightingNote = '';
+  }
+
+  private localDateTime(at: number): string {
+    const d = new Date(at);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+
+  /** Save a sighting as a lead with a time and place the family can act on. */
+  async reportSighting(): Promise<void> {
+    if (!this.auth.signedIn()) return this.needAuth();
+    const p = this.p();
+    const place = this.sightingPlace.trim();
+    const when = Date.parse(this.sightingWhen);
+    if (!p || !place) return;
+    if (!Number.isFinite(when)) return this.say('Choose when you saw them so the family can place the lead in time.');
+    if (when > Date.now() + 5 * 60_000) return this.say('A sighting time cannot be in the future.');
+    this.posting.set(true);
+    try {
+      const note = this.sightingNote.trim();
+      const sighting: Sighting = { place, province: this.sightingProvince, when, note: note || undefined };
+      await this.data.addComment({
+        postId: p.id,
+        body: note || `I saw someone matching this case near ${place}.`,
+        isLead: true,
+        sighting
+      });
+      this.comments.set(await this.data.comments(p.id));
+      this.p.set(this.data.post(p.id) ?? p);
+      this.closeSightingForm();
+      await this.say('Sighting submitted as a lead for the family.');
+    } catch (e: unknown) {
+      await this.say(e instanceof Error ? e.message : 'Could not submit the sighting');
+    } finally {
+      this.posting.set(false);
+    }
+  }
+
   more(): void {
     const p = this.p();
     if (p) void this.actions.openMenu(p, () => void this.router.navigate(['/home'], { replaceUrl: true }));
@@ -916,9 +1069,6 @@ export class PostDetailComponent implements OnInit {
 
   /* --------------------------- comments --------------------------- */
 
-  /** The face row, from the same list the message box uses. */
-  protected readonly EMOJIS = QUICK_EMOJIS;
-  protected emojiOpen = signal(false);
   /** What the `@` in the box can still become, and which row is highlighted. */
   protected mentionOpen = signal(false);
   protected mentionQuery = signal('');
@@ -1063,7 +1213,7 @@ export class PostDetailComponent implements OnInit {
   repliesOf(parentId: string): Comment[] {
     return this.comments().filter((c) => c.parentId === parentId).sort((a, b) => a.createdAt - b.createdAt);
   }
-  nameOf(id: string): string { return this.data.authorOf(id)?.displayName ?? 'LulaFind member'; }
+  nameOf(id: string): string { return this.data.authorOf(id)?.displayName ?? 'Member'; }
   /** LinkedIn shows the commenter's headline under their name. */
   headlineOf(id: string): string { return this.data.authorOf(id)?.bio ?? ''; }
   avatarOf(id: string): string { return this.data.avatarFor(this.data.authorOf(id)); }
@@ -1159,7 +1309,11 @@ export class PostDetailComponent implements OnInit {
     this.scanMentions(el.value);
   }
 
-  /** A face goes in at the end of what is written, the way the message box does it. */
+  /**
+   * Kept as a small compatibility hook for existing unit tests and assistive
+   * integrations. There is deliberately no app emoji picker or emoji button;
+   * normal users use the phone keyboard's native emoji key.
+   */
   addEmoji(e: string): void {
     const el = this.box?.nativeElement;
     const next = `${this.draft()}${e}`;
@@ -1217,7 +1371,6 @@ export class PostDetailComponent implements OnInit {
       this.replyTo.set(null);
       this.asLead.set(false);
       this.markGuess.set('');
-      this.emojiOpen.set(false);
       this.closeMentions();
     } catch (e: unknown) {
       await this.say(e instanceof Error ? e.message : 'Could not post your comment');
@@ -1300,7 +1453,7 @@ export class PostDetailComponent implements OnInit {
           handler: async (v: string) => {
             try {
               await this.mod.report({ target: 'comment', targetId: c.id, summary: c.body.slice(0, 80), reason: v ?? 'other' });
-              await this.say('Report sent. Thank you.');
+              await this.say('Report saved for moderation. Email alerts depend on the server configuration.');
             } catch (e: unknown) {
               await this.say(e instanceof Error ? e.message : 'Could not send the report');
             }

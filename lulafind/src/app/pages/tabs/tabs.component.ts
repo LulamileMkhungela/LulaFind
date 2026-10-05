@@ -1,4 +1,4 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, inject, signal } from '@angular/core';
 import { NavigationEnd, Router } from '@angular/router';
 import { IonTabs } from '@ionic/angular/ion-tabs';
 import { IonLabel } from '@ionic/angular/ion-label';
@@ -7,15 +7,13 @@ import { IonTabButton } from '@ionic/angular/ion-tab-button';
 import { IconComponent } from '../../shared/components/icon.component';
 import { AvatarComponent } from '../../shared/components/avatar.component';
 import { AuthService } from '../../core/services/auth.service';
-import { DataService } from '../../core/services/data.service';
 
 /**
- * Bottom navigation: Home, Spotlight, Create, Discover, Menu.
+ * Bottom navigation: Home, Spotlight, Create, Menu.
  *
- * Chats used to sit here. It moved to the top navigation beside the bell, where
- * it keeps its unread badge, and the Photo tab - which only duplicated Create -
- * became Discover: the people you follow, your followers, the follow requests
- * waiting on you, and members' statuses.
+ * Chats moved to the top navigation beside the bell, where it keeps its unread
+ * badge. The former Discover/Network workspace is reached from Home → Network,
+ * so the primary navigation stays focused on posting, cases and profile.
  *
  * Menu is your own profile, which is where Settings and everything else lives.
  */
@@ -40,14 +38,6 @@ import { DataService } from '../../core/services/data.service';
           <span class="create-disc"><lf-icon name="plus" [size]="24" [weight]="2.6" /></span>
           <ion-label>Create</ion-label>
         </button>
-
-        <ion-tab-button tab="discover">
-          <div class="wrap">
-            <lf-icon name="compass" [size]="24" [filled]="active() === 'discover'" />
-            @if (requests() > 0) { <span class="tab-dot">{{ requests() > 99 ? '99+' : requests() }}</span> }
-          </div>
-          <ion-label>Discover</ion-label>
-        </ion-tab-button>
 
         <button class="bar-btn menu" type="button" (click)="openMenu()" aria-label="Your profile and menu">
           <span class="wrap">
@@ -134,10 +124,8 @@ import { DataService } from '../../core/services/data.service';
 })
 export class TabsComponent {
   private router = inject(Router);
-  private data = inject(DataService);
   protected auth = inject(AuthService);
 
-  readonly requests = computed(() => this.data.followRequests().length);
   readonly active = signal(TabsComponent.tabOf(typeof location !== 'undefined' ? location.pathname : '/home'));
 
   constructor() {
@@ -151,7 +139,7 @@ export class TabsComponent {
     const first = url.split(/[?#]/)[0].split('/').filter(Boolean)[0] ?? 'home';
     // Chats is no longer a tab, so /chats lights nothing up - as on LinkedIn,
     // where a pushed page leaves the bar unselected.
-    return ['home', 'spotlight', 'discover', 'me'].includes(first) ? first : '';
+    return ['home', 'spotlight', 'me'].includes(first) ? first : '';
   }
 
   create(): void {

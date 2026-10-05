@@ -224,8 +224,12 @@ export class TopNavComponent {
 
   back(): void {
     const fallback = this.backTo() || '/home';
-    // Prefer real history so a deep link (a shared post) still feels like Back.
-    if (typeof window !== 'undefined' && window.history.length > 1) {
+    // Prefer the app's own Angular history so a detail page returns to the
+    // exact tab/query/filter/scroll context that opened it. `history.length`
+    // also counts the browser page that hosted the app, which could otherwise
+    // eject a deep link from LulaFind. A direct deep link has no prior Angular
+    // navigation and uses the explicit page fallback instead.
+    if (typeof window !== 'undefined' && Number(window.history.state?.navigationId ?? 0) > 1) {
       window.history.back();
       return;
     }

@@ -153,7 +153,13 @@ export class AppComponent implements OnInit {
         if (!this.router.url.startsWith('/auth')) void this.router.navigate(['/auth']);
         return;
       }
-      if (u && !u.onboarded && this.auth.ready()) void this.router.navigate(['/onboarding']);
+      if (u && !u.onboarded && this.auth.ready()) {
+        // A stale cached shell must not turn a successful sign-in into an
+        // unhandled router rejection. The auth screen reports navigation
+        // failures with a user-facing recovery message when it initiated the
+        // sign-in; restore-time failures simply leave the current screen intact.
+        void this.router.navigate(['/onboarding']).catch(() => undefined);
+      }
     });
 
     effect(() => {

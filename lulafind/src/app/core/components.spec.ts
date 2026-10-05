@@ -112,7 +112,7 @@ describe('Components render', () => {
     f.detectChanges();
     await f.whenStable();
     const html = (f.nativeElement as HTMLElement).innerHTML;
-    for (const label of ['Home', 'Spotlight', 'Create', 'Discover', 'Menu']) {
+    for (const label of ['Home', 'Spotlight', 'Create', 'Menu']) {
       expect(html, label).toContain(label);
     }
     // Chats moved to the top navigation, and the Photo tab is gone.
@@ -861,7 +861,33 @@ describe('Components render', () => {
     await settle(f);
     const html: string = (f.nativeElement as HTMLElement).innerHTML;
     expect(html).toContain('lf-post-card');
-    if (feed.length >= 8) expect(html).toContain('lf-story-rail');
+    // Story cards no longer interrupt For you. They are rendered only in the
+    // explicit Home → Network context.
+    expect(html).not.toContain('network-stories');
+  });
+
+  it('keeps the Network story rail visible even when there are fewer than eight posts', async () => {
+    const auth = TestBed.inject(AuthService);
+    const data = TestBed.inject(DataService);
+    await auth.signInDemo();
+    await data.loadStatic();
+    data.setFilter({ scope: 'network' });
+
+    const f = TestBed.createComponent(HomeComponent);
+    await settle(f);
+    expect((f.nativeElement as HTMLElement).querySelector('.network-context .network-stories lf-story-rail')).toBeTruthy();
+  });
+
+  it('keeps the Network story rail visible even when there are fewer than eight posts', async () => {
+    const auth = TestBed.inject(AuthService);
+    const data = TestBed.inject(DataService);
+    await auth.signInDemo();
+    await data.loadStatic();
+    data.setFilter({ scope: 'network' });
+
+    const f = TestBed.createComponent(HomeComponent);
+    await settle(f);
+    expect((f.nativeElement as HTMLElement).querySelector('.network-context .network-stories lf-story-rail')).toBeTruthy();
   });
 
   it('sends a visitor who is not signed in to the login screen, not to Home', async () => {
@@ -1467,7 +1493,7 @@ describe('Search boxes actually search', () => {
     expect(f.componentInstance.posts().length).toBeGreaterThan(0);
   });
 
-  it('gives a member the short composer and searches people inside the Spotlight', async () => {
+  it('opens the shared composer with the Spotlight selected and searches people inside it', async () => {
     await TestBed.inject(AuthService).signInDemo();
     const data = TestBed.inject(DataService);
     await data.refresh();
@@ -1478,18 +1504,19 @@ describe('Search boxes actually search', () => {
     f.detectChanges();
     await f.whenStable();
     const html = (f.nativeElement as HTMLElement).innerHTML;
-    expect(html).toContain('Post to the ' + sp.surname + ' community');
-    expect(html).toContain('Photo');
-    expect(html).toContain('Video');
+    expect(html).toContain('Post here');
+    // The Spotlight page has no second, shortened composer. The shared Create
+    // composer opens only after this action and receives the community id.
+    expect((f.nativeElement as HTMLElement).querySelector('.quick')).toBeFalsy();
+    await f.componentInstance.postHere();
+    expect(TestBed.inject(Router).url).toContain('/create/missing?spotlight=' + sp.id);
     // searching inside the community finds the people in it
     const memberId = sp.memberIds.find((id) => id !== 'u_demo')!;
     const member = await data.people([memberId]);
     const needle = member[0].displayName.split(' ')[0];
-    f.componentInstance.onSearch(needle);
-    await f.whenStable();
+    await f.componentInstance.onSearch(needle);
     expect(f.componentInstance.people().map((u) => u.id)).toContain(memberId);
-    f.componentInstance.onSearch('');
-    await f.whenStable();
+    await f.componentInstance.onSearch('');
     expect(f.componentInstance.people()).toEqual([]);
   });
 
@@ -2252,21 +2279,18 @@ describe('Mentions in a comment', () => {
     expect(f.componentInstance.mentionedIds('@Kabelo, and @nobody-here')).toEqual(['u_kabelo']);
   });
 
-  it('puts a face in the comment box without a keyboard', async () => {
+  it('leaves emoji entry to the phone keyboard, without an in-app picker', async () => {
     const { f } = await page();
     const el = f.nativeElement as HTMLElement;
-    expect(el.querySelector('.em-toggle')).toBeTruthy();
+    expect(el.querySelector('.em-toggle')).toBeFalsy();
+    expect(el.querySelector('lf-emoji-row')).toBeFalsy();
     const box = el.querySelector('textarea')! as HTMLTextAreaElement;
-    box.value = 'Thank you ';
+    expect(box.getAttribute('inputmode')).toBe('text');
+    box.value = 'Thank you 🙏';
     box.dispatchEvent(new Event('input'));
-    f.componentInstance.addEmoji('🙏');
     f.detectChanges();
     await f.whenStable();
     expect(box.value).toContain('🙏');
-    expect(el.querySelector('lf-emoji-row')).toBeFalsy();
-    el.querySelector<HTMLButtonElement>('.em-toggle')!.click();
-    f.detectChanges();
-    expect((f.nativeElement as HTMLElement).querySelector('lf-emoji-row')?.querySelectorAll('button').length).toBe(16);
   });
 
   it('offers a follow beside a commenter, and says Following when you already do', async () => {

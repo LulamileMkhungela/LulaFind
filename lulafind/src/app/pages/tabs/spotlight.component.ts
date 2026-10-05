@@ -324,8 +324,11 @@ export class SpotlightComponent {
     void this.runSearch(value);
   }
 
-  vote(p: Post, v: ReactionKind): void {
-    void this.data.vote(p.id, v);
+  async vote(p: Post, v: ReactionKind): Promise<void> {
+    const saving = this.data.vote(p.id, v);
+    this.posts.update((items) => items.map((item) => item.id === p.id ? (this.data.post(p.id) ?? item) : item));
+    try { await saving; } catch { /* DataService restored the previous copy. */ }
+    this.posts.update((items) => items.map((item) => item.id === p.id ? (this.data.post(p.id) ?? item) : item));
   }
 
   openPost(p: Post): void {

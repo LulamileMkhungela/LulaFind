@@ -31,7 +31,7 @@ import { cover } from '../../core/data/seed';
   standalone: true,
   imports: [IonContent, IonSkeletonText, RouterLink, IconComponent, AvatarComponent, EmptyComponent, PostCardComponent, TopNavComponent],
   template: `
-    <lf-top-nav backTo="/home" />
+    <lf-top-nav [title]="u()?.displayName ?? 'Profile'" backTo="/home" />
 
     <ion-content class="lf-page">
       <div class="page-title">
@@ -546,8 +546,11 @@ export class ProfileComponent implements OnInit {
     await this.platform.share(`${u.displayName} on LulaFind`, `${u.displayName} - LulaFind`, this.platform.link(`/user/${u.id}`));
   }
 
-  vote(p: Post, v: ReactionKind): void {
-    void this.data.vote(p.id, v);
+  async vote(p: Post, v: ReactionKind): Promise<void> {
+    const saving = this.data.vote(p.id, v);
+    this.posts.update((items) => items.map((item) => item.id === p.id ? (this.data.post(p.id) ?? item) : item));
+    try { await saving; } catch { /* DataService restored the previous copy. */ }
+    this.posts.update((items) => items.map((item) => item.id === p.id ? (this.data.post(p.id) ?? item) : item));
   }
 
   open(p: Post): void {
@@ -601,7 +604,7 @@ export class ProfileComponent implements OnInit {
           handler: async (v: any) => {
             try {
               await this.mod.report({ target: 'user', targetId: u.id, summary: u.displayName, reason: v?.reason ?? 'other' });
-              await this.say('Report sent. Thank you.');
+              await this.say('Report saved for moderation. Email alerts depend on the server configuration.');
             } catch (e: any) {
               await this.say(e?.message ?? 'Could not send the report');
             }

@@ -1,4 +1,4 @@
-import { Component, EventEmitter, Output, computed, inject } from '@angular/core';
+import { Component, EventEmitter, Output, computed, inject, input } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { Story } from '../../core/models/types';
 import { timeAgo } from '../../core/utils/format';
@@ -41,6 +41,9 @@ import { AuthService } from '../../core/services/auth.service';
           <div class="fb-story-avatar-badge" [class.seen]="isSeen(s)">
             <lf-avatar [src]="avatarOf(s)" [name]="nameOf(s)" [size]="34" />
           </div>
+          @if (s.text) {
+            <span class="fb-story-copy">{{ s.text }}</span>
+          }
           <span class="fb-story-name">{{ nameOf(s) }}</span>
         </a>
       }
@@ -158,6 +161,27 @@ import { AuthService } from '../../core/services/auth.service';
     .fb-story-avatar-badge lf-avatar { border-radius: 50%; box-shadow: 0 0 0 2px var(--lf-card); }
     .fb-story-avatar-badge.seen { background: var(--lf-card-2); box-shadow: none; }
 
+    .fb-story-copy {
+      position: absolute;
+      z-index: 2;
+      left: 8px;
+      right: 8px;
+      top: 54px;
+      max-height: 86px;
+      overflow: hidden;
+      color: #fff;
+      text-align: center;
+      text-shadow: 0 1px 7px rgba(0,0,0,.72);
+      font-size: 13px;
+      line-height: 1.3;
+      font-weight: 700;
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 5;
+      overflow-wrap: anywhere;
+      white-space: pre-wrap;
+    }
+
     .fb-story-name {
       position: absolute;
       bottom: 8px;
@@ -179,9 +203,25 @@ export class StoryRailComponent {
   private data = inject(DataService);
   private auth = inject(AuthService);
 
+  /** Network story scope: stories stay on Home → Network, while the member can
+   * choose whose stories to browse without changing the post feed. */
+  readonly scope = input<'following' | 'followers' | 'public'>('following');
+
   protected readonly timeAgo = timeAgo;
 
-  readonly grouped = computed(() => this.data.visibleStories().slice(0, 30));
+  readonly grouped = computed(() => {
+    const me = this.auth.viewerId;
+    const following = new Set(this.data.followingIds());
+    const followers = new Set(this.data.followerIds());
+    const scope = this.scope();
+    return this.data.visibleStories()
+      .filter((story) => {
+        if (story.authorId === me) return true;
+        if (scope === 'public') return story.audience === 'public';
+        return scope === 'following' ? following.has(story.authorId) : followers.has(story.authorId);
+      })
+      .slice(0, 30);
+  });
   readonly myAvatar = computed(() => this.data.avatarFor(this.auth.user()));
   readonly myName = computed(() => this.auth.user()?.displayName ?? 'You');
 

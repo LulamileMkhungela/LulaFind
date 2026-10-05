@@ -40,8 +40,8 @@ import { timeAgo } from '../../core/utils/format';
         <div class="lf-banner">
           <lf-icon name="shield" [size]="18" />
           <div>
-            You are signed in as an admin. You can remove posts, suspend people and delete accounts.
-            Every action is recorded on the report.
+            Admin queue. Actions are recorded.
+            <br /><strong>Email delivery:</strong> configure the Supabase report webhook and provider secrets.
           </div>
         </div>
 
@@ -238,7 +238,7 @@ export class AdminComponent implements OnInit {
 
   nameOf(id: string): string {
     if (id === this.auth.viewerId) return 'you';
-    return this.data.authorOf(id)?.displayName ?? this.users().find((u) => u.id === id)?.displayName ?? 'a member';
+    return this.data.authorOf(id)?.displayName ?? this.users().find((u) => u.id === id)?.displayName ?? 'Member';
   }
 
   /** Ask for a reason. Returns null if the admin cancelled. */
