@@ -25,7 +25,8 @@ import { LookoutService } from '../../core/services/lookout.service';
 import { MediaService } from '../../core/services/media.service';
 import { KvStore } from '../../core/data/local-db';
 import {
-  Comment, MediaItem, Post, REACTIONS, ReactionKind, UserProfile, isReaction, provinceName
+  Comment, MediaItem, Post, PROVINCES, ProvinceCode, REACTIONS, ReactionKind, Sighting, UserProfile,
+  isReaction, provinceName
 } from '../../core/models/types';
 import { QUICK_EMOJIS } from '../../shared/components/emoji-row.component';
 import { compact, dayMonth, headingIsNew as headingIsNewFn, timeAgo } from '../../core/utils/format';
@@ -278,6 +279,32 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
             @if (!auth.signedIn()) {
               <button class="signin" type="button" (click)="needAuth()">Sign in to comment</button>
             } @else {
+              @if (canLead() && !replyTo()) {
+                <button type="button" class="sighting-trigger" [class.on]="sightingOpen()" (click)="openSightingForm()">
+                  <lf-icon name="pin" [size]="16" />
+                  <span><strong>Report a sighting</strong><small>Share when and where you saw someone</small></span>
+                  <lf-icon [name]="sightingOpen() ? 'chevronDown' : 'chevronRight'" [size]="16" />
+                </button>
+                @if (sightingOpen()) {
+                  <section class="sighting-form" aria-label="Report a structured sighting">
+                    <p class="sighting-form__hint">Only report what you personally saw. Do not approach or confront anyone.</p>
+                    <label><span>Where did you see them?</span><input [value]="sightingPlace" placeholder="Public place or nearest landmark" (input)="sightingPlace = $any($event.target).value" /></label>
+                    <div class="sighting-form__two">
+                      <label><span>Province</span><select [value]="sightingProvince" (change)="sightingProvince = $any($event.target).value">
+                        @for (province of provinces; track province.code) { <option [value]="province.code">{{ province.name }}</option> }
+                      </select></label>
+                      <label><span>When?</span><input type="datetime-local" [value]="sightingWhen" (input)="sightingWhen = $any($event.target).value" /></label>
+                    </div>
+                    <label><span>What did you see?</span><textarea rows="3" [value]="sightingNote" placeholder="Direction of travel, clothing, vehicle or other facts" (input)="sightingNote = $any($event.target).value"></textarea></label>
+                    <div class="sighting-form__actions">
+                      <button type="button" class="textbtn" (click)="closeSightingForm()" [disabled]="posting()">Cancel</button>
+                      <button type="button" class="big big--go" (click)="reportSighting()" [disabled]="posting() || !sightingPlace.trim()">
+                        <lf-icon name="send" [size]="16" /> {{ posting() ? 'Sending…' : 'Submit sighting' }}
+                      </button>
+                    </div>
+                  </section>
+                }
+              }
               @if (replyTo(); as r) {
                 <div class="replying">Replying to <strong>{{ r.name }}</strong>
                   <button type="button" (click)="cancelReply()" aria-label="Cancel reply"><lf-icon name="x" [size]="14" /></button>
@@ -639,6 +666,19 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
 
     /* Conversation thread - sender row, message bubble and compact Like/Reply actions. */
     .comments { background: var(--lf-card); box-shadow: var(--lf-shadow); padding: 12px var(--edge) 18px; }
+    .sighting-trigger { display: flex; align-items: center; gap: 8px; width: 100%; margin: 0 0 10px; padding: 10px 12px; border: 1px solid var(--lf-line);
+      border-radius: 8px; background: var(--lf-card-2); color: inherit; font: inherit; text-align: left; cursor: pointer; }
+    .sighting-trigger span { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+    .sighting-trigger small { color: var(--lf-muted); font-size: 12px; }
+    .sighting-trigger.on { border-color: transparent; background: var(--lf-primary-soft); color: var(--lf-primary-soft-text); }
+    .sighting-form { display: flex; flex-direction: column; gap: 10px; margin: -2px 0 12px; padding: 12px; border: 1px solid var(--lf-line); border-radius: 9px; background: var(--lf-bg); }
+    .sighting-form label { display: flex; flex-direction: column; gap: 4px; color: var(--ion-text-color); font-size: 12px; font-weight: 700; }
+    .sighting-form input, .sighting-form select, .sighting-form textarea { width: 100%; box-sizing: border-box; min-height: 38px; padding: 8px 10px; border: 1px solid var(--lf-line); border-radius: 7px; background: var(--lf-card); color: inherit; font: inherit; font-size: 14px; font-weight: 400; }
+    .sighting-form textarea { min-height: 76px; resize: vertical; }
+    .sighting-form__two { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .sighting-form__hint { margin: 0; color: var(--lf-muted); font-size: 12px; line-height: 1.4; }
+    .sighting-form__actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
+    .sighting-form__actions .big { min-width: 148px; height: 38px; font-size: 13px; }
     .cbox { display: flex; align-items: flex-start; gap: 8px; }
     .compose { flex: 1; min-width: 0; }
     .field { width: 100%; min-width: 0; box-sizing: border-box; display: flex; align-items: flex-end; gap: 6px; padding: 6px 6px 6px 14px; border: 1px solid var(--lf-line); border-radius: 20px; background: var(--lf-card); }
@@ -763,6 +803,7 @@ export class PostDetailComponent implements OnInit {
 
   protected readonly compact = compact;
   protected readonly timeAgo = timeAgo;
+  protected readonly provinces = PROVINCES;
   /** Whether this account asked to hear about changes to this case. */
   readonly followingCase = computed(() => !!this.p() && this.data.isFollowingCase(this.p()!.id));
   /** Whether this account has volunteered to look near the last-seen area. */
@@ -793,6 +834,11 @@ export class PostDetailComponent implements OnInit {
   markGuess = signal('');
   posting = signal(false);
   readonly lookingBusy = signal(false);
+  readonly sightingOpen = signal(false);
+  sightingPlace = '';
+  sightingProvince: ProvinceCode = 'GP';
+  sightingWhen = '';
+  sightingNote = '';
   khumbuNote = '';
 
   readonly me = computed(() => this.auth.viewerId);
@@ -950,6 +996,63 @@ export class PostDetailComponent implements OnInit {
       await this.say(e instanceof Error ? e.message : 'Could not update the search team');
     } finally {
       this.lookingBusy.set(false);
+    }
+  }
+
+  /** Open the structured sighting sheet instead of forcing a family to parse free text. */
+  openSightingForm(): void {
+    if (this.sightingOpen()) {
+      this.closeSightingForm();
+      return;
+    }
+    const p = this.p();
+    if (!p) return;
+    this.sightingProvince = p.province;
+    this.sightingPlace = '';
+    this.sightingWhen = this.localDateTime(Date.now());
+    this.sightingNote = '';
+    this.sightingOpen.set(true);
+  }
+
+  closeSightingForm(): void {
+    this.sightingOpen.set(false);
+    this.sightingPlace = '';
+    this.sightingNote = '';
+  }
+
+  private localDateTime(at: number): string {
+    const d = new Date(at);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+
+  /** Save a sighting as a lead with a time and place the family can act on. */
+  async reportSighting(): Promise<void> {
+    if (!this.auth.signedIn()) return this.needAuth();
+    const p = this.p();
+    const place = this.sightingPlace.trim();
+    const when = Date.parse(this.sightingWhen);
+    if (!p || !place) return;
+    if (!Number.isFinite(when)) return this.say('Choose when you saw them so the family can place the lead in time.');
+    if (when > Date.now() + 5 * 60_000) return this.say('A sighting time cannot be in the future.');
+    this.posting.set(true);
+    try {
+      const note = this.sightingNote.trim();
+      const sighting: Sighting = { place, province: this.sightingProvince, when, note: note || undefined };
+      await this.data.addComment({
+        postId: p.id,
+        body: note || `I saw someone matching this case near ${place}.`,
+        isLead: true,
+        sighting
+      });
+      this.comments.set(await this.data.comments(p.id));
+      this.p.set(this.data.post(p.id) ?? p);
+      this.closeSightingForm();
+      await this.say('Sighting submitted as a lead for the family.');
+    } catch (e: unknown) {
+      await this.say(e instanceof Error ? e.message : 'Could not submit the sighting');
+    } finally {
+      this.posting.set(false);
     }
   }
 

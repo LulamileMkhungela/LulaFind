@@ -38,7 +38,14 @@ Perplexity's public website was available as a research entry point, but its una
 - The action survives a refresh through the post record and is covered by a regression test.
 - Notification failure cannot make a successful volunteer action look like it failed.
 
-This takes the useful Search Party / Digital Search Hero pattern and keeps LulaFind's safer boundary: a volunteer declares intent, not a precise location trace.
+A structured **Report a sighting** sheet is also available on case conversations.
+
+- It captures place, province, time seen, and factual notes.
+- It stores the report as a lead directly attached to the case rather than burying it in free text.
+- It warns people not to approach or confront anyone.
+- It keeps the existing family/admin verification path and notification flow.
+
+Together these take the useful Search Party, Digital Search Hero, and structured-sighting patterns while keeping LulaFind's safer boundary: a volunteer declares intent, not a precise location trace.
 
 ### Recommended next interactions
 

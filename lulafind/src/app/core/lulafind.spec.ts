@@ -1233,6 +1233,22 @@ describe('I am looking', () => {
     signInAs('u_demo');
     await expect(data.markLooking('p_thato')).rejects.toThrow(/family/i);
   });
+
+  it('stores a structured sighting as a lead attached to the case', async () => {
+    const data = svc<DataService>(DataService);
+    signInAs('u_kabelo');
+    const when = Date.now() - 25 * 60_000;
+    const comment = await data.addComment({
+      postId: 'p_thato',
+      body: 'I saw someone matching the case near the taxi rank.',
+      isLead: true,
+      sighting: { place: 'Orlando taxi rank', province: 'GP', when, note: 'Heading toward the clinic.' }
+    });
+    expect(comment.isLead).toBe(true);
+    expect(comment.sighting?.place).toBe('Orlando taxi rank');
+    expect(comment.sighting?.when).toBe(when);
+    expect((await data.comments('p_thato')).some((c) => c.id === comment.id && c.sighting?.province === 'GP')).toBe(true);
+  });
 });
 
 describe('Safety check-ins', () => {
