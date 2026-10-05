@@ -271,46 +271,10 @@ grant execute on function public.lula_link_spotlight_post(text, text, boolean) t
 
 -- ── joining and leaving a surname community ────────────────────────────────
 --
--- "lula update" only lets a Spotlight's owner rewrite the row. That is right for
--- the tagline and the about text and wrong for membership: everybody is allowed
--- to join. Without this policy, joining works only through
--- lula_set_spotlight_membership(), and a deployment that never installed that
--- function (or never granted it) answers "join" with permission denied - which
--- is why the client also knows how to update the row itself.
---
--- The rule: the row must be a spotlight; everything in it except memberIds and
--- followers must be byte-identical to what was there; the only person who may
--- appear or disappear from memberIds is the caller; and the follower count may
--- rise by at most one (falling is harmless, and lets a count that was inflated
--- elsewhere come back to the list). Ownership, admins and the filed posts are
--- therefore untouchable by a member, and a vote cannot be stuffed from the side.
+-- PostgreSQL RLS policies cannot reference an `old` row inside WITH CHECK.
+-- Membership therefore uses lula_set_spotlight_membership(), a locked
+-- SECURITY DEFINER RPC that changes only the caller's membership.
 drop policy if exists "lula spotlight join" on public.records;
-create policy "lula spotlight join" on public.records
-for update to authenticated
-using (
-  collection = 'spotlights'
-  and (select public.lula_uid()) is not null
-)
-with check (
-  collection = 'spotlights'
-  and (select public.lula_uid()) is not null
-  and (payload - 'memberIds' - 'followers') = (old.payload - 'memberIds' - 'followers')
-  -- nobody newly listed except the caller
-  and not exists (
-    select 1 from jsonb_array_elements_text(coalesce(payload->'memberIds', '[]'::jsonb)) as added(id)
-    where added.id <> (select public.lula_uid())
-      and not (coalesce(old.payload->'memberIds', '[]'::jsonb) @> to_jsonb(added.id))
-  )
-  -- nobody dropped except the caller
-  and not exists (
-    select 1 from jsonb_array_elements_text(coalesce(old.payload->'memberIds', '[]'::jsonb)) as gone(id)
-    where gone.id <> (select public.lula_uid())
-      and not (coalesce(payload->'memberIds', '[]'::jsonb) @> to_jsonb(gone.id))
-  )
-  and coalesce((payload->>'followers')::int, 0)
-      <= coalesce((old.payload->>'followers')::int, 0) + 1
-)
-;
 
 -- The membership function's own grant. Repeated here because a missing grant is
 -- the same permission-denied failure seen from the other side, and a grant that
