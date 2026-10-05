@@ -92,7 +92,7 @@ put_vault_secret() {
     printf '  end if;\nend $$;\n'
   } > "$sql_file"
   echo "==> Updating Vault secret $name"
-  "${CLI[@]}" db query --project-ref "$PROJECT_REF" --file "$sql_file" >/dev/null
+  "${CLI[@]}" db query --linked --project-ref "$PROJECT_REF" --file "$sql_file" >/dev/null
   rm -f "$sql_file"
   trap - RETURN
 }
