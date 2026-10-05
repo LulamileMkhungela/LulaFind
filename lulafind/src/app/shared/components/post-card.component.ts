@@ -8,6 +8,7 @@ import { IconComponent } from './icon.component';
 import { ReactionsSheetComponent } from './reactions-sheet.component';
 import { UserHoverDirective } from './user-hover-card.component';
 import { ReactionIconComponent } from './reaction-icon.component';
+import { ReactionButtonComponent } from './reaction-button.component';
 import { DataService } from '../../core/services/data.service';
 import { AuthService } from '../../core/services/auth.service';
 import { CHECK_IN_COPY } from '../../core/services/safety.service';
@@ -33,7 +34,7 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
 @Component({
   selector: 'lf-post-card',
   standalone: true,
-  imports: [RouterLink, IconComponent, AvatarComponent, ReactionIconComponent, ReactionsSheetComponent, UserHoverDirective],
+  imports: [RouterLink, IconComponent, AvatarComponent, ReactionIconComponent, ReactionButtonComponent, ReactionsSheetComponent, UserHoverDirective],
   template: `
     @if (!gone()) {
     <article class="fb-card lf-fade-in"
@@ -217,20 +218,15 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
            markup, so a post in the feed had no way to be reacted to or
            commented on even though every handler below still existed. -->
       <div class="fb-actions" (click)="$event.stopPropagation()">
-        <button class="fb-act" type="button" [class.on]="!!myReaction()"
-                (click)="quickReact()" (contextmenu)="openReactions($event)"
-                [attr.aria-label]="myReaction() ? 'Your reaction: ' + reactionWord() : 'Like'">
-          <lf-reaction-icon [kind]="myReaction() ?? defaultReaction" [size]="20" />
-          <span>{{ reactionWord() }}</span>
+        <lf-reaction-button class="fb-act" [value]="myReaction()" (react)="onReact($event)" (click)="legacyReactClick($event)" />
+        <button class="fb-act" type="button" (click)="comment.emit()" aria-label="Comment" title="Comment">
+          <lf-icon name="comment" [size]="20" /><span class="sr-only">Comment</span>
         </button>
-        <button class="fb-act" type="button" (click)="comment.emit()" aria-label="Comment">
-          <lf-icon name="comment" [size]="20" /><span>Comment</span>
+        <button class="fb-act" type="button" (click)="onRepost()" aria-label="Repost" title="Repost">
+          <lf-icon name="repost" [size]="20" /><span class="sr-only">Repost</span>
         </button>
-        <button class="fb-act" type="button" (click)="onRepost()" aria-label="Repost">
-          <lf-icon name="repost" [size]="20" /><span>Repost</span>
-        </button>
-        <button class="fb-act" type="button" (click)="onSend()" aria-label="Send">
-          <lf-icon name="send" [size]="19" /><span>Send</span>
+        <button class="fb-act" type="button" (click)="onSend()" aria-label="Send" title="Send">
+          <lf-icon name="send" [size]="19" /><span class="sr-only">Send</span>
         </button>
       </div>
 
@@ -455,6 +451,8 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
       display: flex; align-items: center; margin: 6px 8px 8px; padding-top: 2px;
       border-top: 1px solid var(--lf-line-soft);
     }
+    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+    .fb-actions lf-reaction-button { flex: 1 1 0; min-width: 0; }
     .fb-act {
       flex: 1 1 0; min-width: 0; height: 40px; border: 0; background: transparent; color: var(--lf-muted);
       font-family: inherit; font-size: 13.5px; font-weight: 600; cursor: pointer; border-radius: 6px;
@@ -516,12 +514,12 @@ export class PostCardComponent implements OnInit, OnChanges, AfterViewChecked {
   readonly isMine = computed(() => this.post?.authorId === this.auth.viewerId);
   readonly myVote = computed(() => (this.post ? this.data.myVote(this.post) : null));
   readonly authorName = computed(() =>
-    this.post?.anonymous && !this.isMine() ? 'Anonymous' : this.author?.displayName ?? 'LulaFind member'
+    this.post?.anonymous && !this.isMine() ? 'Anonymous' : this.author?.displayName ?? 'Member'
   );
   readonly originalName = computed(() => {
     const o = this.original();
     if (!o) return '';
-    return o.anonymous ? 'Anonymous' : this.data.authorOf(o.authorId)?.displayName ?? 'LulaFind member';
+    return o.anonymous ? 'Anonymous' : this.data.authorOf(o.authorId)?.displayName ?? 'Member';
   });
   readonly originalAvatar = computed(() => {
     const o = this.original();
@@ -621,7 +619,7 @@ export class PostCardComponent implements OnInit, OnChanges, AfterViewChecked {
   });
 
   commenterName(c: Comment): string {
-    return this.data.authorOf(c.authorId)?.displayName ?? 'A neighbour';
+    return this.data.authorOf(c.authorId)?.displayName ?? 'Member';
   }
 
   commenterAvatar(c: Comment): string {
@@ -752,6 +750,15 @@ export class PostCardComponent implements OnInit, OnChanges, AfterViewChecked {
   reactionWord(): string {
     const mine = this.myReaction();
     return mine ? REACTIONS.find((r) => r.key === mine)?.label ?? DEFAULT_REACTION_LABEL : DEFAULT_REACTION_LABEL;
+  }
+
+  /**
+   * Compatibility for callers that click the host element itself. Real pointer
+   * taps are handled by ReactionButtonComponent; ignoring bubbled child clicks
+   * here prevents a quick tap from being applied twice.
+   */
+  legacyReactClick(event: Event): void {
+    if (event.target === event.currentTarget) this.quickReact();
   }
 
   /** A tap applies the default reaction; holding opens the tray. */

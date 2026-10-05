@@ -10,6 +10,7 @@ import { IonItem } from '@ionic/angular/ion-item';
 import { IonLabel } from '@ionic/angular/ion-label';
 import { IonToggle } from '@ionic/angular/ion-toggle';
 import { ToastController } from '@ionic/angular/toast-controller';
+import { AlertController } from '@ionic/angular/alert-controller';
 import { IconComponent } from '../../shared/components/icon.component';
 import { TopNavComponent } from '../../shared/components/top-nav.component';
 import { LocationService } from '../../core/services/location.service';
@@ -244,6 +245,7 @@ export class SafetyCenterComponent {
   protected auth = inject(AuthService);
   protected data = inject(DataService);
   private toast = inject(ToastController);
+  private alert = inject(AlertController);
 
   protected readonly provinceName = provinceName;
   protected readonly fullDate = fullDate;
@@ -337,8 +339,24 @@ export class SafetyCenterComponent {
   }
 
   async cancelLookout(): Promise<void> {
-    await this.lookouts.cancel();
-    await this.say('Lookout cancelled.');
+    const alert = await this.alert.create({
+      header: 'Cancel this lookout?',
+      message: 'Your followers will be told that no further check-in is needed. Any LulaFind case created for this lookout will be removed.',
+      buttons: [
+        { text: 'Keep it', role: 'cancel' },
+        { text: 'Cancel lookout', role: 'destructive', handler: () => void this.finishCancelLookout() }
+      ]
+    });
+    await alert.present();
+  }
+
+  private async finishCancelLookout(): Promise<void> {
+    try {
+      await this.lookouts.cancel();
+      await this.say('Lookout cancelled and any linked case was cleaned up.');
+    } catch (e: unknown) {
+      await this.say(e instanceof Error ? e.message : 'Could not cancel the lookout');
+    }
   }
 
   private async savePrivacy(patch: Partial<PrivacyPrefs>, message: string): Promise<void> {

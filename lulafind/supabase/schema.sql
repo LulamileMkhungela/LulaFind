@@ -522,6 +522,18 @@ with check (
   )
 );
 
+-- Reports are private to the reporter, except for the moderation queue. The
+-- generic select policy above intentionally does not expose reports to admins;
+-- this explicit branch makes the queue readable cross-device without exposing
+-- anyone else's reports to ordinary members.
+drop policy if exists "lula report read" on public.records;
+create policy "lula report read" on public.records
+for select to anon, authenticated
+using (
+  collection = 'reports'
+  and (public.lula_is_admin() or payload->>'byUserId' = (select public.lula_uid()))
+);
+
 drop policy if exists "lula update" on public.records;
 create policy "lula update" on public.records
 for update to anon, authenticated

@@ -1,5 +1,5 @@
 import {
-  ChatMessage, ChatThread, Comment, FeedFilter, FollowEdge, Lookout, Notification, Post, Spotlight, Story, Tip,
+  ChatMessage, ChatThread, Comment, FeedFilter, FollowEdge, Lookout, Notification, Post, Spotlight, Story, Tip, UserReport,
   ReactionKind, UserProfile, defaultPrivacy, isReaction
 } from '../models/types';
 import { seedComments, seedPosts, seedSpotlights, seedStories, seedTips, seedUsers } from './seed';
@@ -129,6 +129,10 @@ export const emptyDb = (): DbSnapshot => ({
  */
 export class LocalDb {
   private store = new KvStore('lulafind.db');
+  // Reports are separate from the demo/live snapshot so a report cannot be
+  // accidentally wiped by a data-shape migration. MockApi still exercises the
+  // same durable adapter contract as SupabaseApi.
+  private reportStore = new KvStore('lulafind.reports');
   private db: DbSnapshot;
   private rev = 0;
   private listeners = new Set<() => void>();
@@ -405,11 +409,17 @@ export class LocalDb {
    * same wherever it is typed. Cases held for review stay hidden from the
    * public; the caller merges in whatever the viewer's own feed may show them.
    */
-  searchPosts(q: string, limit = 40): Post[] {
+  searchPosts(q: string, limit = 40, viewerId: string | null = null): Post[] {
     const needle = q.trim().toLowerCase();
     if (needle.length < 2) return [];
+    const viewer = viewerId ? this.user(viewerId) : undefined;
+    const following = new Set(this.db.follows
+      .filter((edge) => edge.followerId === viewerId && edge.status === 'accepted')
+      .map((edge) => edge.followingId));
     return this.db.posts
-      .filter((p) => p.status !== 'under_review' && this.matchesQuery(p, needle))
+      .filter((p) => p.status !== 'under_review' || p.authorId === viewerId || viewer?.isAdmin === true)
+      .filter((p) => canReadPostAudience(p, { viewerId, following }))
+      .filter((p) => this.matchesQuery(p, needle))
       .sort((a, b) => b.updatedAt - a.updatedAt)
       .slice(0, limit)
       .map((p) => clone(p));
@@ -571,7 +581,20 @@ export class LocalDb {
 
   filtered(f: FeedFilter, viewerId: string | null, viewer: UserProfile | undefined): Post[] {
     const following = new Set(this.db.follows.filter((e) => e.followerId === viewerId && e.status === 'accepted').map((e) => e.followingId));
+    const followers = new Set(this.db.follows.filter((e) => e.followingId === viewerId && e.status === 'accepted').map((e) => e.followerId));
     let list = this.db.posts.slice();
+
+    if (f.scope === 'network') {
+      // Network is deliberately narrower than For you: a post must come from
+      // someone in either direction, or from a Spotlight the viewer belongs to.
+      // Checking membership here (rather than only in the component) keeps a
+      // followers-only post from leaking when the tab is refreshed.
+      const networkPeople = new Set([...(viewerId ? [viewerId] : []), ...following, ...followers]);
+      const joinedSpotlights = new Set(
+        this.db.spotlights.filter((s) => !!viewerId && s.memberIds.includes(viewerId)).map((s) => s.id)
+      );
+      list = list.filter((p) => networkPeople.has(p.authorId) || (!!p.spotlightId && joinedSpotlights.has(p.spotlightId)));
+    }
 
     if (f.type !== 'all') list = list.filter((p) => p.type === f.type);
     if (f.province !== 'all') list = list.filter((p) => p.province === f.province);
@@ -722,9 +745,20 @@ export class LocalDb {
   }
 
   /* ------------------------- stories ------------------------- */
-  stories(): Story[] {
+  stories(viewerId: string | null = null): Story[] {
     const now = Date.now();
-    return this.db.stories.filter((s) => s.expiresAt > now).map((s) => clone(s));
+    const following = new Set(this.db.follows
+      .filter((edge) => edge.followerId === viewerId && edge.status === 'accepted')
+      .map((edge) => edge.followingId));
+    const memberSpotlights = new Set(this.db.spotlights
+      .filter((sp) => !!viewerId && sp.memberIds.includes(viewerId))
+      .map((sp) => sp.id));
+    return this.db.stories
+      .filter((s) => s.expiresAt > now)
+      .filter((s) => s.authorId === viewerId || s.audience === 'public'
+        || (s.audience === 'followers' && following.has(s.authorId))
+        || (s.audience === 'surname' && !!s.spotlightId && memberSpotlights.has(s.spotlightId)))
+      .map((s) => clone(s));
   }
   story(id: string): Story | undefined {
     const st = this.db.stories.find((x) => x.id === id && x.expiresAt > Date.now());
@@ -835,12 +869,27 @@ export class LocalDb {
     this.persist();
   }
 
+  /* ------------------------- moderation reports ------------------------- */
+  reportsFor(userId: string): UserReport[] {
+    const all = this.reportStore.get<UserReport[]>('all', []);
+    const admin = this.db.users.find((u) => u.id === userId)?.isAdmin === true;
+    return all.filter((r) => admin || r.byUserId === userId).sort((a, b) => b.at - a.at).map((r) => clone(r));
+  }
+  saveReport(report: UserReport): void {
+    const all = this.reportStore.get<UserReport[]>('all', []);
+    const next = [report, ...all.filter((r) => r.id !== report.id)];
+    this.reportStore.set('all', next);
+    this.rev++;
+    this.listeners.forEach((fn) => fn());
+  }
+
   /* ------------------------- tips ------------------------- */
   tips(): Tip[] { return this.db.tips.map((t) => clone(t)); }
 
   /* ------------------------- reset ------------------------- */
   reset(): void {
     this.db = this.seedDemo ? this.seed() : this.emptyLive();
+    this.reportStore.clearAll();
     this.persist();
   }
 }

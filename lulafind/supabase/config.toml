@@ -37,3 +37,6 @@ port = 54323
 # request reaches the function.
 [functions.send-push]
 verify_jwt = false
+
+[functions.send-report-email]
+verify_jwt = false

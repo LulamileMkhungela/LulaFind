@@ -52,9 +52,9 @@ type Tab = 'requests' | 'following' | 'followers';
           @for (r of matchingRows(); track r.id) {
             <div class="row">
               <a [routerLink]="'/user/' + r.id" class="who">
-                <lf-avatar [src]="data.avatarFor(r.u)" [name]="r.u?.displayName ?? '?'" [size]="56" />
+                <lf-avatar [src]="data.avatarFor(r.u)" [name]="r.u?.displayName ?? 'Member'" [size]="56" />
                 <div class="txt">
-                  <strong>{{ r.u?.displayName ?? 'A member' }}</strong>
+                  <strong>{{ r.u?.displayName ?? 'Member' }}</strong>
                   <span class="lf-tiny lf-muted">
                     @if (r.u?.handle) { &#64;{{ r.u!.handle }} · }
                     @switch (tab()) {

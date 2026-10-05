@@ -42,7 +42,8 @@ export interface Settings {
 }
 
 const DEFAULTS: Settings = {
-  theme: 'dark',
+  // Follow the device appearance until the person explicitly chooses Light or Dark.
+  theme: 'system',
   background: 'black',
   haptics: true,
   pushEnabled: true,
@@ -58,6 +59,7 @@ const DEFAULTS: Settings = {
 @Injectable({ providedIn: 'root' })
 export class SettingsService {
   private store = new KvStore('lulafind.settings');
+  private systemMedia?: MediaQueryList;
   readonly settings = signal<Settings>(this.load());
 
   /**
@@ -68,7 +70,7 @@ export class SettingsService {
   private load(): Settings {
     const saved = this.store.get<Partial<Settings>>('current', {});
     if (saved.background === undefined) {
-      const migrated = { ...DEFAULTS, ...saved, theme: 'dark' as ThemeMode, background: 'black' as BackgroundKey };
+      const migrated = { ...DEFAULTS, ...saved, theme: (saved.theme ?? DEFAULTS.theme) as ThemeMode, background: 'black' as BackgroundKey };
       this.store.set('current', migrated);
       return migrated;
     }
@@ -108,5 +110,16 @@ export class SettingsService {
 
   init(): void {
     this.applyTheme(this.settings().theme, this.settings().background);
+    // `system` is a live preference, not a one-time copy of the current mode.
+    // This also covers a device switching appearance while LulaFind is open.
+    if (typeof window !== 'undefined' && window.matchMedia) {
+      this.systemMedia = window.matchMedia('(prefers-color-scheme: dark)');
+      const refresh = () => {
+        if (this.settings().theme === 'system') this.applyTheme('system', this.settings().background);
+      };
+      this.systemMedia.addEventListener?.('change', refresh);
+      // Safari versions without addEventListener still expose addListener.
+      this.systemMedia.addListener?.(refresh);
+    }
   }
 }
