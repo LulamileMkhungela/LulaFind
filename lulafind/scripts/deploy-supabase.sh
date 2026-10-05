@@ -63,7 +63,7 @@ FCM_SERVICE_ACCOUNT_JSON="$(node -e '
 run_sql() {
   local file="$1"
   echo "==> Applying $(basename "$file")"
-  "${CLI[@]}" db query --project-ref "$PROJECT_REF" --file "$file"
+  "${CLI[@]}" db query --linked --project-ref "$PROJECT_REF" --file "$file"
 }
 
 # Escape a value into a PostgreSQL single-quoted literal without printing it.
