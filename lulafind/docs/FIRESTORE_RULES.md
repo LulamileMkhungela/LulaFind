@@ -126,6 +126,13 @@ service cloud.firestore {
       allow delete: if isSelf(userId);
     }
 
+    /* ---------------- moderation reports ---------------- */
+    match /reports/{reportId} {
+      allow read: if signedIn() && (isAdmin() || resource.data.byUserId == request.auth.uid);
+      allow create: if signedIn() && request.resource.data.byUserId == request.auth.uid;
+      allow update, delete: if isAdmin();
+    }
+
     /* ---------------- tips (read-only content) ---------------- */
     match /tips/{tipId} {
       allow read: if true;

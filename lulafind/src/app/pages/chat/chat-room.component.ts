@@ -463,7 +463,7 @@ export class ChatRoomComponent implements OnInit, OnDestroy {
   readonly thread = computed(() => this.chat.threads().find((t) => t.id === this.route.snapshot.paramMap.get('threadId')));
   readonly peerId = computed(() => this.thread()?.participantIds.find((id) => id !== this.auth.viewerId) ?? '');
   readonly peer = computed(() => this.data.authorOf(this.peerId()));
-  readonly peerName = computed(() => this.peer()?.displayName ?? 'LulaFind member');
+  readonly peerName = computed(() => this.peer()?.displayName ?? 'Member');
   readonly peerHandle = computed(() => (this.peer() ? '@' + this.peer()!.handle : ''));
   readonly peerHeadline = computed(() => this.peer()?.bio ?? '');
   readonly peerAvatar = computed(() => this.data.avatarFor(this.peer()));

@@ -2252,21 +2252,18 @@ describe('Mentions in a comment', () => {
     expect(f.componentInstance.mentionedIds('@Kabelo, and @nobody-here')).toEqual(['u_kabelo']);
   });
 
-  it('puts a face in the comment box without a keyboard', async () => {
+  it('leaves emoji entry to the phone keyboard, without an in-app picker', async () => {
     const { f } = await page();
     const el = f.nativeElement as HTMLElement;
-    expect(el.querySelector('.em-toggle')).toBeTruthy();
+    expect(el.querySelector('.em-toggle')).toBeFalsy();
+    expect(el.querySelector('lf-emoji-row')).toBeFalsy();
     const box = el.querySelector('textarea')! as HTMLTextAreaElement;
-    box.value = 'Thank you ';
+    expect(box.getAttribute('inputmode')).toBe('text');
+    box.value = 'Thank you 🙏';
     box.dispatchEvent(new Event('input'));
-    f.componentInstance.addEmoji('🙏');
     f.detectChanges();
     await f.whenStable();
     expect(box.value).toContain('🙏');
-    expect(el.querySelector('lf-emoji-row')).toBeFalsy();
-    el.querySelector<HTMLButtonElement>('.em-toggle')!.click();
-    f.detectChanges();
-    expect((f.nativeElement as HTMLElement).querySelector('lf-emoji-row')?.querySelectorAll('button').length).toBe(16);
   });
 
   it('offers a follow beside a commenter, and says Following when you already do', async () => {

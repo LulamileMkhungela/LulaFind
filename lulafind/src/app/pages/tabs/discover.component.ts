@@ -32,9 +32,16 @@ type Tab = 'following' | 'followers' | 'requests' | 'statuses';
   standalone: true,
   imports: [IonContent, TopNavComponent, RouterLink, AvatarComponent, EmptyComponent, IconComponent, StoryRailComponent],
   template: `
-    <lf-top-nav heading="Discover" />
+    <lf-top-nav heading="Network" />
 
     <ion-content class="lf-page lf-plain">
+      <div class="network-tools">
+        <a class="network-search" routerLink="/search">
+          <lf-icon name="search" [size]="18" />
+          <span><strong>Find people and cases</strong><small>Search the active Network, not just this screen</small></span>
+          <lf-icon name="chevronRight" [size]="17" />
+        </a>
+      </div>
       <!-- Stories live here too: "Create story" opens the camera/upload step and
            every story card opens the viewer, so Discover is not a dead end. -->
       <lf-story-rail (addStory)="onAddStory()" />
@@ -93,10 +100,10 @@ type Tab = 'following' | 'followers' | 'requests' | 'statuses';
                     @for (r of statusPeople(); track r.id) {
                       <div class="row">
                         <a [routerLink]="['/user', r.id]" class="who">
-                          <lf-avatar [src]="data.avatarFor(r.u)" [name]="r.u?.displayName ?? '?'" [size]="56"
+                          <lf-avatar [src]="data.avatarFor(r.u)" [name]="r.u?.displayName ?? 'Member'" [size]="56"
                                      [status]="r.status" />
                           <div class="txt">
-                            <strong>{{ r.u?.displayName ?? 'A member' }}</strong>
+                            <strong>{{ r.u?.displayName ?? 'Member' }}</strong>
                             <span class="pillstatus" [attr.data-key]="r.status">
                               <lf-icon [name]="iconFor(r.status)" [size]="13" [weight]="2.4" />
                               {{ labelFor(r.status) }}
@@ -126,9 +133,9 @@ type Tab = 'following' | 'followers' | 'requests' | 'statuses';
                   @for (r of rowsFor(s.key); track r.id) {
                     <div class="row">
                       <a [routerLink]="['/user', r.id]" class="who">
-                        <lf-avatar [src]="data.avatarFor(r.u)" [name]="r.u?.displayName ?? '?'" [size]="56" />
+                        <lf-avatar [src]="data.avatarFor(r.u)" [name]="r.u?.displayName ?? 'Member'" [size]="56" />
                         <div class="txt">
-                          <strong>{{ r.u?.displayName ?? 'A member' }}</strong>
+                          <strong>{{ r.u?.displayName ?? 'Member' }}</strong>
                           <span class="lf-tiny lf-muted">
                             @if (r.u?.handle) { &#64;{{ r.u!.handle }} · }
                             @switch (s.key) {
@@ -167,6 +174,10 @@ type Tab = 'following' | 'followers' | 'requests' | 'statuses';
     </ion-content>
   `,
   styles: [`
+    .network-tools { padding: 10px var(--lf-gap) 2px; }
+    .network-search { display: flex; align-items: center; gap: 10px; padding: 11px 13px; border: 1px solid var(--lf-line); border-radius: 12px; background: var(--lf-card); color: inherit; text-decoration: none; }
+    .network-search > span { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+    .network-search small { color: var(--lf-muted); font-size: 11.5px; }
     /* One card per section, header always visible, body only when open. */
     .sect { background: var(--lf-card); box-shadow: var(--lf-shadow); margin-top: 8px; }
     .sect__head { width: 100%; display: flex; align-items: center; gap: 8px;
@@ -255,11 +266,12 @@ export class DiscoverComponent {
 
   readonly myStatus = computed(() => this.auth.user()?.checkIn?.status ?? null);
 
-  /** People you follow who have a status set, newest first. */
+  /** People in either direction of the viewer who have a status set, newest first. */
   readonly statusPeople = computed(() => {
     const me = this.auth.viewerId;
+    const ids = [...new Set([...this.data.followingIds(), ...this.data.followerIds()])];
     const out: { id: string; u: UserProfile | null; status: CheckInStatus; at: number | null }[] = [];
-    for (const id of this.data.followingIds()) {
+    for (const id of ids) {
       if (id === me) continue;
       const u = this.data.authorOf(id);
       if (!u?.checkIn) continue;

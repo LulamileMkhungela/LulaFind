@@ -601,7 +601,7 @@ export class ProfileComponent implements OnInit {
           handler: async (v: any) => {
             try {
               await this.mod.report({ target: 'user', targetId: u.id, summary: u.displayName, reason: v?.reason ?? 'other' });
-              await this.say('Report sent. Thank you.');
+              await this.say('Report saved for moderation. Email alerts depend on the server configuration.');
             } catch (e: any) {
               await this.say(e?.message ?? 'Could not send the report');
             }

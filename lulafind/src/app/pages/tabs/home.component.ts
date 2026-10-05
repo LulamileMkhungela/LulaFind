@@ -6,6 +6,7 @@ import { IonRefresherContent } from '@ionic/angular/ion-refresher-content';
 import { IonSkeletonText } from '@ionic/angular/ion-skeleton-text';
 import { ToastController } from '@ionic/angular/toast-controller';
 import { IconComponent } from '../../shared/components/icon.component';
+import { AvatarComponent } from '../../shared/components/avatar.component';
 import { TopNavComponent } from '../../shared/components/top-nav.component';
 import { EmptyComponent } from '../../shared/components/empty.component';
 import { ChatState, PostCardComponent } from '../../shared/components/post-card.component';
@@ -26,7 +27,7 @@ import { timeAgo } from '../../core/utils/format';
   standalone: true,
   imports: [
     IonContent, IonRefresher, IonRefresherContent, IonSkeletonText,
-    TopNavComponent, IconComponent, EmptyComponent, PostCardComponent, StoryRailComponent, PeopleRailComponent, FilterBarComponent,
+    TopNavComponent, IconComponent, AvatarComponent, EmptyComponent, PostCardComponent, StoryRailComponent, PeopleRailComponent, FilterBarComponent,
     RouterLink
   ],
   template: `
@@ -80,6 +81,60 @@ import { timeAgo } from '../../core/utils/format';
             }
           </ul>
           <button type="button" class="lf-btn lf-btn--ghost lf-btn--sm" (click)="dismissCatchUp()">Dismiss</button>
+        </section>
+      }
+
+      <!-- LinkedIn-style feed scope: discovery stays separate from the member's
+           actual network. The scope is part of the data query, not a visual
+           filter, so a refresh cannot leak a For you post into Network. -->
+      <nav class="feed-scopes" role="tablist" aria-label="Home feed">
+        <button type="button" role="tab" [class.active]="data.filter().scope === 'for-you'"
+                [attr.aria-selected]="data.filter().scope === 'for-you'"
+                (click)="setScope('for-you')">For you</button>
+        <button type="button" role="tab" [class.active]="data.filter().scope === 'network'"
+                [attr.aria-selected]="data.filter().scope === 'network'"
+                (click)="setScope('network')">Network</button>
+      </nav>
+
+      @if (data.filter().scope === 'network') {
+        <section class="network-context" aria-label="Your network">
+          <div class="network-context__header">
+            <div>
+              <strong>Your network</strong>
+              <span>Posts, statuses and Spotlights from people connected to you.</span>
+            </div>
+            <lf-icon name="users" [size]="20" />
+          </div>
+
+          @if (data.networkStatuses().length) {
+            <div class="network-strip">
+              <span class="network-strip__label">Statuses</span>
+              @for (u of data.networkStatuses(); track u.id) {
+                <a class="network-person" [routerLink]="'/user/' + u.id">
+                  <lf-avatar [src]="data.avatarFor(u)" [name]="u.displayName" [size]="30" [status]="u.checkIn?.status ?? null" />
+                  <span class="network-person__name">{{ u.displayName.split(' ')[0] }}</span>
+                  <span class="network-person__status">{{ networkStatusLabel(u.checkIn?.status) }}</span>
+                  @if (u.checkIn?.note) { <span class="network-person__note">{{ u.checkIn!.note }}</span> }
+                </a>
+              }
+            </div>
+          }
+
+          @if (data.mySpotlights().length) {
+            <div class="network-strip">
+              <span class="network-strip__label">Spotlights</span>
+              @for (sp of data.mySpotlights(); track sp.id) {
+                <a class="network-spotlight" [routerLink]="'/spotlight/' + sp.id">
+                  <span class="network-spotlight__mark">{{ sp.surname.slice(0, 1) }}</span>
+                  <span>{{ sp.surname }}</span>
+                </a>
+              }
+            </div>
+          }
+
+          @if (!data.networkStatuses().length && !data.mySpotlights().length) {
+            <p class="network-empty">Follow people or join a Spotlight to build this feed.</p>
+          }
         </section>
       }
 
@@ -138,6 +193,29 @@ import { timeAgo } from '../../core/utils/format';
     </ion-content>
   `,
   styles: [`
+    .feed-scopes { display: flex; gap: 4px; margin: 8px var(--lf-gap) 0; padding: 3px; border: 1px solid var(--lf-line); border-radius: 9px; background: var(--lf-card); }
+    .feed-scopes button { flex: 1; min-height: 38px; border: 0; border-radius: 7px; background: transparent; color: var(--lf-muted); font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; }
+    .feed-scopes button:hover { background: var(--lf-hover); }
+    .feed-scopes button.active { background: var(--lf-primary-soft); color: var(--lf-primary-soft-text); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+    .network-context { margin: 8px var(--lf-gap) 10px; padding: 12px 14px; border-radius: var(--lf-radius); background: var(--lf-card); box-shadow: var(--lf-shadow); }
+    .network-context__header { display: flex; align-items: flex-start; gap: 10px; }
+    .network-context__header > div { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+    .network-context__header strong { font-size: 15px; }
+    .network-context__header span { color: var(--lf-muted); font-size: 12px; line-height: 1.35; }
+    .network-context__header > lf-icon { color: var(--lf-primary); }
+    .network-strip { display: flex; align-items: center; gap: 9px; overflow-x: auto; margin-top: 11px; padding-top: 10px; border-top: 1px solid var(--lf-line-soft); scrollbar-width: none; }
+    .network-strip::-webkit-scrollbar { display: none; }
+    .network-strip__label { flex: none; color: var(--lf-muted); font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .35px; }
+    .network-person, .network-spotlight { flex: none; display: inline-flex; align-items: center; gap: 5px; color: inherit; text-decoration: none; font-size: 12px; font-weight: 600; }
+    .network-person { flex-direction: column; align-items: flex-start; gap: 3px; min-width: 76px; max-width: 128px; }
+    .network-person__name { font-weight: 700; }
+    .network-person__status { color: var(--lf-primary); font-size: 11px; white-space: nowrap; }
+    .network-person__note { max-width: 128px; overflow: hidden; color: var(--lf-muted); font-size: 11px; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
+    .network-spotlight { padding: 5px 8px 5px 5px; border-radius: 999px; background: var(--lf-card-2); }
+    .network-spotlight__mark { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--lf-primary); color: #fff; font-weight: 800; }
+    .network-empty { margin: 10px 0 0; color: var(--lf-muted); font-size: 13px; }
+    @media (min-width: 700px) { .feed-scopes, .network-context { max-width: var(--lf-maxw); margin-left: auto; margin-right: auto; } }
+
     .catchup { margin: 10px var(--lf-gap) 0; padding: 12px 14px; border-radius: var(--lf-radius);
       background: var(--lf-card); box-shadow: var(--lf-shadow); display: flex; flex-direction: column; gap: 8px; }
     .catchup__head { display: flex; align-items: center; gap: 8px; }
@@ -248,6 +326,21 @@ export class HomeComponent {
       if (n >= 0) void this.recomputeGates();
     });
     this.data.startAutoSync();
+  }
+
+  networkStatusLabel(status: string | null | undefined): string {
+    switch (status) {
+      case 'need_help': return 'Needs help';
+      case 'watch_me': return 'Watch me';
+      case 'unfamiliar': return 'Status update';
+      case 'safe': return "I'm safe";
+      default: return 'Status update';
+    }
+  }
+
+  setScope(scope: 'for-you' | 'network'): void {
+    if (this.data.filter().scope === scope) return;
+    this.data.setFilter({ scope });
   }
 
   goSignUp(): void {

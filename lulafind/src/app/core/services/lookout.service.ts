@@ -306,12 +306,24 @@ export class LookoutService {
     const lookout = lookoutId ? this.data.lookouts().find((l) => l.id === lookoutId) : this.mine();
     if (!me || !lookout) return null;
     if (lookout.userId !== me.id && me.isAdmin !== true) throw new Error('That is not yours to cancel');
-    const closed = clearedByOwner(lookout);
-    const saved = await this.api.patchLookout(lookout.id, {
-      status: closed.status, closedAt: closed.closedAt, closedReason: closed.closedReason
-    }) ?? closed;
-    this.data.mergeLookout(saved);
-    return saved;
+    this.busy.set(true);
+    try {
+      const closed = clearedByOwner(lookout);
+      const saved = await this.api.patchLookout(lookout.id, {
+        status: closed.status, closedAt: closed.closedAt, closedReason: closed.closedReason
+      }) ?? closed;
+      // A lookout-generated case is not allowed to survive the owner's cancel.
+      // This keeps a stale public alert from outliving the person's decision.
+      if (saved.escalatedPostId) await this.api.deleteLookoutCase(saved.id);
+      this.data.mergeLookout(saved);
+      for (const followerId of saved.askedIds) {
+        await this.notify(followerId, saved.id, `${me.displayName} ended the lookout`,
+          'They cancelled the lookout. No further check-in is needed.');
+      }
+      return saved;
+    } finally {
+      this.busy.set(false);
+    }
   }
 
   /* ------------------------------ helpers ------------------------------ */

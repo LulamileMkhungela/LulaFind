@@ -1,7 +1,7 @@
 import { InjectionToken } from '@angular/core';
 import { Observable, Subject } from 'rxjs';
 import {
-  ChatMessage, ChatThread, Comment, FeedFilter, FollowEdge, Lookout, MediaItem, Notification, Post, Spotlight, Story, StoryReply, StoryView, Tip, UserProfile
+  ChatMessage, ChatThread, Comment, FeedFilter, FollowEdge, Lookout, MediaItem, Notification, Post, Spotlight, Story, StoryReply, StoryView, Tip, UserProfile, UserReport
 } from '../models/types';
 import { LocalDb } from './local-db';
 
@@ -32,7 +32,7 @@ export abstract class LulaApi {
    * applies the same review and audience rules as the feed - a search result
    * can never be more visible than the post itself.
    */
-  abstract searchPosts(q: string, limit?: number): Promise<Post[]>;
+  abstract searchPosts(q: string, limit?: number, viewerId?: string | null): Promise<Post[]>;
   /**
    * Free-text search over members: display name, surname and handle.
    *
@@ -146,7 +146,7 @@ export abstract class LulaApi {
   async resolveMedia(src: string): Promise<string> { return src; }
 
   /* stories */
-  abstract stories(): Promise<Story[]>;
+  abstract stories(viewerId?: string | null): Promise<Story[]>;
   abstract saveStory(s: Story): Promise<void>;
   abstract storyRepliesFor(storyId: string): Promise<StoryReply[]>;
   abstract saveStoryReply(reply: StoryReply): Promise<void>;
@@ -178,6 +178,11 @@ export abstract class LulaApi {
   abstract notifications(userId: string): Promise<Notification[]>;
   abstract pushNotification(n: Notification): Promise<void>;
   abstract markNotificationsRead(userId: string): Promise<void>;
+
+  /* moderation reports */
+  /** The backend is the durable queue; RLS limits this to the reporter or an admin. */
+  abstract reportsFor(userId: string): Promise<UserReport[]>;
+  abstract saveReport(report: UserReport): Promise<void>;
 
   /* push device tokens - see supabase/push-tokens.sql */
   abstract savePushToken(token: string, platform: string, appVersion: string): Promise<void>;
@@ -213,7 +218,7 @@ export class MockApi implements LulaApi {
   async saveUser(u: UserProfile) { this.db.upsertUser(u); }
   async deleteUser(id: string) { this.db.removeUser(id); }
 
-  async searchPosts(q: string, limit?: number) { return this.db.searchPosts(q, limit); }
+  async searchPosts(q: string, limit?: number, viewerId: string | null = null) { return this.db.searchPosts(q, limit, viewerId); }
   async searchUsers(q: string, limit?: number) { return this.db.searchUsers(q, limit); }
 
   async post(id: string) { return this.db.post(id); }
@@ -254,7 +259,7 @@ export class MockApi implements LulaApi {
   async uploadMedia(_ownerId: string, item: MediaItem) { return item; }
   /** Nothing to sign: a device store holds the picture itself. */
   async resolveMedia(src: string) { return src; }
-  async stories() { return this.db.stories(); }
+  async stories(viewerId: string | null = null) { return this.db.stories(viewerId); }
   async saveStory(s: Story) { this.db.upsertStory(s); }
   async storyRepliesFor(storyId: string) { return this.db.story(storyId)?.replies ?? []; }
   async saveStoryReply(reply: StoryReply) {
@@ -312,6 +317,9 @@ export class MockApi implements LulaApi {
   }
   async pushNotification(n: Notification) { this.db.pushNotification(n); }
   async markNotificationsRead(userId: string) { this.db.markNotificationsRead(userId); }
+
+  async reportsFor(userId: string) { return this.db.reportsFor(userId); }
+  async saveReport(report: UserReport) { this.db.saveReport(report); }
 
   /* No device tokens in mock mode - there is no FCM in a browser tab. */
   async savePushToken(_token: string, _platform: string, _appVersion: string): Promise<void> {}
