@@ -1,4 +1,4 @@
-import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { Component, OnInit, computed, effect, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { IonContent } from '@ionic/angular/ion-content';
 import { IonInput } from '@ionic/angular/ion-input';
@@ -249,6 +249,16 @@ export class SpotlightDetailComponent implements OnInit {
     type: 'sighting', title: '', body: '', town: '', media: []
   });
   readonly posting = signal(false);
+
+  private reloadSeq = 0;
+
+  constructor() {
+    effect(() => {
+      const tick = this.data.syncTick();
+      if (tick > 0 && this.sp()) void this.reloadPosts();
+    });
+  }
+
   readonly mediaBusy = computed(() => this.media.busy());
 
   /** The attachment rule shared with the composer: three photos, one video. */
@@ -320,7 +330,11 @@ export class SpotlightDetailComponent implements OnInit {
       // A headline was not typed: take the first line, so nothing is invented.
       const firstLine = d.body.trim().split(/\n/)[0]?.trim() ?? '';
       const title = d.title.trim() || firstLine.slice(0, 120);
-      await this.data.postToSpotlight(sp, { type: d.type, title, body: d.body, town: d.town, media: d.media });
+      const created = await this.data.postToSpotlight(sp, { type: d.type, title, body: d.body, town: d.town, media: d.media });
+      // Paint the new post immediately. The subsequent server read confirms it
+      // and also picks up posts made by other members, but a slow index/RLS
+      // response must never make the author's own post disappear.
+      this.all.update((list) => [created, ...list.filter((p) => p.id !== created.id)]);
       this.draft.set({ type: d.type, title: '', body: '', town: d.town, media: [] });
       await this.reloadPosts();
       await this.data.loadStatic();
@@ -334,9 +348,9 @@ export class SpotlightDetailComponent implements OnInit {
   }
 
   /** One field for the in-spotlight search: posts on the card, people above. */
-  onSearch(value: string): void {
+  async onSearch(value: string): Promise<void> {
     this.q.set(value);
-    void this.loadPeople(value);
+    await this.loadPeople(value);
   }
 
   private async loadPeople(value: string): Promise<void> {
@@ -387,7 +401,12 @@ export class SpotlightDetailComponent implements OnInit {
 
   async reloadPosts(): Promise<void> {
     const sp = this.sp();
-    if (sp) this.all.set(await this.data.postsForSpotlight(sp));
+    if (!sp) return;
+    const request = ++this.reloadSeq;
+    const posts = await this.data.postsForSpotlight(sp);
+    // A resume refresh can overlap the initial load (or a just-created post).
+    // Only the newest response may replace the list.
+    if (request === this.reloadSeq && this.sp()?.id === sp.id) this.all.set(posts);
   }
 
   coverOf(): string {

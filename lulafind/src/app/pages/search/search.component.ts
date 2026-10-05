@@ -21,10 +21,9 @@ import { cover } from '../../core/data/seed';
   standalone: true,
   imports: [IonContent, IonSearchbar, RouterLink, IconComponent, AvatarComponent, EmptyComponent, PostCardComponent, TopNavComponent],
   template: `
-    <lf-top-nav />
+    <lf-top-nav title="Search" backTo="/home" />
 
     <ion-content class="lf-page">
-      <div class="page-title"><h1>Search</h1></div>
       <!-- The search field and its quick chips scroll with the results instead
            of being pinned under a translucent bar, where they were clipped by
            the status bar on notched phones. -->
@@ -75,7 +74,7 @@ import { cover } from '../../core/data/seed';
       } @else {
         @if (spotlights().length) {
           <div class="lf-pad">
-            <h3 class="lf-h2" style="margin:16px 0 8px">Spotlights</h3>
+            <h3 class="lf-h2" style="margin:16px 0 8px">Communities</h3>
             <div class="spots">
               @for (sp of spotlights(); track sp.id) {
                 <a class="spot" [routerLink]="'/spotlight/' + sp.id">
@@ -103,6 +102,11 @@ import { cover } from '../../core/data/seed';
                 </div>
               </a>
             }
+          </div>
+        }
+        @if (posts().length) {
+          <div class="lf-pad">
+            <h3 class="lf-h2" style="margin:16px 0 8px">Posts <span class="lf-muted lf-tiny">{{ posts().length }}</span></h3>
           </div>
         }
         @for (p of posts(); track p.id) {
@@ -146,6 +150,14 @@ export class SearchComponent {
   private readonly syncUrl = effect(() => {
     const q = this.query();
     void this.router.navigate([], { queryParams: q ? { q } : {}, replaceUrl: true });
+  });
+  /** Keep an open result page current when the app resumes or the data layer
+   * completes its background sync. The sequence guard in onQuery prevents a
+   * slower refresh from replacing newer typed results. */
+  private readonly refreshSearch = effect(() => {
+    const tick = this.data.syncTick();
+    const q = this.query().trim();
+    if (tick > 0 && q.length >= 2) void this.onQuery(q);
   });
 
   protected readonly provinces = PROVINCES;

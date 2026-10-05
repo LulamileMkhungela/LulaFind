@@ -100,39 +100,46 @@ import { timeAgo } from '../../core/utils/format';
           <div class="network-context__header">
             <div>
               <strong>Your network</strong>
-              <span>People, cases, follow requests, stories and statuses live here — without feed filters.</span>
+              <span>People, cases and stories from the people and communities around you.</span>
             </div>
-            <lf-icon name="users" [size]="20" />
+            <a class="network-context__open" routerLink="/discover"
+               aria-label="Open following, followers and requests">
+              <lf-icon name="users" [size]="20" />
+              <lf-icon name="chevronRight" [size]="15" />
+            </a>
           </div>
 
           <div class="network-actions" aria-label="Network actions">
             <a class="network-action" routerLink="/search">
               <lf-icon name="search" [size]="17" />
-              <span><strong>Find people and cases</strong><small>Search the active network</small></span>
-            </a>
-            <a class="network-action" [routerLink]="['/discover']" [queryParams]="{ tab: 'following' }">
-              <lf-icon name="user" [size]="17" />
-              <span><strong>Following</strong><small>People and cases you follow</small></span>
-            </a>
-            <a class="network-action" [routerLink]="['/discover']" [queryParams]="{ tab: 'requests' }">
-              <lf-icon name="users" [size]="17" />
-              <span><strong>Requests</strong><small>{{ data.followRequests().length }} waiting</small></span>
+              <span><strong>Find people and cases</strong><small>Search people, posts and communities</small></span>
             </a>
             <button class="network-action" type="button" (click)="onAddStory()">
               <lf-icon name="book" [size]="17" />
-              <span><strong>Create a story</strong><small>Choose its audience before sharing</small></span>
+              <span><strong>Create a story</strong><small>Choose who can see it</small></span>
             </button>
           </div>
 
-          <!-- Keep Stories in the Network context itself. The general feed rail
-               intentionally waits until post eight, but a member's own story
-               must be visible here even when the network has only a few posts. -->
+          <!-- Stories belong to Network only. The general feed does not inject
+               a Story card between posts, so this is the one predictable place
+               to browse them. -->
           <section class="network-stories" aria-label="Network stories">
             <div class="network-stories__head">
               <strong>Stories</strong>
-              <span>Visible according to each story's audience</span>
+              <span>Choose whose stories you want to see</span>
             </div>
-            <lf-story-rail (addStory)="onAddStory()" />
+            <div class="story-scopes" role="tablist" aria-label="Story audience filter">
+              <button type="button" role="tab" [class.active]="storyScope() === 'following'"
+                      [attr.aria-selected]="storyScope() === 'following'"
+                      (click)="storyScope.set('following')">Following</button>
+              <button type="button" role="tab" [class.active]="storyScope() === 'followers'"
+                      [attr.aria-selected]="storyScope() === 'followers'"
+                      (click)="storyScope.set('followers')">Followers</button>
+              <button type="button" role="tab" [class.active]="storyScope() === 'public'"
+                      [attr.aria-selected]="storyScope() === 'public'"
+                      (click)="storyScope.set('public')">Public</button>
+            </div>
+            <lf-story-rail [scope]="storyScope()" (addStory)="onAddStory()" />
           </section>
 
           @if (data.networkStatuses().length) {
@@ -196,7 +203,8 @@ import { timeAgo } from '../../core/utils/format';
                   message="Posts people create will show in this feed." />
       }
 
-      <!-- Stories and People appear after every 8th post, and nowhere else. -->
+      <!-- Network posts stay as one stream. Stories are rendered only in the
+           Network context above; For you does not inject story cards. -->
       @for (item of feedItems(); track item.key) {
         @if (item.post; as p) {
           <lf-post-card
@@ -207,9 +215,7 @@ import { timeAgo } from '../../core/utils/format';
             (comment)="onComment(p)"
             (chat)="onChat(p)"
             (savedChange)="onSave(p)" />
-        } @else if (item.kind === 'stories') {
-          <lf-story-rail (addStory)="onAddStory()" />
-        } @else {
+        } @else if (item.kind === 'people') {
           <lf-people-rail />
         }
       }
@@ -221,14 +227,15 @@ import { timeAgo } from '../../core/utils/format';
     .feed-scopes button { flex: 1; min-height: 38px; border: 0; border-radius: 7px; background: transparent; color: var(--lf-muted); font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; }
     .feed-scopes button:hover { background: var(--lf-hover); }
     .feed-scopes button.active { background: var(--lf-primary-soft); color: var(--lf-primary-soft-text); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
-    .network-context { margin: 8px var(--lf-gap) 10px; padding: 12px 14px; border-radius: var(--lf-radius); background: var(--lf-card); box-shadow: var(--lf-shadow); }
+    .network-context { margin: 8px var(--lf-gap) 10px; padding: 12px 2px; }
     .network-context__header { display: flex; align-items: flex-start; gap: 10px; }
     .network-context__header > div { flex: 1; display: flex; flex-direction: column; gap: 2px; }
     .network-context__header strong { font-size: 15px; }
     .network-context__header span { color: var(--lf-muted); font-size: 12px; line-height: 1.35; }
-    .network-context__header > lf-icon { color: var(--lf-primary); }
-    .network-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; margin-top: 11px; }
-    .network-action { display: flex; align-items: flex-start; gap: 7px; min-width: 0; padding: 9px; border: 1px solid var(--lf-line-soft); border-radius: 9px; background: var(--lf-card-2); color: inherit; text-decoration: none; font: inherit; text-align: left; cursor: pointer; }
+    .network-context__open { display: inline-flex; align-items: center; gap: 1px; flex: none; padding: 4px 0 4px 8px; color: var(--lf-primary); text-decoration: none; }
+    .network-actions { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 11px; }
+    .network-action { display: inline-flex; align-items: flex-start; gap: 7px; min-width: 0; padding: 8px 0; border: 0; border-bottom: 2px solid var(--lf-line-soft); background: transparent; color: inherit; text-decoration: none; font: inherit; text-align: left; cursor: pointer; }
+    .network-action:hover { border-bottom-color: var(--lf-primary); }
     .network-action > lf-icon { flex: none; color: var(--lf-primary); margin-top: 1px; }
     .network-action span { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
     .network-action strong { font-size: 12.5px; line-height: 1.2; }
@@ -237,7 +244,10 @@ import { timeAgo } from '../../core/utils/format';
     .network-stories__head { display: flex; align-items: baseline; gap: 8px; padding: 0 2px 3px; }
     .network-stories__head strong { font-size: 13px; }
     .network-stories__head span { color: var(--lf-muted); font-size: 11px; }
-    .network-stories lf-story-rail { margin: 0 -14px -12px; box-shadow: none; }
+    .story-scopes { display: flex; gap: 4px; margin: 4px 0 6px; }
+    .story-scopes button { border: 0; border-radius: 999px; padding: 5px 10px; background: var(--lf-card-2); color: var(--lf-muted); font: inherit; font-size: 11px; font-weight: 700; cursor: pointer; }
+    .story-scopes button.active { background: var(--lf-primary-soft); color: var(--lf-primary-soft-text); }
+    .network-stories lf-story-rail { margin: 0 -2px; border-radius: var(--lf-radius); box-shadow: var(--lf-shadow); }
     .network-strip { display: flex; align-items: center; gap: 9px; overflow-x: auto; margin-top: 11px; padding-top: 10px; border-top: 1px solid var(--lf-line-soft); scrollbar-width: none; }
     .network-strip::-webkit-scrollbar { display: none; }
     .network-strip__label { flex: none; color: var(--lf-muted); font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .35px; }
@@ -345,8 +355,15 @@ export class HomeComponent {
 
   readonly displayedFeed = computed(() => this.data.feed());
 
-  /** Stories after post 8, People after post 16, then alternate every eight. */
-  readonly feedItems = computed(() => feedWithRails(this.displayedFeed(), 8));
+  /** Stories have one home: Network. Keep the For you stream clean, and keep
+   * Network posts in one continuous stream rather than inserting extra cards. */
+  readonly storyScope = signal<'following' | 'followers' | 'public'>('following');
+  readonly feedItems = computed(() => {
+    const scope = this.data.filter().scope;
+    return feedWithRails(this.displayedFeed(), 8)
+      .filter((item) => item.kind !== 'stories')
+      .filter((item) => scope !== 'network' || item.kind === 'post');
+  });
 
   private chatGates = signal<Record<string, ChatState>>({});
 

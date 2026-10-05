@@ -225,6 +225,12 @@ export class DataService {
 
   /* ------------------------- auto-sync ------------------------- */
   private poll: ReturnType<typeof setInterval> | null = null;
+  private visibilityRefresh: (() => void) | null = null;
+  /** One background pass at a time; an app-resume event and the interval can
+   * otherwise race and let an older user-scoped response replace newer state. */
+  private syncInFlight: Promise<void> | null = null;
+  private staticSeq = 0;
+  private userScopedSeq = 0;
 
   /**
    * Pull the latest posts on a timer so a phone left open on the feed keeps
@@ -233,17 +239,40 @@ export class DataService {
    */
   startAutoSync(everyMs = 45_000): void {
     if (this.poll) return;
+    const refresh = (): void => {
+      if (this.syncInFlight) return;
+      this.syncInFlight = Promise.all([
+        this.loadFeed(),
+        this.loadStatic(),
+        ...(this.auth.viewerId ? [this.loadUserScoped()] : [])
+      ]).then(() => undefined).catch((err) => {
+        console.warn('Background refresh failed:', err instanceof Error ? err.message : err);
+      }).finally(() => {
+        this.syncInFlight = null;
+      });
+    };
     this.poll = setInterval(() => {
       if (typeof document !== 'undefined' && document.hidden) return;
-      this.syncTick.update((n) => n + 1);
-      void this.loadFeed();
-      void this.loadStatic();
+      refresh();
     }, everyMs);
+    // Mobile browsers throttle timers while the app is backgrounded. Refresh
+    // as soon as the member returns so Spotlight posts, Network posts, people,
+    // requests and stories are not stale until the next 45-second tick.
+    if (typeof document !== 'undefined' && !this.visibilityRefresh) {
+      this.visibilityRefresh = () => {
+        if (!document.hidden) refresh();
+      };
+      document.addEventListener('visibilitychange', this.visibilityRefresh);
+    }
   }
 
   stopAutoSync(): void {
     if (this.poll) clearInterval(this.poll);
     this.poll = null;
+    if (typeof document !== 'undefined' && this.visibilityRefresh) {
+      document.removeEventListener('visibilitychange', this.visibilityRefresh);
+      this.visibilityRefresh = null;
+    }
   }
 
   /** Stop reacting to data-layer changes (used when tearing the app down). */
@@ -458,8 +487,9 @@ export class DataService {
   }
 
   async loadStatic(): Promise<void> {
+    const request = ++this.staticSeq;
     const [spots, rawStories, tips] = await Promise.all([this.api.spotlights(), this.api.stories(this.auth.viewerId), this.api.tips()]);
-    this.syncTick.update((n) => n + 1);
+    if (request !== this.staticSeq) return;
     void this.loadLookouts();
     this.spotlights.set(spots);
     const me = this.auth.viewerId;
@@ -487,15 +517,20 @@ export class DataService {
         replies: isOwner ? [...replyMap.values()].sort((a, b) => a.at - b.at) : []
       };
     }));
+    if (request !== this.staticSeq) return;
     this.stories.set(stories);
     this.tips.set(tips);
     void this.cacheAuthors(stories.flatMap((story) => [
       story.authorId,
       ...(story.replies ?? []).map((reply) => reply.authorId), ...(story.viewers ?? [])
     ]));
+    // Notify open Spotlight/Search/Network screens only after the snapshot is
+    // coherent, so one refresh produces one deterministic downstream reload.
+    this.syncTick.update((n) => n + 1);
   }
 
   async loadUserScoped(): Promise<void> {
+    const request = ++this.userScopedSeq;
     const id = this.auth.viewerId;
     if (!id) {
       this.notifications.set([]);
@@ -513,6 +548,7 @@ export class DataService {
       this.api.followRequests(id),
       this.api.postsByAuthor(id).catch(() => [] as Post[])
     ]);
+    if (request !== this.userScopedSeq || id !== this.auth.viewerId) return;
     this.notifications.set(notes);
     this.myAuthored.set([...mine].sort((a, b) => b.createdAt - a.createdAt));
     this.followingIds.set(following.map((edge) => edge.followingId));
@@ -1748,7 +1784,11 @@ export class DataService {
       (p.subject?.name ?? '').trim().toLowerCase().split(/\s+/).includes(needle)
     ));
     const hidden = this.hiddenIds();
-    const list = [...filed, ...surnameMatched].filter((p) =>
+    // Keep the author's just-published copy in the page even if the remote
+    // Spotlight index is a moment behind or its public-read policy has not
+    // caught up yet. The post is still subject to the same review rules below.
+    const ownFiled = this.myAuthored().filter((p) => p.spotlightId === sp.id);
+    const list = [...filed, ...ownFiled, ...surnameMatched].filter((p) =>
       !RETIRED_POST_TYPES.includes(p.type) &&
       !hidden.includes(p.id) &&
       (p.status !== 'under_review' || p.authorId === me || viewer?.isAdmin === true)

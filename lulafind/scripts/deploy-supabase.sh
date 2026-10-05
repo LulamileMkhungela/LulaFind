@@ -133,11 +133,11 @@ put_vault_secret service_role_key "$SUPABASE_SERVICE_ROLE_KEY"
 run_sql "$SUPABASE_DIR/push-webhook.sql"
 run_sql "$SUPABASE_DIR/report-email-webhook.sql"
 
-# Read-only verification. A NULL caller identity in SQL Editor is expected;
-# the script checks that the server objects exist, not a user JWT.
-run_sql "$SUPABASE_DIR/check-setup.sql"
-
+# Do not run check-setup.sql, push-dedupe.sql, or any other verification/
+# rollback script here. They are intentionally separate read-only or cleanup
+# tools and must be reviewed/run by an operator after deployment.
 echo
  echo 'LulaFind Supabase deployment completed.'
+ echo 'Run supabase/check-setup.sql separately to verify the installation.'
  echo 'Test one report, one in-app notification, and one push notification.'
  echo 'Check Edge Function logs and Resend/FCM logs for delivery confirmation.'

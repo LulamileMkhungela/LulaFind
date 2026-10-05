@@ -11,7 +11,7 @@ No screen may show a block of its *own* copy longer than 30 words. Text written 
 
 | Screen | Text | App paragraphs | Longest app copy | Longest user text |
 | --- | --- | --- | --- | --- |
-| Home / feed | 1128 words | 0 | none | 122w |
+| Home / feed | 1127 words | 0 | none | 122w |
 | Spotlight | 37 words | 0 | none | none |
 | Chats (list) | 31 words | 0 | none | none |
 | Me | 42 words | 0 | none | none |
@@ -21,7 +21,7 @@ No screen may show a block of its *own* copy longer than 30 words. Text written 
 | Post detail (my case) | 316 words | 0 | none | 122w |
 | New post | 31 words | 0 | none | none |
 | Poster maker | 80 words | 2 | 27w | none |
-| Profile | 62 words | 0 | none | 24w |
+| Profile | 63 words | 0 | none | 24w |
 | Search | 17 words | 0 | none | none |
 | Saved | 39 words | 0 | none | none |
 | Connections | 47 words | 0 | none | none |
@@ -49,7 +49,7 @@ I reported it to the station commander and attached my details to the LulaFind c
 We are not asking anyone to follow him. Please take a photo from a safe distance and send it to the number on this case.…see more13488 repostsLikeCommentRepostSend Follow each other to message MemberKwaZulu-Natal· Sighting 2d·Green tracksuit seen near Pinetown station on Friday nightTwo people separately described a young man in a green tracksuit near Pinetown station between 20:00 and 21:00 on Friday. Both said he was alone and walking towards the Mall.
 This may be nothing. It may be Sibusiso. Either way, the family wants to know.…see more9771 repostsLikeCommentRepostSend Follow each other to message Ayanda KhumaloAmateur radio operator - help locate people.KwaZulu-Natal· Home Sweet Home 4d· Following Home Sweet Home: Sibusiso Khumalo, 19, left Pietermaritzburg after matric resultsLast seen: Northway taxi rankSibusiso failed two subjects and told his mother he was going to Johannesburg to find work. That was nine days ago. He has R300 and no jacket.
 We are not looking to drag him back. We want to know he is alive. If you are Sibusiso, follow me and I will follow back, so we can chat privately - you can stay anonymous.…see more881 comment·29 repostsLikeCommentRepostSendMemberSibusiso, if you are reading: follow me and I will follow back - then we can chat privately. Nobody else sees it. You do not have to come home today, just say you are alive. 1d · 77 likes  Message them Sipho NdlelaNdlela family page admin. Search volunteer.KwaZulu-Natal· Missing person 3d· Following Update from the Ndlela family: posters are up in four suburbsLast seen: Umlazi, DurbanThank you to everyone in this Spotlight. The posters are now up in Umlazi, Isipingo, Amanzimtoti and Chatsworth. We have also given copies to three taxi associations.
-If you print one for your own street, please post a photo here so we do not overlap.…see more212156 repostsLikeCommentRepostSend Message them Create storyAnonymousNorth West· Missing person 1d·My brother Tshepo Molefe has been missing from Rustenburg for 2 daysI am posting anonymously because of who I believe took him. I have given my real details to LulaFind and to the police.
+If you print one for your own street, please post a photo here so we do not overlap.…see more212156 repostsLikeCommentRepostSend Message them AnonymousNorth West· Missing person 1d·My brother Tshepo Molefe has been missing from Rustenburg for 2 daysI am posting anonymously because of who I believe took him. I have given my real details to LulaFind and to the police.
 He was collecting a debt on Thursday night near Rustenburg CBD. His bakkie was found at home on Friday, keys in the ignition, but he was not in it.…see more761 comment·18 repostsLikeCommentRepostSendMemberLulaFind Trust & Safety: this post is anonymous to the public but the poster is verified with us and with SAPS. Reports of intimidation around this case should go to Crime Stop 08600 10111. 1d · 190 likes  Follow each other to message
 ```
 No app paragraphs - labels and values only.
@@ -138,7 +138,7 @@ Poster5SignalBold and urgentAuroraSoft glass on a glowing gradientEditorialClean
 ### Profile
 
 ```text
-5Profile Lerato Mahlangu @lerato.mSocial worker. GBV advocate.754followers253following347help points1posts Following  Share MessagePostsLerato MahlanguSocial worker. GBV advocate.Gauteng· Found - home safe 3d· Following FOUND: Rex the boerboel is back in MamelodiLost pet: PetLast seen: Mamelodi, PretoriaRex slipped his collar at the taxi rank on Sunday. A neighbour recognised him from the photo and walked him home the next morning.…see more9622 repostsLikeCommentRepostSend Message the poster
+Lerato Mahlangu5Profile Lerato Mahlangu @lerato.mSocial worker. GBV advocate.754followers253following347help points1posts Following  Share MessagePostsLerato MahlanguSocial worker. GBV advocate.Gauteng· Found - home safe 3d· Following FOUND: Rex the boerboel is back in MamelodiLost pet: PetLast seen: Mamelodi, PretoriaRex slipped his collar at the taxi rank on Sunday. A neighbour recognised him from the photo and walked him home the next morning.…see more9622 repostsLikeCommentRepostSend Message the poster
 ```
 No app paragraphs - labels and values only.
 
@@ -148,7 +148,7 @@ No app paragraphs - labels and values only.
 ### Search
 
 ```text
-5Searchmissing in GautengSAPS caseHome Sweet HomefoundOrlandoNdlelaStart with a surnameJump to a provinceGautengKwaZulu-NatalWestern CapeEastern CapeFree StateLimpopoMpumalangaNorth WestNorthern CapePeople
+Search5missing in GautengSAPS caseHome Sweet HomefoundOrlandoNdlelaStart with a surnameJump to a provinceGautengKwaZulu-NatalWestern CapeEastern CapeFree StateLimpopoMpumalangaNorth WestNorthern CapePeople
 ```
 No app paragraphs - labels and values only.
 
@@ -180,7 +180,7 @@ Settings5AppearanceThemeDark (default)LightMatch my phoneBackgroundPick the colo
 ### Safety centre
 
 ```text
-Safety & consent centre5 LulaFind never reads anyone's location without that person's own consent, and never sends a case to the police or an NGO. Get help has the real numbers. My locationPermission: unknownNo location has been read yet. Read my location  Forget my location Safety beaconSend "I am safe" check-ins with your location to people you choose. Off by default.Beacon enabled Send an "I am safe" check-in now Be on the lookout Tell your followers you may not feel safe where you are going. They see the area, and 24 hours later we ask them to check on you. Where are you going, or which area worries you?Anything your followers should know? (optional)Attach where I am now, so my followers see it Start the lookout If I go missing A lookout only becomes a case if a follower says something is wrong. This decides whether LulaFind may post that case, and who sees it. Let LulaFind post a case about meOff by default. Without it, a "no" answer never becomes a post.Being foundWe can ask you if a case is about you. Your account is never handed to the family.Allow name matchingConsent log on my casesFamily reported at the station and messaged Pink Ladies. LulaFind did not send the caseHelp find Thato Mokoena, 14 - last · 02 Oct 2026, 15:27expires 01 Nov 2026, 14:57Photos stay on this case unless the family shares the linkHelp find Thato Mokoena, 14 - last · 02 Oct 2026, 15:27expires 01 Nov 2026, 14:57 Privacy & data settings
+Safety & consent centre5 LulaFind never reads anyone's location without that person's own consent, and never sends a case to the police or an NGO. Get help has the real numbers. My locationPermission: unknownNo location has been read yet. Read my location  Forget my location Safety beaconSend "I am safe" check-ins with your location to people you choose. Off by default.Beacon enabled Send an "I am safe" check-in now Be on the lookout Tell your followers you may not feel safe where you are going. They see the area, and 24 hours later we ask them to check on you. Where are you going, or which area worries you?Anything your followers should know? (optional)Attach where I am now, so my followers see it Start the lookout If I go missing A lookout only becomes a case if a follower says something is wrong. This decides whether LulaFind may post that case, and who sees it. Let LulaFind post a case about meOff by default. Without it, a "no" answer never becomes a post.Being foundWe can ask you if a case is about you. Your account is never handed to the family.Allow name matchingConsent log on my casesFamily reported at the station and messaged Pink Ladies. LulaFind did not send the caseHelp find Thato Mokoena, 14 - last · 02 Oct 2026, 18:34expires 01 Nov 2026, 18:04Photos stay on this case unless the family shares the linkHelp find Thato Mokoena, 14 - last · 02 Oct 2026, 18:34expires 01 Nov 2026, 18:04 Privacy & data settings
 ```
 - 27 words of app copy: "Tell your followers you may not feel safe where you are going. They see the area, and 24 hours later we ask them to check on you."
 - 25 words of app copy: "LulaFind never reads anyone's location without that person's own consent, and never sends a case to the police or an NGO. has the real numbers."

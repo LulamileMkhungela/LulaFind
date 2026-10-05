@@ -31,7 +31,7 @@ import { cover } from '../../core/data/seed';
   standalone: true,
   imports: [IonContent, IonSkeletonText, RouterLink, IconComponent, AvatarComponent, EmptyComponent, PostCardComponent, TopNavComponent],
   template: `
-    <lf-top-nav backTo="/home" />
+    <lf-top-nav [title]="u()?.displayName ?? 'Profile'" backTo="/home" />
 
     <ion-content class="lf-page">
       <div class="page-title">

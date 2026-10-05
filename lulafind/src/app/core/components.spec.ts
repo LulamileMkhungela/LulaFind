@@ -861,7 +861,21 @@ describe('Components render', () => {
     await settle(f);
     const html: string = (f.nativeElement as HTMLElement).innerHTML;
     expect(html).toContain('lf-post-card');
-    if (feed.length >= 8) expect(html).toContain('lf-story-rail');
+    // Story cards no longer interrupt For you. They are rendered only in the
+    // explicit Home → Network context.
+    expect(html).not.toContain('network-stories');
+  });
+
+  it('keeps the Network story rail visible even when there are fewer than eight posts', async () => {
+    const auth = TestBed.inject(AuthService);
+    const data = TestBed.inject(DataService);
+    await auth.signInDemo();
+    await data.loadStatic();
+    data.setFilter({ scope: 'network' });
+
+    const f = TestBed.createComponent(HomeComponent);
+    await settle(f);
+    expect((f.nativeElement as HTMLElement).querySelector('.network-context .network-stories lf-story-rail')).toBeTruthy();
   });
 
   it('keeps the Network story rail visible even when there are fewer than eight posts', async () => {
@@ -1497,11 +1511,9 @@ describe('Search boxes actually search', () => {
     const memberId = sp.memberIds.find((id) => id !== 'u_demo')!;
     const member = await data.people([memberId]);
     const needle = member[0].displayName.split(' ')[0];
-    f.componentInstance.onSearch(needle);
-    await f.whenStable();
+    await f.componentInstance.onSearch(needle);
     expect(f.componentInstance.people().map((u) => u.id)).toContain(memberId);
-    f.componentInstance.onSearch('');
-    await f.whenStable();
+    await f.componentInstance.onSearch('');
     expect(f.componentInstance.people()).toEqual([]);
   });
 

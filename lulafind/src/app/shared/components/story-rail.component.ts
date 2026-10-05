@@ -1,4 +1,4 @@
-import { Component, EventEmitter, Output, computed, inject } from '@angular/core';
+import { Component, EventEmitter, Output, computed, inject, input } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { Story } from '../../core/models/types';
 import { timeAgo } from '../../core/utils/format';
@@ -203,9 +203,25 @@ export class StoryRailComponent {
   private data = inject(DataService);
   private auth = inject(AuthService);
 
+  /** Network story scope: stories stay on Home → Network, while the member can
+   * choose whose stories to browse without changing the post feed. */
+  readonly scope = input<'following' | 'followers' | 'public'>('following');
+
   protected readonly timeAgo = timeAgo;
 
-  readonly grouped = computed(() => this.data.visibleStories().slice(0, 30));
+  readonly grouped = computed(() => {
+    const me = this.auth.viewerId;
+    const following = new Set(this.data.followingIds());
+    const followers = new Set(this.data.followerIds());
+    const scope = this.scope();
+    return this.data.visibleStories()
+      .filter((story) => {
+        if (story.authorId === me) return true;
+        if (scope === 'public') return story.audience === 'public';
+        return scope === 'following' ? following.has(story.authorId) : followers.has(story.authorId);
+      })
+      .slice(0, 30);
+  });
   readonly myAvatar = computed(() => this.data.avatarFor(this.auth.user()));
   readonly myName = computed(() => this.auth.user()?.displayName ?? 'You');
 

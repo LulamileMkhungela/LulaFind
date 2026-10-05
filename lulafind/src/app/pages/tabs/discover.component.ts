@@ -8,7 +8,6 @@ import { TopNavComponent } from '../../shared/components/top-nav.component';
 import { AvatarComponent } from '../../shared/components/avatar.component';
 import { EmptyComponent } from '../../shared/components/empty.component';
 import { IconComponent } from '../../shared/components/icon.component';
-import { StoryRailComponent } from '../../shared/components/story-rail.component';
 import { DataService } from '../../core/services/data.service';
 import { AuthService } from '../../core/services/auth.service';
 import { CHECK_IN_COPY, SafetyService } from '../../core/services/safety.service';
@@ -18,11 +17,11 @@ import { timeAgo } from '../../core/utils/format';
 type Tab = 'following' | 'followers' | 'requests' | 'statuses';
 
 /**
- * Discover - the fourth bottom tab.
+ * Network people workspace reached from Home → Network.
  *
  * Who is around you, and how are they: the people you follow, the people who
  * follow you, the follow requests waiting on you, and the statuses members have
- * set for themselves. A status can be acted on directly from the list.
+ * set for themselves. Stories deliberately stay on Home → Network only.
  *
  * It replaces the old Friends page at /connections (that route still works) and
  * the Photo tab, which only duplicated Create.
@@ -30,9 +29,9 @@ type Tab = 'following' | 'followers' | 'requests' | 'statuses';
 @Component({
   selector: 'lf-discover',
   standalone: true,
-  imports: [IonContent, TopNavComponent, RouterLink, AvatarComponent, EmptyComponent, IconComponent, StoryRailComponent],
+  imports: [IonContent, TopNavComponent, RouterLink, AvatarComponent, EmptyComponent, IconComponent],
   template: `
-    <lf-top-nav heading="Network" />
+    <lf-top-nav title="Network" backTo="/home" />
 
     <ion-content class="lf-page lf-plain">
       <div class="network-tools">
@@ -42,15 +41,11 @@ type Tab = 'following' | 'followers' | 'requests' | 'statuses';
           <lf-icon name="chevronRight" [size]="17" />
         </a>
       </div>
-      <!-- Stories live here too: "Create story" opens the camera/upload step and
-           every story card opens the viewer, so Discover is not a dead end. -->
-      <lf-story-rail (addStory)="onAddStory()" />
-
       <!--
-        Four collapsible sections, in one column under the stories. Each header
-        carries its own count and expands in place, so the page stays short and
-        every group is still one tap away. ?tab=following|followers|requests|
-        statuses opens straight onto one of them.
+        Four collapsible sections in one column. Each header carries its own
+        count and expands in place, so the page stays short and every group is
+        still one tap away. Stories are intentionally not rendered here.
+        ?tab=following|followers|requests|statuses opens straight onto one.
       -->
       @for (s of sections; track s.key) {
         <section class="sect" [class.open]="isOpen(s.key)">
@@ -178,8 +173,9 @@ type Tab = 'following' | 'followers' | 'requests' | 'statuses';
     .network-search { display: flex; align-items: center; gap: 10px; padding: 11px 13px; border: 1px solid var(--lf-line); border-radius: 12px; background: var(--lf-card); color: inherit; text-decoration: none; }
     .network-search > span { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
     .network-search small { color: var(--lf-muted); font-size: 11.5px; }
-    /* One card per section, header always visible, body only when open. */
-    .sect { background: var(--lf-card); box-shadow: var(--lf-shadow); margin-top: 8px; }
+    /* One flat section per relationship group: the headers and rows read as a
+       single people list instead of a stack of duplicate cards. */
+    .sect { background: transparent; border-bottom: 1px solid var(--lf-line-soft); }
     .sect__head { width: 100%; display: flex; align-items: center; gap: 8px;
       padding: 14px var(--lf-gap); border: 0; background: transparent;
       color: var(--ion-text-color); font: inherit; text-align: left; cursor: pointer; }
@@ -210,7 +206,7 @@ type Tab = 'following' | 'followers' | 'requests' | 'statuses';
 
     .list { border-top: 1px solid var(--lf-line-soft); }
     @media (min-width: 768px) {
-      .sect { max-width: var(--lf-maxw); margin-left: auto; margin-right: auto; border-radius: var(--lf-radius); overflow: hidden; }
+      .sect { max-width: var(--lf-maxw); margin-left: auto; margin-right: auto; }
     }
     .row { display: flex; align-items: center; gap: 10px; padding: 10px var(--lf-gap); flex-wrap: wrap; }
     .who { flex: 1 1 200px; min-width: 0; display: flex; gap: 12px; align-items: center; color: inherit; text-decoration: none; }
@@ -234,7 +230,7 @@ export class DiscoverComponent {
   private toast = inject(ToastController);
   protected readonly timeAgo = timeAgo;
 
-  /** The four groups, in the order they are stacked under the stories. */
+  /** The four Network groups, in the order they appear on this people page. */
   readonly sections: { key: Tab; label: string }[] = [
     { key: 'following', label: 'Following' },
     { key: 'followers', label: 'Followers' },
@@ -313,7 +309,8 @@ export class DiscoverComponent {
   constructor() {
     void this.data.loadFollowRequests();
     void this.data.loadUserScoped();
-    // The story rail needs the stories even if Home was never visited.
+    // The people page can be opened directly, so load its member/follow data
+    // even when Home has not been visited first.
     void this.data.loadStatic();
     // ?tab= opens straight onto one section.
     const wanted = this.route.snapshot.queryParamMap.get('tab') as Tab | null;
