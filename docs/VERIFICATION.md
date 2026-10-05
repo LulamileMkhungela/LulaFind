@@ -30,7 +30,7 @@ Admin1 You are signed in as an admin. You can remove posts, suspend people and d
 ### 5. The same member’s Notifications after publishing
 
 ```text
-Notifications1 Mark all as read  All Unread1 Mentions PostsTodayA child is missing nearbyThandi Mokoena · Soweto, Gauteng. Open the case for the poster.now · 13 km from you
+Notifications2 Mark all as read  All Unread2 Mentions PostsTodayThandi Mokoena shared a new postHelp find Thandi Mokoena in SowetonowA child is missing nearbyThandi Mokoena · Soweto, Gauteng. Open the case for the poster.now · 13 km from you
 ```
 
 ### 6. The mother’s own Notifications (never her own case)
@@ -54,7 +54,7 @@ Post5Thandi MokoenaCommunity organiser. If you see something, say something. Ubu
 ### 11. A closed case, as the family sees it
 
 ```text
-Post5Thandi MokoenaCommunity organiser. If you see something, say something. Ubuntu. now  · Gauteng · Found · Home in Soweto  · 03 Oct 2026 Help find Thandi Mokoena in SowetoShe was last seen walking to the taxi rank after work on Tuesday evening.LikeCommentRepostSendFound. The family confirmed it. To take the case off the police circulation list, complete a SAPS 92 with the investigating officer. Photo  Video Attachments stay with this comment
+Post5Thandi MokoenaCommunity organiser. If you see something, say something. Ubuntu. now  · Gauteng · Found · Home in Soweto  · 05 Oct 2026 Help find Thandi Mokoena in SowetoShe was last seen walking to the taxi rank after work on Tuesday evening.LikeCommentRepostSendFound. The family confirmed it. To take the case off the police circulation list, complete a SAPS 92 with the investigating officer. Photo  Video Attachments stay with this comment
 ```
 
 ### 12a. Closed cases the *feed* holds - the reason the page cannot be built from the feed

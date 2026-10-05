@@ -304,6 +304,10 @@ export class DataService {
     this.loading.set(true);
     try {
       const list = uniqueById((await this.readFeed(f, viewerId)).filter((p) => !RETIRED_POST_TYPES.includes(p.type)));
+      // Resolve authors before publishing the feed signal. Cards should never
+      // spend a render showing "LulaFind member" with the anonymous placeholder
+      // while the real profile is still being fetched.
+      await this.cacheAuthors(list.map((p) => p.authorId));
       this.connectionLost.set(false);
       const hidden = this.hiddenIds();
       const visible = hidden.length ? list.filter((p) => !hidden.includes(p.id)) : list;
@@ -387,10 +391,13 @@ export class DataService {
   private async cacheAuthors(ids: string[]): Promise<void> {
     const missing = [...new Set(ids.filter(Boolean))].filter((id) => !this.authors()[id]);
     if (!missing.length) return;
-    const loaded = await Promise.all(missing.map((id) => this.api.user(id)));
+    const loaded = await Promise.all(missing.map((id) => this.api.user(id).catch(() => undefined)));
     const found: Record<string, UserProfile> = {};
     missing.forEach((id, i) => { if (loaded[i]) found[id] = loaded[i]!; });
-    this.authors.set({ ...this.authors(), ...found });
+    // Multiple feed/story loads can resolve at once. Updating the signal instead
+    // of spreading a captured snapshot prevents the later response from
+    // dropping names the earlier one already cached.
+    if (Object.keys(found).length) this.authors.update((all) => ({ ...all, ...found }));
   }
 
   post(id: string): Post | undefined {
@@ -477,7 +484,8 @@ export class DataService {
     }));
     this.stories.set(stories);
     this.tips.set(tips);
-    void this.cacheAuthors(stories.flatMap((story) => [
+    await this.cacheAuthors(stories.flatMap((story) => [
+      story.authorId,
       ...(story.replies ?? []).map((reply) => reply.authorId), ...(story.viewers ?? [])
     ]));
   }
@@ -505,6 +513,12 @@ export class DataService {
     this.followingIds.set(following.map((edge) => edge.followingId));
     this.followerIds.set(followers.map((edge) => edge.followerId));
     this.followRequests.set(requests);
+    await this.cacheAuthors([
+      ...following.map((edge) => edge.followingId),
+      ...followers.map((edge) => edge.followerId),
+      ...requests.map((edge) => edge.followerId),
+      id
+    ]);
     void this.loadFollowedCases();
     void this.checkWatched();
   }
@@ -863,6 +877,13 @@ export class DataService {
       outcomeNudgeAt: null
     };
     await this.api.savePost(post);
+    // A post held for moderation is not live yet, so do not notify a network
+    // about it. Once it is approved, the publication flow sends the alert.
+    // The post is durable before any live fan-out starts; a slow or unavailable
+    // notification write must never turn a successful post into an error.
+    if (post.status === 'active') {
+      await this.notifyPostNetwork(post).catch((e) => console.warn('Post notification fan-out failed:', e?.message ?? e));
+    }
     // Alerts are a side effect of a post that is already saved. If the fan-out
     // fails, the post stays posted - so it must never be reported as a failed
     // post, which is exactly what used to happen: "Nothing was saved", with the
@@ -1194,6 +1215,11 @@ export class DataService {
     const ids = this.followedCaseIds();
     const posts = (await Promise.all(ids.map((id) => this.loadPost(id).catch(() => undefined))))
       .filter((p): p is Post => !!p);
+    // A user can follow or unfollow while this network read is in flight. Do
+    // not let that older response overwrite the newer device preference.
+    if (this.followedCaseIds().join('\u0000') !== ids.join('\u0000')) {
+      return posts;
+    }
     this.followedCases.set(posts);
     if (posts.length !== ids.length) {
       this.followedCaseIds.set(posts.map((p) => p.id));
@@ -1272,6 +1298,8 @@ export class DataService {
    */
   private watchBusy = false;
   private watchAt = 0;
+  private watchDone: Promise<void> | null = null;
+  private finishWatch: (() => void) | null = null;
 
   private get watchKey(): string {
     return `lulafind.watch.${this.auth.viewerId ?? 'anon'}`;
@@ -1297,9 +1325,14 @@ export class DataService {
 
   async checkWatched(force = false): Promise<number> {
     const me = this.auth.viewerId;
-    if (!me || this.watchBusy) return 0;
+    if (!me) return 0;
+    // A background refresh may already be checking the watch list. Wait for it
+    // rather than returning a false zero to a caller that explicitly asked for
+    // a check (for example just after following a case).
+    if (this.watchBusy && this.watchDone) await this.watchDone;
     if (!force && Date.now() - this.watchAt < 60_000) return 0;
     this.watchBusy = true;
+    this.watchDone = new Promise<void>((resolve) => { this.finishWatch = resolve; });
     this.watchAt = Date.now();
     try {
       const why = new Map<string, string>();
@@ -1365,6 +1398,10 @@ export class DataService {
       return sent;
     } finally {
       this.watchBusy = false;
+      const done = this.finishWatch;
+      this.finishWatch = null;
+      this.watchDone = null;
+      done?.();
     }
   }
 
@@ -1658,6 +1695,20 @@ export class DataService {
     const me = this.auth.viewerId;
     return me ? this.spotlights().filter((s) => s.memberIds.includes(me)) : [];
   });
+
+  /** People visible in Home's Network tab: following and followers, once each. */
+  readonly networkPeople = computed(() => {
+    const me = this.auth.viewerId;
+    return [...new Set([...this.followingIds(), ...this.followerIds()])]
+      .filter((id) => id !== me)
+      .map((id) => this.authorOf(id))
+      .filter((u): u is UserProfile => !!u);
+  });
+
+  /** Check-in statuses are part of the network context, not the public For you feed. */
+  readonly networkStatuses = computed(() =>
+    this.networkPeople().filter((u) => !!u.checkIn).sort((a, b) => (b.checkIn?.at ?? 0) - (a.checkIn?.at ?? 0))
+  );
 
   isMember(spotlightId: string | null): boolean {
     const me = this.auth.viewerId;
@@ -2112,6 +2163,57 @@ export class DataService {
    *
    * Returns how many members were reached, which the admin review screen shows.
    */
+  async notifyPostNetwork(post: Post): Promise<void> {
+    if (post.status !== 'active') return;
+    // Publication can happen by a moderator, so resolve the post author rather
+    // than trusting the currently signed-in operator.
+    const author = await this.api.user(post.authorId);
+    if (!author) return;
+
+    const [followers, following, spotlights] = await Promise.all([
+      this.api.followsFor(author.id, 'followers'),
+      this.api.followsFor(author.id, 'following'),
+      post.spotlightId ? this.api.spotlights() : Promise.resolve([] as Spotlight[])
+    ]);
+
+    // A followers-only post is sent only to accepted followers because the
+    // people the author follows may not be able to open it. Public and Spotlight
+    // posts are visible to both sides of the network. The Set also prevents a
+    // mutual connection receiving two copies of the same notification.
+    const recipients = new Set<string>();
+    const canNotifyNetwork = post.audience !== 'followers';
+    followers.forEach((edge) => recipients.add(edge.followerId));
+    if (canNotifyNetwork) following.forEach((edge) => recipients.add(edge.followingId));
+
+    let spotlightName = '';
+    if (post.spotlightId) {
+      const spotlight = spotlights.find((item) => item.id === post.spotlightId);
+      if (spotlight) {
+        spotlightName = spotlight.surname;
+        spotlight.memberIds.forEach((id) => recipients.add(id));
+      }
+    }
+    recipients.delete(author.id);
+    if (!recipients.size) return;
+
+    const isSpotlightPost = !!post.spotlightId && !!spotlightName;
+    const title = isSpotlightPost
+      ? `${author.displayName} posted in the ${spotlightName} Spotlight`
+      : `${author.displayName} shared a new post`;
+    const body = post.title || post.body.slice(0, 120) || 'Open the post to see the update.';
+    await Promise.all([...recipients].map((userId) => this.api.pushNotification({
+      id: uid('n'),
+      userId,
+      kind: isSpotlightPost ? 'spotlight' : 'system',
+      title,
+      body,
+      at: Date.now(),
+      read: false,
+      route: `/post/${post.id}`,
+      postId: post.id
+    })));
+  }
+
   async alertCase(post: Post): Promise<number> {
     if (!isCasePost(post) || post.status !== 'active') return 0;
     const child = isChildCase(post);
@@ -2600,7 +2702,11 @@ export class DataService {
    * had happened: the row saved, but every avatar on the app ignored it.
    */
   avatarFor(u?: UserProfile | null): string {
-    if (!u) return avatar('Anonymous');
+    // `null` means the profile is still loading (or the post is anonymous),
+    // not that the person is named Anonymous. The old fallback produced an A
+    // avatar beside the words "LulaFind member", which looked like a real
+    // account and made missing profile data impossible to spot.
+    if (!u) return avatar('Member');
     return u.avatarUrl || avatar(u.displayName, u.avatarHue);
   }
 
@@ -2610,7 +2716,7 @@ export class DataService {
 
   displayName(p: Post, u?: UserProfile | null): string {
     if (p.anonymous && this.auth.viewerId !== p.authorId) return 'Anonymous';
-    return u?.displayName ?? 'LulaFind member';
+    return u?.displayName ?? 'Member';
   }
 
   provinceLabel(code: string): string {

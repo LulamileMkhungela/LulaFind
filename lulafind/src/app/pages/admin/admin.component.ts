@@ -238,7 +238,7 @@ export class AdminComponent implements OnInit {
 
   nameOf(id: string): string {
     if (id === this.auth.viewerId) return 'you';
-    return this.data.authorOf(id)?.displayName ?? this.users().find((u) => u.id === id)?.displayName ?? 'a member';
+    return this.data.authorOf(id)?.displayName ?? this.users().find((u) => u.id === id)?.displayName ?? 'Member';
   }
 
   /** Ask for a reason. Returns null if the admin cancelled. */

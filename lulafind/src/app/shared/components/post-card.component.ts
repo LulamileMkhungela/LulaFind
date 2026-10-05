@@ -221,16 +221,16 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
                 (click)="quickReact()" (contextmenu)="openReactions($event)"
                 [attr.aria-label]="myReaction() ? 'Your reaction: ' + reactionWord() : 'Like'">
           <lf-reaction-icon [kind]="myReaction() ?? defaultReaction" [size]="20" />
-          <span>{{ reactionWord() }}</span>
+          <span class="sr-only">{{ reactionWord() }}</span>
         </button>
-        <button class="fb-act" type="button" (click)="comment.emit()" aria-label="Comment">
-          <lf-icon name="comment" [size]="20" /><span>Comment</span>
+        <button class="fb-act" type="button" (click)="comment.emit()" aria-label="Comment" title="Comment">
+          <lf-icon name="comment" [size]="20" /><span class="sr-only">Comment</span>
         </button>
-        <button class="fb-act" type="button" (click)="onRepost()" aria-label="Repost">
-          <lf-icon name="repost" [size]="20" /><span>Repost</span>
+        <button class="fb-act" type="button" (click)="onRepost()" aria-label="Repost" title="Repost">
+          <lf-icon name="repost" [size]="20" /><span class="sr-only">Repost</span>
         </button>
-        <button class="fb-act" type="button" (click)="onSend()" aria-label="Send">
-          <lf-icon name="send" [size]="19" /><span>Send</span>
+        <button class="fb-act" type="button" (click)="onSend()" aria-label="Send" title="Send">
+          <lf-icon name="send" [size]="19" /><span class="sr-only">Send</span>
         </button>
       </div>
 
@@ -455,6 +455,7 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
       display: flex; align-items: center; margin: 6px 8px 8px; padding-top: 2px;
       border-top: 1px solid var(--lf-line-soft);
     }
+    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
     .fb-act {
       flex: 1 1 0; min-width: 0; height: 40px; border: 0; background: transparent; color: var(--lf-muted);
       font-family: inherit; font-size: 13.5px; font-weight: 600; cursor: pointer; border-radius: 6px;
@@ -516,12 +517,12 @@ export class PostCardComponent implements OnInit, OnChanges, AfterViewChecked {
   readonly isMine = computed(() => this.post?.authorId === this.auth.viewerId);
   readonly myVote = computed(() => (this.post ? this.data.myVote(this.post) : null));
   readonly authorName = computed(() =>
-    this.post?.anonymous && !this.isMine() ? 'Anonymous' : this.author?.displayName ?? 'LulaFind member'
+    this.post?.anonymous && !this.isMine() ? 'Anonymous' : this.author?.displayName ?? 'Member'
   );
   readonly originalName = computed(() => {
     const o = this.original();
     if (!o) return '';
-    return o.anonymous ? 'Anonymous' : this.data.authorOf(o.authorId)?.displayName ?? 'LulaFind member';
+    return o.anonymous ? 'Anonymous' : this.data.authorOf(o.authorId)?.displayName ?? 'Member';
   });
   readonly originalAvatar = computed(() => {
     const o = this.original();
@@ -621,7 +622,7 @@ export class PostCardComponent implements OnInit, OnChanges, AfterViewChecked {
   });
 
   commenterName(c: Comment): string {
-    return this.data.authorOf(c.authorId)?.displayName ?? 'A neighbour';
+    return this.data.authorOf(c.authorId)?.displayName ?? 'Member';
   }
 
   commenterAvatar(c: Comment): string {

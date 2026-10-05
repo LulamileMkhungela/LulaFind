@@ -5,6 +5,7 @@ import {
 import { LulaApi, SavePostOptions } from './api';
 import { answerBlocker, hasAnswered, withAnswer } from '../utils/lookout';
 import { lookoutCasePost } from '../utils/lookout-case';
+import { canReadPostAudience } from '../utils/audience';
 
 /*
  * Cloud Firestore + Firebase Auth implementation.
@@ -186,11 +187,28 @@ export class FirebaseApi implements LulaApi {
     return next as Post | undefined;
   }
 
-  async queryFeed(f: FeedFilter, _viewerId: string | null) {
+  async queryFeed(f: FeedFilter, viewerId: string | null) {
     // Firestore cannot express every filter combination server-side, so we pull
     // the newest slice and refine in memory. Swap in composite indexes when the
     // dataset grows.
     let all = await this.posts();
+    const following = new Set< string >();
+    const followers = new Set< string >();
+    if (viewerId) {
+      const [followingEdges, followerEdges] = await Promise.all([
+        this.followsFor(viewerId, 'following'),
+        this.followsFor(viewerId, 'followers')
+      ]);
+      followingEdges.forEach((edge) => following.add(edge.followingId));
+      followerEdges.forEach((edge) => followers.add(edge.followerId));
+    }
+    all = all.filter((p) => p.status !== 'under_review' || p.authorId === viewerId)
+      .filter((p) => canReadPostAudience(p, { viewerId, following }));
+    if (f.scope === 'network') {
+      const joined = new Set((await this.spotlights()).filter((spotlight) => !!viewerId && spotlight.memberIds.includes(viewerId)).map((spotlight) => spotlight.id));
+      const network = new Set([...(viewerId ? [viewerId] : []), ...following, ...followers]);
+      all = all.filter((p) => network.has(p.authorId) || (!!p.spotlightId && joined.has(p.spotlightId)));
+    }
     if (f.type !== 'all') all = all.filter((p) => p.type === f.type);
     if (f.province !== 'all') all = all.filter((p) => p.province === f.province);
     if (f.status === 'active') all = all.filter((p) => p.status === 'active' || p.status === 'under_review');

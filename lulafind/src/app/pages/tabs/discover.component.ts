@@ -93,10 +93,10 @@ type Tab = 'following' | 'followers' | 'requests' | 'statuses';
                     @for (r of statusPeople(); track r.id) {
                       <div class="row">
                         <a [routerLink]="['/user', r.id]" class="who">
-                          <lf-avatar [src]="data.avatarFor(r.u)" [name]="r.u?.displayName ?? '?'" [size]="56"
+                          <lf-avatar [src]="data.avatarFor(r.u)" [name]="r.u?.displayName ?? 'Member'" [size]="56"
                                      [status]="r.status" />
                           <div class="txt">
-                            <strong>{{ r.u?.displayName ?? 'A member' }}</strong>
+                            <strong>{{ r.u?.displayName ?? 'Member' }}</strong>
                             <span class="pillstatus" [attr.data-key]="r.status">
                               <lf-icon [name]="iconFor(r.status)" [size]="13" [weight]="2.4" />
                               {{ labelFor(r.status) }}
@@ -126,9 +126,9 @@ type Tab = 'following' | 'followers' | 'requests' | 'statuses';
                   @for (r of rowsFor(s.key); track r.id) {
                     <div class="row">
                       <a [routerLink]="['/user', r.id]" class="who">
-                        <lf-avatar [src]="data.avatarFor(r.u)" [name]="r.u?.displayName ?? '?'" [size]="56" />
+                        <lf-avatar [src]="data.avatarFor(r.u)" [name]="r.u?.displayName ?? 'Member'" [size]="56" />
                         <div class="txt">
-                          <strong>{{ r.u?.displayName ?? 'A member' }}</strong>
+                          <strong>{{ r.u?.displayName ?? 'Member' }}</strong>
                           <span class="lf-tiny lf-muted">
                             @if (r.u?.handle) { &#64;{{ r.u!.handle }} · }
                             @switch (s.key) {
@@ -255,11 +255,12 @@ export class DiscoverComponent {
 
   readonly myStatus = computed(() => this.auth.user()?.checkIn?.status ?? null);
 
-  /** People you follow who have a status set, newest first. */
+  /** People in either direction of the viewer who have a status set, newest first. */
   readonly statusPeople = computed(() => {
     const me = this.auth.viewerId;
+    const ids = [...new Set([...this.data.followingIds(), ...this.data.followerIds()])];
     const out: { id: string; u: UserProfile | null; status: CheckInStatus; at: number | null }[] = [];
-    for (const id of this.data.followingIds()) {
+    for (const id of ids) {
       if (id === me) continue;
       const u = this.data.authorOf(id);
       if (!u?.checkIn) continue;

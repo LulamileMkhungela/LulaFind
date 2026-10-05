@@ -165,6 +165,7 @@ export class ModerationService {
         postId: post.id
       });
       const reached = await this.data.alertCase(live);
+      await this.data.notifyPostNetwork(live).catch((e) => console.warn('Post notification fan-out failed:', e?.message ?? e));
       await this.loadPending();
       return reached;
     } finally {

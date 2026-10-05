@@ -63,7 +63,7 @@ export class AvatarComponent {
   failed = signal(false);
 
   get text(): string {
-    return this.name.trim().split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? '').join('') || '?';
+    return this.name.trim().split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? '').join('') || 'M';
   }
 
   /** Colour is never the only clue. */

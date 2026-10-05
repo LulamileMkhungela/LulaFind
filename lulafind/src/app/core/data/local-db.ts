@@ -571,7 +571,20 @@ export class LocalDb {
 
   filtered(f: FeedFilter, viewerId: string | null, viewer: UserProfile | undefined): Post[] {
     const following = new Set(this.db.follows.filter((e) => e.followerId === viewerId && e.status === 'accepted').map((e) => e.followingId));
+    const followers = new Set(this.db.follows.filter((e) => e.followingId === viewerId && e.status === 'accepted').map((e) => e.followerId));
     let list = this.db.posts.slice();
+
+    if (f.scope === 'network') {
+      // Network is deliberately narrower than For you: a post must come from
+      // someone in either direction, or from a Spotlight the viewer belongs to.
+      // Checking membership here (rather than only in the component) keeps a
+      // followers-only post from leaking when the tab is refreshed.
+      const networkPeople = new Set([...(viewerId ? [viewerId] : []), ...following, ...followers]);
+      const joinedSpotlights = new Set(
+        this.db.spotlights.filter((s) => !!viewerId && s.memberIds.includes(viewerId)).map((s) => s.id)
+      );
+      list = list.filter((p) => networkPeople.has(p.authorId) || (!!p.spotlightId && joinedSpotlights.has(p.spotlightId)));
+    }
 
     if (f.type !== 'all') list = list.filter((p) => p.type === f.type);
     if (f.province !== 'all') list = list.filter((p) => p.province === f.province);

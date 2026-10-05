@@ -164,9 +164,9 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
 
           <div class="actions">
             <lf-reaction-button [value]="myVote()" (react)="react($event)" />
-            <button class="act" type="button" (click)="focusComment()" aria-label="Comment"><lf-icon name="comment" [size]="20" /><span>Comment</span></button>
-            <button class="act" type="button" (click)="repost()" aria-label="Repost"><lf-icon name="repost" [size]="20" /><span>Repost</span></button>
-            <button class="act" type="button" (click)="send()" aria-label="Send"><lf-icon name="send" [size]="19" /><span>Send</span></button>
+            <button class="act" type="button" (click)="focusComment()" aria-label="Comment" title="Comment"><lf-icon name="comment" [size]="20" /><span class="sr-only">Comment</span></button>
+            <button class="act" type="button" (click)="repost()" aria-label="Repost" title="Repost"><lf-icon name="repost" [size]="20" /><span class="sr-only">Repost</span></button>
+            <button class="act" type="button" (click)="send()" aria-label="Send" title="Send"><lf-icon name="send" [size]="19" /><span class="sr-only">Send</span></button>
           </div>
 
           @if (!isMine() || p()!.status === 'active') {
@@ -586,6 +586,7 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
     section.gone { display: flex; flex-direction: column; gap: 12px; align-items: flex-start; color: var(--lf-text); }
     section.gone p { margin: 0; color: var(--lf-muted); line-height: 1.5; }
 
+    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
     /* LinkedIn's stats line + action bar */
     .stats { display: flex; align-items: center; justify-content: space-between; padding: 8px var(--edge) 6px; font-size: 13px; color: var(--lf-muted); }
     .stats button { border: 0; background: transparent; color: inherit; font: inherit; cursor: pointer; padding: 0; }
@@ -772,7 +773,7 @@ export class PostDetailComponent implements OnInit {
   readonly isMine = computed(() => this.p()?.authorId === this.auth.viewerId);
   readonly author = computed(() => (this.p() ? this.data.authorOf(this.p()!.authorId) ?? null : null));
   readonly authorName = computed(() =>
-    this.p()?.anonymous && !this.isMine() ? 'Anonymous' : this.author()?.displayName ?? 'LulaFind member');
+    this.p()?.anonymous && !this.isMine() ? 'Anonymous' : this.author()?.displayName ?? 'Member');
   readonly authorHeadline = computed(() =>
     this.p()?.anonymous && !this.isMine() ? '' : this.author()?.bio ?? '');
   readonly authorAvatar = computed(() => this.data.avatarFor(this.p()?.anonymous && !this.isMine() ? null : this.author()));
@@ -791,7 +792,7 @@ export class PostDetailComponent implements OnInit {
   readonly myVote = computed(() => (this.p() ? this.data.myVote(this.p()!) : null));
   readonly originalName = computed(() => {
     const o = this.original();
-    return o ? (o.anonymous ? 'Anonymous' : this.data.authorOf(o.authorId)?.displayName ?? 'LulaFind member') : '';
+    return o ? (o.anonymous ? 'Anonymous' : this.data.authorOf(o.authorId)?.displayName ?? 'Member') : '';
   });
   readonly originalAvatar = computed(() => {
     const o = this.original();
@@ -1063,7 +1064,7 @@ export class PostDetailComponent implements OnInit {
   repliesOf(parentId: string): Comment[] {
     return this.comments().filter((c) => c.parentId === parentId).sort((a, b) => a.createdAt - b.createdAt);
   }
-  nameOf(id: string): string { return this.data.authorOf(id)?.displayName ?? 'LulaFind member'; }
+  nameOf(id: string): string { return this.data.authorOf(id)?.displayName ?? 'Member'; }
   /** LinkedIn shows the commenter's headline under their name. */
   headlineOf(id: string): string { return this.data.authorOf(id)?.bio ?? ''; }
   avatarOf(id: string): string { return this.data.avatarFor(this.data.authorOf(id)); }

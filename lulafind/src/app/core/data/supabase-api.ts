@@ -743,7 +743,24 @@ export class SupabaseApi implements LulaApi {
         viewerId ? this.user(viewerId) : Promise.resolve(undefined),
         f.query.trim() ? this.users() : Promise.resolve([])
       ]);
-      posts = (await this.applyVisibility(posts, viewerId)).filter((p) => {
+      posts = await this.applyVisibility(posts, viewerId);
+      if (f.scope === 'network' && viewerId) {
+        const [following, followers, spotlights] = await Promise.all([
+          this.followsFor(viewerId, 'following'),
+          this.followsFor(viewerId, 'followers'),
+          this.spotlights()
+        ]);
+        const peopleInNetwork = new Set([
+          viewerId,
+          ...following.map((edge) => edge.followingId),
+          ...followers.map((edge) => edge.followerId)
+        ]);
+        const joined = new Set(spotlights.filter((spotlight) => spotlight.memberIds.includes(viewerId)).map((spotlight) => spotlight.id));
+        posts = posts.filter((p) => peopleInNetwork.has(p.authorId) || (!!p.spotlightId && joined.has(p.spotlightId)));
+      } else if (f.scope === 'network') {
+        posts = [];
+      }
+      posts = posts.filter((p) => {
         if (f.type !== 'all' && p.type !== f.type) return false;
         if (f.province !== 'all' && p.province !== f.province) return false;
         if (f.spotlightId && p.spotlightId !== f.spotlightId) return false;
@@ -775,6 +792,23 @@ export class SupabaseApi implements LulaApi {
     } catch (e: any) {
       console.warn('Supabase queryFeed fallback:', e?.message);
       let posts = this.localDb.getAll<Post>('posts');
+      if (f.scope === 'network') {
+        const network = new Set<string>();
+        if (viewerId) {
+          network.add(viewerId);
+          const [following, followers, spotlights] = await Promise.all([
+            this.localDb.followingOf(viewerId),
+            this.localDb.followersOf(viewerId),
+            this.localDb.spotlights()
+          ]);
+          following.forEach((edge) => network.add(edge.followingId));
+          followers.forEach((edge) => network.add(edge.followerId));
+          const joined = new Set(spotlights.filter((spotlight) => spotlight.memberIds.includes(viewerId)).map((spotlight) => spotlight.id));
+          posts = posts.filter((p) => network.has(p.authorId) || (!!p.spotlightId && joined.has(p.spotlightId)));
+        } else {
+          posts = [];
+        }
+      }
       if (f.type !== 'all') posts = posts.filter((p) => p.type === f.type);
       if (f.province !== 'all') posts = posts.filter((p) => p.province === f.province);
       if (f.status === 'active') posts = posts.filter((p) => p.status === 'active' || p.status === 'under_review');
