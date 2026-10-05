@@ -68,10 +68,9 @@ run_sql() {
 
 # Escape a value into a PostgreSQL single-quoted literal without printing it.
 pg_quote() {
-  node -e '
-    const value = process.argv[1];
-    process.stdout.write("'"'"'" + value.replaceAll("'"'"'", "'"'"'"'"'"'") + "'"'"'");
-  ' "$1"
+  local value="$1"
+  value="${value//\'/\'\'}"
+  printf "'%s'" "$value"
 }
 
 # Store a secret in Supabase Vault without putting it in a committed SQL file.
@@ -114,13 +113,17 @@ echo '==> Deploying Edge Functions'
   --project-ref "$PROJECT_REF" --no-verify-jwt --use-api
 
 echo '==> Setting Edge Function secrets'
-"${CLI[@]}" secrets set --project-ref "$PROJECT_REF" \
-  "RESEND_API_KEY=$RESEND_API_KEY" \
-  "MODERATION_EMAIL_TO=$MODERATION_EMAIL_TO" \
-  "REPORT_WEBHOOK_SECRET=$REPORT_WEBHOOK_SECRET" \
-  "APP_URL=$APP_URL" \
-  "FCM_SERVICE_ACCOUNT=$FCM_SERVICE_ACCOUNT_JSON" \
-  ${MODERATION_EMAIL_FROM:+"MODERATION_EMAIL_FROM=$MODERATION_EMAIL_FROM"}
+secret_args=(
+  "RESEND_API_KEY=$RESEND_API_KEY"
+  "MODERATION_EMAIL_TO=$MODERATION_EMAIL_TO"
+  "REPORT_WEBHOOK_SECRET=$REPORT_WEBHOOK_SECRET"
+  "APP_URL=$APP_URL"
+  "FCM_SERVICE_ACCOUNT=$FCM_SERVICE_ACCOUNT_JSON"
+)
+if [[ -n "${MODERATION_EMAIL_FROM:-}" ]]; then
+  secret_args+=("MODERATION_EMAIL_FROM=$MODERATION_EMAIL_FROM")
+fi
+"${CLI[@]}" secrets set --project-ref "$PROJECT_REF" "${secret_args[@]}"
 
 put_vault_secret report_webhook_secret "$REPORT_WEBHOOK_SECRET"
 put_vault_secret service_role_key "$SUPABASE_SERVICE_ROLE_KEY"
