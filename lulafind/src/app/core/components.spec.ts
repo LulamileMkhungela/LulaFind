@@ -1493,7 +1493,7 @@ describe('Search boxes actually search', () => {
     expect(f.componentInstance.posts().length).toBeGreaterThan(0);
   });
 
-  it('gives a member the short composer and searches people inside the Spotlight', async () => {
+  it('opens the shared composer with the Spotlight selected and searches people inside it', async () => {
     await TestBed.inject(AuthService).signInDemo();
     const data = TestBed.inject(DataService);
     await data.refresh();
@@ -1504,9 +1504,12 @@ describe('Search boxes actually search', () => {
     f.detectChanges();
     await f.whenStable();
     const html = (f.nativeElement as HTMLElement).innerHTML;
-    expect(html).toContain('Post to the ' + sp.surname + ' community');
-    expect(html).toContain('Photo');
-    expect(html).toContain('Video');
+    expect(html).toContain('Post here');
+    // The Spotlight page has no second, shortened composer. The shared Create
+    // composer opens only after this action and receives the community id.
+    expect((f.nativeElement as HTMLElement).querySelector('.quick')).toBeFalsy();
+    await f.componentInstance.postHere();
+    expect(TestBed.inject(Router).url).toContain('/create/missing?spotlight=' + sp.id);
     // searching inside the community finds the people in it
     const memberId = sp.memberIds.find((id) => id !== 'u_demo')!;
     const member = await data.people([memberId]);

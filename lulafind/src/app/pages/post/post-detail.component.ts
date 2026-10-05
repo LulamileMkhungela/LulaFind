@@ -658,7 +658,10 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
     .note { margin: 8px var(--edge); padding: 10px 12px; border-radius: 8px; background: var(--lf-card); color: var(--ion-text-color); font-size: 14px; line-height: 1.45; }
 
     /* Conversation thread - sender row, message bubble and compact Like/Reply actions. */
-    .comments { background: var(--lf-card); box-shadow: var(--lf-shadow); padding: 12px var(--edge) 18px; }
+    /* The comment composer belongs to the viewport, not the conversation. Keep
+       enough room in the thread for its fixed bottom bar so the last comment
+       can still be read above it. */
+    .comments { background: var(--lf-card); box-shadow: var(--lf-shadow); padding: 12px var(--edge) calc(116px + var(--lf-safe-bottom)); }
     .sighting-trigger { display: flex; align-items: center; gap: 8px; width: 100%; margin: 0 0 10px; padding: 10px 12px; border: 1px solid var(--lf-line);
       border-radius: 8px; background: var(--lf-card-2); color: inherit; font: inherit; text-align: left; cursor: pointer; }
     .sighting-trigger span { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
@@ -672,7 +675,14 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
     .sighting-form__hint { margin: 0; color: var(--lf-muted); font-size: 12px; line-height: 1.4; }
     .sighting-form__actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
     .sighting-form__actions .big { min-width: 148px; height: 38px; font-size: 13px; }
-    .cbox { position: sticky; top: 0; z-index: 5; display: flex; align-items: flex-start; gap: 8px; padding: 8px 0; background: var(--lf-card); overscroll-behavior: contain; }
+    .cbox { position: fixed; inset-inline: 0; bottom: 0; z-index: 30; display: flex; align-items: flex-start; gap: 8px;
+      box-sizing: border-box; padding: 8px var(--edge) max(8px, var(--lf-safe-bottom));
+      background: color-mix(in srgb, var(--lf-card) 96%, transparent); box-shadow: 0 -4px 18px rgba(0,0,0,.12);
+      overscroll-behavior: contain; }
+    .cbox > .compose { width: min(100%, var(--lf-maxw)); margin: 0 auto; }
+    @media (min-width: 700px) {
+      .cbox { padding-inline: max(var(--edge), calc((100vw - var(--lf-maxw)) / 2 + var(--edge))); }
+    }
     .compose { flex: 1; min-width: 0; }
     .field { width: 100%; min-width: 0; box-sizing: border-box; display: flex; align-items: flex-end; gap: 6px; padding: 6px 6px 6px 14px; border: 1px solid var(--lf-line); border-radius: 20px; background: var(--lf-card); overscroll-behavior-y: contain; touch-action: pan-y; }
     .field textarea { flex: 1; min-width: 0; max-height: 120px; padding: 6px 0; border: 0; outline: 0; resize: none; overflow-y: auto; overscroll-behavior-y: contain; -webkit-overflow-scrolling: touch; touch-action: pan-y; background: transparent; color: var(--ion-text-color); font: inherit; font-size: 15px; line-height: 1.35; }
@@ -709,7 +719,7 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
        card, under the name, and the time lives in the action row with the
        buttons. A bubble read as a private message, which this is not. */
     .ccard { border: 0; border-radius: 0; background: transparent; padding: 0; }
-    .who-list { position: absolute; z-index: 12; left: 0; right: 0; top: calc(100% + 4px); display: flex; flex-direction: column;
+    .who-list { position: absolute; z-index: 12; left: 0; right: 0; bottom: calc(100% + 4px); display: flex; flex-direction: column;
       padding: 6px; border: 1px solid var(--lf-line-soft); border-radius: 10px; background: var(--lf-card); box-shadow: var(--lf-shadow); }
     .who-list button { display: flex; align-items: center; gap: 9px; width: 100%; padding: 7px 8px; border: none; border-radius: 8px;
       background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }

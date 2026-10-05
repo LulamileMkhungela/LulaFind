@@ -182,7 +182,13 @@ describe('DataService voting and comments', () => {
     await data.vote('p_khumalo', 'support');
     const p1 = data.post('p_khumalo')!;
     expect(p1.upvotes).toBe(p0.upvotes + 1);
+    expect(p1.voterIds['u_demo']).toBe('support');
     expect(data.myVote(p1)).toBe('support');
+    // The selected reaction is not only optimistic UI state: the stored post
+    // carries the new kind and count through a subsequent feed read.
+    await data.loadFeed();
+    expect(data.myVote(data.post('p_khumalo')!)).toBe('support');
+    expect(data.post('p_khumalo')!.upvotes).toBe(p0.upvotes + 1);
     await data.vote('p_khumalo', 'support');
     expect(data.post('p_khumalo')!.upvotes).toBe(p0.upvotes);
   });

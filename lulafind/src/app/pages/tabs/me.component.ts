@@ -621,8 +621,8 @@ export class MeComponent {
     await this.platform.share(`${u.displayName} on LulaFind`, `Follow ${u.displayName} on LulaFind`, this.platform.link(`/user/${u.id}`));
   }
 
-  vote(p: Post, v: ReactionKind): void {
-    void this.data.vote(p.id, v);
+  async vote(p: Post, v: ReactionKind): Promise<void> {
+    try { await this.data.vote(p.id, v); } catch { /* DataService restored every cached list. */ }
   }
 
   open(p: Post): void {

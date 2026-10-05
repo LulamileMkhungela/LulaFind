@@ -244,8 +244,13 @@ export class SearchComponent {
     void this.router.navigate(['/home']);
   }
 
-  vote(p: Post, v: ReactionKind): void {
-    void this.data.vote(p.id, v);
+  async vote(p: Post, v: ReactionKind): Promise<void> {
+    const saving = this.data.vote(p.id, v);
+    // Search results are a local signal, so mirror DataService's optimistic
+    // cache immediately instead of waiting for the provider round trip.
+    this.posts.update((items) => items.map((item) => item.id === p.id ? (this.data.post(p.id) ?? item) : item));
+    try { await saving; } catch { /* DataService restored the previous copy. */ }
+    this.posts.update((items) => items.map((item) => item.id === p.id ? (this.data.post(p.id) ?? item) : item));
   }
 
   open(p: Post): void {

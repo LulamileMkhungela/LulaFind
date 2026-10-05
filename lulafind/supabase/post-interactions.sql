@@ -30,7 +30,6 @@ declare
     'voterIds', 'upvotes', 'commentCount', 'views', 'shares', 'lookingIds',
     'searchParty', 'danger', 'khumbu', 'flags', 'events', 'lastComment', 'lastLike', 'updatedAt', 'status', 'outcome'
   ];
-  my_old text;
   my_new text;
   claimed_old text;
   claimed_new text;
@@ -71,15 +70,20 @@ begin
   if (coalesce(cur->'voterIds', '{}'::jsonb) - me) is distinct from (coalesce(next->'voterIds', '{}'::jsonb) - me) then
     raise exception 'You can only change your own vote';
   end if;
-  my_old := cur->'voterIds'->>me;
   my_new := next->'voterIds'->>me;
   if my_new is not null and my_new not in ('up', 'like', 'support', 'sad') then
     raise exception 'Unknown vote';
   end if;
   merged := cur;
   merged := jsonb_set(merged, '{voterIds}', coalesce(next->'voterIds', '{}'::jsonb), true);
-  merged := jsonb_set(merged, '{upvotes}', to_jsonb(greatest(0,
-    coalesce((cur->>'upvotes')::int, 0) + (case when my_new is not null then 1 else 0 end) - (case when my_old is not null and my_old <> 'down' then 1 else 0 end))), true);
+  -- Rebuild the counter from the resulting voter map instead of adjusting a
+  -- possibly stale client count. This makes a reaction switch exact after a
+  -- refresh, even when an older record was written with a mismatched counter.
+  merged := jsonb_set(merged, '{upvotes}', to_jsonb((
+    select count(*)
+    from jsonb_each_text(coalesce(next->'voterIds', '{}'::jsonb)) as votes(user_id, reaction)
+    where reaction in ('up', 'like', 'support', 'sad')
+  )), true);
 
   -- Rebuild the preview from the authenticated member. The client can carry
   -- lastLike optimistically, but cannot author its identity or display name.

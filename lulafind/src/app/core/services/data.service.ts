@@ -617,9 +617,15 @@ export class DataService {
   /** Replace a post in the view signals as well as the cache (used optimistically). */
   private replacePostViews(post: Post): void {
     this.mergeCache([post]);
-    this.feed.update((items) => items.map((item) => item.id === post.id ? post : item));
-    this.broughtHome.update((items) => items.map((item) => item.id === post.id ? post : item));
-    this.myAuthored.update((items) => items.map((item) => item.id === post.id ? post : item));
+    // A reaction is a post change, not a feed-only change. Keep every already
+    // rendered list on the same object so Saved, Network/followed cases, Menu,
+    // For you, and a detail page cannot disagree until the next refresh.
+    const replace = (items: Post[]) => items.map((item) => item.id === post.id ? post : item);
+    this.feed.update(replace);
+    this.broughtHome.update(replace);
+    this.followedCases.update(replace);
+    this.savedPosts.update(replace);
+    this.myAuthored.update(replace);
   }
 
   myVote(p: Post): VoteValue {
@@ -2477,6 +2483,7 @@ export class DataService {
     let fromApi: Post[] = [];
     try {
       fromApi = await this.api.searchPosts(q, 40, this.auth.viewerId);
+      this.mergeCache(fromApi);
     } catch {
       // Offline or the query failed: the copies on this device still answer.
     }
