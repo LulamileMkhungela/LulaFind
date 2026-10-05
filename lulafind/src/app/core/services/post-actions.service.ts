@@ -326,7 +326,7 @@ export class PostActionsService {
           handler: async (v: string) => {
             try {
               await this.mod.report({ target: 'post', targetId: p.id, summary: p.title, reason: v ?? 'other' });
-              await this.toast('Report sent. Thank you \u2014 an admin will look at it.');
+              await this.toast('Report saved for moderation. Email alerts depend on the server configuration.');
             } catch (e: unknown) {
               await this.toast(e instanceof Error ? e.message : 'Could not send the report');
             }

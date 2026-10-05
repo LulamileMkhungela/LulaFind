@@ -152,9 +152,9 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
                 </div>
                 @for (r of requestPeople(); track r.id) {
                   <div class="req">
-                    <lf-avatar [src]="data.avatarFor(r.u)" [name]="r.u?.displayName ?? '?'" [size]="40" />
+                    <lf-avatar [src]="data.avatarFor(r.u)" [name]="r.u?.displayName ?? 'Member'" [size]="40" />
                     <div class="lf-grow">
-                      <strong>{{ r.u?.displayName ?? 'A member' }}</strong>
+                      <strong>{{ r.u?.displayName ?? 'Member' }}</strong>
                       <span class="lf-small lf-muted">wants to follow you</span>
                     </div>
                     <button class="lf-btn lf-btn--sm" (click)="respond(r.id, true)">Accept</button>

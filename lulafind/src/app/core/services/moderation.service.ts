@@ -42,11 +42,32 @@ export class ModerationService {
 
   constructor() {
     this.load();
+    // Local state makes the queue usable offline; the backend is authoritative
+    // whenever a signed-in identity is available. In particular, a browser
+    // localStorage write is never described as an email or moderation alert.
+    void this.refreshRemote();
   }
 
   load(): void {
     const list = this.store.get<UserReport[]>('reports', []);
     this.reports.set([...list].sort((a, b) => b.at - a.at));
+  }
+
+  async refreshRemote(): Promise<void> {
+    const me = this.auth.viewerId;
+    if (!me) return;
+    try {
+      const remote = await this.api.reportsFor(me);
+      const local = this.reports();
+      const byId = new Map([...local, ...remote].map((r) => [r.id, r]));
+      const merged = [...byId.values()].sort((a, b) => b.at - a.at);
+      this.reports.set(merged);
+      this.persist();
+    } catch (e) {
+      // A backend outage is visible to the caller when a new report is filed;
+      // an admin opening the queue can still inspect the last local snapshot.
+      console.warn('Moderation queue could not be refreshed:', (e as Error)?.message ?? e);
+    }
   }
 
   /** Drop the local report queue (used by Settings → Reset demo data). */
@@ -67,6 +88,7 @@ export class ModerationService {
     if (!me) throw new Error('Sign in to report something');
     if (!input.reason) throw new Error('Choose a reason');
 
+    await this.refreshRemote();
     const existing = this.reports().find(
       (r) => r.targetId === input.targetId && r.byUserId === me && r.status === 'open'
     );
@@ -86,7 +108,10 @@ export class ModerationService {
       adminNote: '',
       actionTaken: null
     };
-    this.reports.set([report, ...this.reports()]);
+    // This is the durable hand-off. If Supabase/Firestore refuses it, fail
+    // honestly instead of turning a device-only write into "report sent".
+    await this.api.saveReport(report);
+    this.reports.set([report, ...this.reports().filter((r) => r.id !== report.id)]);
     this.persist();
     return report;
   }
@@ -109,6 +134,8 @@ export class ModerationService {
         ? { ...r, status, adminNote: adminNote.trim(), actionTaken, resolvedAt: Date.now() }
         : r
     );
+    const changed = next.find((r) => r.id === reportId);
+    if (changed) await this.api.saveReport(changed);
     this.reports.set(next);
     this.persist();
   }
@@ -165,6 +192,7 @@ export class ModerationService {
         postId: post.id
       });
       const reached = await this.data.alertCase(live);
+      await this.data.notifyPostNetwork(live).catch((e) => console.warn('Post notification fan-out failed:', e?.message ?? e));
       await this.loadPending();
       return reached;
     } finally {

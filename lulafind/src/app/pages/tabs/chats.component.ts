@@ -102,7 +102,7 @@ export class ChatsComponent {
   }
 
   nameOf(t: { participantIds: string[] }): string {
-    return this.data.authorOf(this.otherId(t.participantIds))?.displayName ?? 'LulaFind member';
+    return this.data.authorOf(this.otherId(t.participantIds))?.displayName ?? 'Member';
   }
 
   avatarOf(t: { participantIds: string[] }): string {

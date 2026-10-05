@@ -1233,6 +1233,22 @@ describe('I am looking', () => {
     signInAs('u_demo');
     await expect(data.markLooking('p_thato')).rejects.toThrow(/family/i);
   });
+
+  it('stores a structured sighting as a lead attached to the case', async () => {
+    const data = svc<DataService>(DataService);
+    signInAs('u_kabelo');
+    const when = Date.now() - 25 * 60_000;
+    const comment = await data.addComment({
+      postId: 'p_thato',
+      body: 'I saw someone matching the case near the taxi rank.',
+      isLead: true,
+      sighting: { place: 'Orlando taxi rank', province: 'GP', when, note: 'Heading toward the clinic.' }
+    });
+    expect(comment.isLead).toBe(true);
+    expect(comment.sighting?.place).toBe('Orlando taxi rank');
+    expect(comment.sighting?.when).toBe(when);
+    expect((await data.comments('p_thato')).some((c) => c.id === comment.id && c.sighting?.province === 'GP')).toBe(true);
+  });
 });
 
 describe('Safety check-ins', () => {
@@ -1477,6 +1493,22 @@ describe('Saved posts, watch alerts and followers', () => {
     signInAs(target.authorId);
     await data.loadUserScoped();
     expect(data.notifications().some((n) => n.postId === target.id && n.kind === 'vote' && /idea/i.test(n.title))).toBe(true);
+  });
+
+  it('lets a neighbour volunteer near an open case without sharing live location', async () => {
+    signInAs('u_kabelo');
+    const data = svc<DataService>(DataService);
+    await data.refresh();
+    const target = data.feed().find((p) => p.type === 'missing' && p.authorId !== 'u_kabelo' && p.status === 'active')!;
+    expect(target).toBeTruthy();
+
+    expect(await data.markLooking(target.id)).toBe(true);
+    const looking = (await data.loadPost(target.id))!;
+    expect(looking.lookingIds).toContain('u_kabelo');
+    expect(db.notifications(target.authorId).some((n) => n.postId === target.id && /looking/i.test(n.title))).toBe(true);
+
+    expect(await data.markLooking(target.id)).toBe(false);
+    expect((await data.loadPost(target.id))!.lookingIds).not.toContain('u_kabelo');
   });
 
   it('lets you remove a follower', async () => {

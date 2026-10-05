@@ -790,7 +790,11 @@ export interface Tip {
   urgent?: boolean;
 }
 
+export type FeedScope = 'for-you' | 'network';
+
 export interface FeedFilter {
+  /** The Home tabs: discovery for everyone, or only the viewer's network. */
+  scope: FeedScope;
   type: PostType | 'all';
   province: ProvinceCode | 'all';
   query: string;
@@ -800,6 +804,7 @@ export interface FeedFilter {
 }
 
 export const emptyFilter = (): FeedFilter => ({
+  scope: 'for-you',
   type: 'all',
   province: 'all',
   query: '',

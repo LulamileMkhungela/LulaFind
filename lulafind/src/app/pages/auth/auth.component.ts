@@ -39,7 +39,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
           <div class="snap-bottom-cta">
             <button class="snap-btn snap-btn--blue" (click)="mode.set('signin')">Log In with email</button>
 
-            <button class="snap-btn snap-btn--google" (click)="provider('google')">
+            <button class="snap-btn snap-btn--google" [disabled]="busy()" (click)="provider('google')">
               <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                 <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
                 <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
@@ -104,7 +104,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
             <div class="snap-divider"><span>or</span></div>
 
-            <button class="snap-btn snap-btn--black snap-block" (click)="provider('google')">
+            <button class="snap-btn snap-btn--black snap-block" [disabled]="busy()" (click)="provider('google')">
               <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                 <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
                 <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
@@ -167,7 +167,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
                 <div class="snap-divider"><span>or</span></div>
 
-                <button class="snap-btn snap-btn--google snap-block" (click)="provider('google')">
+                <button class="snap-btn snap-btn--google snap-block" [disabled]="busy()" (click)="provider('google')">
               <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                 <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
                 <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
@@ -910,10 +910,25 @@ export class AuthComponent implements OnInit {
 
   private async afterAuth(): Promise<void> {
     this.auth.passwordRecovery.set(false);
+    // Google can complete authentication before a new member has chosen a
+    // province/privacy settings. Existing members go straight in; a new Google
+    // account gets the short onboarding flow instead of landing on a feed with
+    // an incomplete profile (and generic member avatars).
+    const destination = this.auth.needsOnboarding() ? '/onboarding' : this.next;
     // Show the app first. Waiting for the feed, the stories, the tips and the
     // follow lists before the first screen appears is what made sign-in feel
     // like it was hanging; they now stream in behind the first paint.
-    await this.router.navigateByUrl(this.next);
+    try {
+      await this.router.navigateByUrl(destination);
+    } catch {
+      // Keep provider sign-in failures actionable instead of leaking an
+      // unhandled router rejection. This also covers a stale deployment whose
+      // route table has not picked up the onboarding screen yet.
+      this.error.set(this.auth.needsOnboarding()
+        ? 'You are signed in, but account setup could not be opened. Please reload LulaFind and try again.'
+        : 'You are signed in, but LulaFind could not open the app. Please reload and try again.');
+      return;
+    }
     void this.data.refresh();
   }
 }

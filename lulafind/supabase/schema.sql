@@ -423,6 +423,36 @@ grant execute on function public.lula_in_thread(text, text) to anon, authenticat
 grant execute on function public.lula_follow_insert_allowed(text, text, text) to anon, authenticated;
 grant execute on function public.lula_media_visible(text, text) to anon, authenticated;
 
+-- The main read policy below references lookout visibility. Keep a small,
+-- dependency-free definition here so a fresh project can install the policy
+-- before the fuller lookout RPCs further down this file are created. The later
+-- CREATE OR REPLACE is the canonical copy and also installs its grants.
+create or replace function public.lula_lookout_visible(lookout_id text, viewer text)
+returns boolean language sql stable security definer set search_path = pg_catalog as $$
+  select viewer is not null and exists (
+    select 1
+    from public.records r
+    where r.collection = 'lookouts'
+      and r.id = lookout_id
+      and (
+        r.payload->>'userId' = viewer
+        or viewer in (
+          select jsonb_array_elements_text(
+            coalesce(r.payload->'askedIds', '[]'::jsonb)
+          )
+        )
+        or exists (
+          select 1
+          from public.records f
+          where f.collection = 'follows'
+            and f.payload->>'followingId' = r.payload->>'userId'
+            and f.payload->>'followerId' = viewer
+            and coalesce(f.payload->>'status', 'accepted') = 'accepted'
+        )
+      )
+  );
+$$;
+
 -- Remove earlier additive policies: permissive RLS policies are ORed together.
 drop policy if exists "lula stories audience read" on public.records;
 drop policy if exists "lula story replies read" on public.records;
@@ -522,6 +552,18 @@ with check (
   )
 );
 
+-- Reports are private to the reporter, except for the moderation queue. The
+-- generic select policy above intentionally does not expose reports to admins;
+-- this explicit branch makes the queue readable cross-device without exposing
+-- anyone else's reports to ordinary members.
+drop policy if exists "lula report read" on public.records;
+create policy "lula report read" on public.records
+for select to anon, authenticated
+using (
+  collection = 'reports'
+  and (public.lula_is_admin() or payload->>'byUserId' = (select public.lula_uid()))
+);
+
 drop policy if exists "lula update" on public.records;
 create policy "lula update" on public.records
 for update to anon, authenticated
@@ -575,34 +617,12 @@ with check (
   )
 );
 
--- Joining a surname community is not the owner's job, so a member may rewrite
--- exactly one thing in the row: their own name in memberIds. Everything else in
--- the payload must come back unchanged, which is what makes this safe to open to
--- any signed-in person. The long reasoning is in post-interactions.sql.
+-- Spotlight membership changes use the SECURITY DEFINER RPC below. PostgreSQL
+-- RLS WITH CHECK expressions cannot reference an `old` row, so do not install a
+-- broad direct-update policy here: that would either fail at deployment or let
+-- a member rewrite another field. The RPC locks the row and changes only the
+-- caller's membership safely.
 drop policy if exists "lula spotlight join" on public.records;
-create policy "lula spotlight join" on public.records
-for update to authenticated
-using (
-  collection = 'spotlights'
-  and (select public.lula_uid()) is not null
-)
-with check (
-  collection = 'spotlights'
-  and (select public.lula_uid()) is not null
-  and (payload - 'memberIds' - 'followers') = (old.payload - 'memberIds' - 'followers')
-  and not exists (
-    select 1 from jsonb_array_elements_text(coalesce(payload->'memberIds', '[]'::jsonb)) as added(id)
-    where added.id <> (select public.lula_uid())
-      and not (coalesce(old.payload->'memberIds', '[]'::jsonb) @> to_jsonb(added.id))
-  )
-  and not exists (
-    select 1 from jsonb_array_elements_text(coalesce(old.payload->'memberIds', '[]'::jsonb)) as gone(id)
-    where gone.id <> (select public.lula_uid())
-      and not (coalesce(payload->'memberIds', '[]'::jsonb) @> to_jsonb(gone.id))
-  )
-  and coalesce((payload->>'followers')::int, 0)
-      <= coalesce((old.payload->>'followers')::int, 0) + 1
-);
 
 drop policy if exists "lula delete" on public.records;
 create policy "lula delete" on public.records
@@ -739,7 +759,7 @@ declare
   k text;
   allowed text[] := array[
     'voterIds', 'upvotes', 'commentCount', 'views', 'shares', 'lookingIds',
-    'searchParty', 'danger', 'khumbu', 'flags', 'events', 'lastComment', 'updatedAt', 'status', 'outcome'
+    'searchParty', 'danger', 'khumbu', 'flags', 'events', 'lastComment', 'lastLike', 'updatedAt', 'status', 'outcome'
   ];
   my_old text;
   my_new text;
@@ -748,6 +768,7 @@ declare
   is_claimed boolean;
   merged jsonb;
   last_comment jsonb;
+  last_like jsonb;
   n_old int;
 begin
   if me is null then
@@ -790,6 +811,29 @@ begin
   merged := jsonb_set(merged, '{voterIds}', coalesce(next->'voterIds', '{}'::jsonb), true);
   merged := jsonb_set(merged, '{upvotes}', to_jsonb(greatest(0,
     coalesce((cur->>'upvotes')::int, 0) + (case when my_new is not null then 1 else 0 end) - (case when my_old is not null and my_old <> 'down' then 1 else 0 end))), true);
+
+  -- The client may optimistically carry lastLike, but it cannot author that
+  -- metadata. Rebuild it from the authenticated member when a reaction is
+  -- added or changed; keep the saved previous entry when a reaction is removed.
+  if my_new is not null then
+    select jsonb_build_object(
+      'userId', me,
+      'displayName', coalesce(u.payload->>'displayName', 'Someone'),
+      'at', floor(extract(epoch from clock_timestamp()) * 1000)::bigint
+    ) into last_like
+    from public.records u
+    where u.collection = 'users' and u.id = me;
+    merged := jsonb_set(
+      merged,
+      '{lastLike}',
+      coalesce(last_like, jsonb_build_object(
+        'userId', me,
+        'displayName', 'Someone',
+        'at', floor(extract(epoch from clock_timestamp()) * 1000)::bigint
+      )),
+      true
+    );
+  end if;
 
   -- 3. Counters: comments are counted, views and shares go up by one at most.
   merged := jsonb_set(merged, '{commentCount}', to_jsonb((

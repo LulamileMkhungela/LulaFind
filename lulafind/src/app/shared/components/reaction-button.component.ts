@@ -49,13 +49,14 @@ import { ReactionIconComponent } from './reaction-icon.component';
       } @else {
         <lf-icon name="thumbup" [size]="21" />
       }
-      <span class="label">{{ label() }}</span>
+      <span class="label sr-only">{{ label() }}</span>
     </button>
   `,
   styles: [`
     /* This button takes the slack in the action row; the short labels beside
        it take only what they need. */
     :host { position: relative; display: block; flex: 1 1 auto; min-width: 0; }
+    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
     .btn {
       width: 100%; height: 40px; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
       border: 0; border-radius: 4px; background: transparent; color: var(--lf-muted);

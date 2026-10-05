@@ -1,10 +1,11 @@
 import { Observable, Subject } from 'rxjs';
 import {
-  ChatMessage, ChatThread, Comment, Lookout, FeedFilter, FollowEdge, MediaItem, Notification, Post, Spotlight, Story, StoryReply, StoryView, Tip, UserProfile
+  ChatMessage, ChatThread, Comment, Lookout, FeedFilter, FollowEdge, MediaItem, Notification, Post, Spotlight, Story, StoryReply, StoryView, Tip, UserProfile, UserReport
 } from '../models/types';
 import { LulaApi, SavePostOptions } from './api';
 import { answerBlocker, hasAnswered, withAnswer } from '../utils/lookout';
 import { lookoutCasePost } from '../utils/lookout-case';
+import { canReadPostAudience } from '../utils/audience';
 
 /*
  * Cloud Firestore + Firebase Auth implementation.
@@ -186,11 +187,28 @@ export class FirebaseApi implements LulaApi {
     return next as Post | undefined;
   }
 
-  async queryFeed(f: FeedFilter, _viewerId: string | null) {
+  async queryFeed(f: FeedFilter, viewerId: string | null) {
     // Firestore cannot express every filter combination server-side, so we pull
     // the newest slice and refine in memory. Swap in composite indexes when the
     // dataset grows.
     let all = await this.posts();
+    const following = new Set< string >();
+    const followers = new Set< string >();
+    if (viewerId) {
+      const [followingEdges, followerEdges] = await Promise.all([
+        this.followsFor(viewerId, 'following'),
+        this.followsFor(viewerId, 'followers')
+      ]);
+      followingEdges.forEach((edge) => following.add(edge.followingId));
+      followerEdges.forEach((edge) => followers.add(edge.followerId));
+    }
+    all = all.filter((p) => p.status !== 'under_review' || p.authorId === viewerId)
+      .filter((p) => canReadPostAudience(p, { viewerId, following }));
+    if (f.scope === 'network') {
+      const joined = new Set((await this.spotlights()).filter((spotlight) => !!viewerId && spotlight.memberIds.includes(viewerId)).map((spotlight) => spotlight.id));
+      const network = new Set([...(viewerId ? [viewerId] : []), ...following, ...followers]);
+      all = all.filter((p) => network.has(p.authorId) || (!!p.spotlightId && joined.has(p.spotlightId)));
+    }
     if (f.type !== 'all') all = all.filter((p) => p.type === f.type);
     if (f.province !== 'all') all = all.filter((p) => p.province === f.province);
     if (f.status === 'active') all = all.filter((p) => p.status === 'active' || p.status === 'under_review');
@@ -428,6 +446,16 @@ export class FirebaseApi implements LulaApi {
     );
   }
   async pushNotification(n: Notification) { await this.set(`notifications/${n.userId}/items/${n.id}`, n as unknown as Record<string, unknown>); }
+  async reportsFor(userId: string): Promise<UserReport[]> {
+    const viewer = await this.user(userId);
+    const ref = viewer?.isAdmin === true
+      ? this.col('reports')
+      : this.q.query(this.col('reports'), this.q.where('byUserId', '==', userId));
+    return this.getList<UserReport>(ref);
+  }
+  async saveReport(report: UserReport): Promise<void> {
+    await this.set(`reports/${report.id}`, report as unknown as Record<string, unknown>);
+  }
   async markNotificationsRead(userId: string) {
     const items = await this.getList<Notification>(this.col(`notifications/${userId}/items`));
     for (const n of items) await this.set(`notifications/${userId}/items/${n.id}`, { ...n, read: true });

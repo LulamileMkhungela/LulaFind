@@ -18,7 +18,7 @@ export function lookoutCasePost(lookout: Lookout, owner: UserProfile, existing: 
   const now = Date.now();
   /* The id is stable, so a retry can never publish two cases for one lookout. */
   void existing;
-  const name = owner.displayName || 'A LulaFind member';
+  const name = owner.displayName || 'Member';
   const where = lookout.location && owner.town
     ? `${owner.town}, ${provinceName(owner.province ?? undefined)}`
     : owner.town || 'Unknown';
@@ -76,7 +76,7 @@ export function lookoutCasePost(lookout: Lookout, owner: UserProfile, existing: 
       points: lookout.location ? [lookout.location] : [],
       deviceReachable: true,
       lastKnownAt: lookout.locationAt,
-      note: 'The person this is about is a LulaFind member and allowed the app to publish this.'
+      note: 'The person this is about is a member and allowed the app to publish this.'
     },
     khumbu: null,
     outcome: { found: false, foundAt: null, whereaboutsFound: '', closedBy: null, note: '', finderUserId: null, finderName: '' },

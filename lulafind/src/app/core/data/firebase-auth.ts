@@ -400,6 +400,15 @@ export class FirebaseAuthBridge {
         'Rebuild it with: npm run build && npx cap sync android (the Gradle build now runs this for you), then reinstall.'
       );
     }
+    // Google Credential Manager reports code 16 as "Account reauth failed"
+    // when the Android certificate is not registered for this exact APK, or
+    // when the device cannot complete the Google re-authentication request.
+    // Treat it as configuration/network guidance, not as a generic failure.
+    if (code === '16' || /account reauth failed|apiexception\s*:\s*16/i.test(raw)) {
+      return new Error(
+        'Google could not verify this Android build. Check that this app package has its SHA-1 and SHA-256 fingerprints in Firebase → Project settings → Your apps → Android, download the updated google-services.json, rebuild and reinstall. Also check that the phone is online and that the Google account is allowed for this project.'
+      );
+    }
     // The native Google sheet refuses to open when this app's SHA-1 fingerprint
     // is not registered in the Firebase console (GoogleSignIn codes 10 / 12500,
     // surfaced as DEVELOPER_ERROR or an ApiException message).
