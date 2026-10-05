@@ -124,6 +124,17 @@ import { timeAgo } from '../../core/utils/format';
             </button>
           </div>
 
+          <!-- Keep Stories in the Network context itself. The general feed rail
+               intentionally waits until post eight, but a member's own story
+               must be visible here even when the network has only a few posts. -->
+          <section class="network-stories" aria-label="Network stories">
+            <div class="network-stories__head">
+              <strong>Stories</strong>
+              <span>Visible according to each story's audience</span>
+            </div>
+            <lf-story-rail (addStory)="onAddStory()" />
+          </section>
+
           @if (data.networkStatuses().length) {
             <div class="network-strip">
               <span class="network-strip__label">Statuses</span>
@@ -222,6 +233,11 @@ import { timeAgo } from '../../core/utils/format';
     .network-action span { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
     .network-action strong { font-size: 12.5px; line-height: 1.2; }
     .network-action small { color: var(--lf-muted); font-size: 10.5px; line-height: 1.25; }
+    .network-stories { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--lf-line-soft); }
+    .network-stories__head { display: flex; align-items: baseline; gap: 8px; padding: 0 2px 3px; }
+    .network-stories__head strong { font-size: 13px; }
+    .network-stories__head span { color: var(--lf-muted); font-size: 11px; }
+    .network-stories lf-story-rail { margin: 0 -14px -12px; box-shadow: none; }
     .network-strip { display: flex; align-items: center; gap: 9px; overflow-x: auto; margin-top: 11px; padding-top: 10px; border-top: 1px solid var(--lf-line-soft); scrollbar-width: none; }
     .network-strip::-webkit-scrollbar { display: none; }
     .network-strip__label { flex: none; color: var(--lf-muted); font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .35px; }

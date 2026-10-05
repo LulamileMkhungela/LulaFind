@@ -864,6 +864,18 @@ describe('Components render', () => {
     if (feed.length >= 8) expect(html).toContain('lf-story-rail');
   });
 
+  it('keeps the Network story rail visible even when there are fewer than eight posts', async () => {
+    const auth = TestBed.inject(AuthService);
+    const data = TestBed.inject(DataService);
+    await auth.signInDemo();
+    await data.loadStatic();
+    data.setFilter({ scope: 'network' });
+
+    const f = TestBed.createComponent(HomeComponent);
+    await settle(f);
+    expect((f.nativeElement as HTMLElement).querySelector('.network-context .network-stories lf-story-rail')).toBeTruthy();
+  });
+
   it('sends a visitor who is not signed in to the login screen, not to Home', async () => {
     const auth = TestBed.inject(AuthService);
     expect(auth.signedIn()).toBe(false);

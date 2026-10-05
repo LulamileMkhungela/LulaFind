@@ -113,6 +113,22 @@ describe('LocalDb (mock data layer)', () => {
     expect(found.map((p) => p.id)).toContain('p_found');
   });
 
+  it('Network contains both directions of the member graph and joined Spotlight posts', () => {
+    // Add a post by a stranger to a Spotlight the demo member has joined, so
+    // the three network sources are tested independently rather than inferred
+    // from the seeded author's identity.
+    db.upsertPost({
+      ...db.post('p_mokoena_tip')!, id: 'p_joined_spotlight', authorId: 'u_zanele', spotlightId: 'sp_mokoena'
+    });
+
+    const network = db.filtered({ ...emptyFilter(), scope: 'network' }, 'u_demo', db.user('u_demo'));
+    const ids = network.map((p) => p.id);
+    expect(ids).toContain('p_lindiwe'); // someone the demo member follows
+    expect(ids).toContain('p_sighting'); // someone who follows the demo member
+    expect(ids).toContain('p_joined_spotlight'); // a joined Spotlight post
+    expect(ids).not.toContain('p_johan'); // no follow edge and no joined Spotlight
+  });
+
   it('enforces followers-only audience', () => {
     const post: Post = { ...db.post('p_thato')!, id: 'p_private', audience: 'followers' };
     db.upsertPost(post);
