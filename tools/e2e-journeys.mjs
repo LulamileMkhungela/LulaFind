@@ -27,7 +27,7 @@ import puppeteer from '/tmp/br/node_modules/puppeteer-core/lib/puppeteer/puppete
 
 const BASE = process.env.LF_BASE ?? 'http://localhost:4200';
 const NO_DEMO = '?demo=0&data=local';
-const OUT = new URL('../docs/e2e-journeys/', import.meta.url).pathname;
+const OUT = process.env.LF_EVIDENCE_ROOT ? `${process.env.LF_EVIDENCE_ROOT}/e2e-journeys/` : new URL('../docs/e2e-journeys/', import.meta.url).pathname;
 mkdirSync(OUT, { recursive: true });
 
 const browser = await puppeteer.launch({
@@ -323,15 +323,17 @@ journey('New post: finish later', 'a half-written post', keptNote && keptText.in
     : `the composer came back empty (note=${keptNote}, text=${keptText.slice(0, 30)})`);
 await shot('05b-draft-kept', 'the composer says it kept what was typed');
 
-await fill('textarea[data-field="body"]', sentinel + ' Last seen in a blue jacket.');
-await fill('.location-grid select', 'GP');
-await fill('input[placeholder="e.g. Soweto"]', 'Soweto');
+await fill('textarea[data-field="body"]', `Full name: Nandi Mokoena\nAge: 28\nLocation (town/suburb, province): Soweto, Gauteng\nWhat happened: ${sentinel} Last seen in a blue jacket.`);
 await sleep(300);
 await tap('Post', { exact: true });
-const posted = await waitForUrl(/\/post\/p_/, 8000);
-journey('New post publishes', 'the four required fields', posted,
-  posted ? `the post published and opened at ${url()}` : `the composer stayed at ${url()} after a complete Post`);
-const myPostId = posted ? url().split('/post/')[1].split('?')[0].split('/')[0] : null;
+const returnedHome = await waitForUrl(/\/home/, 8000);
+const savedState = await state();
+const authorId = savedState.users.find(u => u.email === A.email)?.id;
+const savedPost = savedState.posts.find(p => p.authorId === authorId && /Nandi Mokoena/.test(p.title));
+const posted = returnedHome && !!savedPost;
+journey('New post publishes', 'a persisted post and return to feed', posted,
+  posted ? `the post was stored and returned to ${url()}` : `publication not confirmed (url=${url()}, stored=${!!savedPost})`);
+const myPostId = savedPost?.id ?? null;
 if (posted) {
   const listed = (await state()).posts.find((p) => p.id === myPostId);
   journey('New post reaches the store', 'a stored post', !!listed, listed ? `the store holds "${listed.title.slice(0, 40)}"` : 'nothing was written');
@@ -372,11 +374,12 @@ if (myPostId) {
       if (!row) return { none: true };
       const items = Array.from(row.querySelectorAll(':scope > *')).map((el) => {
         const r = el.getBoundingClientRect();
-        const inner = el.shadowRoot ? el.shadowRoot.querySelector('.btn') : el;
+        const inner = el.shadowRoot?.querySelector('.btn') ?? el.querySelector('.btn') ?? el;
         const label = inner?.querySelector?.('.label, span');
         return {
           x: Math.round(r.x), w: Math.round(r.width),
-          clip: label ? Math.round(label.scrollWidth - label.clientWidth) : 0,
+          clip: label && !label.classList.contains('sr-only') ? Math.round(label.scrollWidth - label.clientWidth) : 0,
+          accessibleName: inner.getAttribute('aria-label') || label?.textContent?.trim() || '',
           labelW: label ? Math.round(label.clientWidth) : null,
           font: label ? getComputedStyle(label).fontSize : null,
           need: label ? Math.round(label.scrollWidth) : null,
@@ -391,18 +394,18 @@ if (myPostId) {
       return { items, overlaps, rowWidth: Math.round(row.getBoundingClientRect().width) };
     });
   };
-  /* 390 and 360 are everyday phone widths: every word must be whole there.
-     320 (an old small phone) may shorten the longest label, but never overlap. */
+  /* Icon-only actions intentionally use sr-only labels. Check accessible names
+     separately, and measure clipping only for text meant to be visible. */
   for (const width of [390, 360, 320]) {
     const m = await measure(width);
     const clipped = m.none ? ['rows missing'] : m.items.filter((i) => i.clip > 0).map((i) => i.text);
     const overlap = m.overlaps ?? [];
     const partial = width <= 320 ? clipped.length <= 1 && !overlap.length : !clipped.length && !overlap.length;
-    const clean = !m.none && partial;
-    journey(`Action row at ${width}px`, width <= 320 ? 'no overlap' : 'four labels in one line', clean,
+    const clean = !m.none && partial && m.items.length === 4 && m.items.every(i => i.accessibleName);
+    journey(`Action row at ${width}px`, 'four named controls without overlap or clipped visible labels', clean,
       !clean ? `clipped=${JSON.stringify(clipped)} overlaps=${JSON.stringify(overlap)} boxes=${JSON.stringify(m.items)} row=${JSON.stringify(m.rowWidth ?? null)}`
         : clipped.length ? `one label steps down and the rest stay whole (${m.items.map((i) => i.text).join(' · ')})`
-        : `all four labels render whole (${m.items.map((i) => i.text).join(' · ')})`);
+        : `four icon actions have accessible names; no visible label is clipped (${m.items.map((i) => i.accessibleName).join(' · ')})`);
   }
   await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
   await sleep(600);
@@ -519,7 +522,8 @@ const quiet = [
   ['/terms', /Terms|Privacy/, 'Terms'],
   ['/settings', /Settings|Privacy/, 'Settings'],
   ['/safety', /Safety|Be on the lookout/, 'Safety centre'],
-  ['/ask-lula', /Lula|Ask/, 'Ask Lula'],
+  // Ask Lula is intentionally retired; verify its documented redirect, not a missing AI screen.
+  ['/ask-lula', /For you|Network|All/, 'Retired Ask Lula redirect'],
   ['/search', /Search/, 'Search'],
   ['/admin', /Admins only|Review queue|reports/i, 'Admin (non-admin sees why)']
 ];
@@ -539,7 +543,7 @@ await fill('ion-searchbar input', 'Soweto');
 await sleep(1800);
 const found = await waitForText(/Nandi left for the taxi|Missing person: Nandi/i, 5000);
 const noHits = await page.evaluate(() => /Nothing matches that/i.test(document.body.innerText || ''));
-journey('Search finds a post', 'a town typed into the field', found || noHits,
+journey('Search finds a post', 'a town typed into the field', myPostId ? found : noHits,
   found ? 'typing the town brought the case back' : noHits ? 'the screen said nothing matches (the store was searched)' : 'search showed neither results nor an answer');
 await shot('11-search-results', 'searching the town the case was posted in');
 
@@ -558,7 +562,7 @@ console.log('\n== J8. sign out and back in: the gate remembers the way ==');
 await signOut();
 const afterOut = await waitForText(/Log in|Create new account/, 5000);
 journey('Sign out', 'the sign-in screen', afterOut, afterOut ? 'signing out returned to the sign-in screen' : `sign out left the app at ${url()}`);
-await tap('Log in', { exact: true });
+await tap('Log In with email', { exact: true });
 await sleep(700);
 await fill('input[type="email"]', A.email);
 await fill('input[type="password"]', 'wrong-password-9');
@@ -569,7 +573,7 @@ await fill('input[type="password"]', A.pass);
 await tap('Log in', { exact: true });
 await sleep(2400);
 const backIn = /\/home/.test(page.url());
-journey('Sign in', 'the right password', backIn,
+journey('Sign in', 'wrong password refused, then right password accepted', backIn && wrongRefused,
   backIn ? `a wrong password was refused and the right one reached ${url()}` : `sign-in ended at ${url()}`);
 await shot('14-signed-back-in', 'signed back in after a refused password');
 

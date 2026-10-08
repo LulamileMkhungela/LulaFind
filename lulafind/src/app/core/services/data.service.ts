@@ -1,3 +1,4 @@
+import { SearchCommand } from '../utils/search-coordination';
 import { Injectable, computed, effect, inject, signal, untracked } from '@angular/core';
 import { Subscription } from 'rxjs';
 import { toObservable } from '@angular/core/rxjs-interop';
@@ -2660,37 +2661,31 @@ export class DataService {
    * point and the areas to cover; volunteers claim an area so nobody searches
    * the same street twice while another is untouched.
    */
-  async openSearchParty(postId: string, meetAt: string, meetWhen: number | null, zones: string[]): Promise<void> {
-    const p = this.cache()[postId] ?? (await this.api.post(postId));
-    if (!p) throw new Error('That post does not exist');
-    if (!this.canEdit(p)) throw new Error('Only the poster can open a search party');
-    const list = zones.map((name) => ({
-      id: uid('z'), name: name.trim(), priority: 'medium' as const, takenBy: null, done: false, note: ''
-    })).filter((z) => z.name);
-    const next = await this.api.patchPost(postId, {
-      searchParty: { open: true, meetAt: meetAt.trim(), meetWhen, zones: list },
-      updatedAt: Date.now()
-    });
-    if (next) this.touch(next);
-    await this.loadFeed();
+  async refreshSearchBoard(postId: string): Promise<Post> {
+    return this.coordinateSearch(postId, { action: 'refresh' });
   }
 
-  /** A volunteer claims an area of the search. */
+  async coordinateSearch(postId: string, command: SearchCommand): Promise<Post> {
+    const me = this.auth.user();
+    if (!me || me.suspended) throw new Error('Sign in with an active account to coordinate a search.');
+    const post = await this.api.coordinateSearch(postId, command, me.id);
+    this.touch(post);
+    return post;
+  }
+
+  async openSearchParty(postId: string, meetAt: string, meetWhen: number | null, zones: string[]): Promise<void> {
+    await this.coordinateSearch(postId, { action: 'open', meetAt, meetWhen, zones });
+  }
+
+  /** Compatibility entry point: an explicit versioned command, never a whole-array write. */
   async claimSearchZone(postId: string, zoneId: string): Promise<void> {
-    const p = this.cache()[postId] ?? (await this.api.post(postId));
-    if (!p?.searchParty) throw new Error('That case has no open search party');
-    const me = this.auth.viewerId;
-    if (!me) throw new Error('Sign in to join a search party');
-    // Re-read first: a volunteer is claiming one zone while someone else may be
-    // claiming another, and only the searchParty field is written back.
-    const fresh = (await this.api.post(postId)) ?? p;
-    const party = fresh.searchParty ?? p.searchParty;
-    const zones = party.zones.map((z) =>
-      z.id === zoneId ? { ...z, takenBy: z.takenBy === me ? null : me } : z
-    );
-    const next = await this.api.patchPost(postId, { searchParty: { ...party, zones }, updatedAt: Date.now() });
-    if (next) this.touch(next);
-    await this.loadFeed();
+    const post = await this.api.post(postId);
+    const zone = post?.searchParty?.zones.find(z => z.id === zoneId);
+    if (!zone) throw new Error('That search area is no longer available.');
+    await this.coordinateSearch(postId, {
+      action: zone.takenBy === this.auth.viewerId ? 'release' : 'claim',
+      zoneId, expectedVersion: zone.version ?? 0
+    });
   }
 
   /**
@@ -2732,17 +2727,10 @@ export class DataService {
 
   /** Mark an area searched. */
   async completeSearchZone(postId: string, zoneId: string, note = ''): Promise<void> {
-    const p = this.cache()[postId] ?? (await this.api.post(postId));
-    if (!p?.searchParty) throw new Error('That case has no open search party');
-    // Same reason as claiming a zone: re-read, then write back only this field.
-    const fresh = (await this.api.post(postId)) ?? p;
-    const party = fresh.searchParty ?? p.searchParty;
-    const zones = party.zones.map((z) =>
-      z.id === zoneId ? { ...z, done: !z.done, note: note.trim().slice(0, 200) || z.note } : z
-    );
-    const next = await this.api.patchPost(postId, { searchParty: { ...party, zones }, updatedAt: Date.now() });
-    if (next) this.touch(next);
-    await this.loadFeed();
+    const post = await this.api.post(postId);
+    const zone = post?.searchParty?.zones.find(z => z.id === zoneId);
+    if (!zone) throw new Error('That search area is no longer available.');
+    await this.coordinateSearch(postId, { action: 'complete', zoneId, expectedVersion: zone.version ?? 0, note });
   }
 
   /* --------------------------- misc ---------------------------- */

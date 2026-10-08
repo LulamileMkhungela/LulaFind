@@ -1,3 +1,4 @@
+import { SearchBoardComponent } from '../../shared/components/search-board.component';
 import { Component, ElementRef, OnInit, ViewChild, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { IonContent } from '@ionic/angular/ion-content';
@@ -51,7 +52,7 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
   selector: 'lf-post-detail',
   standalone: true,
   imports: [
-    IonContent, IonTextarea, IonSkeletonText, RouterLink, IconComponent, AvatarComponent,
+    SearchBoardComponent, IonContent, IonTextarea, IonSkeletonText, RouterLink, IconComponent, AvatarComponent,
     TopNavComponent, ReactionButtonComponent, ReactionIconComponent, ReactionsSheetComponent, KeyboardDirective,
     MediaImageComponent, MediaVideoComponent, UserHoverDirective],
   template: `
@@ -211,6 +212,10 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
             </button>
           }
         </article>
+
+        @if (isCase() && !p()!.repostOf && (p()!.searchParty || p()!.status === 'active')) {
+          <lf-search-board [post]="p()!" (changed)="p.set($event)" />
+        }
 
         @if (p()!.outcome.found) {
           <p class="closed">

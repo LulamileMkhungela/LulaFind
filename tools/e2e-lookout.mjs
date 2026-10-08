@@ -31,7 +31,7 @@ import puppeteer from '/tmp/br/node_modules/puppeteer-core/lib/puppeteer/puppete
 const BASE = process.env.LF_BASE ?? 'http://localhost:4200';
 /* Real accounts, real screens, the app's own store - and no sample data. */
 const NO_DEMO = '?demo=0&data=local';
-const OUT = new URL('../docs/e2e-lookout/', import.meta.url).pathname;
+const OUT = process.env.LF_EVIDENCE_ROOT ? `${process.env.LF_EVIDENCE_ROOT}/e2e-lookout/` : new URL('../docs/e2e-lookout/', import.meta.url).pathname;
 mkdirSync(OUT, { recursive: true });
 
 const browser = await puppeteer.launch({
@@ -381,7 +381,7 @@ const postId = (await state()).lookouts.find((l) => l.post)?.post;
 await signOut();
 await goto('/auth', 1500);
 /* The auth landing page opens first: get to the email + password step, then submit. */
-await tap('Log in', { exact: true });
+await tap('Log In with email', { exact: true });
 await sleep(900);
 await fill('input[type="email"]', A.email);
 await fill('input[type="password"]', A.pass);
@@ -432,7 +432,7 @@ await sleep(1800);
 await ageLookout();
 await signOut();
 await goto('/auth', 1500);
-await tap('Log in', { exact: true });
+await tap('Log In with email', { exact: true });
 await sleep(900);
 await fill('input[type="email"]', B.email);
 await fill('input[type="password"]', B.pass);

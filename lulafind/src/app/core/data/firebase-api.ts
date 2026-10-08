@@ -1,3 +1,4 @@
+import { SearchCommand } from '../utils/search-coordination';
 import { Observable, Subject } from 'rxjs';
 import {
   ChatMessage, ChatThread, Comment, Lookout, FeedFilter, FollowEdge, MediaItem, Notification, Post, Spotlight, Story, StoryReply, StoryView, Tip, UserProfile, UserReport
@@ -175,6 +176,12 @@ export class FirebaseApi implements LulaApi {
    * Patch fields on a post inside a Firestore transaction, so two writers
    * cannot overwrite each other with stale copies.
    */
+  async coordinateSearch(_id: string, _command: SearchCommand, _actorId: string): Promise<Post> {
+    // Fail closed: the optional Firestore adapter has no equivalent server command.
+    // Do not replace this with an insecure client-side read/modify/write.
+    throw new Error('Search coordination requires the Supabase backend. No change was saved.');
+  }
+
   async patchPost(id: string, patch: Partial<Post>) {
     const ref = this.doc(`posts/${id}`);
     const next = await this.q.runTransaction(this.fs.getFirestore(this.app), async (tx: any) => {

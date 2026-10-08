@@ -163,7 +163,7 @@ begin
 
   -- 5. Search party: members claim or finish zones; the meeting details stay the family's.
   if cur->'searchParty' is not null and jsonb_typeof(cur->'searchParty') = 'object' then
-    if (cur->'searchParty' - 'zones') is distinct from (coalesce(next->'searchParty', 'null'::jsonb) - 'zones') then
+    if ((cur->'searchParty') - 'zones') is distinct from (coalesce(next->'searchParty', 'null'::jsonb) - 'zones') then
       raise exception 'Only the family can change the search party';
     end if;
     merged := jsonb_set(merged, '{searchParty}', next->'searchParty', true);
@@ -176,7 +176,7 @@ begin
     if cur->'danger' is null or jsonb_typeof(cur->'danger') <> 'object' then
       raise exception 'This is not a danger alert';
     end if;
-    if (cur->'danger' - 'stillIds' - 'clearIds' - 'clearedAt') is distinct from (next->'danger' - 'stillIds' - 'clearIds' - 'clearedAt')
+    if ((cur->'danger') - 'stillIds' - 'clearIds' - 'clearedAt') is distinct from ((next->'danger') - 'stillIds' - 'clearIds' - 'clearedAt')
       or (select coalesce(jsonb_agg(v order by v), '[]'::jsonb) from jsonb_array_elements_text(coalesce(cur->'danger'->'stillIds', '[]'::jsonb)) v where v <> me)
          is distinct from
          (select coalesce(jsonb_agg(v order by v), '[]'::jsonb) from jsonb_array_elements_text(coalesce(next->'danger'->'stillIds', '[]'::jsonb)) v where v <> me)

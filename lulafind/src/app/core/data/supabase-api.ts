@@ -1,3 +1,4 @@
+import { SearchCommand } from '../utils/search-coordination';
 import { Observable, Subject } from 'rxjs';
 import { createClient, SupabaseClient, RealtimeChannel } from '@supabase/supabase-js';
 import { FirebaseAuthBridge, firebaseAuthConfigured } from './firebase-auth';
@@ -706,6 +707,20 @@ export class SupabaseApi implements LulaApi {
    * writer cannot clobber the first with a copy it read earlier. Needs
    * `lula_patch_post` from supabase/schema.sql.
    */
+  async coordinateSearch(id: string, command: SearchCommand, _actorId: string): Promise<Post> {
+    const { data, error } = await this.client.rpc('lula_coordinate_search', { post_id: id, command });
+    if (error) {
+      if (isMissingFunction(error, 'lula_coordinate_search')) {
+        throw new Error('Search coordination is not enabled on this server yet. No change was saved.');
+      }
+      throw new Error(error.message);
+    }
+    // The server chooses the actor from the JWT, never from a client-supplied ID.
+    const post = await this.signRecordMedia('posts', data as Post);
+    this.rx.next(++this.tick);
+    return post;
+  }
+
   async patchPost(id: string, patch: Partial<Post>): Promise<Post | undefined> {
     const { error } = await this.client.rpc('lula_patch_post', {
       post_id: id,

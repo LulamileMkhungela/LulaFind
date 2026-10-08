@@ -19,7 +19,7 @@ import puppeteer from '/tmp/br/node_modules/puppeteer-core/lib/puppeteer/puppete
 
 const BASE = process.env.LF_BASE ?? 'http://localhost:4200';
 const DEMO = process.env.LF_DEMO === '0' ? '' : '?demo=1';
-const OUT = new URL('../docs/e2e/', import.meta.url).pathname;
+const OUT = process.env.LF_EVIDENCE_ROOT ? `${process.env.LF_EVIDENCE_ROOT}/e2e/` : new URL('../docs/e2e/', import.meta.url).pathname;
 
 rmSync(OUT, { recursive: true, force: true });
 mkdirSync(OUT, { recursive: true });
@@ -236,7 +236,7 @@ if (!onCase) await page.goto(BASE + '/post/p_thato' + DEMO, { waitUntil: 'networ
 await sleep(2000);
 await shot('04-case-opened', page.url().replace(BASE, '').slice(0, 40));
 if (!/\/post\//.test(page.url())) problems.push('clicking a case did not open the case page');
-if (!(await waitForText(/Have an idea/, 5000))) problems.push('the case page did not finish rendering');
+if (!(await waitForText(/Add a comment|Comment/, 5000))) problems.push('the case page did not finish rendering');
 
 console.log('\n== 3. react, comment, and the checklist ==');
 const held = await hold('Have an idea', { what: 'reaction button (press and hold)' });
@@ -329,12 +329,11 @@ await shot('13-new-post');
 await tap('Missing person', { selector: '.category-grid button, button, [role="button"]', what: 'post category' });
 await sleep(900);
 await shot('13b-new-post-missing');
-await fill('input.heading-input', 'Looking for my brother Andile, last seen in Khayelitsha', { what: 'heading' });
-await fill('textarea.body-input, textarea[data-field="body"]', 'He left for the taxi rank on Sunday morning and has not come home since. He was wearing a blue jacket.', { what: 'body' });
+await fill('textarea.body-input, textarea[data-field="body"]', 'Full name: Andile Mokoena\nAge: 28\nLocation (town/suburb, province): Khayelitsha, Western Cape\nWhat happened: He left for the taxi rank on Sunday morning and has not come home since. He was wearing a blue jacket.', { what: 'case template' });
 await sleep(400);
 await shot('14-new-post-filled');
-const filledHeading = await page.evaluate(() => document.querySelector('input.heading-input')?.value ?? '');
-if (!filledHeading) problems.push('the heading field did not keep what was typed');
+const filledHeading = await page.evaluate(() => document.querySelector('textarea[data-field="body"]')?.value ?? '');
+if (!filledHeading.includes('Andile Mokoena')) problems.push('the case template did not keep what was typed');
 
 console.log('\n== 6. the tabs ==');
 for (const [label, path] of [['Spotlight', '/spotlight'], ['Chats', '/chats'], ['Me', '/me']]) {
@@ -397,7 +396,7 @@ const report = [
   '',
   problems.length ? '### Missing controls or screens\n\n' + problems.map((p) => `- ${p}`).join('\n') : ''
 ];
-writeFileSync(new URL('../docs/E2E-BROWSER.md', import.meta.url).pathname, report.join('\n'));
+writeFileSync(process.env.LF_EVIDENCE_ROOT ? `${process.env.LF_EVIDENCE_ROOT}/E2E-BROWSER.md` : new URL('../docs/E2E-BROWSER.md', import.meta.url).pathname, report.join('\n'));
 
 console.log('\n=== RESULT ===');
 console.log('steps:', shots.length, '| console errors:', consoleErrors.length,
