@@ -10,6 +10,7 @@ import { DataService } from '../../core/services/data.service';
 import { ProvinceCode, PROVINCES } from '../../core/models/types';
 import { SUPPORT_EMAIL, SUPPORT_NAME } from '../../core/config';
 import { parseFullName } from '../../core/utils/format';
+import { demoMode } from '../../core/data/demo';
 
 type Mode = 'welcome' | 'signup' | 'signin' | 'forgot' | 'newpass';
 
@@ -54,6 +55,18 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
             <button class="snap-btn snap-btn--outline" (click)="startSignup()">
               Create new account
             </button>
+
+            <!--
+              Development/demo builds only. The sample dataset exists so the app
+              can be reviewed without creating an account; production never sets
+              demoMode (core/data/demo.ts refuses it), so this button cannot
+              appear on a live build.
+            -->
+            @if (demoMode()) {
+              <button class="snap-btn snap-btn--outline" [disabled]="busy()" (click)="enterDemo()">
+                Explore the sample data
+              </button>
+            }
           </div>
         </section>
       }
@@ -903,6 +916,27 @@ export class AuthComponent implements OnInit {
       await this.afterAuth();
     } catch (e: any) {
       this.error.set(e?.message ?? 'Could not update your password. Request a new reset link.');
+    } finally {
+      this.busy.set(false);
+    }
+  }
+
+  /**
+   * Open the built-in sample dataset with the demo account. Only reachable
+   * while demoMode() is on, which a production build never allows.
+   */
+  /** Exposed for the template: true only in a development/demo build. */
+  protected readonly demoMode = demoMode;
+
+  async enterDemo(): Promise<void> {
+    if (!demoMode() || this.busy()) return;
+    this.error.set('');
+    this.busy.set(true);
+    try {
+      await this.auth.signInDemo();
+      await this.afterAuth();
+    } catch (e: any) {
+      this.error.set(e?.message ?? 'The sample data could not be opened.');
     } finally {
       this.busy.set(false);
     }
