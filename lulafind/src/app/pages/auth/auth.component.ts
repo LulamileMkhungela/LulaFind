@@ -934,6 +934,13 @@ export class AuthComponent implements OnInit {
     this.busy.set(true);
     try {
       await this.auth.signInDemo();
+      // The sample dataset is a prepared demonstration - the account already has
+      // a history - so the reviewer lands in the app. The first-run tour still
+      // runs for real sign-ups, where the choices are the person's own.
+      const me = this.auth.user();
+      if (me && this.auth.needsOnboarding()) {
+        await this.auth.completeOnboarding({ province: me.province, town: me.town, bio: me.bio });
+      }
       await this.afterAuth();
     } catch (e: any) {
       this.error.set(e?.message ?? 'The sample data could not be opened.');

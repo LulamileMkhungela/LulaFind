@@ -19,21 +19,46 @@ const LOCAL_KEY = 'lulafind.data.local';
 /** True while the sample dataset is being served. Read by the app shell banner. */
 export const demoMode = signal(false);
 
-function remembered(): boolean {
+/** The tab's explicit choice, or null when the person has not made one. */
+function remembered(): boolean | null {
   try {
-    return sessionStorage.getItem(KEY) === '1';
+    const v = sessionStorage.getItem(KEY);
+    return v === '1' ? true : v === '0' ? false : null;
   } catch {
-    return false;
+    return null;
   }
 }
 
 function remember(on: boolean): void {
   try {
-    if (on) sessionStorage.setItem(KEY, '1');
-    else sessionStorage.removeItem(KEY);
+    // Store the "off" answer too: on the preview host demo mode is on by
+    // default, and ?demo=0 has to stick rather than be re-applied on reload.
+    sessionStorage.setItem(KEY, on ? '1' : '0');
   } catch {
     /* private mode - the choice then lasts until the next navigation only */
   }
+}
+
+/**
+ * The hosted preview (*.e2b.app) is a development server with no account to
+ * sign in with, so the sample dataset is used there by default. It is still
+ * refused outright in a production build, `?demo=0` still turns it off for the
+ * tab, and the demo banner stays visible the whole time.
+ */
+export function shouldDefaultToDemo(hostname: string, production: boolean): boolean {
+  if (production) return false;
+  const host = (hostname || '').toLowerCase();
+  // The hosted preview proxies a development server through *.e2b.app.
+  if (host.endsWith('.e2b.app')) return true;
+  // A development build opened from any other machine (a phone or a tablet on
+  // the same network, another proxy) also has no account set up, so it starts
+  // on the sample data too. localhost stays a clean install; `?demo=0` opts out.
+  return host !== '' && host !== 'localhost' && host !== '127.0.0.1' && host !== '[::1]';
+}
+
+function previewHost(): boolean {
+  return typeof window !== 'undefined'
+    && shouldDefaultToDemo(window.location.hostname, !!environment.production);
 }
 
 /**
@@ -74,6 +99,6 @@ export function demoRequested(): boolean {
   }
   if (flag === '1') { remember(true); demoMode.set(true); }
   else if (flag === '0') { remember(false); demoMode.set(false); }
-  else demoMode.set(remembered());
+  else demoMode.set(remembered() ?? previewHost());
   return demoMode();
 }

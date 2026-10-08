@@ -4,6 +4,30 @@
 
 The user clarified that “don't patch” means durable complete implementations, not a prohibition on code changes. This implementation follows the earlier research review. It does **not** claim that every app feature works in production, that all competitor features are implemented, or that LulaFind outperforms competitors.
 
+## Seeing it: the hosted preview
+
+The development server runs on **port 4200** and is shown to the user as a live preview
+panel (labelled *LulaFind app (live preview)*) beside the workspace file tree. It is a
+running process, not a file, so it does not appear in the file list.
+
+Because a reviewer has no account, a development build on a preview host starts on the
+sample dataset (banner visible) and the welcome screen offers **Explore the sample data** —
+one tap signs in the seeded demo account and lands on `/home`. The rule is
+`shouldDefaultToDemo(host, production)`:
+
+| Situation | Sample data |
+|---|---|
+| Production build, any host | never |
+| `*.e2b.app` preview host | on |
+| Development build opened from another machine (phone, LAN, other proxy) | on |
+| Development build on `localhost` / `127.0.0.1` / `[::1]` | off |
+| `?demo=0` in the URL | off for that tab, and remembered (an explicit `?demo=1` wins until `?demo=0`) |
+
+Four unit tests cover that table. Verified in Chromium through an HTTPS `*.e2b.app` host
+with no query string, embedded in an iframe like the preview panel: the button appears, one
+tap reaches `/home`, a case page opens the search board, the session survives reopening the
+panel, and there are no page errors.
+
 ## Completed implementation: interactive search coordination
 
 A case now exposes a collapsible **Community search board**. This turns the previously service-only search-party concept into an interactive workflow:
