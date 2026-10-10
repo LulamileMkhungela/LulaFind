@@ -1,3 +1,5 @@
+import { canReadPostAudience } from '../utils/audience';
+import { SearchCommand, coordinateSearch } from '../utils/search-coordination';
 import { InjectionToken } from '@angular/core';
 import { Observable, Subject } from 'rxjs';
 import {
@@ -77,6 +79,7 @@ export abstract class LulaApi {
    * at the same moment. A field patch has nothing to wipe.
    */
   abstract patchPost(id: string, patch: Partial<Post>): Promise<Post | undefined>;
+  abstract coordinateSearch(id: string, command: SearchCommand, actorId: string): Promise<Post>;
 
   /* be on the lookout */
 
@@ -231,6 +234,18 @@ export class MockApi implements LulaApi {
   }
   async savePost(p: Post, options?: SavePostOptions) { return this.db.upsertPost(p, options); }
   async patchPost(id: string, patch: Partial<Post>) { return this.db.patchPost(id, patch); }
+  async coordinateSearch(id: string, command: SearchCommand, actorId: string): Promise<Post> {
+    const post = this.db.post(id);
+    const user = this.db.user(actorId);
+    if (!post || !user || user.suspended) throw new Error('This search is not available to this account.');
+    const author = this.db.user(post.authorId);
+    if (author?.blockedUserIds?.includes(actorId) || user.blockedUserIds?.includes(post.authorId)) throw new Error('This search is not available to this account.');
+    const following = new Set(this.db.follows().filter(f => f.followerId === actorId && f.status === 'accepted').map(f => f.followingId));
+    if (!user.isAdmin && !canReadPostAudience(post, { viewerId: actorId, following })) throw new Error('This search is not available to this account.');
+    const next = coordinateSearch(post, command, actorId, post.authorId === actorId || user.isAdmin === true);
+    this.db.patchPost(id, next);
+    return next;
+  }
   async lookouts() { return this.db.lookouts(); }
   async saveLookout(l: Lookout) { this.db.saveLookout(l); }
   async patchLookout(id: string, patch: Partial<Lookout>) { return this.db.patchLookout(id, patch); }

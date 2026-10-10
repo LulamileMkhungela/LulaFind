@@ -1447,7 +1447,9 @@ describe('Competitor-parity features', () => {
     expect(done.done).toBe(true);
     expect(done.note).toBe('Cleared, nothing');
 
-    // claiming again releases it
+    // A completed area must explicitly be reopened before release.
+    await expect(data.claimSearchZone(mine.id, zone.id)).rejects.toThrow(/unfinished/);
+    await data.coordinateSearch(mine.id, { action: 'reopen', zoneId: zone.id, expectedVersion: done.version ?? 0 });
     await data.claimSearchZone(mine.id, zone.id);
     p = (await data.loadPost(mine.id))!;
     expect(p.searchParty!.zones.find((z) => z.id === zone.id)!.takenBy).toBeNull();
@@ -1464,7 +1466,7 @@ describe('Competitor-parity features', () => {
       displayName: 'Plain User', email: 'plain2@example.co.za', password: 'password123',
       surname: 'User', province: 'GP', town: '', over18: true, acceptedTerms: true, otpVerified: true
     });
-    await expect(data.openSearchParty(theirs.id, 'Somewhere', null, ['Zone A'])).rejects.toThrow(/poster/i);
+    await expect(data.openSearchParty(theirs.id, 'Somewhere', null, ['Zone A'])).rejects.toThrow(/case owner/i);
   });
 });
 

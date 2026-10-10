@@ -54,7 +54,7 @@ Post5Thandi MokoenaCommunity organiser. If you see something, say something. Ubu
 ### 11. A closed case, as the family sees it
 
 ```text
-Post5Thandi MokoenaCommunity organiser. If you see something, say something. Ubuntu. now  · Gauteng · Found · Home in Soweto  · 05 Oct 2026 Help find Thandi Mokoena in SowetoShe was last seen walking to the taxi rank after work on Tuesday evening.LikeCommentRepostSendFound. The family confirmed it. To take the case off the police circulation list, complete a SAPS 92 with the investigating officer. Photo  Video Attachments stay with this comment
+Post5Thandi MokoenaCommunity organiser. If you see something, say something. Ubuntu. now  · Gauteng · Found · Home in Soweto  · 08 Oct 2026 Help find Thandi Mokoena in SowetoShe was last seen walking to the taxi rank after work on Tuesday evening.LikeCommentRepostSendFound. The family confirmed it. To take the case off the police circulation list, complete a SAPS 92 with the investigating officer. Photo  Video Attachments stay with this comment
 ```
 
 ### 12a. Closed cases the *feed* holds - the reason the page cannot be built from the feed

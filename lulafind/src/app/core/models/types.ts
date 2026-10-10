@@ -98,6 +98,10 @@ export type VerificationStatus = 'none' | 'pending' | 'verified' | 'rejected';
 
 /** One area of a ground search, claimed by a volunteer. */
 export interface SearchZone {
+  /** Incremented by the command handler; prevents stale assignments. */
+  version?: number;
+  updatedBy?: string;
+  updatedAt?: number;
   id: string;
   name: string;
   priority: 'high' | 'medium' | 'low';
@@ -585,7 +589,7 @@ export interface Post {
   /**
    * An organised ground search on a case: named areas, who took which one, and
    * what came of it. This is what a family actually needs in the first 48 hours
-   * and no South African search app offers it.
+   * without publishing volunteers' live locations.
    */
   searchParty: {
     open: boolean;

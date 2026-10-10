@@ -1,0 +1,64 @@
+name: Application and database quality
+
+on:
+  pull_request:
+  push:
+    branches: [arena/8f715143-lulafind]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: lulafind
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: lulafind/package-lock.json
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npm run lint
+      - run: npm test
+      - run: npm run test:db
+      - run: npm run build
+      - name: Prepare browser
+        working-directory: .
+        run: bash tools/get-browser.sh
+      - name: Verify search-board browser journeys with synthetic data
+        working-directory: .
+        env:
+          LD_LIBRARY_PATH: /tmp/alibs/lib
+          LF_SEARCH_EVIDENCE: /tmp/lulafind-search-evidence
+          LF_EVIDENCE_ROOT: /tmp/lulafind-regression-evidence
+        run: |
+          cd lulafind
+          npm start > /tmp/lulafind-preview.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" || true' EXIT
+          cd ..
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://localhost:4200/ >/dev/null; then break; fi
+            if ! kill -0 "$SERVER_PID" 2>/dev/null; then cat /tmp/lulafind-preview.log; exit 1; fi
+            sleep 2
+          done
+          node tools/e2e-search-board.mjs
+          node tools/e2e-journeys.mjs
+          node tools/e2e-lookout.mjs
+          # Keep the full historical contract visible: currently fails because
+          # the first-hours checklist isn't exposed on the case page.
+          node tools/e2e-drive.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: search-board-evidence
+          path: |
+            /tmp/lulafind-search-evidence
+            /tmp/lulafind-preview.log
+            /tmp/lulafind-regression-evidence
+          if-no-files-found: ignore
