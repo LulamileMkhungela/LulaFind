@@ -10,6 +10,7 @@ import { AvatarComponent } from './avatar.component';
 import { AuthService } from '../../core/services/auth.service';
 import { DataService } from '../../core/services/data.service';
 import { ChatService } from '../../core/services/chat.service';
+import { goBack } from '../../core/utils/back';
 
 /**
  * The app's top navigation, laid out like LinkedIn's mobile header.
@@ -32,7 +33,7 @@ import { ChatService } from '../../core/services/chat.service';
   template: `
     <ion-header [translucent]="false">
       <ion-toolbar>
-        @if (title()) {
+        @if (title() || backTo()) {
           <ion-buttons slot="start">
             <button class="lf-round-btn" type="button" (click)="back()" aria-label="Go back">
               <lf-icon name="arrowLeft" [size]="20" [weight]="2.4" />
@@ -88,7 +89,7 @@ import { ChatService } from '../../core/services/chat.service';
             @if (unread() > 0) { <span class="dot">{{ unread() > 99 ? '99+' : unread() }}</span> }
           </a>
           <a class="nav-ico" routerLink="/notifications" aria-label="Notifications">
-            <lf-icon name="bell" [size]="24" [filled]="alerts() > 0" />
+            <lf-icon [name]="alerts() > 0 ? 'bellFilled' : 'bell'" [size]="24" [filled]="alerts() > 0" />
             @if (alerts() > 0) { <span class="dot">{{ alerts() > 99 ? '99+' : alerts() }}</span> }
           </a>
         </ion-buttons>
@@ -181,12 +182,19 @@ export class TopNavComponent {
   private data = inject(DataService);
   private chat = inject(ChatService);
 
-  /** Set on inner pages: shows a back button and the title instead of the search bar. */
+  /**
+   * Set on inner pages: shows a back button and the title instead of the
+   * search bar. A page with no title and no backTo is a root page.
+   * `backTo` is where the back button lands when there is no in-app history
+   * (a deep link) - in-app history always wins. It used to default to /home,
+   * which made the back button conditional on this input being set, and one
+   * page that set backTo without a title silently lost its only way back.
+   */
   readonly title = input('');
   /** Set on a bottom-tab page that is not Home (e.g. Chats): photo, heading, bell. */
   readonly heading = input('');
-  /** Where the back button goes. Defaults to the browser history, then /home. */
-  readonly backTo = input('/home');
+  /** Where the back button goes when there is no history. Empty = no back button. */
+  readonly backTo = input('');
 
   readonly signedIn = computed(() => this.auth.signedIn());
   readonly avatar = computed(() => this.auth.userAvatar());
@@ -223,16 +231,6 @@ export class TopNavComponent {
   }
 
   back(): void {
-    const fallback = this.backTo() || '/home';
-    // Prefer the app's own Angular history so a detail page returns to the
-    // exact tab/query/filter/scroll context that opened it. `history.length`
-    // also counts the browser page that hosted the app, which could otherwise
-    // eject a deep link from LulaFind. A direct deep link has no prior Angular
-    // navigation and uses the explicit page fallback instead.
-    if (typeof window !== 'undefined' && Number(window.history.state?.navigationId ?? 0) > 1) {
-      window.history.back();
-      return;
-    }
-    void this.router.navigateByUrl(fallback);
+    goBack(this.router, this.backTo() || '/home');
   }
 }

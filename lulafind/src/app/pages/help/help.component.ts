@@ -116,7 +116,11 @@ import {
     .num { min-width: 92px; font-size: 16px; font-weight: 800; letter-spacing: -.3px; color: var(--lf-signal-text); }
     .meta { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
     .meta strong { font-size: 14px; }
-    .meta span { font-size: 12.5px; line-height: 1.35; color: var(--lf-muted); }
+    .meta span { font-size: 12.5px; line-height: 1.35; color: var(--lf-muted); overflow-wrap: anywhere; }
+    /* The support address is one long token; at 320px it does not fit on one
+       line next to the 92px label, so shrink the type a touch rather than
+       snapping the domain in half. */
+    @media (max-width: 360px) { .meta span { font-size: 11px; } }
     textarea { width: 100%; box-sizing: border-box; margin: 0 0 8px; padding: 10px; border-radius: var(--lf-radius);
       border: 0; box-shadow: var(--lf-shadow); background: var(--lf-card); color: inherit; font: inherit; }
     .note, .steps { font-size: 12.5px; line-height: 1.45; color: var(--lf-muted); }

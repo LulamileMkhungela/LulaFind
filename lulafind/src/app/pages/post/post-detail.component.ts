@@ -185,7 +185,7 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
             <!-- Following a case is the reason to come back to the app: it is
                  what makes the updates arrive, and what the catch-up counts. -->
             <button class="followline" type="button" [class.on]="followingCase()" (click)="toggleFollowCase()">
-              <lf-icon name="bell" [size]="16" [filled]="followingCase()" />
+              <lf-icon [name]="followingCase() ? 'bellFilled' : 'bell'" [size]="16" [filled]="followingCase()" />
               <span>
                 @if (followingCase()) { Following this case - we will tell you when something changes }
                 @else { Follow this case and be told when something changes }
@@ -954,7 +954,7 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
     .leads__tick { display: inline-flex; align-items: center; gap: 3px; padding: 2px 7px; border-radius: 999px;
       background: var(--lf-ubuntu); color: #fff; font-size: 12px; font-weight: 700; }
     .mark { margin: 0 0 6px; font-size: 13px; color: var(--lf-muted); }
-    .ccard__acts { display: flex; align-items: center; gap: 14px; padding: 4px 0 2px 0; border-top: 0; }
+    .ccard__acts { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 14px; padding: 4px 0 2px 0; border-top: 0; }
     .ccard__acts button { display: inline-flex; align-items: center; gap: 5px; border: 0; background: transparent; color: var(--lf-muted); font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; padding: 0; }
     .ccard__acts .ctime2 { color: var(--lf-muted); font-size: 12px; }
     .ccard__acts button.on { color: var(--lf-primary); }

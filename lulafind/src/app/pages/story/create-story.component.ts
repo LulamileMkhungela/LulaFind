@@ -7,6 +7,7 @@ import { MediaService } from '../../core/services/media.service';
 import { STORY_MAX_PHOTOS } from '../../core/models/media-rules';
 import { Audience, MediaItem } from '../../core/models/types';
 import { STORY_BLACK, storyBg } from '../../core/data/seed';
+import { goBack } from '../../core/utils/back';
 
 /**
  * The story composer, built the way a WhatsApp status is built:
@@ -449,5 +450,5 @@ export class CreateStoryComponent {
   }
 
   openSpotlights(): void { void this.router.navigate(['/spotlight']); }
-  cancel(): void { void this.router.navigate(['/home']); }
+  cancel(): void { goBack(this.router, '/home'); }
 }

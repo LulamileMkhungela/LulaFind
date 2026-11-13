@@ -913,13 +913,16 @@ describe('Components render', () => {
     expect(labels).toContain('Repost');
     expect(labels).toContain('Send');
 
-    // Tapping React emits the reaction the app records, and Comment opens the
-    // post's comments - the two things a feed post must be able to do.
+    // A keyboard tap on React emits the reaction the app records, and Comment
+    // opens the post's comments - the two things a feed post must be able to
+    // do. (Pointer taps are covered by the reaction-button's own suite; a
+    // synthetic .click() on the host is deliberately meaningless.)
     const votes: string[] = [];
     const comments: number[] = [];
     f.componentInstance.vote.subscribe((v) => votes.push(v));
     f.componentInstance.comment.subscribe(() => comments.push(1));
-    (el.querySelector('.fb-actions .fb-act') as HTMLButtonElement).click();
+    const reactBtn = el.querySelector('.fb-actions lf-reaction-button .btn') as HTMLButtonElement;
+    reactBtn.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
     ([...el.querySelectorAll('.fb-actions .fb-act')][1] as HTMLButtonElement).click();
     expect(votes.length).toBe(1);
     expect(comments.length).toBe(1);

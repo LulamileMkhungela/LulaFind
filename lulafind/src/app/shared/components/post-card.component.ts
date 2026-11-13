@@ -253,7 +253,7 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
            markup, so a post in the feed had no way to be reacted to or
            commented on even though every handler below still existed. -->
       <div class="fb-actions" (click)="$event.stopPropagation()">
-        <lf-reaction-button class="fb-act" [value]="myReaction()" (react)="onReact($event)" (click)="legacyReactClick($event)" />
+        <lf-reaction-button class="fb-act" [value]="myReaction()" (react)="onReact($event)" />
         <button class="fb-act" type="button" (click)="comment.emit()" aria-label="Comment" title="Comment">
           <lf-icon name="comment" [size]="20" /><span class="sr-only">Comment</span>
         </button>
@@ -862,19 +862,6 @@ export class PostCardComponent implements OnInit, OnChanges, AfterViewChecked {
     return mine ? REACTIONS.find((r) => r.key === mine)?.label ?? DEFAULT_REACTION_LABEL : DEFAULT_REACTION_LABEL;
   }
 
-  /**
-   * Compatibility for callers that click the host element itself. Real pointer
-   * taps are handled by ReactionButtonComponent; ignoring bubbled child clicks
-   * here prevents a quick tap from being applied twice.
-   */
-  legacyReactClick(event: Event): void {
-    if (event.target === event.currentTarget) this.quickReact();
-  }
-
-  /** A tap applies the default reaction; holding opens the tray. */
-  quickReact(): void {
-    this.onReact(this.myReaction() ?? DEFAULT_REACTION);
-  }
 
   onRepost(): void { void this.actions.openRepost(this.post); }
   onSend(): void { void this.actions.send(this.post); }

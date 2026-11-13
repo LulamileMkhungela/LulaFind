@@ -6,6 +6,7 @@ import { DataService } from '../../core/services/data.service';
 import { AuthService } from '../../core/services/auth.service';
 import { Story } from '../../core/models/types';
 import { countdown, timeAgo } from '../../core/utils/format';
+import { goBack } from '../../core/utils/back';
 import { STORY_BLACK, storyBg } from '../../core/data/seed';
 
 /** How long a finger has to stay down before a press counts as "hold to read". */
@@ -378,5 +379,5 @@ export class StoryViewerComponent implements OnInit, OnDestroy {
     }
   }
 
-  close(): void { void this.router.navigate(['/home']); }
+  close(): void { goBack(this.router, '/home'); }
 }

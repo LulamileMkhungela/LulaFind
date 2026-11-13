@@ -392,6 +392,8 @@ ion-back-button {
   background: var(--lf-card-2);
   color: var(--ion-text-color);
   white-space: nowrap;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .lf-chip--danger {

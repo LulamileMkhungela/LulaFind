@@ -69,7 +69,8 @@ import { timeAgo } from '../../core/utils/format';
     .thread strong { font-size: 15px; font-weight: 600; }
     @media (min-width: 768px) { .list, .gate-note { max-width: var(--lf-maxw); margin: 0 auto; } }
     .grow { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
-    .lf-chip { align-self: flex-start; margin-top: 2px; }
+    .lf-chip { align-self: flex-start; margin-top: 2px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; display: inline-flex; }
+    .lf-chip lf-icon { flex: none; }
   `]
 })
 export class ChatsComponent {

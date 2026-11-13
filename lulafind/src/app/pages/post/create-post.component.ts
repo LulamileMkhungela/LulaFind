@@ -18,6 +18,7 @@ import {
   Audience, MediaItem, Post, PostPoster, PostType, PROVINCES, ProvinceCode
 } from '../../core/models/types';
 import { uid } from '../../core/utils/format';
+import { goBack } from '../../core/utils/back';
 import { drawPoster, isPosterType, loadPosterImage, posterContent, POSTER_TEMPLATES, type PosterTemplateId } from '../../core/utils/poster';
 import { PlatformService } from '../../core/services/platform.service';
 
@@ -1755,5 +1756,9 @@ export class CreatePostComponent implements OnInit, OnDestroy {
     await t.present();
   }
 
-  close(): void { void this.router.navigate(['/home']); }
+  close(): void {
+    // Editing a post and landing here cold: back to the post itself.
+    const editId = this.route.snapshot.paramMap.get('id');
+    goBack(this.router, editId ? `/post/${editId}` : '/home');
+  }
 }
