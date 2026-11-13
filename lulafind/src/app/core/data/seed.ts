@@ -1,4 +1,5 @@
 import { defaultPrivacy, Comment, Post, Spotlight, Story, UserProfile } from '../models/types';
+import { ImpactTally } from '../models/impact';
 
 /**
  * Deterministic placeholder imagery built as inline SVG data-URIs so the app is
@@ -43,7 +44,11 @@ export const avatar = (name: string, hue?: number): string => {
 /** Wide cover / spotlight banner. */
 export const cover = (label: string, hue?: number): string => {
   const h = hue ?? hueOf(label);
-  return enc(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 180">
+  // No words in the artwork. Every surface that shows this banner already
+  // prints the name in HTML right next to it, and text baked into a picture is
+  // always fighting the crop - it used to be clipped on both edges in the
+  // square tiles and hidden behind the avatar on the profile.
+  return enc(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 180" width="400" height="180">
   <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
     <stop offset="0" stop-color="hsl(${h} 60% 34%)"/>
     <stop offset=".55" stop-color="hsl(${(h + 35) % 360} 55% 20%)"/>
@@ -51,9 +56,8 @@ export const cover = (label: string, hue?: number): string => {
   <rect width="400" height="180" fill="url(#g)"/>
   <g opacity=".16" fill="#fff">
     <circle cx="52" cy="34" r="26"/><circle cx="332" cy="140" r="42"/><circle cx="250" cy="26" r="14"/>
-  </g>
-  <text x="24" y="150" font-family="system-ui,Arial" font-size="26" font-weight="800"
-    fill="rgba(255,255,255,.9)" letter-spacing="1">${label.toUpperCase()}</text></svg>`);
+    <circle cx="150" cy="120" r="8" opacity=".7"/>
+  </g></svg>`);
 };
 
 /** Scene placeholder used for post photos (street, home, map-ish). */
@@ -71,7 +75,7 @@ export const scene = (label: string, seedStr: string, tone: 'street' | 'home' | 
     const hh = 20 + ((hash(seedStr + i) % 90) + 20);
     return `<rect x="${x}" y="${180 - hh}" width="18" height="${hh}" fill="hsla(${h},20%,${10 + (i % 3) * 6}%,.9)"/>`;
   }).join('');
-  return enc(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 240">
+  return enc(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 240" width="400" height="240">
   <defs><linearGradient id="s" x1="0" y1="0" x2="0" y2="1">
     <stop offset="0" stop-color="${a}"/><stop offset="1" stop-color="${b}"/></linearGradient></defs>
   <rect width="400" height="240" fill="url(#s)"/>
@@ -80,8 +84,8 @@ export const scene = (label: string, seedStr: string, tone: 'street' | 'home' | 
   <rect y="180" width="400" height="60" fill="hsla(0,0%,0%,.45)"/>
   <g stroke="hsla(0,0%,100%,.35)" stroke-width="3" stroke-dasharray="14 12">
     <path d="M0 210 H400"/></g>
-  <text x="16" y="34" font-family="system-ui,Arial" font-size="15" font-weight="700"
-    fill="rgba(255,255,255,.75)">${label}</text></svg>`);
+  <text x="200" y="34" text-anchor="middle" font-family="system-ui,Arial" font-size="15" font-weight="700"
+    fill="rgba(255,255,255,.78)">${label}</text></svg>`);
 };
 
 export const posterPlaceholder = (title: string): string => scene(title, title, 'night');
@@ -102,6 +106,28 @@ export const storyBg = (hue: number): string => {
 /* ------------------------------------------------------------------ *
  * Seed data
  * ------------------------------------------------------------------ */
+
+/**
+ * A believable impact tally for a seeded member.
+ *
+ * The old `karma` number was invented per name and never moved, while the level
+ * came from `impact`. Two numbers on one profile then contradicted each other -
+ * "347 help points" above "Level 1, Neighbour". The tally is derived from
+ * that standing so the demo data tells one story: the same total, broken into
+ * the acts that earned it, mostly ground work and posters.
+ */
+const impactFor = (karma: number): ImpactTally => {
+  const target = Math.max(0, Math.round(karma));
+  const searches = Math.round((target * 0.35) / 15);
+  const care = Math.round((target * 0.15) / 25);
+  const communities = Math.round((target * 0.12) / 20);
+  const posters = Math.round((target * 0.2) / 10);
+  const spent = searches * 15 + care * 25 + communities * 20 + posters * 10;
+  return {
+    searches, care, communities, posters,
+    signals: Math.max(0, Math.round(Math.max(0, target - spent) / 5))
+  };
+};
 
 const now = Date.now();
 const MIN = 60_000;
@@ -137,6 +163,7 @@ export const seedUsers = (): UserProfile[] => {
     followers: 40 + (hash(id) % 900),
     following: 20 + (hash(handle) % 300),
     karma: 10 + (hash(name) % 900),
+    impact: impactFor(10 + (hash(name) % 900)),
     onboarded: true,
     blockedUserIds: [],
     spotlightIds: [],
@@ -155,7 +182,7 @@ export const seedUsers = (): UserProfile[] => {
     'GP',
     'Soweto, Johannesburg',
     'Community organiser. If you see something, say something. Ubuntu.',
-    { verified: true, followers: 1240, karma: 2310, onboarded: false, isAdmin: true }
+    { verified: true, followers: 1240, karma: 2310, impact: impactFor(2310), onboarded: false, isAdmin: true }
   );
 
   return [

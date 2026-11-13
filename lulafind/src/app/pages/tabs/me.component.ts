@@ -25,6 +25,7 @@ import { ModerationService } from '../../core/services/moderation.service';
 import { compact, contributorLabel, parseFullName } from '../../core/utils/format';
 import { PROVINCES, ProvinceCode, Post, UserProfile, defaultPrivacy, provinceName } from '../../core/models/types';
 import { CHECK_IN_COPY, RING_KEY, SafetyService } from '../../core/services/safety.service';
+import { pointsOf, progressFor } from '../../core/models/impact';
 import { MediaService } from '../../core/services/media.service';
 
 import { KeyboardDirective } from '../../shared/keyboard.directive';
@@ -69,8 +70,47 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
           <div class="stats">
             <button type="button" (click)="openPeople('followers')"><strong>{{ data.followerIds().length }}</strong><span>followers</span></button>
             <button type="button" (click)="openPeople('following')"><strong>{{ data.followingIds().length }}</strong><span>following</span></button>
-            <div><strong>{{ compact(me()!.karma) }}</strong><span>help points</span></div>
+            <!-- The same points the level is calculated from, so the two cannot disagree. -->
+            <div><strong>{{ compact(data.myPoints()) }}</strong><span>impact points</span></div>
           </div>
+
+          <!--
+            Your impact: the level you reached from what you gave the network,
+            one step to the next, and the way to the full picture. It sits under
+            the stats because it is a summary, not a scoreboard - the detail is
+            one tap away on /progress.
+          -->
+          <a class="impact" routerLink="/progress" [attr.aria-label]="'Your impact: level ' + level().level.level + ', ' + level().level.name">
+            <span class="impact__ring">
+              <lf-icon name="sparkle" [size]="18" [weight]="2.2" />
+            </span>
+            <div class="impact__body">
+              <div class="impact__top">
+                <strong>Level {{ level().level.level }} · {{ level().level.name }}</strong>
+                <span class="impact__pts">{{ points() }} pts</span>
+              </div>
+              <div class="impact__bar" role="progressbar" [attr.aria-valuenow]="level().percent"
+                   aria-valuemin="0" aria-valuemax="100" [attr.aria-label]="level().next ? level().toNext + ' points to ' + level().next!.name : 'Top level'">
+                <span [style.width.%]="level().percent"></span>
+              </div>
+              <span class="impact__next">
+                {{ level().next ? level().toNext + ' points to ' + level().next!.name : 'Top level - you are the beacon' }}
+              </span>
+            </div>
+            <lf-icon name="chevronRight" [size]="16" />
+          </a>
+
+          <!-- The single next thing this person could do, chosen from what is missing. -->
+          @if (nextStep(); as s) {
+            <a class="stepline" [routerLink]="s.route">
+              <span class="stepline__ic"><lf-icon [name]="s.icon" [size]="17" /></span>
+              <span class="stepline__body">
+                <strong>Next: {{ s.title }}</strong>
+                <small>{{ s.body }}</small>
+              </span>
+              <span class="stepline__go">{{ s.action }}</span>
+            </a>
+          }
           @if (people()) {
             <div class="requests">
               <div class="lf-row-between">
@@ -134,6 +174,7 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
               <button class="q" type="button" (click)="createStory()"><span class="qi qi-blue"><lf-icon name="image" [size]="20" /></span><span>Add a Story</span></button>
               <a class="q" routerLink="/safety"><span class="qi qi-green"><lf-icon name="shield" [size]="20" /></span><span>Safety</span></a>
               <a class="q" routerLink="/tips"><span class="qi qi-yellow"><lf-icon name="info" [size]="20" /></span><span>Tips</span></a>
+              <a class="q" routerLink="/progress"><span class="qi qi-purple"><lf-icon name="award" [size]="20" /></span><span>Your impact</span></a>
               @if (isAdmin()) {
                 <a class="q" routerLink="/admin"><span class="qi qi-red"><lf-icon name="shield" [size]="20" /></span><span>Admin</span>
                   @if (mod.openCount() > 0) { <em class="lf-badge">{{ mod.openCount() }}</em> }</a>
@@ -298,6 +339,26 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
       border: 0; background: transparent; color: inherit; padding: 0 6px; margin: -10px -6px; cursor: pointer; font-family: inherit; }
     .stats strong { font-size: 15px; font-weight: 700; }
     .stats span { font-size: 15px; color: var(--lf-muted); }
+    .impact { display: flex; align-items: center; gap: 11px; margin: 10px var(--lf-gap) 0; padding: 11px 12px;
+      border-radius: 12px; background: linear-gradient(150deg, color-mix(in srgb, var(--lf-primary) 14%, var(--lf-card)), var(--lf-card) 70%);
+      box-shadow: var(--lf-shadow); color: inherit; text-decoration: none; }
+    .impact__ring { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%; flex: none;
+      background: var(--lf-card); color: var(--lf-primary-soft-text); box-shadow: 0 0 0 2px color-mix(in srgb, var(--lf-primary) 26%, transparent); }
+    .impact__body { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; }
+    .impact__top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+    .impact__top strong { font-size: 13.5px; }
+    .impact__pts { flex: none; font-size: 11.5px; color: var(--lf-muted); font-weight: 700; }
+    .impact__bar { height: 7px; border-radius: 999px; background: color-mix(in srgb, var(--lf-primary) 16%, transparent); overflow: hidden; }
+    .impact__bar span { display: block; height: 100%; border-radius: inherit; background: var(--lf-primary); }
+    .impact__next { font-size: 11px; color: var(--lf-muted); }
+    .stepline { display: flex; align-items: center; gap: 10px; margin: 8px var(--lf-gap) 0; padding: 10px 12px;
+      border-radius: 12px; background: var(--lf-card); box-shadow: var(--lf-shadow); color: inherit; text-decoration: none; }
+    .stepline__ic { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 9px; flex: none;
+      background: var(--lf-primary-soft); color: var(--lf-primary-soft-text); }
+    .stepline__body { display: flex; flex-direction: column; gap: 1px; flex: 1; min-width: 0; }
+    .stepline__body strong { font-size: 13px; }
+    .stepline__body small { font-size: 11.5px; color: var(--lf-muted); line-height: 1.3; }
+    .stepline__go { flex: none; font-size: 12px; font-weight: 700; color: var(--lf-primary-soft-text); }
     .menu-tabs { margin-top: 8px; }
     .menu-tabs .tab { flex: 1; }
     .menu-panel { padding-bottom: 8px; }
@@ -397,6 +458,11 @@ export class MeComponent {
 
   readonly me = computed(() => this.auth.user());
   readonly avatar = computed(() => this.data.avatarFor(this.me()));
+
+  /* Impact, read from the profile the app already holds - no extra round trip. */
+  readonly points = computed(() => pointsOf(this.me()));
+  readonly level = computed(() => progressFor(this.points()));
+  readonly nextStep = computed(() => this.data.nextBestStep());
   readonly location = computed(() => this.auth.locationLabel(this.me()));
   /** The viewer's own posts at every stage - see DataService.myPosts. */
   readonly myPosts = computed(() => this.data.myPosts());

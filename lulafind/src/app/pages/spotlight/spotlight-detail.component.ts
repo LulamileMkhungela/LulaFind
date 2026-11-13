@@ -26,7 +26,7 @@ import { cover } from '../../core/data/seed';
   standalone: true,
   imports: [IonContent, IonSearchbar, IonSkeletonText, IconComponent, EmptyComponent, PostCardComponent, AvatarComponent, RouterLink, TopNavComponent],
   template: `
-    <lf-top-nav backTo="/spotlight" />
+    <lf-top-nav [title]="sp()?.surname ?? 'Spotlight'" backTo="/spotlight" />
 
     <ion-content class="lf-page">
       @if (!sp()) {
@@ -82,7 +82,8 @@ import { cover } from '../../core/data/seed';
             @else { <a class="lf-btn lf-btn--primary lf-btn--sm" routerLink="/auth">Sign in</a> }
           </div>
         }
-        <ion-searchbar placeholder="Search posts and people in {{ sp()!.surname }}" [debounce]="200"
+        <ion-searchbar placeholder="Search this community" [debounce]="200"
+                       aria-label="Search posts and people in this community"
                        (ionInput)="onSearch($any($event.detail).value ?? '')"></ion-searchbar>
         <div class="pills">
           <button class="pill" [class.on]="show() === 'all'" (click)="show.set('all')">All · {{ all().length }}</button>
@@ -121,7 +122,7 @@ import { cover } from '../../core/data/seed';
   `,
   styles: [`
     .banner { width: 100%; height: 150px; object-fit: cover; display: block; }
-    .ident { padding: 14px var(--lf-gap) 10px; display: flex; flex-direction: column; gap: 8px; margin-top: -18px; }
+    .ident { padding: 12px var(--lf-gap) 10px; display: flex; flex-direction: column; gap: 8px; }
     .ident h1 { display: flex; align-items: center; gap: 8px; margin: 0; flex-wrap: wrap; }
     .tag { margin: 0; font-weight: 600; }
     .about { margin: 0; font-size: 13.5px; color: var(--lf-muted); line-height: 1.5; }

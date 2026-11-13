@@ -11,6 +11,7 @@ import { DataService } from '../../core/services/data.service';
 import { PostActionsService } from '../../core/services/post-actions.service';
 import { Post, provinceName } from '../../core/models/types';
 import { timeAgo } from '../../core/utils/format';
+import { goBack } from '../../core/utils/back';
 
 /**
  * "Repost with your thoughts", laid out like LinkedIn's composer: who you are
@@ -128,8 +129,7 @@ export class RepostComponent implements OnInit {
   }
 
   close(): void {
-    if (typeof window !== 'undefined' && window.history.length > 1) window.history.back();
-    else void this.router.navigate(['/home']);
+    goBack(this.router, '/home');
   }
 
   async submit(): Promise<void> {

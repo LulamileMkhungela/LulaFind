@@ -45,6 +45,32 @@ async function check(name, fn) {
   await fn(); count++; console.log(`PASS ${name}`);
 }
 const open = { action: 'open', meetAt: 'Public library entrance', zones: ['North park', 'Taxi rank'] };
+// ── public profile view: impact aggregates reach the public surface, case data never does ──
+await check('public profile exposes impact totals and still hides private fields', async () => {
+  // write the way the app does for its own row: upsert into records as the owner
+  await identity('a');
+  await db.query(
+    `update public.records set payload = payload || $2 where collection = 'users' and id = $1`,
+    ['a', {
+      impact: { signals: 3, searches: 1, posters: 0, communities: 2, care: 4 },
+      privacy: { showStats: true, showLocation: false }
+    }]
+  );
+  const open = (await db.query(`select payload from public.lula_user_profiles_public where id = 'a'`)).rows[0].payload;
+  assert.equal(open.impact.signals, 3);
+  assert.equal(open.impact.care, 4);
+  assert.equal(open.email, '', 'email never leaves the private row');
+  assert.equal(open.payload, undefined, 'no raw payload column');
+
+  // hidden stats hide the aggregates too, exactly like followers and karma
+  await db.query(
+    `update public.records set payload = jsonb_set(payload, '{privacy,showStats}', 'false'::jsonb) where collection = 'users' and id = 'a'`
+  );
+  const hidden = (await db.query(`select payload from public.lula_user_profiles_public where id = 'a'`)).rows[0].payload;
+  assert.equal(hidden.impact.signals, 0);
+  assert.equal(hidden.karma, 0);
+});
+
 await check('anonymous cannot execute coordination', () => assert.rejects(command(null, open), /permission denied/));
 await check('unrelated member cannot open a board', () => assert.rejects(command('a', open), /Only the case owner/));
 await check('suspended member denied', () => assert.rejects(command('suspended', open), /not available/));

@@ -10,6 +10,8 @@ const PATHS: Record<string, string> = {
   chat: 'M21 11.5a8.4 8.4 0 0 1-9 8.4 9 9 0 0 1-4-.9L3 21l1.9-4.4A8.4 8.4 0 0 1 12 3.1a8.4 8.4 0 0 1 9 8.4z',
   user: 'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z',
   bell: 'M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0',
+  /** Solid bell (Material-style) - used when the person has unread alerts and the glyph is filled. */
+  bellFilled: 'M12 22a2.2 2.2 0 0 0 2.15-1.75H9.85A2.2 2.2 0 0 0 12 22zm7-5.4v.4H5v-.4l1.9-1.9v-4.35c0-3.2 1.7-5.9 4.6-6.6v-.8a1.5 1.5 0 0 1 3 0v.8c2.9.7 4.6 3.4 4.6 6.6v4.35l1.9 1.9z',
   heart: 'M20.8 5.6a5 5 0 0 0-7.1 0L12 7.3l-1.7-1.7a5 5 0 1 0-7.1 7.1L12 21l8.8-8.3a5 5 0 0 0 0-7.1z',
   share: 'M4 12v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7M16 6l-4-4-4 4M12 2v14',
   comment: 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z',
@@ -59,6 +61,10 @@ const PATHS: Record<string, string> = {
   clock: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM12 6v6l4 2',
   calendar: 'M3 5h18v16H3zM16 3v4M8 3v4M3 10h18',
   award: 'M12 15a6 6 0 1 0 0-12 6 6 0 0 0 0 12zM8.2 13.9 7 23l5-3 5 3-1.2-9.1',
+  play: 'M8 5v14l11-7z',
+  pause: 'M7 5h4v14H7zM13 5h4v14h-4z',
+  mic: 'M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3zM18 11v1a6 6 0 0 1-12 0v-1M12 18v3M8 21h8',
+  stop: 'M6 6h12v12H6z',
   sparkle: 'M12 2l2.2 6.2L20 10l-5.8 1.8L12 18l-2.2-6.2L4 10l5.8-1.8zM19 16l.9 2.6L22 19l-2.1.9L19 22l-.9-2.1L16 19l2.1-.4z',
   map: 'M1 6l7-3 8 3 7-3v15l-7 3-8-3-7 3zM8 3v15M16 6v15',
   target: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM12 18a6 6 0 1 0 0-12 6 6 0 0 0 0 12zM12 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4z',
@@ -76,7 +82,18 @@ const PATHS: Record<string, string> = {
   sad: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM16 16.5s-1.4-2-4-2-4 2-4 2M9 9.5h.01M15 9.5h.01',
   palette: 'M12 22a10 10 0 1 1 10-10c0 3-2 4-4 4h-2a2 2 0 0 0-1.4 3.4A2 2 0 0 1 12 22zM7.5 12.5h.01M9.5 7.5h.01M14.5 7.5h.01M17.5 11.5h.01',
   layout: 'M3 3h18v18H3zM3 9h18M9 21V9',
-  wand: 'M15 4V2M15 16v-2M8 9h2M20 9h2M17.8 11.8 19 13M17.8 6.2 19 5M3 21l9-9M12.2 6.2 11 5'
+  wand: 'M15 4V2M15 16v-2M8 9h2M20 9h2M17.8 11.8 19 13M17.8 6.2 19 5M3 21l9-9M12.2 6.2 11 5',
+  /* Trophy: a level, earned - not a competition against a family. */
+  trophy: 'M8 21h8M12 17v4M7 4h10v4a5 5 0 0 1-10 0zM7 5H4v2a3 3 0 0 0 3 3M17 5h3v2a3 3 0 0 1-3 3',
+  /* Flame: a streak that matters (days helping), never a streak of grief. */
+  flame: 'M12 22c4 0 6-2.4 6-6 0-4-3-5-3-9 0 0-3 2-3 5-1-1-2-2-2-4-2 1.6-4 4-4 8 0 3.6 2 6 6 6z',
+  /* Handshake: a partner handoff (SAPS, NGO) - two-way, not one-way. */
+  handshake: 'M8 12 4 8l4-4 4 4M16 12l4-4-4-4-4 4M3 14l5 5 4-4 4 4 5-5',
+  /* Steps: the guided plan - one step at a time. */
+  steps: 'M4 20h5v-4h5v-4h5V8h2M4 20v-4',
+  chevronUp: 'M18 15l-6-6-6 6',
+  /* Map pin with a route: tracking a search, not a person. */
+  route: 'M6 19a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM18 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM9 16h4a4 4 0 0 0 4-4V9'
 };
 
 export const registerCoreIcons = (): void => {

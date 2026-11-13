@@ -9,8 +9,14 @@ import {
   VoteValue, ReactionKind, REACTIONS, RETIRED_POST_TYPES, isReaction, VehicleDetails, dangerLabel, emptyFilter, provinceName,
   POST_TYPE_META
 } from '../models/types';
+import {
+  BadgeSpec, IMPACT_RULES, ImpactTally, announceBadge, NextStep, NextStepInput, earnedBadges, impactOf, levelFor,
+  nextStep as computeNextStep, pointsOf, progressFor
+} from '../models/impact';
+import { RewardService } from './reward.service';
 import { avatar, cover, hueOf, scene } from '../data/seed';
 import { HOUR, DAY, compact, uid } from '../utils/format';
+import { helpersOf, helpSummary } from '../utils/aftercare';
 import { withTimeout } from '../utils/net';
 import { AuthService } from './auth.service';
 import { SettingsService } from './settings.service';
@@ -108,6 +114,7 @@ export class DataService {
   private api = inject(LULA_API);
   private auth = inject(AuthService);
   private settings = inject(SettingsService);
+  private rewards = inject(RewardService);
 
   /* --------------------------- state --------------------------- */
   readonly filter = signal<FeedFilter>(emptyFilter());
@@ -686,6 +693,10 @@ export class DataService {
       mentions: input.mentions?.length ? input.mentions : undefined
     };
     await this.api.saveComment(c);
+
+    // A lead the family can act on is the app's hardest currency, so it is the
+    // one thing a comment earns. Replies are conversation, not evidence.
+    if (c.isLead && !input.parentId) void this.awardOnce(`lead:${c.id}`, 'signals', 'That lead is on the case now.');
 
     // Keep the top-level comment preview and count fresh without making the
     // person wait for another full feed download. Replies count too but do not
@@ -1672,6 +1683,9 @@ export class DataService {
     const queued = this.api.spotlightMembershipQueued?.(id) ?? false;
     this.spotlightSync.set(landedOnServer && !queued ? 'server' : 'device');
     await this.loadStatic();
+    // Joining a surname community is a contribution: it is the people a family
+    // reaches first, and it is counted once per community, not per tap.
+    void this.awardOnce(`spotlight:${id}`, 'communities', `You joined the ${sp.surname} Spotlight.`);
     return true;
   }
 
@@ -2014,6 +2028,25 @@ export class DataService {
           route: `/user/${finder.id}`,
           postId: p.id
         });
+        /*
+         * The one award worth interrupting for, and only for the person being
+         * named - a family closing their case must never see their own screen
+         * taken over by a points animation. A named find is 50 points, so this
+         * is also where a level usually changes.
+         */
+        if (finder.id === this.auth.viewerId) {
+          const before = pointsOf(finder) - 50;
+          const after = pointsOf(updated);
+          const was = levelFor(before);
+          const now = levelFor(after);
+          this.rewards.show({
+            points: 50,
+            reason: 'A family named you as the person who found someone.',
+            totalBefore: before,
+            totalAfter: after,
+            levelUp: now.level > was.level ? now : undefined
+          });
+        }
       }
     }
 
@@ -2046,6 +2079,69 @@ export class DataService {
     this.myAuthored.update((list) => list.map((x) => (x.id === next.id ? next : x)));
     await this.loadFeed();
     return next;
+  }
+
+  /**
+   * The family's thankyou, sent to everyone who gave that case something.
+   *
+   * This is the last step of the reporter's job and the first step of a
+   * volunteer's next one: a person who is named once comes back. One message
+   * each, one time per case, written by the family rather than by the app - the
+   * app only supplies the fact of who helped and how, so the note cannot turn
+   * into a template that says nothing.
+   *
+   * It carries no points and no badge for the family. Closing a case is not an
+   * achievement to be scored.
+   */
+  async thankHelpers(postId: string, note: string): Promise<{ sent: number }> {
+    const me = this.auth.user();
+    if (!me) throw new Error('Sign in to thank the people who helped');
+    const p = this.post(postId) ?? await this.loadPost(postId);
+    if (!p) throw new Error('That case is not here any more');
+    // The thankyou is signed by whoever sends it, so it can only come from the
+    // family themselves. An admin sending it would put their name on the family's
+    // words - and the whole value of the note is that it is theirs.
+    if (p.authorId !== me.id) throw new Error('Only the person who posted this case can thank the people who helped');
+    if (!p.outcome?.found) throw new Error('Close the case first - the people who helped are only thanked once someone is found');
+    if (p.outcome.thankedAt) throw new Error('You have already thanked the people who helped with this case');
+
+    const comments = await this.comments(postId).catch(() => []);
+    const helpers = helpersOf(p, comments);
+    const subject = p.subject?.name?.trim() || 'the person you were looking for';
+    const words = note.trim()
+      || `Thank you. ${subject} is safe, and every pair of eyes you gave us helped.`;
+
+    let sent = 0;
+    for (const helper of helpers) {
+      try {
+        await this.api.pushNotification({
+          id: uid('n'),
+          userId: helper.userId,
+          kind: 'outcome',
+          title: `A thankyou from ${me.displayName}`,
+          body: `${words} — you ${helpSummary(helper.via)} on this case.`,
+          at: Date.now(),
+          read: false,
+          route: `/post/${p.id}`,
+          postId: p.id
+        });
+        sent += 1;
+      } catch (error) {
+        // One blocked inbox must not swallow the other nine thankyous.
+        console.warn('Thankyou not delivered:', error);
+      }
+    }
+
+    const next: Post = {
+      ...p,
+      updatedAt: Date.now(),
+      outcome: { ...p.outcome, thankedAt: Date.now(), thankedCount: sent }
+    };
+    await this.api.savePost(next);
+    this.mergeCache([next]);
+    this.myAuthored.update((list) => list.map((x) => (x.id === p.id ? next : x)));
+    await this.loadFeed();
+    return { sent };
   }
 
   /**
@@ -2438,6 +2534,192 @@ export class DataService {
     await this.loadUserScoped();
   }
 
+  /* --------------------- impact / progress --------------------- */
+
+  /**
+   * Is there a free search area on one of my own cases, or a claimed area of
+   * mine still open? Read from the cache so this is cheap enough for a rail.
+   */
+  private mySearchState(): { free: number; claimed: number } {
+    const me = this.auth.viewerId;
+    if (!me) return { free: 0, claimed: 0 };
+    let free = 0;
+    let claimed = 0;
+    for (const p of Object.values(this.cache())) {
+      const zones = p.searchParty?.open ? p.searchParty.zones : [];
+      for (const z of zones) {
+        if (z.takenBy === me && !z.done) claimed++;
+        else if (!z.takenBy && !z.done) free++;
+      }
+    }
+    return { free, claimed };
+  }
+
+  /** A case I own that has a poster ready but was never shared. */
+  private postersReady(): number {
+    const me = this.auth.viewerId;
+    if (!me) return 0;
+    return Object.values(this.cache()).filter((p) => p.authorId === me && (p.shares ?? 0) === 0 && !!p.poster).length;
+  }
+
+  /** The impact tally on the signed-in profile, all zeroes when absent. */
+  readonly myImpact = computed<ImpactTally>(() => impactOf(this.auth.user()));
+
+  /** Points from the tally plus every contributor credit the family gave. */
+  readonly myPoints = computed(() => pointsOf(this.auth.user()));
+
+  readonly myLevel = computed(() => levelFor(this.myPoints()));
+  readonly myProgress = computed(() => progressFor(this.myPoints()));
+
+  readonly myBadges = computed<BadgeSpec[]>(() => {
+    const u = this.auth.user();
+    return earnedBadges(this.myImpact(), {
+      found: u?.contributorCredits ?? 0,
+      hasPosted: this.myAuthored().length > 0,
+      newHere: !!u && Date.now() - u.createdAt < 14 * DAY
+    });
+  });
+
+  /**
+   * The single next thing this person could do, or null when nothing is
+   * missing that the app can honestly teach.
+   */
+  nextBestStep(): NextStep {
+    const me = this.auth.user();
+    if (!me) {
+      return computeNextStep({
+        signedIn: false, hasProvince: false, following: 0, stories: 0, mySpotlights: 0, myCases: 0,
+        hasCheckIn: false, openSearchFreeArea: 0, myClaimedAreas: 0, postersAvailable: 0, lookoutsToAnswer: 0
+      });
+    }
+    const search = this.mySearchState();
+    return computeNextStep({
+      signedIn: true,
+      hasProvince: !!me.province,
+      following: this.followingIds().length,
+      stories: this.stories().filter((st) => st.authorId === me.id && st.expiresAt > Date.now()).length,
+      mySpotlights: me.spotlightIds?.length ?? 0,
+      myCases: this.myAuthored().filter((p) => !p.repostOf).length,
+      hasCheckIn: !!me.checkIn,
+      openSearchFreeArea: search.free,
+      myClaimedAreas: search.claimed,
+      postersAvailable: this.postersReady(),
+      lookoutsToAnswer: this.lookouts().filter((l) => l.status === 'checking').length
+    });
+  }
+
+  /** Exposed for the rail that shows a small empty-state checklist. */
+  nextStepFrom(input: NextStepInput): NextStep {
+    return computeNextStep(input);
+  }
+
+  /**
+   * Add to one bucket of the signed-in person's impact and, when a threshold
+   * is crossed, leave exactly one notification behind.
+   *
+   * The write is a read-modify-write of one profile field, the same shape as
+   * every other profile save. It never throws: an award is a side effect of an
+   * action that has already succeeded, and a failed award must not turn a
+   * finished search area into an error message.
+   */
+  async awardImpact(kind: keyof ImpactTally, note?: string): Promise<void> {
+    const me = this.auth.user();
+    if (!me) return;
+    try {
+      const before = pointsOf(me);
+      const tally = impactOf(me);
+      tally[kind] = (tally[kind] ?? 0) + 1;
+      const updated: UserProfile = { ...me, impact: tally };
+      const after = pointsOf(updated);
+      await this.api.saveUser(updated);
+      this.auth.syncUser(updated);
+      this.touchAuthor(updated);
+
+      // Level up? Say so once, at the crossing.
+      const was = levelFor(before);
+      const now = levelFor(after);
+      if (now.level > was.level) {
+        await this.api.pushNotification({
+          id: uid('n'), userId: me.id, kind: 'impact',
+          title: `You are now a ${now.name}`,
+          body: `${now.meaning} ${note ? note + ' ' : ''}Impact is never a score on someone being missing - only on what you gave.`,
+          at: Date.now(), read: false, route: '/progress', postId: null
+        }).catch(() => undefined);
+      }
+
+      // A badge that just became true. One notification per badge, ever, because
+      // the badge list is static and the tally only goes up.
+      const ctx = { found: me.contributorCredits ?? 0, hasPosted: this.myAuthored().length > 0 };
+      const had = new Set(earnedBadges(impactOf(me), ctx).map((b) => b.id));
+      const fresh = earnedBadges(tally, ctx).filter((b) => !had.has(b.id));
+      for (const b of fresh.slice(0, 2)) {
+        await this.api.pushNotification({
+          id: uid('n'), userId: me.id, kind: 'impact',
+          title: `Badge earned: ${b.name}`,
+          body: b.how,
+          at: Date.now(), read: false, route: '/progress', postId: null
+        }).catch(() => undefined);
+      }
+      if (fresh.length || now.level > was.level) await this.loadUserScoped();
+
+      /*
+       * Say it where the person is. A level-up outranks a badge, and a badge
+       * outranks plain points, because that is the order the news matters in -
+       * and only one of the three is ever on screen, so the thanks never turns
+       * into a list.
+       */
+      this.rewards.show({
+        points: after - before,
+        reason: note ?? IMPACT_RULES.find((r) => r.key === kind)?.label ?? 'Thank you.',
+        totalBefore: before,
+        totalAfter: after,
+        levelUp: now.level > was.level ? now : undefined,
+        badge: now.level > was.level ? undefined : announceBadge(fresh)
+      });
+    } catch (e) {
+      console.warn('Impact award skipped:', (e as Error)?.message ?? e);
+    }
+  }
+
+  /** Direct award by amount (safety checks, credits already counted elsewhere). */
+  async awardCare(note?: string): Promise<void> {
+    await this.awardImpact('care', note);
+  }
+
+  /** True once someone has been thanked for a specific act, so it is never counted twice. */
+  private rewardedIds: Set<string> | null = null;
+
+  /** Idempotent award for a thing with an id (a zone, a poster, a case). */
+  private rewarded(): Set<string> {
+    if (this.rewardedIds) return this.rewardedIds;
+    try {
+      const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(`lulafind.rewarded.${this.auth.viewerId ?? 'anon'}`) : null;
+      this.rewardedIds = new Set<string>(raw ? (JSON.parse(raw) as string[]) : []);
+    } catch {
+      this.rewardedIds = new Set<string>();
+    }
+    return this.rewardedIds;
+  }
+
+  private persistRewarded(): void {
+    try {
+      if (typeof localStorage === 'undefined' || !this.rewardedIds) return;
+      localStorage.setItem(`lulafind.rewarded.${this.auth.viewerId ?? 'anon'}`, JSON.stringify([...this.rewardedIds]));
+    } catch {
+      /* storage full or blocked - the in-memory set still holds for this session */
+    }
+  }
+
+  /** Award once for a key such as "zone:p_1:z2". Silent on repeat. */
+  async awardOnce(key: string, kind: keyof ImpactTally, note?: string): Promise<boolean> {
+    const seen = this.rewarded();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    this.persistRewarded();
+    await this.awardImpact(kind, note);
+    return true;
+  }
+
   async notify(n: Omit<Notification, 'id' | 'at' | 'read'>): Promise<void> {
     await this.api.pushNotification({ ...n, id: uid('n'), at: Date.now(), read: false });
     await this.loadUserScoped();
@@ -2730,7 +3012,22 @@ export class DataService {
     const post = await this.api.post(postId);
     const zone = post?.searchParty?.zones.find(z => z.id === zoneId);
     if (!zone) throw new Error('That search area is no longer available.');
+    const mine = zone.takenBy === this.auth.viewerId;
     await this.coordinateSearch(postId, { action: 'complete', zoneId, expectedVersion: zone.version ?? 0, note });
+    // Only the volunteer who walked the area earns for it. A coordinator
+    // closing someone else's area does not pocket their work.
+    if (mine) void this.awardOnce(`zone:${postId}:${zoneId}`, 'searches', `Finished: ${zone.name}.`);
+  }
+
+  /**
+   * The poster was shared outside the app (WhatsApp, a taxi rank, a clinic wall).
+   * Counted once per case so a family can record the work without gaming it.
+   */
+  async markPosterShared(postId: string): Promise<void> {
+    const p = this.post(postId) ?? await this.loadPost(postId);
+    if (!p) return;
+    await this.recordShare(postId).catch(() => undefined);
+    void this.awardOnce(`poster:${postId}`, 'posters', 'Every wall it reaches is one more pair of eyes.');
   }
 
   /* --------------------------- misc ---------------------------- */

@@ -70,6 +70,8 @@
 	<string>LulaFind uses your location only when you choose to attach it to a case, and to sort cases near you. It is never read in the background without your consent.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>Optional safety beacon: sends an "I am safe" check-in with your location to people you choose. You can turn it off at any time.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>LulaFind records a voice note when you choose to say what happened in your own words instead of typing it. The microphone is only open while you are recording, and the audio stays on your phone until you post it. The phone's own speech engine also writes the words down, so a deaf reader can follow the note.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>LulaFind uses the camera so you can photograph a missing person's poster or a last-seen location.</string>
 	<key>NSPhotoLibraryUsageDescription</key>

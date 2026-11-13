@@ -190,8 +190,15 @@ describe('Journey: focused case details and a meaningful Still searching update'
     const first = textOf(page);
     expect(first).toContain('Mark as found');
     expect(first).toContain('Still searching');
-    expect(first).not.toContain('First hours');
+    // The first-hours checklist used to be deliberately absent from the case
+    // page, and the audit in docs/IMPLEMENTATION-STATUS called that a release
+    // blocker: the family could not reach the one screen built for them. It is
+    // now on the page, collapsed, carrying its own SAPS guidance - so the rule
+    // below is the corrected one: the checklist is reachable, its detail stays
+    // inside it, and the status actions are still on screen beside it.
+    expect(first).toContain('First hours');
     expect(first).not.toContain('No waiting period');
+    expect(first).toContain('Mark as found');
     note('7. The focused case page with the status actions', first.split('Comments')[0]);
 
     await clickButton(page, 'Still searching');

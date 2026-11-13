@@ -6,8 +6,8 @@ import { iconPath } from '../../core/theme/icon-registry';
   standalone: true,
   template: `
     <svg [attr.viewBox]="'0 0 24 24'" [attr.width]="size" [attr.height]="size"
-         [attr.fill]="filled ? 'currentColor' : 'none'" stroke="currentColor" [attr.stroke-width]="weight"
-         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+         [attr.fill]="filled ? 'currentColor' : 'none'" [attr.stroke]="filled ? 'none' : 'currentColor'" [attr.stroke-width]="weight"
+         stroke-linecap="round" stroke-linejoin="round" fill-rule="evenodd" aria-hidden="true" focusable="false">
       <path [attr.d]="path" />
     </svg>
   `,

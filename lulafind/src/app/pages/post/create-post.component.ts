@@ -1,4 +1,4 @@
-import { Component, ElementRef, OnInit, ViewChild, computed, inject, signal } from '@angular/core';
+import { Component, ElementRef, OnDestroy, OnInit, ViewChild, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { ToastController } from '@ionic/angular/toast-controller';
 import { IonContent } from '@ionic/angular/ion-content';
@@ -7,15 +7,18 @@ import { IonToolbar } from '@ionic/angular/ion-toolbar';
 import { IonTitle } from '@ionic/angular/ion-title';
 import { IonButtons } from '@ionic/angular/ion-buttons';
 import { IconComponent } from '../../shared/components/icon.component';
+import { DictationService } from '../../core/services/dictation.service';
+import { VoiceRecorderService } from '../../core/services/voice-recorder.service';
 import { AvatarComponent } from '../../shared/components/avatar.component';
 import { AuthService } from '../../core/services/auth.service';
 import { DataService } from '../../core/services/data.service';
 import { MediaService } from '../../core/services/media.service';
-import { PHOTO_MAX_BYTES, POST_MAX_PHOTOS, VIDEO_MAX_BYTES, mb } from '../../core/models/media-rules';
+import { PHOTO_MAX_BYTES, POST_MAX_PHOTOS, AUDIO_MAX_BYTES, VIDEO_MAX_BYTES, mb } from '../../core/models/media-rules';
 import {
   Audience, MediaItem, Post, PostPoster, PostType, PROVINCES, ProvinceCode
 } from '../../core/models/types';
 import { uid } from '../../core/utils/format';
+import { goBack } from '../../core/utils/back';
 import { drawPoster, isPosterType, loadPosterImage, posterContent, POSTER_TEMPLATES, type PosterTemplateId } from '../../core/utils/poster';
 import { PlatformService } from '../../core/services/platform.service';
 
@@ -78,16 +81,28 @@ const sectionKey = (line: string): { key: keyof TemplateValues; value: string } 
   return key ? { key, value: match[2].trim() } : null;
 };
 
+/**
+ * The prompts a person fills in to open a case.
+ *
+ * These are deliberately the *few* things a case cannot exist without: who,
+ * when, where, and what happened. Everything else - clothing, the SAPS case
+ * number, contact details, a mark only the family knows - used to be asked for
+ * here *and* again in the "Optional details" panel below, which is the same
+ * question twice and reads as a form that does not trust you. Those now live in
+ * that panel alone, and all of them can be added after publishing from the post
+ * itself, because a terrified parent should not be stopped by a field they do
+ * not have to hand.
+ */
 function templateForType(type: PostType): string {
   switch (type) {
     case 'missing':
-      return 'Full name:\nAge:\nGender:\nLocation (town/suburb, province):\nWhen last seen:\nWhat happened:\nClothing / identifying details:\nSAPS case number (optional):\nContact details (optional):\nPrivate identifying detail (optional; not shared publicly):';
+      return 'Full name:\nAge:\nGender:\nLocation (town/suburb, province):\nWhen last seen:\nWhat happened:';
     case 'khumbulekhaya':
-      return 'Full name:\nAge:\nLocation last seen (town/suburb, province):\nWhen they left:\nWhat happened:\nWhat the family wants them to know (optional):\nContact details (optional):';
+      return 'Full name:\nAge:\nLocation last seen (town/suburb, province):\nWhen they left:\nWhat happened:';
     case 'pet':
-      return 'Pet name:\nAge:\nGender:\nLocation (town/suburb, province):\nWhen last seen:\nWhat happened:\nCoat, collar or identifying details:\nContact details (optional):';
+      return 'Pet name:\nAge:\nGender:\nLocation (town/suburb, province):\nWhen last seen:\nWhat happened:';
     case 'sighting':
-      return 'Location (town/suburb, province):\nWhen seen:\nWhat I personally saw:\nWhat they were wearing (if known):';
+      return 'Location (town/suburb, province):\nWhen seen:\nWhat I personally saw:';
     default:
       return 'What happened:\nLocation (town/suburb, province):';
   }
@@ -303,13 +318,53 @@ interface MissingField { key: string; label: string; }
                        [value]="f().title" (input)="patch({ title: $any($event.target).value })" />
               </label>
             } @else {
-              <p class="template-instruction">Fill in the prompts. Your post will stay as readable text unless you choose Generate.</p>
+              <!--
+                Two promises in one line, because both decide whether the form
+                feels possible: nothing here has to be perfect, and everything
+                left out can be added from the post afterwards.
+              -->
+              <p class="template-instruction">
+                Fill in what you know. Leave any line blank and add it later from the post itself.
+                @if (dictation.available) {
+                  The small mic in the box types as you speak. Voice, below, records your words for people to hear.
+                }
+              </p>
             }
-            <textarea class="body-input" [class.body-input--template]="!editing()" [rows]="editing() ? 5 : 13"
-                      inputmode="text" autocorrect="on" autocomplete="on" autocapitalize="sentences" spellcheck="true"
-                      data-field="body" [placeholder]="editing() ? bodyPlaceholder() : ''"
-                      [value]="f().body" (input)="patch({ body: $any($event.target).value })"
-                      aria-label="Post text template"></textarea>
+            <div class="body-wrap">
+              <textarea class="body-input" [class.body-input--template]="!editing()" [rows]="editing() ? 5 : 13"
+                        inputmode="text" autocorrect="on" autocomplete="on" autocapitalize="sentences" spellcheck="true"
+                        data-field="body" [placeholder]="editing() ? bodyPlaceholder() : ''"
+                        [value]="f().body" (input)="patch({ body: $any($event.target).value })"
+                        aria-label="Post text template"></textarea>
+
+              <!--
+                Speak instead of typing. A parent filling this in on a phone,
+                one-handed, in a police station queue should not have to fight a
+                keyboard. The button only renders where the browser actually has
+                speech recognition - a mic that does nothing is worse than none.
+              -->
+              @if (dictation.available) {
+                <button class="mic" type="button" [class.on]="dictation.listening()"
+                        [attr.aria-pressed]="dictation.listening()"
+                        [attr.aria-label]="dictation.listening() ? 'Stop speaking' : 'Speak this instead of typing'"
+                        (click)="toggleDictation()">
+                  <lf-icon [name]="dictation.listening() ? 'stop' : 'mic'" [size]="18" />
+                  <span class="sr-only">{{ dictation.listening() ? 'Stop dictation' : 'Start dictation' }}</span>
+                </button>
+              }
+            </div>
+            @if (dictation.listening()) {
+              <p class="mic-note listening" role="status">
+                <span class="pulse" aria-hidden="true"></span>
+                Listening. Tap stop when you are done, then read it back.
+                @if (dictation.interim()) { <em>{{ dictation.interim() }}</em> }
+              </p>
+            } @else if (dictation.error()) {
+              <p class="mic-note error" role="alert">
+                {{ dictation.error() }}
+                <button type="button" (click)="dictation.clearError()">Dismiss</button>
+              </p>
+            }
             @if (fieldError('body')) { <p class="field-error">{{ fieldError('body') }}</p> }
 
             @if (editing()) {
@@ -336,9 +391,18 @@ interface MissingField { key: string; label: string; }
             @if (f().media.length) {
               <div class="media-preview" aria-label="Attached media">
                 @for (item of f().media; track item.id) {
-                  <div class="media-tile">
+                  <div class="media-tile" [class.media-tile--audio]="item.kind === 'audio'">
                     @if (item.kind === 'video') {
                       <video [src]="item.src" controls preload="metadata"></video>
+                    } @else if (item.kind === 'audio') {
+                      <!-- A voice note, played back before it is posted. -->
+                      <div class="voice">
+                        <span class="voice__label"><lf-icon name="mic" [size]="15" /> Voice note · {{ voiceLength(item) }}</span>
+                        <audio [src]="item.src" controls preload="metadata"></audio>
+                        @if (item.transcript) {
+                          <p class="voice__text">{{ item.transcript }}</p>
+                        }
+                      </div>
                     } @else {
                       <img [src]="item.src" alt="Post attachment" />
                     }
@@ -347,6 +411,52 @@ interface MissingField { key: string; label: string; }
                     </button>
                   </div>
                 }
+              </div>
+            }
+
+            @if (recorder.recording()) {
+              <!--
+                The recording bar. It replaces the gestures with words as soon as
+                the finger is down, because "slide up to lock" has to be readable
+                while the thumb is already moving.
+              -->
+              <div class="recbar" [class.recbar--locked]="recorder.locked()" role="status" aria-live="polite">
+                <span class="pulse" aria-hidden="true"></span>
+                <span class="recbar__time">{{ recorder.clock }}</span>
+                <svg class="recbar__wave" viewBox="0 0 120 24" aria-hidden="true" preserveAspectRatio="none">
+                  @for (h of waveBars; track $index) {
+                    <rect [attr.x]="$index * 6" y="0" width="3" [attr.height]="h" rx="1.5"></rect>
+                  }
+                </svg>
+                @if (recorder.locked()) {
+                  <span class="recbar__hint">Locked</span>
+                  <button type="button" class="recbar__btn recbar__btn--go" (click)="stopVoiceNote()" aria-label="Stop and attach the voice note">
+                    <lf-icon name="send" [size]="16" />
+                  </button>
+                  <button type="button" class="recbar__btn recbar__btn--no" (click)="cancelVoiceNote()" aria-label="Cancel the recording">
+                    <lf-icon name="trash" [size]="16" />
+                  </button>
+                } @else {
+                  <span class="recbar__hint"><lf-icon name="chevronLeft" [size]="13" /> Slide to cancel</span>
+                  <span class="recbar__hint recbar__hint--up"><lf-icon name="chevronUp" [size]="13" /> up to lock</span>
+                }
+              </div>
+              @if (recorder.transcript()) {
+                <!--
+                  The words the phone heard so far. They are shown while speaking
+                  so the writing-down is never a surprise, and the line under it
+                  says plainly who is listening: the phone's speech engine, not
+                  LulaFind.
+                -->
+                <p class="recbar__heard" role="status">
+                  <span class="recbar__heard-words">{{ recorder.transcript() }}</span>
+                  <small>The phone's speech engine is writing these words down, so the note can be read as well as heard.</small>
+                </p>
+              }
+            } @else if (recorder.error()) {
+              <div class="voicerec error" role="alert">
+                <span>{{ recorder.error() }}</span>
+                <button type="button" class="voicerec__cancel" (click)="recorder.clearError()">Dismiss</button>
               </div>
             }
 
@@ -359,12 +469,36 @@ interface MissingField { key: string; label: string; }
                       [disabled]="busy() || hasVideo() || f().media.length > 0">
                 <lf-icon name="video" [size]="18" /> <span>Video</span>
               </button>
+              <!--
+                Voice note, held the way WhatsApp holds it: press and keep the
+                finger down to record, slide left to cancel, slide up to lock it
+                and let go. A plain tap still starts a hands-free recording, so
+                the gesture is a shortcut rather than the only way in - and every
+                one of those is also a button, for a screen reader or a shaky hand.
+              -->
+              @if (recorder.available) {
+                <button type="button" class="attachment-button voice-hold" [class.armed]="recorder.recording()"
+                        [disabled]="busy() || hasVideo()"
+                        [attr.aria-pressed]="recorder.recording()"
+                        [attr.aria-label]="recorder.recording() ? 'Recording. Release to send, slide up to lock, slide left to cancel.' : 'Hold to record a voice note'"
+                        (pointerdown)="voiceDown($event)"
+                        (pointerup)="voiceUp($event)"
+                        (pointercancel)="voiceCancelGesture()"
+                        (pointermove)="voiceMove($event)"
+                        (keydown.enter)="startVoiceHandsFree()"
+                        (keydown.space)="startVoiceHandsFree(); $event.preventDefault()">
+                  <lf-icon [name]="recorder.recording() ? 'mic' : 'mic'" [size]="18" />
+                  <span>{{ recorder.recording() ? 'Release' : hasVoiceNote() ? 'Re-record' : 'Voice' }}</span>
+                </button>
+              }
               @if (!editing() && canGenerate()) {
                 <button type="button" class="attachment-button generate-button" (click)="openGenerator()" [disabled]="busy()">
                   <lf-icon name="layout" [size]="18" /> <span>Generate</span>
                 </button>
               }
-              <span class="attachment-hint">Up to {{ maxPhotos }} photos ({{ photoMb }} MB each) or 1 video ({{ videoMb }} MB)</span>
+              <span class="attachment-hint">
+                Up to {{ maxPhotos }} photos ({{ photoMb }} MB each), 1 video ({{ videoMb }} MB) or a voice note up to {{ voiceMb }} MB.
+              </span>
             </div>
             @if (posterTemplate()) {
               <p class="generated-selection" role="status"><lf-icon name="check" [size]="15" /> {{ selectedTemplateName() }} design will be published with this post.
@@ -375,10 +509,16 @@ interface MissingField { key: string; label: string; }
               <p class="generator-stale" role="status">The text or photos changed, so the old preview was cleared. Generate again to use a design.</p>
             }
 
-            @if (editing()) {
+            <!--
+              Available while creating too, not only when editing. It was
+              edit-only, so the composer's copy promised "add it after posting"
+              while the panel it pointed at did not exist yet - the promise is
+              only honest if the fields are right here, collapsed.
+            -->
+            @if (canAddDetails()) {
               <button type="button" class="details-toggle" [attr.aria-expanded]="moreOpen()" (click)="moreOpen.set(!moreOpen())">
                 <span class="details-icon"><lf-icon name="plus" [size]="17" /></span>
-                <span class="details-copy"><strong>{{ detailsLabel() }}</strong><small>Optional details help people respond accurately</small></span>
+                <span class="details-copy"><strong>{{ detailsLabel() }}</strong><small>Optional - skip it and add it after posting</small></span>
                 <lf-icon [name]="moreOpen() ? 'chevronDown' : 'chevronRight'" [size]="17" />
               </button>
 
@@ -514,6 +654,31 @@ interface MissingField { key: string; label: string; }
       background: transparent; color: var(--fb-text); font: inherit; font-size: 15px; line-height: 1.5; outline: 0; resize: vertical; }
     .body-input--template { min-height: 290px; padding: 12px; border: 1px solid var(--fb-line); border-radius: 9px; background: var(--lf-card); white-space: pre-wrap; }
     .body-input::placeholder { color: var(--lf-muted); }
+    /*
+     * Dictation. The mic sits inside the writing area, bottom-right, where a
+     * thumb already is - not in a toolbar at the top. While it listens it turns
+     * solid and pulses, because a muted mic button that looks identical to an
+     * idle one is how people talk to a phone that never started listening.
+     */
+    .body-wrap { position: relative; }
+    .mic { position: absolute; right: 6px; bottom: 6px; width: 42px; height: 42px; border-radius: 50%;
+      display: grid; place-items: center; border: 1px solid var(--fb-line); background: var(--lf-card);
+      color: var(--lf-muted); cursor: pointer; box-shadow: 0 2px 8px rgb(0 0 0 / .10); }
+    .mic.on { background: var(--lf-signal-text); border-color: var(--lf-signal-text); color: #fff; }
+    .mic:focus-visible { outline: 3px solid var(--lf-primary); outline-offset: 2px; }
+    .mic-note { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; margin: 2px 0 0;
+      font-size: 12.5px; line-height: 1.35; color: var(--lf-muted); }
+    .mic-note.listening { color: var(--lf-signal-text); font-weight: 600; }
+    .mic-note em { font-style: normal; font-weight: 500; color: var(--lf-muted); }
+    .mic-note.error { color: var(--lf-signal-text); }
+    .mic-note button { border: 0; background: none; padding: 0; font: inherit; font-weight: 700;
+      color: var(--lf-link); cursor: pointer; text-decoration: underline; }
+    .pulse { width: 9px; height: 9px; border-radius: 50%; background: var(--lf-signal-text);
+      animation: mic-pulse 1.2s ease-in-out infinite; }
+    @keyframes mic-pulse { 0%, 100% { opacity: .35; transform: scale(.85); } 50% { opacity: 1; transform: scale(1.15); } }
+    @media (prefers-reduced-motion: reduce) { .pulse { animation: none; opacity: 1; } }
+    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden;
+      clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
     .location-grid, .fields-two { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
     .field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
     .field.full { width: 100%; }
@@ -529,13 +694,70 @@ interface MissingField { key: string; label: string; }
     .media-preview { display: flex; flex-wrap: wrap; gap: 7px; }
     .media-tile { position: relative; width: 84px; height: 84px; border-radius: 8px; overflow: hidden; background: var(--fb-soft); }
     .media-tile img, .media-tile video { width: 100%; height: 100%; object-fit: cover; }
+    /* A voice note is a row, not an 84px square: the player needs the width. */
+    .media-tile--audio { width: 100%; height: auto; }
+    .media-tile--audio .voice { padding-right: 34px; }
+    /* The words the phone heard, so the note is readable before it is posted. */
+    .voice__text { margin: 5px 0 0; font-size: 12.5px; line-height: 1.4; color: var(--fb-muted); }
     .remove-media { position: absolute; right: 4px; top: 4px; display: grid; place-items: center; width: 23px; height: 23px; border: 0; border-radius: 50%; background: rgba(0,0,0,.68); color: #fff; cursor: pointer; }
-    .attachment-actions { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-top: 1px solid var(--lf-line-soft); border-bottom: 1px solid var(--lf-line-soft); }
+    /* Wrap the buttons, then let the limit text take a line of its own rather
+       than being squeezed into a vertical column beside them. */
+    .attachment-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding: 6px 0;
+      border-top: 1px solid var(--lf-line-soft); border-bottom: 1px solid var(--lf-line-soft); }
     .attachment-button { display: inline-flex; align-items: center; gap: 6px; min-height: 34px; padding: 0 9px; border: 0; border-radius: 6px; background: transparent; color: var(--fb-muted); font-size: 14px; font-weight: 600; cursor: pointer; }
     .attachment-button:first-child lf-icon { color: #45bd62; }
     .attachment-button:nth-child(2) lf-icon { color: #9360d8; }
     .attachment-button:disabled { opacity: .4; cursor: default; }
-    .attachment-hint { margin-left: auto; color: var(--fb-muted); font-size: 12px; }
+    .attachment-hint { flex: 1 1 100%; color: var(--fb-muted); font-size: 12px; line-height: 1.3; }
+    /*
+     * The recording bar, after WhatsApp: a red dot, the clock, a moving
+     * equaliser, and the two things a thumb can do next. It takes the whole
+     * width because it is the only thing happening on the screen at that moment.
+     */
+    .recbar { display: flex; align-items: center; gap: 9px; width: 100%; padding: 10px 12px;
+      border-radius: 999px; margin-bottom: 8px; color: #fff;
+      background: color-mix(in srgb, var(--lf-signal-text) 92%, #000);
+      animation: recbar-in .18s ease-out both; }
+    .recbar__time { font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .recbar__wave { flex: 1 1 auto; height: 20px; min-width: 40px; }
+    .recbar__wave rect { fill: rgb(255 255 255 / .75); animation: wave 1s ease-in-out infinite; }
+    .recbar__wave rect:nth-child(3n) { animation-delay: .12s; }
+    .recbar__wave rect:nth-child(3n+1) { animation-delay: .24s; }
+    .recbar__wave rect:nth-child(4n) { animation-delay: .36s; }
+    .recbar__hint { display: inline-flex; align-items: center; gap: 2px; font-size: 11.5px; font-weight: 600;
+      white-space: nowrap; opacity: .9; }
+    .recbar__hint--up { opacity: .75; }
+    .recbar__btn { flex: 0 0 auto; width: 30px; height: 30px; border-radius: 50%; border: 0; display: grid;
+      place-items: center; cursor: pointer; }
+    .recbar__btn--go { background: #fff; color: var(--lf-signal-text); }
+    .recbar__btn--no { background: rgb(255 255 255 / .18); color: #fff; }
+    .recbar--locked { background: color-mix(in srgb, var(--lf-ubuntu) 92%, #000); }
+    @keyframes recbar-in { from { transform: translateY(6px); opacity: 0; } to { transform: none; opacity: 1; } }
+    @keyframes wave { 0%, 100% { opacity: .45; } 50% { opacity: 1; } }
+    /* The hold target: a wide, forgiving area - a thumb on a moving taxi is not precise. */
+    .voice-hold { touch-action: none; user-select: none; -webkit-user-select: none; }
+    .voice-hold.armed { background: color-mix(in srgb, var(--lf-signal-text) 14%, transparent); color: var(--lf-signal-text); }
+    @media (prefers-reduced-motion: reduce) {
+      .recbar, .recbar__wave rect { animation: none; }
+      .recbar__wave rect { opacity: .8; }
+    }
+    /* The recording strip: visible, time-stamped, and cancellable. */
+    .voicerec { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 9px 11px; border-radius: 9px;
+      margin-bottom: 6px; font-size: 13px; line-height: 1.3; }
+    .voicerec.on { background: color-mix(in srgb, var(--lf-signal-text) 10%, transparent); color: var(--lf-signal-text); }
+    .voicerec.error { background: var(--lf-card-2); color: var(--ion-text-color); }
+    .voicerec strong { font-weight: 700; font-variant-numeric: tabular-nums; }
+    .voicerec .lf-small { flex: 1 1 160px; color: var(--lf-muted); }
+    .voicerec__cancel { border: 0; background: none; padding: 0; font: inherit; font-weight: 700;
+      color: var(--lf-link); cursor: pointer; text-decoration: underline; }
+    /* The words being heard, under the bar, with the sentence that says who hears them. */
+    .recbar__heard { margin: 0 0 8px; padding: 8px 12px; border-radius: 10px; background: var(--fb-soft);
+      font-size: 12.5px; line-height: 1.35; color: var(--ion-text-color); }
+    .recbar__heard-words { display: block; font-weight: 550; }
+    .recbar__heard small { display: block; margin-top: 3px; color: var(--fb-muted); font-size: 11.5px; }
+    .voice { display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; }
+    .voice__label { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; font-weight: 650; color: var(--lf-muted); }
+    .voice audio { width: 100%; max-width: 100%; }
     .details-toggle { display: flex; align-items: center; gap: 9px; width: 100%; min-height: 54px; padding: 7px 9px; border: 1px solid var(--fb-line); border-radius: 8px; background: var(--lf-card); color: var(--fb-text); text-align: left; cursor: pointer; transition: background .15s ease; }
     .details-toggle:active { background: var(--fb-soft); }
     .details-icon { width: 30px; height: 30px; display: grid; place-items: center; border-radius: 50%; background: var(--lf-primary-soft); color: var(--lf-primary-soft-text); }
@@ -604,7 +826,7 @@ interface MissingField { key: string; label: string; }
     @media (max-width: 370px) { .composer { padding-inline: 10px; } .category-grid { gap: 5px; } .category { padding-inline: 7px; font-size: 13px; } .location-grid, .fields-two { grid-template-columns: 1fr; } }
   `]
 })
-export class CreatePostComponent implements OnInit {
+export class CreatePostComponent implements OnInit, OnDestroy {
   protected data = inject(DataService);
   private auth = inject(AuthService);
   private media = inject(MediaService);
@@ -617,6 +839,221 @@ export class CreatePostComponent implements OnInit {
   protected readonly categories = CATEGORIES;
   protected readonly posterTemplates = POSTER_TEMPLATES;
   protected readonly moreOpen = signal(false);
+
+  /**
+   * Whether the "add details" panel applies to this post.
+   *
+   * A missing person, a Home Sweet Home case or a pet gets person/pet fields; a
+   * sighting gets its own. A plain update has none of them, so the panel is not
+   * offered at all rather than opening onto nothing.
+   */
+  /* ------------------------ voice notes ------------------------ */
+
+  protected readonly recorder = inject(VoiceRecorderService);
+
+  readonly hasVoiceNote = computed(() => this.f().media.some((item) => item.kind === 'audio'));
+
+  /** "0:42" - the length on the tile, so a note is not a mystery box. */
+  voiceLength(item: { durationSec?: number }): string {
+    const total = Math.max(0, Math.round(item.durationSec ?? 0));
+    return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
+  }
+
+  /* ------------------- the hold-to-record gesture ------------------- */
+
+  /**
+   * Where the thumb first touched down. Everything is measured from here, the
+   * way WhatsApp measures: the gesture is relative, not absolute, so it behaves
+   * the same wherever the button happens to sit on the screen.
+   */
+  private gesture: { startX: number; startY: number; pointerId: number } | null = null;
+  /** True once the thumb has slid far enough left that letting go would cancel. */
+  private willCancel = false;
+  /** Set when a recording was thrown away, so a late-arriving note is not attached. */
+  private voiceCancelled = false;
+
+  /** Slide further than this to the left and the recording is thrown away. */
+  private static readonly CANCEL_PX = 70;
+  /** Slide up further than this and the recording locks. */
+  private static readonly LOCK_PX = 60;
+
+  /** The little equaliser in the recording bar. Heights in the 0..24 viewBox. */
+  protected readonly waveBars = [6, 13, 20, 9, 16, 22, 11, 18, 7, 15, 21, 10, 17, 8, 14, 19, 6, 12, 16, 9];
+
+  /**
+   * Finger down: start recording immediately.
+   *
+   * Recording begins on touch-down rather than on release so the first word is
+   * not lost - the commonest complaint about every hold-to-talk button ever
+   * built. The permission prompt is the only thing that can delay it, and when
+   * that happens the bar shows "starting" instead of a running clock.
+   */
+  voiceDown(event: PointerEvent): void {
+    if (this.busy() || this.hasVideo() || !this.recorder.available) return;
+    event.preventDefault();
+    /*
+     * Capture the pointer for the whole gesture. The recording bar appears
+     * under the thumb and pushes the buttons down, so without capture the
+     * release would land on the bar and the recording would run forever -
+     * a start with no finish. Capture makes every move and the release come
+     * back to this button, wherever the layout moves to.
+     */
+    try {
+      (event.currentTarget as HTMLElement | null)?.setPointerCapture?.(event.pointerId);
+    } catch {
+      // A synthetic or already-released pointer: the gesture still works.
+    }
+    this.gesture = { startX: event.clientX, startY: event.clientY, pointerId: event.pointerId };
+    this.willCancel = false;
+    // A fresh gesture clears any leftover cancel flag from the last one, so one
+    // thrown-away recording can never poison the next.
+    this.voiceCancelled = false;
+    // Holding is a deliberate, physical act - the phone should say so.
+    void this.platform.haptic('light');
+    if (this.recorder.recording()) return;
+    /*
+     * Deliberately not awaited. `record()` stays pending for the whole
+     * recording, so awaiting it here would leave this handler hanging and the
+     * gesture list half-bound. It is started, and the note is collected when it
+     * arrives - or not at all, if the person slides left.
+     */
+    this.pendingNote = this.recorder.record();
+    void this.pendingNote.then((note) => this.collectVoiceNote(note));
+  }
+
+  /** The in-flight recording, so a cancel can throw away what it eventually returns. */
+  private pendingNote: Promise<MediaItem | null> | null = null;
+
+  /**
+   * Finger moving: decide whether this is a cancel (left) or a lock (up).
+   *
+   * Only the axis that moved furthest counts, so a diagonal slide cannot both
+   * cancel and lock. The threshold is crossed once and remembered, so a thumb
+   * that drifts back does not silently revive a cancelled recording - the
+   * action is stated in the bar instead.
+   */
+  voiceMove(event: PointerEvent): void {
+    const g = this.gesture;
+    if (!g || event.pointerId !== g.pointerId) return;
+    const dx = event.clientX - g.startX;
+    const dy = event.clientY - g.startY;
+
+    if (Math.abs(dx) > Math.abs(dy)) {
+      // Horizontal: sliding left throws it away, sliding back restores it.
+      const wasCancel = this.willCancel;
+      this.willCancel = dx < -CreatePostComponent.CANCEL_PX;
+      if (this.willCancel !== wasCancel) void this.platform.haptic('light');
+      return;
+    }
+
+    // Upwards: lock, so the finger can come off and the person can talk.
+    if (dy < -CreatePostComponent.LOCK_PX && !this.recorder.locked() && this.recorder.recording()) {
+      this.recorder.locked.set(true);
+      this.willCancel = false;
+      void this.platform.haptic('medium');
+    }
+  }
+
+  /**
+   * Finger up: finish.
+   *
+   * Three outcomes, in the order the person expects: a cancel if they slid left,
+   * nothing if the recording was locked (it keeps running), and otherwise stop
+   * and attach.
+   */
+  voiceUp(event: PointerEvent): void {
+    const g = this.gesture;
+    this.gesture = null;
+    if (!g || event.pointerId !== g.pointerId) return;
+
+    if (this.willCancel) {
+      this.willCancel = false;
+      this.voiceCancelled = true;
+      this.recorder.cancel();
+      void this.platform.haptic('heavy');
+      return;
+    }
+    // Locked: the finger leaving is the point. Keep recording.
+    if (this.recorder.locked()) return;
+    if (this.recorder.recording()) this.recorder.stop();
+  }
+
+  /** The browser took the pointer away (a call, a system gesture). Stop cleanly. */
+  voiceCancelGesture(): void {
+    if (!this.gesture) return;
+    this.gesture = null;
+    this.willCancel = false;
+    if (this.recorder.recording() && !this.recorder.locked()) this.recorder.stop();
+  }
+
+  /** A tap, a keyboard press, or a screen reader: record without holding anything. */
+  startVoiceHandsFree(): void {
+    if (this.recorder.recording() || this.hasVideo()) return;
+    this.voiceCancelled = false;
+    this.pendingNote = this.recorder.record();
+    void this.pendingNote.then((note) => this.collectVoiceNote(note));
+  }
+
+  stopVoiceNote(): void {
+    this.recorder.stop();
+  }
+
+  cancelVoiceNote(): void {
+    this.voiceCancelled = true;
+    this.recorder.cancel();
+  }
+
+  /**
+   * Attach the note once it lands.
+   *
+   * One voice note per post, and it replaces any previous one: a case should not
+   * carry a pile of half-recordings. A null result is a cancelled or failed
+   * recording, and nothing is attached.
+   */
+  private async collectVoiceNote(note: Awaited<ReturnType<VoiceRecorderService['record']>>): Promise<void> {
+    /*
+     * The flag is read and cleared once, whatever arrives: a cancelled
+     * recording resolves to null, so clearing it only in the non-null branch
+     * would leave the flag set and swallow the person's next note.
+     */
+    const cancelled = this.voiceCancelled;
+    this.voiceCancelled = false;
+    if (!note || cancelled) return;
+    this.f.update((form) => ({
+      ...form,
+      media: [...form.media.filter((item) => item.kind !== 'audio'), note]
+    }));
+    void this.platform.haptic('light');
+  }
+
+  protected readonly canAddDetails = computed(() => {
+    const t = this.type();
+    return t === 'missing' || t === 'khumbulekhaya' || t === 'pet' || t === 'sighting';
+  });
+
+  /* ------------------------- dictation ------------------------- */
+
+  protected readonly dictation = inject(DictationService);
+
+  /**
+   * Speak into the prompt box.
+   *
+   * Dictation writes into the same textarea the person would type in - it is
+   * not a separate voice post. That means the text is visible, correctable and
+   * published exactly like typed words, and the prompts stay the structure of
+   * the post rather than being replaced by free speech.
+   */
+  toggleDictation(): void {
+    this.dictation.toggle({
+      existing: this.f().body,
+      apply: (text) => this.patch({ body: text })
+    });
+  }
+
+  /** Leaving the screen must not leave the microphone open. */
+  ngOnDestroy(): void {
+    if (this.dictation.listening()) this.dictation.stop();
+  }
   private generatedCanvas: HTMLCanvasElement | null = null;
   private generatedImage: HTMLImageElement | null = null;
 
@@ -924,17 +1361,37 @@ export class CreatePostComponent implements OnInit {
     ].filter((part) => part.trim()).join('\n\n').trim();
   }
 
+  /**
+   * The subject, from the prompts *and* the optional panel.
+   *
+   * The panel is open while a case is being created, so what it collects has to
+   * reach the post. It used to be ignored on a new post - whatever a person
+   * typed into "clothing" there was silently dropped, and only the line inside
+   * the prompt text survived. The panel wins where it has a value (it is the
+   * more explicit input), and the prompt fills the gaps.
+   */
   private subjectFromTemplate(): Post['subject'] {
     const type = this.type();
     const values = this.templateValues();
-    if (!type || !isPosterType(type)) return type === 'sighting' && (values.name || values.clothing) ? {
-      name: values.name, age: null, gender: 'unknown', height: '', build: '', skinTone: '', hair: '', eyes: '',
-      clothing: values.clothing, distinguishing: '', medical: '', vehicle: '', languages: '', surname: '', relationship: ''
-    } : null;
+    const fields = this.s();
+    const orTemplate = (panel: string, template: string): string => (panel ?? '').trim() || (template ?? '').trim();
+    if (!type || !isPosterType(type)) {
+      const sightingName = orTemplate(fields.name, values.name);
+      const sightingClothing = orTemplate(fields.clothing, values.clothing);
+      return type === 'sighting' && (sightingName || sightingClothing) ? {
+        name: sightingName, age: null, gender: 'unknown', height: '', build: '', skinTone: '', hair: '', eyes: '',
+        clothing: sightingClothing, distinguishing: '', medical: '', vehicle: '', languages: '', surname: '', relationship: ''
+      } : null;
+    }
+    const name = orTemplate(fields.name, values.name);
+    const age = fields.age ? Number(fields.age) : values.age;
+    const gender = (fields.gender && fields.gender !== 'unknown' ? fields.gender : values.gender);
     return {
-      name: values.name.trim(), age: values.age, gender: values.gender, height: '', build: '', skinTone: '', hair: '', eyes: '',
-      clothing: values.clothing.trim(), distinguishing: values.privateMark.trim(), medical: '', vehicle: '', languages: '',
-      surname: values.name.trim().split(/\s+/).at(-1) ?? '', relationship: ''
+      name, age, gender, height: '', build: '', skinTone: '', hair: fields.hair?.trim() || '', eyes: '',
+      clothing: orTemplate(fields.clothing, values.clothing),
+      distinguishing: orTemplate(fields.distinguishing, values.privateMark),
+      medical: '', vehicle: '', languages: '',
+      surname: name.split(/\s+/).at(-1) ?? '', relationship: ''
     };
   }
 
@@ -1083,6 +1540,7 @@ export class CreatePostComponent implements OnInit {
   readonly maxPhotos = POST_MAX_PHOTOS;
   readonly photoMb = mb(PHOTO_MAX_BYTES);
   readonly videoMb = mb(VIDEO_MAX_BYTES);
+  readonly voiceMb = mb(AUDIO_MAX_BYTES);
 
   /** A case about someone under 18: the poster must confirm they may publish it. */
   childCase(): boolean {
@@ -1221,7 +1679,18 @@ export class CreatePostComponent implements OnInit {
           await this.router.navigate(['/post', created.id]);
         } else {
           await this.toastMsg(generatedTemplate ? 'Post shared with generated design.' : 'Post shared.');
-          await this.router.navigate(['/home']);
+          /*
+           * The next step after publishing a case is not "back to the feed" -
+           * it is the thing that actually puts it in front of people: the
+           * printable poster, or an area alert if it is a sighting. LulaFind
+           * only offers this when the case can carry a poster (a missing,
+           * left-home or pet post), so a status update still goes home.
+           */
+          if (created && isPosterType(created.type)) {
+            await this.router.navigate(['/post', created.id, 'poster'], { queryParams: { new: '1' } });
+          } else {
+            await this.router.navigate(['/home']);
+          }
         }
       }
     } catch (e: any) {
@@ -1287,5 +1756,9 @@ export class CreatePostComponent implements OnInit {
     await t.present();
   }
 
-  close(): void { void this.router.navigate(['/home']); }
+  close(): void {
+    // Editing a post and landing here cold: back to the post itself.
+    const editId = this.route.snapshot.paramMap.get('id');
+    goBack(this.router, editId ? `/post/${editId}` : '/home');
+  }
 }

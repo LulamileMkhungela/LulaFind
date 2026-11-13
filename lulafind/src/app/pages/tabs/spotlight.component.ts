@@ -206,7 +206,15 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
     .seg__btn.on { background: var(--lf-primary-soft); color: var(--lf-link); }
     .find { background: var(--lf-card); padding: 8px 0 10px; margin-bottom: 8px; box-shadow: var(--lf-shadow); }
     .find__row { display: flex; align-items: center; gap: 8px; padding: 0 var(--lf-gap); }
-    .find__row ion-searchbar { flex: 1; min-width: 0; padding: 0 !important; --border-radius: 999px; height: 40px; }
+    .find__row ion-searchbar { flex: 1 1 auto; min-width: 0; padding: 0 !important; --border-radius: 999px; height: 40px; }
+    /* Search first, then narrow by province. On a small phone there is no
+       honest way to fit both on one line, so the search takes the row and the
+       province filter moves underneath at full width. */
+    @media (max-width: 400px) {
+      .find__row { flex-wrap: wrap; }
+      .find__row ion-searchbar { flex: 1 1 100%; }
+      .prov-filter { flex: 1 1 auto; justify-content: flex-start; max-width: none; height: 34px; }
+    }
     /* The province filter sits at the end of the search row, where the eye
        lands after typing: search first, then narrow where. */
     .prov-filter { flex: none; display: inline-flex; align-items: center; gap: 4px; max-width: 46%;

@@ -5,6 +5,14 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.CAMERA" />
+    <!-- Recording a voice note. Without this the microphone is refused inside
+         the app no matter what the web layer asks for. It is requested only
+         when someone taps record, never at launch. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- Without this the WebView refuses the microphone before the permission
+         prompt ever appears, so the request looks ignored. It is never measured
+         or tuned by the app itself. -->
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <!-- Android 13+ photo access. -->
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
@@ -19,6 +27,10 @@
     <uses-permission android:name="android.permission.VIBRATE" />
 
     <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <!-- A device with no microphone can still read cases and type a report; the
+         recorder says so plainly and points at the keyboard instead of hiding
+         the app from it in Play. -->
+    <uses-feature android:name="android.hardware.microphone" android:required="false" />
     <uses-feature android:name="android.hardware.location.gps" android:required="false" />
     <application
         android:allowBackup="true"

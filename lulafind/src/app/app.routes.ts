@@ -53,6 +53,8 @@ export const routes: Routes = [
   { path: 'spotlight/:id', loadComponent: () => import('./pages/spotlight/spotlight-detail.component').then((m) => m.SpotlightDetailComponent) },
   { path: 'story/:id', loadComponent: () => import('./pages/story/story-viewer.component').then((m) => m.StoryViewerComponent) },
   { path: 'saved', canActivate: [authGuard], loadComponent: () => import('./pages/saved/saved.component').then((m) => m.SavedComponent) },
+  /* Your impact: levels and badges, and the honest list of what is not counted. */
+  { path: 'progress', canActivate: [authGuard], loadComponent: () => import('./pages/progress/progress.component').then((m) => m.ProgressComponent) },
   { path: 'connections', canActivate: [authGuard], loadComponent: () => import('./pages/connections/connections.component').then((m) => m.ConnectionsComponent) },
   { path: 'search', loadComponent: () => import('./pages/search/search.component').then((m) => m.SearchComponent) },
   { path: 'tips', loadComponent: () => import('./pages/tips/tips.component').then((m) => m.TipsComponent) },

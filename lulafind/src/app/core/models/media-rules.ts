@@ -7,8 +7,9 @@
  *
  *   photo: 2 MB each
  *   video: 3 MB each
- *   a case (post): up to 3 photos, or one video
+ *   a case (post): up to 3 photos, or one video, plus one voice note
  *   a story: one photo
+ *   a voice note: up to 2 minutes
  *
  * A photo can be re-encoded in the browser, so its picker accepts a generous
  * original and `MediaService.compress` guarantees the upload size. A video
@@ -28,6 +29,20 @@ export const POST_MAX_PHOTOS = 3;
 
 /** A story is a single photo. */
 export const STORY_MAX_PHOTOS = 1;
+
+/**
+ * A voice note attached to a case.
+ *
+ * Short on purpose: this is a family saying what happened in their own voice,
+ * not a podcast. Two minutes is enough for the whole story and keeps the file
+ * well inside a mobile data bundle - speech at 32 kbps is roughly 480 KB.
+ * The recorder stops itself at this length rather than letting someone talk
+ * into a file that will then be refused.
+ */
+export const AUDIO_MAX_SECONDS = 120;
+
+/** Largest voice note that may be uploaded. Two minutes at 32 kbps is ~480 KB. */
+export const AUDIO_MAX_BYTES = 2 * 1024 * 1024;
 
 /**
  * What the *picker* accepts for a photo. A modern phone camera writes 5-12 MB

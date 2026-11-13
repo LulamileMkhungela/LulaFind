@@ -44,6 +44,26 @@ Two fixes, both in place:
    `cordova.variables.gradle`, the manifest) are now in Git; only their build
    output stays ignored.
 
+## The microphone, in the app
+
+A voice note is recorded by the *web layer* (`MediaRecorder` over
+`navigator.mediaDevices.getUserMedia`) inside the Capacitor WebView, which is
+why it needs nothing from a plugin and works on both platforms. What the native
+shell does have to provide is the permission, and without it the WebView denies
+the mic before any prompt is shown:
+
+| Where | What |
+| --- | --- |
+| `android/app/src/main/AndroidManifest.xml` | `RECORD_AUDIO` + `MODIFY_AUDIO_SETTINGS`; `android.hardware.microphone` declared `required="false"` so a device with no mic can still read cases and type |
+| `ios/App/App/Info.plist` | `NSMicrophoneUsageDescription` |
+| Capacitor itself | `BridgeWebChromeClient.onPermissionRequest` grants `AUDIO_CAPTURE` by asking for exactly those two Android permissions, on the tap, never at launch |
+
+`webDir` in `capacitor.config.ts` is `www/browser`, because `angular.json` writes
+the entry point to `www/browser/index.html`. It previously said `www`, and
+`cap sync` refused to run at all ("must contain an index.html") — so no APK could
+carry the current UI, voice note included. `npx cap sync android` now completes
+and copies the built recorder into `assets/public/`.
+
 ## Google sign-in on Android — the full chain
 
 `capacitor.config.ts` uses `FirebaseAuthentication: { skipNativeAuth: true }`:

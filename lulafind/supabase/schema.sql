@@ -351,6 +351,20 @@ select
     'following', case when show_stats then coalesce(payload->'following', '0'::jsonb) else '0'::jsonb end,
     'karma', case when show_stats then coalesce(payload->'karma', '0'::jsonb) else '0'::jsonb end,
     'contributorCredits', case when show_stats then coalesce(payload->'contributorCredits', '0'::jsonb) else '0'::jsonb end,
+    -- What this member gave the network, by kind. Only the aggregate reaches
+    -- this view: never a case, never a location, never a lead's detail. It is
+    -- the same shape models/impact.ts reads, and zeroes when the member has
+    -- hidden their stats or has not contributed yet.
+    'impact', case
+      when show_stats then jsonb_build_object(
+        'signals', coalesce((payload #>> '{impact,signals}')::int, 0),
+        'searches', coalesce((payload #>> '{impact,searches}')::int, 0),
+        'posters', coalesce((payload #>> '{impact,posters}')::int, 0),
+        'communities', coalesce((payload #>> '{impact,communities}')::int, 0),
+        'care', coalesce((payload #>> '{impact,care}')::int, 0)
+      )
+      else '{"signals":0,"searches":0,"posters":0,"communities":0,"care":0}'::jsonb
+    end,
     'onboarded', coalesce(payload->'onboarded', 'false'::jsonb),
     'blockedUserIds', '[]'::jsonb,
     'spotlightIds', case when show_spotlights then coalesce(payload->'spotlightIds', '[]'::jsonb) else '[]'::jsonb end,
@@ -704,7 +718,11 @@ values (
   'photos',
   false,
   5242880,
-  array['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'video/mp4']
+  array[
+    'image/jpeg', 'image/png', 'image/webp', 'image/gif', 'video/mp4',
+    -- Voice notes recorded in the app (see uploadMedia in supabase-api.ts).
+    'audio/webm', 'audio/ogg', 'audio/mp4', 'audio/aac', 'audio/mpeg'
+  ]
 )
 on conflict (id) do update
 set public = false,

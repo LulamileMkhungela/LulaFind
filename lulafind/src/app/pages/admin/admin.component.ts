@@ -168,7 +168,8 @@ import { timeAgo } from '../../core/utils/format';
     </ion-content>
   `,
   styles: [`
-    .tabs { display: flex; gap: 8px; padding: 12px var(--lf-gap); }
+    .tabs { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px var(--lf-gap); }
+    .tab { min-width: 0; }
     .tab { position: relative; padding: 8px 16px; border-radius: 999px; border: 1px solid var(--lf-line);
       background: transparent; color: var(--lf-muted); font-weight: 700; font-size: 13px; cursor: pointer; }
     .tab.on { background: var(--lf-primary-soft); color: var(--lf-primary-soft-text); border-color: transparent; }

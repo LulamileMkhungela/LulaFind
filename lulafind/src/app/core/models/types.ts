@@ -2,6 +2,8 @@
  * LulaFind - domain model
  * ------------------------------------------------------------------ */
 
+import type { ImpactTally } from './impact';
+
 export type ProvinceCode =
   | 'EC' | 'FS' | 'GP' | 'KZN' | 'LP' | 'MP' | 'NW' | 'NC' | 'WC';
 
@@ -294,13 +296,28 @@ export interface UserProfile {
   lastBeaconAt: number | null;
   followers: number;
   following: number;
-  /** help points - earned when people find your answers useful */
+  /**
+   * Legacy running total, kept so stored profiles still load.
+   *
+   * Nothing increments it any more and nothing displays it: impact points are
+   * derived from `impact` + `contributorCredits` (see models/impact.ts) so the
+   * number a person sees and the level they hold can never disagree.
+   */
   karma: number;
   /**
    * Times this person was selected as the one who found someone.
    * The profile badge reads "Contributor x4" from this number.
    */
   contributorCredits?: number;
+  /**
+   * What this person has given the network, counted by kind.
+   *
+   * Deliberately not a score over cases: a family is never ranked, and a
+   * sighting that could locate a child is never part of a public total.
+   * Optional, because accounts created before this existed have none -
+   * `impactOf()` in models/impact.ts reads a missing one as all zeroes.
+   */
+  impact?: ImpactTally;
   onboarded: boolean;
   blockedUserIds: string[];
   /** Where case alerts should reach this member. Missing means "province, everything". */
@@ -352,13 +369,26 @@ export const REPORT_REASONS: { id: string; label: string }[] = [
 
 export interface MediaItem {
   id: string;
-  kind: 'image' | 'video';
+  /**
+   * 'audio' is a voice note: a family saying what happened in their own words,
+   * or a volunteer describing what they saw. It is recorded in the app, never
+   * uploaded from elsewhere, and capped at two minutes (see media-rules.ts).
+   */
+  kind: 'image' | 'video' | 'audio';
   /** data-uri, https url or bundle asset path */
   src: string;
   poster?: string;
   caption?: string;
+  /**
+   * The words in a voice note, in writing. Empty for a recording nobody has
+   * transcribed; when it is set the player offers "Read it instead" beside the
+   * audio rather than sending a deaf reader to a screen that cannot help.
+   */
+  transcript?: string;
   width?: number;
   height?: number;
+  /** Length of a voice note in seconds, so the player can show it before playing. */
+  durationSec?: number;
 }
 
 export interface Comment {
@@ -641,6 +671,14 @@ export interface Post {
     /** LulaFind member named as the person who found them. Set once. */
     finderUserId?: string | null;
     finderName?: string;
+    /**
+     * When the family sent their thankyou to the people who helped. Set once:
+     * the same case can never thank the same people twice, and the screen uses
+     * it to show the completed step instead of the button.
+     */
+    thankedAt?: number | null;
+    /** How many people that thankyou reached. */
+    thankedCount?: number;
   };
 
   events: VerificationEvent[];
@@ -776,7 +814,9 @@ export interface Notification {
     | 'checkin' | 'moderation' | 'danger' | 'story_reply' | 'repost' | 'missing'
     | 'lookout'
     /** Someone sent you a post from the Send picker. */
-    | 'share';
+    | 'share'
+    /** A level or a badge was earned (and, once per level, what unlocked it). */
+    | 'impact';
   title: string;
   body: string;
   at: number;

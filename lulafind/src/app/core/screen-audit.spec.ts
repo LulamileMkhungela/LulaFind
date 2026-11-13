@@ -16,6 +16,7 @@ import { HomeComponent } from '../pages/tabs/home.component';
 import { SpotlightComponent } from '../pages/tabs/spotlight.component';
 import { ChatsComponent } from '../pages/tabs/chats.component';
 import { MeComponent } from '../pages/tabs/me.component';
+import { ProgressComponent } from '../pages/progress/progress.component';
 import { NotificationsComponent } from '../pages/notifications/notifications.component';
 import { AdminComponent } from '../pages/admin/admin.component';
 import { FoundComponent } from '../pages/found/found.component';
@@ -216,6 +217,7 @@ describe('Every screen says one thing without making anyone read a wall', () => 
     { name: 'Spotlight', component: SpotlightComponent, as: 'u_demo' },
     { name: 'Chats (list)', component: ChatsComponent, as: 'u_demo' },
     { name: 'Me', component: MeComponent, as: 'u_demo' },
+    { name: 'Your impact', component: ProgressComponent, as: 'u_demo' },
     { name: 'Notifications', component: NotificationsComponent, as: 'u_demo' },
     { name: 'Found (reunions)', component: FoundComponent, as: 'u_demo' },
     { name: 'Review queue', component: AdminComponent, as: 'u_mod' },

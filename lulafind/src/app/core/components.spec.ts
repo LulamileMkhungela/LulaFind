@@ -5,7 +5,7 @@ import { provideRouter, Router } from '@angular/router';
 import { provideIonicAngular } from '@ionic/angular';
 import { ToastController } from '@ionic/angular/toast-controller';
 
-import { PHOTO_MAX_BYTES, VIDEO_MAX_BYTES } from './models/media-rules';
+import { AUDIO_MAX_BYTES, PHOTO_MAX_BYTES, VIDEO_MAX_BYTES } from './models/media-rules';
 import { LocalDb } from './data/local-db';
 import { compact } from './utils/format';
 import { LULA_API, MockApi } from './data/api';
@@ -24,6 +24,12 @@ import { PlatformService } from './services/platform.service';
 import { AuthComponent } from '../pages/auth/auth.component';
 import { SpotlightComponent } from '../pages/tabs/spotlight.component';
 import { MeComponent } from '../pages/tabs/me.component';
+import { ProgressComponent } from '../pages/progress/progress.component';
+import { RewardService } from './services/reward.service';
+import { RewardToastComponent } from '../shared/components/reward-toast.component';
+import { pointsOf } from './models/impact';
+import { helpersOf } from './utils/aftercare';
+import { VoiceRecorderService } from './services/voice-recorder.service';
 import { CreatePostComponent } from '../pages/post/create-post.component';
 import { CreateStoryComponent } from '../pages/story/create-story.component';
 import { RepostComponent } from '../pages/post/repost.component';
@@ -644,6 +650,79 @@ describe('Components render', () => {
     expect(uploaded.map((u) => u.path)).toEqual(['u_1/p_ok.jpg', 'u_1/v_ok.mp4']);
   });
 
+  it('shows a voice note with its own words, and never a "Read it instead" that has nothing behind it', async () => {
+    const data = TestBed.inject(DataService);
+    await data.loadFeed();
+    const base = (await data.loadPost('p_thato'))!;
+
+    // A note the speech engine transcribed: the words sit under the player.
+    const spoken = {
+      ...base,
+      body: 'A body of text that is not the voice note.',
+      media: [{ id: 'a1', kind: 'audio' as const, src: 'data:audio/webm;base64,AA', durationSec: 12,
+                transcript: 'She was wearing a grey cardigan with a broken zip.' }]
+    };
+    const withWords = TestBed.createComponent(PostCardComponent);
+    withWords.componentInstance.post = spoken;
+    withWords.componentInstance.author = (await data.profile('u_demo'))!;
+    withWords.detectChanges();
+    const html = (withWords.nativeElement as HTMLElement).innerHTML;
+    expect(html).toContain('Read it instead');
+    expect(html).toContain('grey cardigan');
+    // The post body is not passed off as the transcript: the words appear once,
+    // in the note's own "Read it instead", not a second time under the player.
+    const spokenHtml = new DOMParser().parseFromString(html, 'text/html');
+    const transcriptBlocks = [...spokenHtml.querySelectorAll('.note__text p')].map((p) => p.textContent?.trim());
+    expect(transcriptBlocks).toEqual(['She was wearing a grey cardigan with a broken zip.']);
+
+    // A note nobody transcribed: a player, and no promise of text.
+    const silent = { ...base, media: [{ id: 'a2', kind: 'audio' as const, src: 'data:audio/webm;base64,AA', durationSec: 5 }] };
+    const noWords = TestBed.createComponent(PostCardComponent);
+    noWords.componentInstance.post = silent;
+    noWords.componentInstance.author = (await data.profile('u_demo'))!;
+    noWords.detectChanges();
+    const bare = (noWords.nativeElement as HTMLElement).innerHTML;
+    expect(bare).toContain('Voice note');
+    expect(bare).not.toContain('Read it instead');
+  });
+
+  it('stores a voice note as audio, under a name a phone can play, and refuses an oversized one', async () => {
+    // A note is already the bytes we want. Sending it through the photo encoder
+    // turned it into a JPEG blob and stored it as `u_1/a_1.jpg`, so a published
+    // voice note came back as a broken player - on the very post that was meant
+    // to carry a family's own words.
+    const api = new SupabaseApi();
+    const uploaded: { path: string; type: string; bytes: number }[] = [];
+    (api as unknown as { client: unknown }).client = {
+      storage: { from: () => ({
+        upload: async (path: string, blob: Blob) => {
+          uploaded.push({ path, type: blob.type, bytes: blob.size });
+          return { error: null };
+        }
+      }) },
+      rpc: async () => ({ data: { verdict: 'PASS - uploads should work.' }, error: null })
+    };
+    (api as unknown as { signedStorageUrl: unknown }).signedStorageUrl = async () => 'signed://photos/note';
+
+    const note = 'data:audio/webm;codecs=opus;base64,' + Buffer.alloc(1024).toString('base64');
+    const stored = await api.uploadMedia('u_1', { id: 'a_1', kind: 'audio', src: note, durationSec: 4 } as never);
+    expect(uploaded).toEqual([{ path: 'u_1/a_1.webm', type: 'audio/webm', bytes: 1024 }]);
+    // The length survives the round trip: the player shows it before playing.
+    expect(stored.durationSec).toBe(4);
+
+    // iOS records AAC in an MP4 container, and that gets a .m4a name.
+    const ios = 'data:audio/mp4;base64,' + Buffer.alloc(64).toString('base64');
+    await api.uploadMedia('u_1', { id: 'a_2', kind: 'audio', src: ios } as never);
+    expect(uploaded[1]!.path).toBe('u_1/a_2.m4a');
+
+    // Over the two-minute size rule: refused with a sentence about the note,
+    // before a single byte reaches Storage.
+    const long = 'data:audio/webm;base64,' + Buffer.alloc(AUDIO_MAX_BYTES + 1).toString('base64');
+    await expect(api.uploadMedia('u_1', { id: 'a_3', kind: 'audio', src: long } as never))
+      .rejects.toThrow(/too long to upload/i);
+    expect(uploaded).toHaveLength(2);
+  });
+
   it('writes a notification owned by the actor, never by the recipient', async () => {
     // The recipient can never own the row: the insert policy compares owner_id
     // with the caller. Falling back to them produced a write the database could
@@ -834,13 +913,16 @@ describe('Components render', () => {
     expect(labels).toContain('Repost');
     expect(labels).toContain('Send');
 
-    // Tapping React emits the reaction the app records, and Comment opens the
-    // post's comments - the two things a feed post must be able to do.
+    // A keyboard tap on React emits the reaction the app records, and Comment
+    // opens the post's comments - the two things a feed post must be able to
+    // do. (Pointer taps are covered by the reaction-button's own suite; a
+    // synthetic .click() on the host is deliberately meaningless.)
     const votes: string[] = [];
     const comments: number[] = [];
     f.componentInstance.vote.subscribe((v) => votes.push(v));
     f.componentInstance.comment.subscribe(() => comments.push(1));
-    (el.querySelector('.fb-actions .fb-act') as HTMLButtonElement).click();
+    const reactBtn = el.querySelector('.fb-actions lf-reaction-button .btn') as HTMLButtonElement;
+    reactBtn.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
     ([...el.querySelectorAll('.fb-actions .fb-act')][1] as HTMLButtonElement).click();
     expect(votes.length).toBe(1);
     expect(comments.length).toBe(1);
@@ -1108,13 +1190,25 @@ describe('Components render', () => {
     const composer = f.nativeElement as HTMLElement;
     const composerHtml = composer.innerHTML;
     const contentInputs = composer.querySelectorAll('textarea');
-    expect(composerHtml).toContain('Fill in the prompts');
+    expect(composerHtml).toContain('Fill in what you know');
+    // The promise that makes the form possible: nothing here is final.
+    expect(composerHtml).toContain('add it later from the post itself');
     expect(composerHtml).toContain('Generate');
     expect(composerHtml).not.toContain('Short heading');
     expect(composerHtml).not.toContain('Story');
     expect(contentInputs).toHaveLength(1);
     expect((contentInputs[0] as HTMLTextAreaElement).value).toContain('Full name:');
     expect((contentInputs[0] as HTMLTextAreaElement).value).toContain('What happened:');
+    /*
+     * The prompts ask only what a case cannot exist without. Clothing, the SAPS
+     * case number and contact details used to be asked here *and* again in the
+     * optional panel - the same question twice, which read as a form that does
+     * not trust you. They live in the panel alone now.
+     */
+    const prompts = (contentInputs[0] as HTMLTextAreaElement).value;
+    for (const deferred of ['Clothing', 'SAPS case number', 'Contact details']) {
+      expect(prompts, deferred).not.toContain(deferred);
+    }
 
     f.componentInstance.patch({ body: 'Full name:\nAma Ndlovu\nAge:\n14\nGender:\nFemale\nLocation (town/suburb, province):\nSoweto, Gauteng\nWhen last seen:\n2026-09-30T10:20\nWhat happened:\nAma was last seen walking home from school after her afternoon class.\nClothing / identifying details:\nBlue school uniform' });
     expect(f.componentInstance.templateValues()).toMatchObject({
@@ -1235,6 +1329,315 @@ describe('Components render', () => {
     f.componentInstance.menuTab.set('saved');
     f.detectChanges();
     expect((f.nativeElement as HTMLElement).innerHTML).toContain('Saved posts');
+  });
+
+  it('shows the member their impact, the next step and the honest list of what counts', async () => {
+    const auth = TestBed.inject(AuthService);
+    const data = TestBed.inject(DataService);
+    await auth.signInDemo();
+    await data.loadFeed();
+    await data.loadStatic();
+
+    // A member who has given nothing still gets a level, a reason and one step.
+    const f = TestBed.createComponent(ProgressComponent);
+    await settle(f);
+    const el = f.nativeElement as HTMLElement;
+    const text = el.textContent ?? '';
+    expect(text).toContain('Neighbour');
+    expect(text).toContain('What counts');
+    expect(text).toContain('Never counted');
+    expect(text).toContain('Badges');
+    // Several badges are locked for a fresh account, and each still says how.
+    const locked = Array.from(el.querySelectorAll('.badge')).filter((b) => !b.classList.contains('on'));
+    expect(locked.length).toBeGreaterThan(0);
+    for (const b of locked) expect((b.textContent ?? '').trim().length).toBeGreaterThan(12);
+
+    // A member with real work sees the badges and a level that moved.
+    const me = auth.user()!;
+    await TestBed.inject(LULA_API).saveUser({
+      ...me,
+      impact: { signals: 4, searches: 3, posters: 1, communities: 1, care: 1 },
+      contributorCredits: 1
+    });
+    auth.syncUser({ ...me, impact: { signals: 4, searches: 3, posters: 1, communities: 1, care: 1 }, contributorCredits: 1 });
+    const rich = TestBed.createComponent(ProgressComponent);
+    await settle(rich);
+    const richText = rich.nativeElement.textContent ?? '';
+    // 4 leads (20) + 3 areas (45) + 1 poster (10) + 1 community (20) + 1 check (25) + 1 find (50) = 170
+    expect(richText).toContain('170 points');
+    expect(richText).toContain('Level 3');
+    expect(richText).toContain('30 to Guide');
+    const earned = Array.from((rich.nativeElement as HTMLElement).querySelectorAll('.badge.on'));
+    expect(earned.length).toBeGreaterThanOrEqual(4);
+  });
+
+  it('thanks a person where they are when their work is counted, and opens their impact', async () => {
+    const auth = TestBed.inject(AuthService);
+    const data = TestBed.inject(DataService);
+    const rewards = TestBed.inject(RewardService);
+    await auth.signInDemo();
+    await data.loadStatic();
+
+    // Start from nothing: a member who has never been counted. The seeded members
+    // already carry a tally, and a badge you already hold is not news.
+    auth.syncUser({ ...auth.user()!, impact: { signals: 0, searches: 0, posters: 0, communities: 0, care: 0 }, contributorCredits: 0 });
+    TestBed.inject(LULA_API);
+    // An award is visible: the toast is not a hidden side effect of a profile write.
+    // The first poster is also a badge, and a badge outranks the points it came with.
+    await data.awardOnce('test:poster:p_harness', 'posters', 'Every wall it reaches is one more pair of eyes.');
+    const f = TestBed.createComponent(RewardToastComponent);
+    f.detectChanges();
+    let html = (f.nativeElement as HTMLElement).innerHTML;
+    // "First step" comes with the very first thing anyone does, so the badge that
+    // travels with a poster is the poster one - not a welcome that repeats itself.
+    expect(html).toContain('Badge earned: Poster in hand');
+    expect(html).toContain('Put a case poster out where people pass.');
+    expect(html).toContain('role="status"');
+    expect(html).toContain('aria-live="polite"');
+    expect(rewards.moment()?.totalAfter).toBe(10);
+
+    // The same act never pays twice.
+    expect(await data.awardOnce('test:poster:p_harness', 'posters', 'again')).toBe(false);
+    expect(pointsOf(auth.user()!)).toBe(10);
+
+    // An ordinary lead with no new badge just says what it was worth.
+    rewards.dismiss();
+    await data.awardOnce('test:lead:c_harness', 'signals', 'That lead is on the case now.');
+    f.detectChanges();
+    f.detectChanges();
+    html = (f.nativeElement as HTMLElement).innerHTML;
+    expect(html).toContain('+5 points');
+    expect(html).toContain('That lead is on the case now.');
+
+    // Crossing a level is announced once, in the person's own terms.
+    rewards.dismiss();
+    await data.awardOnce('test:care:l_harness', 'care', 'You answered a safety check.');
+    f.detectChanges();
+    html = (f.nativeElement as HTMLElement).innerHTML;
+    expect(html).toContain('You are now a Helper');
+    expect(html).toContain('You have given the network something it could use.');
+
+    // Tapping it goes to the impact screen - the toast is a door, not a trophy.
+    const nav = TestBed.inject(Router);
+    const go = vi.spyOn(nav, 'navigate').mockResolvedValue(true);
+    f.componentInstance.open({ badge: { id: 'posterman' } });
+    expect(go).toHaveBeenCalledWith(['/progress'], expect.anything());
+    expect(rewards.moment()).toBeNull();
+    go.mockRestore();
+  });
+
+  it('takes a newly published case straight to its poster, because that is what reaches people', async () => {
+    TestBed.overrideProvider(ToastController, { useValue: { create: async () => ({ present: async () => undefined }) } });
+    const auth = TestBed.inject(AuthService);
+    const data = TestBed.inject(DataService);
+    await auth.signInDemo();
+    await data.loadStatic();
+    const nav = TestBed.inject(Router);
+    const go = vi.spyOn(nav, 'navigate').mockResolvedValue(true);
+
+    // A missing-person case carries a printable poster, so publishing ends there.
+    const f = TestBed.createComponent(CreatePostComponent);
+    f.detectChanges();
+    await f.whenStable();
+    f.componentInstance.setType('missing');
+    f.componentInstance.patch({
+      body: 'Full name:\nSipho Dlamini\nAge:\n9\nGender:\nMale\nLocation (town/suburb, province):\nSoweto, Gauteng\nWhen last seen:\n2026-10-02T16:00\nWhat happened:\nSipho walked home from the shop on the corner and did not arrive. His family have searched the usual places and spoken to neighbours, and they are asking anyone who passes the park to look.\nClothing / identifying details:\nRed T-shirt, blue shorts',
+      guardianConsent: true
+    });
+    await f.componentInstance.submit();
+    const casePost = data.myAuthored().find((item) => item.subject?.name === 'Sipho Dlamini');
+    expect(casePost).toBeTruthy();
+    expect(go).toHaveBeenLastCalledWith(['/post', casePost!.id, 'poster'], { queryParams: { new: '1' } });
+
+    // A status update has no poster, so it goes home rather than to a dead end.
+    go.mockClear();
+    const g = TestBed.createComponent(CreatePostComponent);
+    g.detectChanges();
+    await g.whenStable();
+    g.componentInstance.setType('sighting');
+    g.componentInstance.patch({ body: 'A boy in a red T-shirt and blue shorts was seen near the park gates at 07:00.' });
+    // A sighting needs no poster; the photo the person attached is enough to publish.
+    g.componentInstance.f.update((v) => ({ ...v, media: [{ id: 'sighting-photo', kind: 'image' as const, src: 'data:image/png;base64,AA==' }] }));
+    await g.componentInstance.submit();
+    expect(g.componentInstance.error()).toBe('');
+    expect(go).toHaveBeenCalledWith(['/home']);
+    go.mockRestore();
+  });
+
+  it('lets a family thank the people who helped, once, and only the ones who did', async () => {
+    const auth = TestBed.inject(AuthService);
+    const data = TestBed.inject(DataService);
+    await auth.signInDemo();
+    await data.loadStatic();
+    const seed = db.posts().find((p) => p.id === 'p_thato')!;
+    // The seeded case has two people marked as looking and a lead in its comments.
+    expect(seed.lookingIds?.length ?? 0).toBeGreaterThan(0);
+    const helpers = helpersOf(seed, db.comments().filter((c) => c.postId === seed.id));
+    expect(helpers.length).toBeGreaterThan(0);
+
+    // A case that is still open cannot be thanked: there is nothing to say yet.
+    await expect(data.thankHelpers(seed.id, '')).rejects.toThrow(/Close the case first/);
+
+    const closed = await data.markFound(seed.id, { whereabouts: 'Home in Orlando West' });
+    expect(closed?.outcome.found).toBe(true);
+
+    const result = await data.thankHelpers(seed.id, 'Thank you for giving up your Saturday.');
+    expect(result.sent).toBe(helpers.length);
+
+    // Each helper gets one message, in the family's words, that says what they did.
+    for (const helper of helpers) {
+      const inbox = await TestBed.inject(LULA_API).notifications(helper.userId);
+      const note = inbox.find((n) => n.kind === 'outcome' && n.postId === seed.id && n.title.startsWith('A thankyou'));
+      expect(note, helper.userId).toBeTruthy();
+      expect(note!.body).toContain('Thank you for giving up your Saturday.');
+      expect(note!.body).toContain('you ');
+      expect(note!.route).toBe(`/post/${seed.id}`);
+    }
+
+    // The poster is not thanked for their own case.
+    const posterInbox = await TestBed.inject(LULA_API).notifications(seed.authorId);
+    expect(posterInbox.some((n) => n.title.startsWith('A thankyou'))).toBe(false);
+
+    // It is recorded on the case, and never sent twice.
+    const after = data.post(seed.id)!;
+    expect(after.outcome.thankedCount).toBe(helpers.length);
+    expect(after.outcome.thankedAt).toBeGreaterThan(0);
+    await expect(data.thankHelpers(seed.id, 'again')).rejects.toThrow(/already thanked/);
+  });
+
+  it('refuses a thankyou from anyone but the family who posted the case', async () => {
+    const auth = TestBed.inject(AuthService);
+    const data = TestBed.inject(DataService);
+    const seed = db.posts().find((p) => p.id === 'p_thato')!;
+    await data.markFound(seed.id, { whereabouts: 'Home' });
+    // Signed in as someone else entirely - an admin, even, because the note is
+    // signed by whoever sends it and a family's words are only theirs.
+    await auth.signInDemo();
+    const admin = db.user('u_demo')!;
+    (auth as unknown as { user: { set(v: unknown): void } }).user
+      .set({ ...admin, id: 'u_mod', displayName: 'Moderator', isAdmin: true, onboarded: true });
+    await expect(data.thankHelpers(seed.id, 'thanks')).rejects.toThrow(/Only the person who posted/);
+  });
+
+  it('publishes a case from the few prompts, and the optional details land where they belong', async () => {
+    TestBed.overrideProvider(ToastController, { useValue: { create: async () => ({ present: async () => undefined }) } });
+    const auth = TestBed.inject(AuthService);
+    const data = TestBed.inject(DataService);
+    await auth.signInDemo();
+    await data.loadStatic();
+    const f = TestBed.createComponent(CreatePostComponent);
+    f.detectChanges();
+    await f.whenStable();
+    f.componentInstance.setType('missing');
+
+    // Only the prompts are filled - this is the whole "what you know" path.
+    f.componentInstance.patch({
+      body: 'Full name:\nLindiwe Sithole\nAge:\n16\nGender:\nFemale\nLocation (town/suburb, province):\nSoweto, Gauteng\nWhen last seen:\n2026-10-01T07:30\nWhat happened:\nLindiwe left for school and did not arrive. Her family have checked the clinic, the taxi rank and her friends\u2019 homes.',
+      guardianConsent: true
+    });
+    const missing = f.componentInstance.missing().map((m) => m.key);
+    expect(missing).toEqual([]);
+    expect(f.componentInstance.childCase()).toBe(true);
+
+    // Details that were deferred are still reachable, and are stored on the subject.
+    (f.componentInstance as unknown as { moreOpen: { set(v: boolean): void } }).moreOpen.set(true);
+    f.componentInstance.patchSubject({ clothing: 'Grey school tracksuit' });
+    f.detectChanges();
+    // The deferred fields are in the panel, labelled as skippable.
+    const panelHtml = (f.nativeElement as HTMLElement).innerHTML;
+    expect(panelHtml).toContain('Add person and case details');
+    expect(panelHtml).toContain('Clothing or identifying details');
+
+    await f.componentInstance.submit();
+    const post = data.myAuthored().find((item) => item.subject?.name === 'Lindiwe Sithole');
+    expect(post).toBeTruthy();
+    expect(post!.subject?.clothing).toBe('Grey school tracksuit');
+    // The public words stay the story, not a form dump.
+    expect(post!.body).toContain('Lindiwe left for school');
+    expect(post!.body).not.toContain('Full name:');
+  });
+
+  it('records a voice note by holding, slides left to cancel and up to lock', async () => {
+    const auth = TestBed.inject(AuthService);
+    const data = TestBed.inject(DataService);
+    const recorder = TestBed.inject(VoiceRecorderService);
+    await auth.signInDemo();
+    await data.loadStatic();
+    const f = TestBed.createComponent(CreatePostComponent);
+    f.detectChanges();
+    await f.whenStable();
+    f.componentInstance.setType('missing');
+
+    // A fake recorder shaped like the real one: the promise stays pending while
+    // recording, and resolves only when the person stops or cancels.
+    let live = false;
+    let cancelled = 0;
+    let stopped = 0;
+    let settle: ((n: unknown) => void) | null = null;
+    const note = { id: 'a1', kind: 'audio' as const, src: 'data:audio/webm;base64,AA', durationSec: 4 };
+    vi.spyOn(recorder, 'record').mockImplementation(() => {
+      live = true;
+      recorder.recording.set(true);
+      return new Promise((resolve) => { settle = resolve; }) as never;
+    });
+    vi.spyOn(recorder, 'stop').mockImplementation(() => {
+      live = false;
+      stopped += 1;
+      recorder.recording.set(false);
+      settle?.(note);
+      settle = null;
+    });
+    vi.spyOn(recorder, 'cancel').mockImplementation(() => {
+      live = false;
+      cancelled += 1;
+      recorder.recording.set(false);
+      recorder.locked.set(false);
+      settle?.(null);
+      settle = null;
+    });
+    Object.defineProperty(recorder, 'available', { get: () => true });
+
+    const down = (x: number, y: number): PointerEvent => ({ clientX: x, clientY: y, pointerId: 1, preventDefault() {} } as unknown as PointerEvent);
+
+    // Hold: recording starts on touch-down, not on release, so no first word is lost.
+    f.componentInstance.voiceDown(down(200, 500));
+    await new Promise((r) => setTimeout(r, 0));
+    expect(live).toBe(true);
+    // Nothing is attached while the finger is still down.
+    expect(f.componentInstance.hasVoiceNote()).toBe(false);
+
+    // Slide left past the threshold, then release: thrown away, nothing attached.
+    f.componentInstance.voiceDown(down(200, 500));
+    await new Promise((r) => setTimeout(r, 0));
+    f.componentInstance.voiceMove(down(100, 500));
+    f.componentInstance.voiceUp(down(100, 500));
+    expect(cancelled).toBe(1);
+    expect(f.componentInstance.hasVoiceNote()).toBe(false);
+
+    // Release without sliding: the note is kept and the mic closes.
+    f.componentInstance.voiceDown(down(200, 500));
+    await new Promise((r) => setTimeout(r, 0));
+    f.componentInstance.voiceUp(down(200, 500));
+    await new Promise((r) => setTimeout(r, 0));
+    expect(stopped).toBe(1);
+    // Released without sliding: the note lands on the post.
+    expect(f.componentInstance.hasVoiceNote()).toBe(true);
+
+    // Slide up past the threshold: locked, so letting go keeps recording.
+    f.componentInstance.voiceDown(down(200, 500));
+    await new Promise((r) => setTimeout(r, 0));
+    f.componentInstance.voiceMove(down(200, 420));
+    expect(recorder.locked()).toBe(true);
+    f.componentInstance.voiceUp(down(200, 420));
+    expect(live).toBe(true);
+    expect(stopped).toBe(1);
+    // The bar offers stop and cancel once locked.
+    f.detectChanges();
+    const html = (f.nativeElement as HTMLElement).innerHTML;
+    expect(html).toContain('recbar--locked');
+    expect(html).toContain('Locked');
+    f.componentInstance.stopVoiceNote();
+    expect(stopped).toBe(2);
   });
 
   it('handles media in the composer', async () => {
@@ -1370,7 +1773,7 @@ describe('Components render', () => {
     expect(html).toContain('Green ring');
     expect(html).toContain('Safe');
     // stats and communities are hidden from a visitor
-    expect(html).not.toContain('help points');
+    expect(html).not.toContain('impact points');
     expect(f.componentInstance.showStats()).toBe(false);
   });
 
