@@ -49,6 +49,14 @@ import { timeAgo } from '../../core/utils/format';
         </a>
       }
 
+      <!--
+        Home is the feed. "What should I do next?" used to be answered here as
+        well as on Me, from the same nextBestStep() - two screens giving the same
+        advice, which is one screen too many. The advice lives on Me, next to the
+        impact it is about; a person who has not started yet still gets the
+        empty-state invitation below.
+      -->
+
       <!-- While you were away: the honest answer to "what did I miss?" - new
            cases (and how many are in your own province), movement on the cases
            you follow, and anything new in the Spotlights you are part of. -->
@@ -261,6 +269,22 @@ import { timeAgo } from '../../core/utils/format';
     .network-empty { margin: 10px 0 0; color: var(--lf-muted); font-size: 13px; }
     @media (min-width: 700px) { .feed-scopes, .network-context { max-width: var(--lf-maxw); margin-left: auto; margin-right: auto; } }
 
+    .start { position: relative; margin: 10px var(--lf-gap) 0; padding: 13px 14px 12px; border-radius: 14px;
+      background: linear-gradient(150deg, color-mix(in srgb, var(--lf-primary) 13%, var(--lf-card)), var(--lf-card) 72%);
+      box-shadow: var(--lf-shadow); }
+    .start__x { position: absolute; top: 8px; right: 8px; display: grid; place-items: center; width: 26px; height: 26px;
+      border: 0; border-radius: 50%; background: transparent; color: var(--lf-muted); cursor: pointer; }
+    .start__row { display: flex; gap: 11px; align-items: flex-start; padding-right: 22px; }
+    .start__ic { display: grid; place-items: center; width: 38px; height: 38px; flex: none; border-radius: 11px;
+      background: var(--lf-card); color: var(--lf-primary-soft-text); box-shadow: 0 0 0 1px var(--lf-line-soft); }
+    .start__body { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+    .start__eyebrow { font-size: 10.5px; font-weight: 800; letter-spacing: .7px; text-transform: uppercase; color: var(--lf-primary-soft-text); }
+    .start__body strong { font-size: 14.5px; line-height: 1.25; }
+    .start__body p { margin: 1px 0 0; font-size: 12.5px; line-height: 1.35; color: var(--lf-muted); }
+    .start__foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 11px; }
+    .start__foot .lf-btn { display: inline-flex; align-items: center; gap: 5px; text-decoration: none; }
+    .start__go { display: inline-flex; align-items: center; gap: 2px; font-size: 12.5px; font-weight: 700;
+      color: var(--lf-primary-soft-text); text-decoration: none; }
     .catchup { margin: 10px var(--lf-gap) 0; padding: 12px 14px; border-radius: var(--lf-radius);
       background: var(--lf-card); box-shadow: var(--lf-shadow); display: flex; flex-direction: column; gap: 8px; }
     .catchup__head { display: flex; align-items: center; gap: 8px; }
@@ -352,6 +376,7 @@ export class HomeComponent {
       })
       .filter((p) => !!p.lookout);
   });
+
 
   readonly displayedFeed = computed(() => this.data.feed());
 

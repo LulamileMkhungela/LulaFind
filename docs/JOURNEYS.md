@@ -120,6 +120,11 @@ Listed so nothing here reads as more than it is:
 - **Android device flows** — camera capture, share sheet, push notifications, geolocation in the
   native shell. The web fallbacks are what the browser run exercises; the APK needs a rebuild to
   retest on a phone (`npx cap sync android` is done; the build needs an Android SDK).
+- **The voice note, recorded and published** — verified in headless Chromium with a fake microphone
+  and a stand-in speech engine: hold to record, slide up to lock, slide left to cancel, the words
+  written down while speaking, the note attached, published, and playable with "Read it instead" on
+  the post. What is *not* verified here is a real phone's microphone, and the transcript with a real
+  speech engine: headless Chromium has neither.
 - **Real-time messaging between two devices** — the hosted backend is unreachable here, so chat is
   exercised on the local store only.
 - **Admin-only actions** — remove post, suspend a person, delete an account. The screen and its

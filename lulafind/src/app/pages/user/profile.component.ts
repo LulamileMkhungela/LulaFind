@@ -22,6 +22,9 @@ import { ModerationService } from '../../core/services/moderation.service';
 import { LookoutService } from '../../core/services/lookout.service';
 import { SafetyService, CHECK_IN_COPY } from '../../core/services/safety.service';
 import { lastSeenOf } from '../../core/utils/lookout';
+import {
+  BADGES, earnedBadges, impactOf, pointsOf, progressFor
+} from '../../core/models/impact';
 import { CheckInStatus, Post, UserProfile, provinceName } from '../../core/models/types';
 import { compact, contributorLabel, dayMonth, timeAgo } from '../../core/utils/format';
 import { cover } from '../../core/data/seed';
@@ -70,9 +73,54 @@ import { cover } from '../../core/data/seed';
               <div class="stats">
                 <div><strong>{{ compact(u()!.followers) }}</strong><span>followers</span></div>
                 <div><strong>{{ compact(u()!.following) }}</strong><span>following</span></div>
-                <div><strong>{{ compact(u()!.karma) }}</strong><span>help points</span></div>
+                <!--
+                  One number, one meaning. This used to print karma - a field
+                  nothing ever incremented - while the level below it came from a
+                  different tally, so a member could show 347 help points and
+                  "Level 1, Neighbour" at the same time. The points shown here are
+                  the points the level is calculated from.
+                -->
+                <div><strong>{{ compact(points()) }}</strong><span>impact points</span></div>
                 <div><strong>{{ posts().length }}</strong><span>posts</span></div>
               </div>
+
+              <!--
+                On your own profile the level is a door to your impact; on
+                someone else's it is one line of context, never a comparison.
+                Both go through showStats, so a member who hid their numbers
+                hides this too - there is no side channel to what they turned off.
+              -->
+              @if (isMe()) {
+                <a class="level" routerLink="/progress">
+                  <lf-icon name="sparkle" [size]="16" />
+                  <span class="level__name">Level {{ progress().level.level }} · {{ progress().level.name }}</span>
+                  <span class="level__pts">{{ myPoints() }} pts</span>
+                  <lf-icon name="chevronRight" [size]="15" />
+                </a>
+              } @else if (theirLevel(); as lvl) {
+                <p class="level level--static">
+                  <lf-icon name="sparkle" [size]="15" />
+                  <span class="level__name">Level {{ lvl.level.level }} · {{ lvl.level.name }}</span>
+                  @if (lvl.next) { <span class="level__pts">{{ lvl.toNext }} to {{ lvl.next.name }}</span> }
+                </p>
+              }
+
+              <!-- The badges a person actually earned. Locked ones are not listed
+                   on someone else's profile: a wall of grey is a nag, not a welcome. -->
+              @if (badges().length) {
+                <div class="badge-row" [attr.aria-label]="isMe() ? 'Your badges' : 'Badges earned'">
+                  @for (b of shownBadges(); track b.id) {
+                    <span class="badge-pill" [title]="b.how">
+                      <lf-icon [name]="b.icon" [size]="13" /> {{ b.name }}
+                    </span>
+                  }
+                  @if (isMe()) {
+                    <a class="badge-more" routerLink="/progress">See all {{ allBadges().length }}</a>
+                  } @else if (moreBadges() > 0) {
+                    <a class="badge-more" [routerLink]="'/progress'" aria-label="All badges">+{{ moreBadges() }} more</a>
+                  }
+                </div>
+              }
             }
 
             <!-- safety status -->
@@ -239,6 +287,21 @@ import { cover } from '../../core/data/seed';
     .stats div { display: flex; flex-direction: column; }
     .stats strong { font-size: 17px; }
     .stats span { font-size: 11.5px; color: var(--lf-muted); }
+    /* The level line: a door on your own profile, one quiet fact on anyone else's. */
+    .level { display: flex; align-items: center; gap: 6px; margin-top: 10px; padding: 8px 11px; border-radius: 999px;
+      background: color-mix(in srgb, var(--lf-primary) 10%, transparent); color: var(--ion-text-color);
+      font-size: 13px; font-weight: 650; text-decoration: none; align-self: flex-start; }
+    .level lf-icon { color: var(--lf-primary); }
+    .level__name { white-space: nowrap; }
+    .level__pts { margin-left: auto; font-weight: 600; font-size: 12.5px; color: var(--lf-muted); font-variant-numeric: tabular-nums; }
+    .level--static { background: none; padding: 4px 0 0; border-radius: 0; color: var(--lf-muted); font-weight: 600; }
+    .level--static lf-icon { color: var(--lf-signal); }
+    .badge-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+    .badge-pill { display: inline-flex; align-items: center; gap: 4px; padding: 4px 9px; border-radius: 999px;
+      font-size: 12px; font-weight: 650; background: var(--lf-card); border: 1px solid var(--lf-line);
+      color: var(--ion-text-color); }
+    .badge-pill lf-icon { color: var(--lf-signal); }
+    .badge-more { font-size: 12.5px; font-weight: 650; align-self: center; color: var(--lf-primary); text-decoration: none; }
     .quick { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; padding: 12px 13px;
       border-radius: var(--lf-radius); background: var(--lf-card); border: 0; box-shadow: var(--lf-shadow); }
     .quick-label { font-size: 12.5px; font-weight: 700; color: var(--lf-muted); }
@@ -351,6 +414,36 @@ export class ProfileComponent implements OnInit {
   private tick = signal(0);
 
   readonly isMe = computed(() => this.u()?.id === this.auth.viewerId);
+
+  /**
+   * Levels are public only as far as the member's own privacy allows: the same
+   * `showStats` switch that hides followers and points hides these, because
+   * a hidden number with a visible level next to it is still the number.
+   */
+  readonly myImpact = computed(() => this.data.myImpact());
+  readonly myPoints = computed(() => this.data.myPoints());
+  readonly progress = computed(() => progressFor(this.myPoints()));
+  /** The single number behind the level, for the person whose profile this is. */
+  readonly points = computed(() => (this.isMe() ? this.data.myPoints() : pointsOf(this.u())));
+
+  readonly theirLevel = computed(() => {
+    const u = this.u();
+    if (!u || this.isMe()) return null;
+    return progressFor(pointsOf(u));
+  });
+  /**
+   * Four badges is a summary; twelve is a CV. On your own profile the rest is one
+   * tap away, and on someone else's a count is enough to know there is more.
+   */
+  readonly shownBadges = computed(() => (this.isMe() ? this.badges() : this.badges().slice(0, 4)));
+  readonly moreBadges = computed(() => Math.max(0, this.badges().length - 4));
+
+  readonly badges = computed(() => {
+    const u = this.u();
+    if (!u || u.privacy?.showStats === false) return [];
+    return earnedBadges(impactOf(u), { found: u.contributorCredits ?? 0 });
+  });
+  readonly allBadges = computed(() => BADGES);
   readonly avatar = computed(() => this.data.avatarFor(this.u()));
   readonly banner = computed(() => cover(this.u()?.surname || this.u()?.displayName || 'LulaFind'));
   readonly location = computed(() => this.auth.locationLabel(this.u()));

@@ -6,13 +6,28 @@ import { LulaApi, SavePostOptions } from './api';
 import { answerBlocker } from '../utils/lookout';
 import { SUPABASE_URL, SUPABASE_KEY, supabaseNotice } from './supabase-client';
 import { LocalDb } from './local-db';
-import { approxBytes, MAX_STORED_BYTES, mimeOfDataUrl, storableBlob } from '../utils/media-encode';
+import { approxBytes, dataUrlToBlob, MAX_STORED_BYTES, mimeOfDataUrl, storableBlob } from '../utils/media-encode';
 import { canReadPostAudience } from '../utils/audience';
-import { PHOTO_MAX_BYTES, VIDEO_MAX_BYTES } from '../models/media-rules';
+import { AUDIO_MAX_BYTES, PHOTO_MAX_BYTES, VIDEO_MAX_BYTES } from '../models/media-rules';
 import {
   ChatMessage, ChatThread, Lookout, Comment, FeedFilter, FollowEdge, MediaItem,
   Notification, Post, Spotlight, Story, StoryReply, StoryView, Tip, UserProfile, UserReport
 } from '../models/types';
+
+/**
+ * The file extension Storage should see for each audio type the recorder makes.
+ * Android records Opus in WebM or AAC in MP4; a saved note has to keep a name
+ * that matches its type, or the signed link serves it as something a phone will
+ * not play.
+ */
+export const AUDIO_FILE_EXTENSION: Record<string, string> = {
+  'audio/webm': 'webm',
+  'audio/ogg': 'ogg',
+  'audio/mp4': 'm4a',
+  'audio/aac': 'aac',
+  'audio/mpeg': 'mp3',
+  'audio/wav': 'wav'
+};
 
 /**
  * True when Postgres refused the row and a fresh token is worth one retry.
@@ -1354,6 +1369,12 @@ export class SupabaseApi implements LulaApi {
     if (item.kind === 'video' && approxBytes(item.src) > VIDEO_MAX_BYTES) {
       throw new MediaUploadError(`Choose a video smaller than ${Math.round(VIDEO_MAX_BYTES / (1024 * 1024))} MB`, false);
     }
+    // A voice note cannot be re-encoded either, and the recorder already stops at
+    // two minutes. Checking the bytes here means a long note fails with a sentence
+    // about the note rather than a bucket refusal the person cannot act on.
+    if (item.kind === 'audio' && approxBytes(item.src) > AUDIO_MAX_BYTES) {
+      throw new MediaUploadError('That recording is too long to upload. Keep it under two minutes.', false);
+    }
 
     // Encoding first, and only then who is uploading: the answer about a file that
     // is too big or the wrong type belongs to the file, and it must not be dressed
@@ -1366,7 +1387,15 @@ export class SupabaseApi implements LulaApi {
     const owner = dbUid ?? ownerId;
     if (!owner) throw new MediaUploadError('Sign in before uploading media', true);
     const isVideo = blob.type.startsWith('video');
-    const extension = isVideo ? 'mp4' : (blob.type.split('/')[1] ?? 'jpeg').replace('jpeg', 'jpg');
+    const isAudio = blob.type.startsWith('audio');
+    /*
+     * The extension has to be a real one: a stored note plays from its signed
+     * link, and a browser decides how to decode it from the type it is served.
+     * `audio/webm;codecs=opus` would otherwise become the nonsense `.webm;codecs=opus`.
+     */
+    const extension = isVideo ? 'mp4'
+      : isAudio ? AUDIO_FILE_EXTENSION[blob.type.split(';')[0]!.trim()] ?? 'webm'
+      : (blob.type.split('/')[1] ?? 'jpeg').replace('jpeg', 'jpg');
     const path = `${owner}/${item.id}.${extension}`;
     const send = () => this.client.storage.from('photos').upload(path, blob, {
       cacheControl: '3600',
@@ -1399,6 +1428,17 @@ export class SupabaseApi implements LulaApi {
    * HEIC original becomes a JPEG a browser can read.
    */
   private async toStorableBlob(item: MediaItem): Promise<Blob | null> {
+    /*
+     * A voice note is already the bytes we want: Opus or AAC, recorded at a
+     * speech bitrate by the phone itself. There is nothing to re-encode, and a
+     * canvas would destroy it - it goes straight through, at its own type.
+     */
+    if (item.kind === 'audio' || mimeOfDataUrl(item.src).startsWith('audio')) {
+      const audio = dataUrlToBlob(item.src);
+      if (!audio) return null;
+      if (!audio.type.startsWith('audio')) return null;
+      return audio;
+    }
     const video = item.kind === 'video' || mimeOfDataUrl(item.src).startsWith('video');
     // The product rule, not the bucket's: a photo is re-encoded until it fits 2 MB,
     // and only a picture this browser cannot decode at all (HEIC in Chrome, a

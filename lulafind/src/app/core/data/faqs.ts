@@ -67,6 +67,20 @@ const fromLula: Faq[] = FAQ_TOPICS
 
 const housekeeping: Faq[] = [
   {
+    id: 'impact',
+    category: 'Your account',
+    q: 'What are levels and badges - and does a family get scored?',
+    a: 'Your impact counts only what you chose to give: a lead the family could use, a search area you claimed and finished, a poster out in public, a Spotlight community you joined, a safety check you answered, and being named by a family as the person who found someone. It never counts how many cases are missing, how often someone posts, or anything about a family. There is no leaderboard against other people and your points are shown only to you.',
+    links: [{ label: 'See your impact', route: '/progress' }]
+  },
+  {
+    id: 'next-step',
+    category: 'Start here',
+    q: 'What should I do first?',
+    a: 'One card on Home tells you the single next thing, chosen from what is missing for you - your province, one person or case to follow, your surname Spotlight, a first post, a poster, a check-in. It disappears for the day when you dismiss it, and it never asks you to post a case you do not have.',
+    links: [{ label: 'Open Home', route: '/home' }]
+  },
+  {
     id: 'gbv-channels',
     category: 'Safety & privacy',
     q: 'Which gender-based violence line actually works?',

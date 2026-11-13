@@ -1,4 +1,5 @@
 import { defaultPrivacy, Comment, Post, Spotlight, Story, UserProfile } from '../models/types';
+import { ImpactTally } from '../models/impact';
 
 /**
  * Deterministic placeholder imagery built as inline SVG data-URIs so the app is
@@ -103,6 +104,28 @@ export const storyBg = (hue: number): string => {
  * Seed data
  * ------------------------------------------------------------------ */
 
+/**
+ * A believable impact tally for a seeded member.
+ *
+ * The old `karma` number was invented per name and never moved, while the level
+ * came from `impact`. Two numbers on one profile then contradicted each other -
+ * "347 help points" above "Level 1, Neighbour". The tally is derived from
+ * that standing so the demo data tells one story: the same total, broken into
+ * the acts that earned it, mostly ground work and posters.
+ */
+const impactFor = (karma: number): ImpactTally => {
+  const target = Math.max(0, Math.round(karma));
+  const searches = Math.round((target * 0.35) / 15);
+  const care = Math.round((target * 0.15) / 25);
+  const communities = Math.round((target * 0.12) / 20);
+  const posters = Math.round((target * 0.2) / 10);
+  const spent = searches * 15 + care * 25 + communities * 20 + posters * 10;
+  return {
+    searches, care, communities, posters,
+    signals: Math.max(0, Math.round(Math.max(0, target - spent) / 5))
+  };
+};
+
 const now = Date.now();
 const MIN = 60_000;
 const HOUR = 60 * MIN;
@@ -137,6 +160,7 @@ export const seedUsers = (): UserProfile[] => {
     followers: 40 + (hash(id) % 900),
     following: 20 + (hash(handle) % 300),
     karma: 10 + (hash(name) % 900),
+    impact: impactFor(10 + (hash(name) % 900)),
     onboarded: true,
     blockedUserIds: [],
     spotlightIds: [],
@@ -155,7 +179,7 @@ export const seedUsers = (): UserProfile[] => {
     'GP',
     'Soweto, Johannesburg',
     'Community organiser. If you see something, say something. Ubuntu.',
-    { verified: true, followers: 1240, karma: 2310, onboarded: false, isAdmin: true }
+    { verified: true, followers: 1240, karma: 2310, impact: impactFor(2310), onboarded: false, isAdmin: true }
   );
 
   return [

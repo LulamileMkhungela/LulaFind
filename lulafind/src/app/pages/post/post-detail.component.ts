@@ -1,4 +1,5 @@
 import { SearchBoardComponent } from '../../shared/components/search-board.component';
+import { CasePlanComponent } from '../../shared/components/case-plan.component';
 import { Component, ElementRef, OnInit, ViewChild, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { IonContent } from '@ionic/angular/ion-content';
@@ -30,6 +31,8 @@ import {
 } from '../../core/models/types';
 import { compact, dayMonth, headingIsNew as headingIsNewFn, timeAgo } from '../../core/utils/format';
 import { leadMarkView } from '../../core/utils/mark-check';
+import { aftercareSteps, helpSummary, helpersOf } from '../../core/utils/aftercare';
+import { MediaAudioComponent } from '../../shared/components/media-audio.component';
 
 /**
  * One post, and nothing else.
@@ -52,9 +55,9 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
   selector: 'lf-post-detail',
   standalone: true,
   imports: [
-    SearchBoardComponent, IonContent, IonTextarea, IonSkeletonText, RouterLink, IconComponent, AvatarComponent,
+    SearchBoardComponent, CasePlanComponent, IonContent, IonTextarea, IonSkeletonText, RouterLink, IconComponent, AvatarComponent,
     TopNavComponent, ReactionButtonComponent, ReactionIconComponent, ReactionsSheetComponent, KeyboardDirective,
-    MediaImageComponent, MediaVideoComponent, UserHoverDirective],
+    MediaImageComponent, MediaVideoComponent, MediaAudioComponent, UserHoverDirective],
   template: `
     <lf-top-nav title="Post" backTo="/home" />
 
@@ -136,6 +139,15 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
                 @for (m of p()!.media; track m.id) {
                   @if (m.kind === 'video') {
                     <lf-media-video [src]="m.src" label="Video in this post" />
+                  } @else if (m.kind === 'audio') {
+                    <!--
+                      A family saying it out loud, or a witness describing what
+                      they saw. It gets a real player with the length visible,
+                      and never the broken-image tile an unknown kind used to get.
+                    -->
+                    <lf-media-audio [src]="m.src" [durationSec]="m.durationSec ?? 0"
+                                    [transcript]="m.transcript ?? ''"
+                                    [label]="m.caption?.trim() || 'Voice note from the family'" />
                   } @else {
                     <lf-media-img [src]="m.src" [alt]="m.caption ?? p()!.title" />
                   }
@@ -217,11 +229,100 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
           <lf-search-board [post]="p()!" (changed)="p.set($event)" />
         }
 
+        <!--
+          The first-hours checklist the family works through (SAPS 55(A), the
+          case number, the investigating officer, a recent photo, one
+          spokesperson, the poster, the NGOs), then the case's own record of
+          what has happened. Both were built and never mounted here - the audit
+          below this page's comments found the checklist unreachable.
+        -->
+        @if (isCase() && !p()!.repostOf && (isMine() || showJourney())) {
+          <lf-case-plan [post]="p()!" [editable]="isMine() || auth.user()?.isAdmin === true"
+                        [admin]="auth.user()?.isAdmin === true" (updated)="p.set($event); journeyOpen.set(true)" />
+        }
+
+        @if (isCase() && !p()!.repostOf && journey().length) {
+          <section class="journey" aria-label="What has happened on this case">
+            <button class="journey__head" type="button" (click)="journeyOpen.set(!journeyOpen())"
+                    [attr.aria-expanded]="journeyOpen()">
+              <lf-icon name="steps" [size]="16" [weight]="2.2" />
+              <span class="journey__title">Journey</span>
+              <span class="journey__count">{{ journey().length }} {{ journey().length === 1 ? 'event' : 'events' }}</span>
+              <lf-icon [name]="journeyOpen() ? 'chevronUp' : 'chevronDown'" [size]="16" />
+            </button>
+            @if (journeyOpen()) {
+              <ol class="journey__list">
+                @for (e of journey(); track e.key) {
+                  <li [attr.data-tone]="e.tone">
+                    <span class="journey__dot"><lf-icon [name]="e.icon" [size]="12" [weight]="3" /></span>
+                    <div class="journey__body">
+                      <strong>{{ e.title }}</strong>
+                      @if (e.detail) { <span>{{ e.detail }}</span> }
+                    </div>
+                    <time>{{ e.when }}</time>
+                  </li>
+                }
+              </ol>
+            }
+          </section>
+        }
+
         @if (p()!.outcome.found) {
-          <p class="closed">
-            <lf-icon name="check" [size]="15" [weight]="3" />
-            <span>Found. The family confirmed it. To take the case off the police circulation list, complete a <strong>SAPS 92</strong> with the investigating officer.</span>
-          </p>
+          @if (isMine() && !p()!.repostOf) {
+            <!--
+              The reporter's last job. A case that closes leaves work behind:
+              the police list, the posters still on walls, and the people who
+              gave up their weekend. It is a checklist because that is how it
+              gets finished - and every line is something only the family can do.
+            -->
+            <section class="after" aria-label="Finishing the case">
+              <header class="after__head">
+                <span class="after__tick"><lf-icon name="check" [size]="15" [weight]="3" /></span>
+                <div>
+                  <h2>{{ p()!.outcome.whereaboutsFound || 'Found' }}. The case is closed.</h2>
+                  <!-- The count is the number of rows below, not a number written by hand. -->
+                  <p class="lf-small lf-muted">{{ neededSteps().length }} things finish it properly. None of them are urgent today.</p>
+                </div>
+              </header>
+
+              @for (step of neededSteps(); track step.id) {
+                <div class="after__row" [class.done]="step.id === 'thanks' && p()!.outcome.thankedAt">
+                    <div class="after__copy">
+                      <strong>{{ step.title }}</strong>
+                      <span class="lf-small lf-muted">{{ step.detail }}</span>
+                    </div>
+                    @if (step.id === 'thanks') {
+                      @if (p()!.outcome.thankedAt) {
+                        <span class="after__done">
+                          <lf-icon name="check" [size]="13" /> Thanked {{ p()!.outcome.thankedCount ?? 0 }}
+                        </span>
+                      } @else {
+                        <button class="after__btn" type="button" (click)="openThanks()">Thank them</button>
+                      }
+                    }
+                </div>
+              }
+
+              @if (helpers().length) {
+                <div class="after__people">
+                  @for (h of helpers().slice(0, 5); track h.userId) {
+                    <a class="after__person" [routerLink]="['/user', h.userId]">
+                      <img [src]="data.avatarFor(data.authorOf(h.userId))" alt="" />
+                      <span>{{ data.authorOf(h.userId)?.displayName ?? 'Member' }}</span>
+                    </a>
+                  }
+                  @if (helpers().length > 5) {
+                    <span class="lf-small lf-muted">+{{ helpers().length - 5 }} more</span>
+                  }
+                </div>
+              }
+            </section>
+          } @else {
+            <p class="closed">
+              <lf-icon name="check" [size]="15" [weight]="3" />
+              <span>Found. The family confirmed it. To take the case off the police circulation list, complete a <strong>SAPS 92</strong> with the investigating officer.</span>
+            </p>
+          }
         }
 
         @if (isCase() && (p()!.status === 'active' || p()!.status === 'under_review') && latestStillSearching(); as update) {
@@ -578,6 +679,44 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
         </div>
       </div>
     }
+
+    @if (thanksOpen()) {
+      <div class="sheetwrap" (click)="closeThanks()">
+        <div class="sheet" (click)="$event.stopPropagation()">
+          <div class="sheet__top">
+            <h3>Thank the people who helped</h3>
+            <button class="dots" (click)="closeThanks()" aria-label="Close"><lf-icon name="x" [size]="20" /></button>
+          </div>
+          <!--
+            The list is real: each name is someone whose lead, area or pair of
+            eyes is on this case. A family that helped itself sees an honest
+            "nobody to thank" instead of a button that does nothing.
+          -->
+          @if (helpers().length) {
+            <p class="sheet__p">
+              One message each to {{ helpers().length }} {{ helpers().length === 1 ? 'person' : 'people' }}. Each one says what they did.
+            </p>
+            <div class="thanks__list">
+              @for (h of helpers(); track h.userId) {
+                <div class="thanks__row">
+                  <lf-avatar [src]="data.avatarFor(data.authorOf(h.userId))" [name]="data.authorOf(h.userId)?.displayName ?? 'Member'" [size]="30" />
+                  <span><strong>{{ data.authorOf(h.userId)?.displayName ?? 'Member' }}</strong><small>{{ helpSummary(h.via) }}</small></span>
+                </div>
+              }
+            </div>
+            <label class="k">Your words (optional)</label>
+            <textarea class="fld fld--area" rows="3" [value]="thanksNote()"
+                      [attr.placeholder]="defaultThanks()"
+                      (input)="thanksNote.set($any($event.target).value)"></textarea>
+            <button class="big big--go" [disabled]="thanksBusy()" (click)="sendThanks()">{{ thanksBusy() ? 'Sending…' : 'Send the thankyou' }}</button>
+            <button class="textbtn" type="button" [disabled]="thanksBusy()" (click)="closeThanks()">Not now</button>
+          } @else {
+            <p class="sheet__p">Nobody else was on this case, so there is nobody to thank. You can still take the posters down and complete the SAPS 92.</p>
+            <button class="big" type="button" (click)="closeThanks()">Close</button>
+          }
+        </div>
+      </div>
+    }
   `,
   styles: [`
     :host { --edge: 16px; }
@@ -750,9 +889,60 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
     .lead { display: inline-block; margin-bottom: 6px; padding: 1px 8px; border-radius: 10px; background: color-mix(in srgb, var(--lf-ubuntu) 18%, transparent); color: var(--lf-ubuntu); font-size: 11.5px; font-weight: 700; }
     .sighting { display: flex; align-items: center; gap: 5px; margin-bottom: 6px; font-size: 13px; color: var(--lf-muted); }
     .checked { display: flex; align-items: center; gap: 5px; margin: 0 0 6px; font-size: 13px; font-weight: 600; color: var(--lf-ubuntu); }
+    .journey { margin: 4px var(--edge) 10px; border: 1px solid var(--lf-line); border-radius: 10px; overflow: hidden; background: var(--lf-card); }
+    .journey__head { display: flex; align-items: center; gap: 8px; width: 100%; padding: 11px 12px; border: 0;
+      background: transparent; color: inherit; font: inherit; font-size: 14.5px; font-weight: 600; cursor: pointer; text-align: left; }
+    .journey__title { flex: 1; }
+    .journey__count { font-size: 12.5px; color: var(--lf-muted); }
+    .journey__list { list-style: none; margin: 0; padding: 0 12px 10px; }
+    .journey__list li { position: relative; display: flex; gap: 10px; padding: 8px 0; border-top: 1px solid var(--lf-line-soft); }
+    .journey__list li:first-child { border-top: 0; }
+    /* the vertical thread, drawn only between dots */
+    .journey__list li:not(:last-child)::before { content: ''; position: absolute; left: 9px; top: 26px; bottom: -2px; width: 2px;
+      background: var(--lf-line-soft); }
+    .journey__dot { position: relative; z-index: 1; display: grid; place-items: center; width: 20px; height: 20px; margin-top: 1px;
+      flex: none; border-radius: 50%; background: var(--lf-card-2); color: var(--ion-text-color); box-shadow: 0 0 0 2px var(--lf-card); }
+    .journey__list li[data-tone="ubuntu"] .journey__dot { background: var(--lf-ubuntu); color: #fff; }
+    .journey__list li[data-tone="signal"] .journey__dot { background: var(--lf-signal); color: #fff; }
+    .journey__list li[data-tone="beacon"] .journey__dot { background: var(--lf-primary); color: #fff; }
+    .journey__body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+    .journey__body strong { font-size: 13.5px; line-height: 1.25; }
+    .journey__body span { font-size: 12px; color: var(--lf-muted); line-height: 1.35; }
+    .journey__list time { flex: none; font-size: 11.5px; color: var(--lf-muted); margin-top: 1px; }
     .closed, .still-status { display: flex; gap: 8px; align-items: flex-start; margin: 4px 0 10px; padding: 10px 12px; border-radius: 8px;
       background: color-mix(in srgb, var(--lf-ubuntu) 12%, transparent); color: inherit; font-size: 13.5px; line-height: 1.35; }
     .still-status strong { color: var(--lf-ubuntu); font-weight: 700; }
+    /*
+     * The after-close panel. It is the one place in the app where the family is
+     * asked for something after the good news, so it earns its space: a calm
+     * surface, three rows at most, and the people who showed up named on it.
+     */
+    .after { margin: 6px 0 12px; padding: 14px; border-radius: var(--lf-radius);
+      background: color-mix(in srgb, var(--lf-ubuntu) 10%, var(--lf-card)); border: 1px solid color-mix(in srgb, var(--lf-ubuntu) 26%, transparent); }
+    .after__head { display: flex; gap: 10px; align-items: flex-start; }
+    .after__tick { flex: 0 0 26px; height: 26px; border-radius: 50%; display: grid; place-items: center;
+      background: var(--lf-ubuntu); color: #fff; }
+    .after__head h2 { margin: 1px 0 2px; font-size: 15.5px; line-height: 1.25; font-weight: 700; }
+    .after__head p { margin: 0; }
+    .after__row { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-top: 1px solid color-mix(in srgb, var(--lf-ubuntu) 20%, transparent); }
+    .after__row:first-of-type { margin-top: 8px; }
+    .after__copy { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+    .after__copy strong { font-size: 13.5px; font-weight: 650; }
+    .after__btn { flex: 0 0 auto; min-height: 34px; padding: 0 14px; border-radius: 999px; border: 0;
+      background: var(--lf-ubuntu); color: #fff; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+    .after__done { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 4px;
+      font-size: 12.5px; font-weight: 650; color: var(--lf-ubuntu); }
+    .after__people { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding-top: 10px;
+      border-top: 1px solid color-mix(in srgb, var(--lf-ubuntu) 20%, transparent); }
+    .after__person { display: inline-flex; align-items: center; gap: 5px; text-decoration: none; color: inherit;
+      font-size: 12.5px; font-weight: 600; }
+    .after__person img { width: 22px; height: 22px; border-radius: 50%; object-fit: cover; }
+    .thanks__list { display: flex; flex-direction: column; gap: 8px; max-height: 30vh; overflow: auto; margin-bottom: 10px; }
+    .thanks__row { display: flex; align-items: center; gap: 9px; }
+    .thanks__row span { display: flex; flex-direction: column; min-width: 0; }
+    .thanks__row strong { font-size: 13.5px; font-weight: 650; }
+    .thanks__row small { font-size: 12px; color: var(--lf-muted); }
+    .fld--area { resize: vertical; min-height: 72px; font-family: inherit; }
     .big:disabled { opacity: .65; cursor: wait; }
     /* A lead is useful information, not an error: this used to be drawn in the
        red "signal" colour, which read as a warning banner on a case page. */
@@ -854,6 +1044,17 @@ export class PostDetailComponent implements OnInit {
 
   readonly me = computed(() => this.auth.viewerId);
   readonly isMine = computed(() => this.p()?.authorId === this.auth.viewerId);
+
+  /**
+   * Everyone who gave this case something the family could act on, with the
+   * case's leads folded in. The same list feeds the panel, the count in the
+   * thanks sheet and the message each person receives.
+   */
+  protected readonly helpSummary = helpSummary;
+  readonly helpers = computed(() => helpersOf(this.p(), this.comments()));
+
+  readonly afterSteps = computed(() => aftercareSteps(this.p(), this.helpers().length));
+  readonly neededSteps = computed(() => this.afterSteps().filter((s) => s.needed));
   readonly author = computed(() => (this.p() ? this.data.authorOf(this.p()!.authorId) ?? null : null));
   readonly authorName = computed(() =>
     this.p()?.anonymous && !this.isMine() ? 'Anonymous' : this.author()?.displayName ?? 'Member');
@@ -896,6 +1097,109 @@ export class PostDetailComponent implements OnInit {
       : [...top].sort((a, b) => b.upvotes - a.upvotes || a.createdAt - b.createdAt);
   });
   readonly notMe = computed(() => this.dismissed().includes(this.p()?.id ?? ''));
+
+  /* --------------------------- the journey --------------------------- */
+
+  readonly journeyOpen = signal(true);
+
+  /** Anyone signed in may read a case's record; a guest sees the plan only when it exists. */
+  showJourney(): boolean {
+    return this.auth.signedIn();
+  }
+
+  /**
+   * The case as a record, oldest first: every event the app has written down,
+   * the outcome, the findings, the search board and the checklist folded onto
+   * one line each.
+   *
+   * This is the spine the family and the moderators read afterwards - "what was
+   * done, by whom, and when". It is deliberately plain: no scores, no guesses.
+   */
+  readonly journey = computed(() => {
+    const p = this.p();
+    if (!p) return [];
+    const rows: { key: string; at: number; title: string; detail: string; icon: string; tone: string; when: string }[] = [];
+    const nameOf = (id: string | null | undefined): string => {
+      if (!id) return 'LulaFind';
+      if (id === this.auth.viewerId) return 'You';
+      return this.data.authorOf(id)?.displayName ?? (id === p.authorId ? this.author()?.displayName ?? 'The family' : 'A member');
+    };
+    const push = (key: string, at: number, title: string, detail: string, icon: string, tone: string) => {
+      rows.push({ key, at, title, detail, icon, tone, when: timeAgo(at) });
+    };
+
+    push('posted', p.createdAt, 'Case opened', `Posted by ${p.anonymous ? 'an anonymous member' : nameOf(p.authorId)}`, 'plus', 'ink');
+    for (const e of p.events ?? []) {
+      const when = typeof e.at === 'number' && e.at > 0 ? e.at : p.createdAt;
+      switch (e.kind) {
+        case 'claimed':
+          if (when === p.createdAt) break; // same line as the case opening
+          push(`ev-${when}-claimed`, when, 'The person in the post said "this is me"', e.note ?? '', 'user', 'beacon');
+          break;
+        case 'is_wanted_yes':
+          push(`ev-${when}-wanted`, when, 'Someone answered "yes, I am being looked for"', e.note ?? '', 'check', 'ubuntu');
+          break;
+        case 'is_wanted_no':
+          push(`ev-${when}-notwanted`, when, 'Someone answered "no, this is not me"', e.note ?? '', 'x', 'ink');
+          break;
+        case 'going_home':
+          push(`ev-${when}-home`, when, 'They said they are coming home', e.note ?? '', 'home', 'ubuntu');
+          break;
+        case 'not_going_home':
+          push(`ev-${when}-nothome`, when, 'Safe, but not coming home', e.note ?? '', 'hand', 'beacon');
+          break;
+        case 'still_searching':
+          push(`ev-${when}-still`, when, 'Still searching', 'The family confirmed the case is open', 'search', 'signal');
+          break;
+        case 'whereabouts_found':
+          push(`ev-${when}-where`, when, 'Whereabouts confirmed', e.note ?? '', 'target', 'ubuntu');
+          break;
+        case 'found':
+          push(`ev-${when}-found`, when, 'Found', e.note ?? '', 'award', 'ubuntu');
+          break;
+        case 'false_claim_removed':
+          push(`ev-${when}-claim-removed`, when, 'A claim was removed', e.note ?? 'A moderator confirmed it was not them.', 'shield', 'signal');
+          break;
+        default:
+          break;
+      }
+    }
+
+    if (p.caseNumber) push('case-number', p.createdAt, 'SAPS case number on file', p.caseNumber, 'book', 'ink');
+
+    const party = p.searchParty;
+    if (party?.open) {
+      const done = party.zones.filter((z) => z.done).length;
+      push('search-board', p.updatedAt, 'Search board opened',
+        `${party.zones.length} ${party.zones.length === 1 ? 'area' : 'areas'} · ${done} finished${party.meetAt ? ' · meeting at ' + party.meetAt : ''}`,
+        'map', 'beacon');
+    }
+
+    for (const zone of party?.zones ?? []) {
+      if (zone.done && zone.updatedAt) {
+        push(`zone-${zone.id}`, zone.updatedAt, `${zone.name} finished`,
+          zone.note ? `${nameOf(zone.takenBy)} · ${zone.note}` : `${nameOf(zone.takenBy)} walked this area`, 'target', 'ubuntu');
+      }
+    }
+
+    if (p.sightingVerified?.at) {
+      push('sighting-checked', p.sightingVerified.at, 'A sighting was checked',
+        p.sightingVerified.note || 'Confirmed against an official source', 'shield', 'ubuntu');
+    }
+
+    if (p.locationCheck?.consentFromSubject === 'granted' && p.locationCheck.consentAt) {
+      push('location-consent', p.locationCheck.consentAt, 'Location consent granted', 'The person agreed to share their last known point', 'target', 'beacon');
+    }
+
+    if (p.outcome?.found && p.outcome.foundAt) {
+      push('closed', p.outcome.foundAt, 'Case closed as found',
+        [p.outcome.whereaboutsFound, p.outcome.finderName ? 'found by ' + p.outcome.finderName : ''].filter(Boolean).join(' · '),
+        'check', 'ubuntu');
+    }
+
+    // Newest first: the top of the list is the last thing that happened.
+    return rows.sort((a, b) => b.at - a.at || a.title.localeCompare(b.title));
+  });
 
   isCase(): boolean {
     const t = this.p()?.type;
@@ -1634,6 +1938,45 @@ export class PostDetailComponent implements OnInit {
   pickFinder(u: UserProfile): void {
     this.finderId.set(u.id);
     this.finderQuery.set(u.displayName);
+  }
+
+  /* ----------------------- the thankyou ----------------------- */
+
+  readonly thanksOpen = signal(false);
+  readonly thanksNote = signal('');
+  readonly thanksBusy = signal(false);
+
+  openThanks(): void {
+    this.thanksNote.set('');
+    this.thanksOpen.set(true);
+  }
+
+  closeThanks(): void {
+    if (this.thanksBusy()) return;
+    this.thanksOpen.set(false);
+  }
+
+  /** What the thankyou will say if the family writes nothing of their own. */
+  readonly defaultThanks = computed(() => {
+    const subject = this.p()?.subject?.name?.trim() || 'They';
+    return `Thank you. ${subject} is safe, and every pair of eyes you gave us helped.`;
+  });
+
+  async sendThanks(): Promise<void> {
+    const p = this.p();
+    if (!p || this.thanksBusy()) return;
+    this.thanksBusy.set(true);
+    try {
+      const { sent } = await this.data.thankHelpers(p.id, this.thanksNote().trim());
+      const fresh = this.data.post(p.id);
+      if (fresh) this.p.set(fresh);
+      this.thanksOpen.set(false);
+      await this.say(sent === 1 ? 'Your thankyou went to 1 person.' : `Your thankyou went to ${sent} people.`);
+    } catch (e: unknown) {
+      await this.say(e instanceof Error ? e.message : 'Could not send the thankyou');
+    } finally {
+      this.thanksBusy.set(false);
+    }
   }
 
   async confirmFound(skipName = false): Promise<void> {

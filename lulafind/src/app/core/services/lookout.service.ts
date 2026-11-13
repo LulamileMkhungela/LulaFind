@@ -205,6 +205,9 @@ export class LookoutService {
     try {
       const next = await this.api.answerLookout(lookoutId, me.id, ok);
       if (next) this.data.mergeLookout(next);
+      // Answering a safety check is the most selfless thing a follower does,
+      // and it is the only place a person is asked to care rather than react.
+      void this.data.awardOnce(`lookout:${lookoutId}`, 'care', 'You answered a safety check.');
 
       const owner = await this.api.user(lookout.userId);
 

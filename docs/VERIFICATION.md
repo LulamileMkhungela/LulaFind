@@ -42,19 +42,19 @@ Notifications2 Mark all as read  All Unread2 Mentions PostsTodayThandi Mokoena s
 ### 7. The focused case page with the status actions
 
 ```text
-Post5Thandi MokoenaCommunity organiser. If you see something, say something. Ubuntu. now  · Gauteng · Help find Thandi Mokoena in SowetoShe was last seen walking to the taxi rank after work on Tuesday evening.LikeCommentRepostSend Mark as found Still searching Photo  Video Attachments stay with this comment
+Post5Thandi MokoenaCommunity organiser. If you see something, say something. Ubuntu. now  · Gauteng · Help find Thandi Mokoena in SowetoShe was last seen walking to the taxi rank after work on Tuesday evening.LikeCommentRepostSendFirst hours0 of 7Journey1 eventCase openedPosted by Younow Mark as found Still searching Photo  Video Attachments stay with this comment
 ```
 
 ### 8. After the poster confirms they are still searching
 
 ```text
-Post5Thandi MokoenaCommunity organiser. If you see something, say something. Ubuntu. now  · Gauteng · Help find Thandi Mokoena in SowetoShe was last seen walking to the taxi rank after work on Tuesday evening.LikeCommentRepostSendStill searching. Confirmed now. This case remains open. Mark as found Still searching Photo  Video Attachments stay with this comment
+Post5Thandi MokoenaCommunity organiser. If you see something, say something. Ubuntu. now  · Gauteng · Help find Thandi Mokoena in SowetoShe was last seen walking to the taxi rank after work on Tuesday evening.LikeCommentRepostSendFirst hours0 of 7Journey2 eventsStill searchingThe family confirmed the case is opennowCase openedPosted by YounowStill searching. Confirmed now. This case remains open. Mark as found Still searching Photo  Video Attachments stay with this comment
 ```
 
 ### 11. A closed case, as the family sees it
 
 ```text
-Post5Thandi MokoenaCommunity organiser. If you see something, say something. Ubuntu. now  · Gauteng · Found · Home in Soweto  · 08 Oct 2026 Help find Thandi Mokoena in SowetoShe was last seen walking to the taxi rank after work on Tuesday evening.LikeCommentRepostSendFound. The family confirmed it. To take the case off the police circulation list, complete a SAPS 92 with the investigating officer. Photo  Video Attachments stay with this comment
+Post5Thandi MokoenaCommunity organiser. If you see something, say something. Ubuntu. now  · Gauteng · Found · Home in Soweto  · 13 Nov 2026 Help find Thandi Mokoena in SowetoShe was last seen walking to the taxi rank after work on Tuesday evening.LikeCommentRepostSendFirst hours0 of 7Journey3 eventsCase closed as foundHome in Soweto · found by Lerato MahlangunowFoundHome in Soweto · found by Lerato MahlangunowCase openedPosted by YounowHome in Soweto. The case is closed.2 things finish it properly. None of them are urgent today.Tell the investigating officerComplete a SAPS 92 with the officer handling the case. That is what takes it off the police circulation list.Thank the 1 person who helpedThey get one message from you. It is the reason they will help the next family.Thank themLerato Mahlangu Photo  Video Attachments stay with this comment
 ```
 
 ### 12a. Closed cases the *feed* holds - the reason the page cannot be built from the feed

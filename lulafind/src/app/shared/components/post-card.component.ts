@@ -1,10 +1,11 @@
 import { AfterViewChecked, Component, EventEmitter, Input, OnChanges, OnInit, Output, ViewChild, computed, inject, signal } from '@angular/core';
 import type { ElementRef } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
-import { DEFAULT_REACTION, DEFAULT_REACTION_LABEL, Comment, Post, POST_TYPE_META, REACTIONS, ReactionKind, UserProfile, isReaction, provinceName } from '../../core/models/types';
+import { DEFAULT_REACTION, DEFAULT_REACTION_LABEL, Comment, MediaItem, Post, POST_TYPE_META, REACTIONS, ReactionKind, UserProfile, isReaction, provinceName } from '../../core/models/types';
 import { alreadySaid, compact, headingIsNew, timeAgo } from '../../core/utils/format';
 import { AvatarComponent } from './avatar.component';
 import { IconComponent } from './icon.component';
+import { MediaAudioComponent } from './media-audio.component';
 import { ReactionsSheetComponent } from './reactions-sheet.component';
 import { UserHoverDirective } from './user-hover-card.component';
 import { ReactionIconComponent } from './reaction-icon.component';
@@ -34,7 +35,7 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
 @Component({
   selector: 'lf-post-card',
   standalone: true,
-  imports: [RouterLink, IconComponent, AvatarComponent, ReactionIconComponent, ReactionButtonComponent, ReactionsSheetComponent, UserHoverDirective],
+  imports: [RouterLink, IconComponent, AvatarComponent, ReactionIconComponent, ReactionButtonComponent, ReactionsSheetComponent, UserHoverDirective, MediaAudioComponent],
   template: `
     @if (!gone()) {
     <article class="fb-card lf-fade-in"
@@ -151,6 +152,28 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
             <span>Last seen: {{ post.lastSeenWhere || post.town }}</span>
           </div>
         }
+        <!--
+          A live case says, in one line, how long it has been open and how many
+          people are on it. No counting is needed to read it, and the clock is
+          the only thing that turns red - on time, never on engagement.
+        -->
+        @if (isLiveCase()) {
+          <div class="fb-case-line" [attr.data-urgency]="caseUrgency()">
+            <lf-icon name="clock" [size]="13" [weight]="2.2" />
+            <strong>{{ caseAge() }}</strong>
+            <span>open</span>
+            @if ((post.lookingIds?.length ?? 0) > 0) {
+              <span class="fb-case-line__sep">·</span>
+              <lf-icon name="search" [size]="13" />
+              <span>{{ post.lookingIds!.length }} looking</span>
+            }
+            @if (post.searchParty?.open && post.searchParty!.zones.length) {
+              <span class="fb-case-line__sep">·</span>
+              <lf-icon name="map" [size]="13" />
+              <span>{{ doneAreas() }}/{{ post.searchParty!.zones.length }} areas</span>
+            }
+          </div>
+        }
         <p class="fb-post-text" #bodyEl [class.fb-clamp]="!expanded()">{{ post.body }}</p>
         @if (!expanded() && textOverflows()) {
           <button class="fb-readmore" (click)="toggleExpand($event)">…see more</button>
@@ -170,6 +193,16 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
           <video class="fb-media-video" [src]="post.media[0].src" controls playsinline preload="metadata"
                  [attr.aria-label]="'Video attached to: ' + post.title"></video>
         </div>
+      } @else if (voiceNote(); as note) {
+        <!--
+          A voice note plays on the card. It is deliberately not wrapped in the
+          card's link: pressing play must play, and the words stay here rather
+          than sending someone to another screen to hear a parent speak.
+        -->
+        <div class="fb-media fb-media--voice">
+          <lf-media-audio [src]="note.src" [durationSec]="note.durationSec ?? 0"
+                          [label]="note.caption?.trim() || 'Voice note'" [transcript]="transcriptOf(note)" />
+        </div>
       } @else if (post.media.length) {
         <div class="fb-media" [routerLink]="'/post/' + post.id">
           @if (post.media.length === 1) {
@@ -180,6 +213,8 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
                 <div class="fb-grid__tile">
                   @if (m.kind === 'video') {
                     <video [src]="m.src" muted playsinline preload="metadata" [attr.aria-label]="'Video: ' + post.title"></video>
+                  } @else if (m.kind === 'audio') {
+                    <span class="fb-grid__audio"><lf-icon name="mic" [size]="18" /> Voice</span>
                   } @else {
                     <img [src]="m.src" [alt]="m.caption ?? ''" loading="lazy" />
                   }
@@ -359,7 +394,22 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
 
 
     .fb-card-body { padding: 8px 16px 12px; cursor: pointer; }
-    .fb-post-title { font-size: 17px; font-weight: 700; color: var(--ion-text-color); margin: 0 0 4px; line-height: 1.3; }
+    /*
+     * The case line. It went in without a size of its own and inherited the
+     * 17px weight-700 heading rule below, which turned a sentence of small
+     * facts into a second headline. It now carries its own type, and the
+     * clock alone changes colour, and only while time is doing damage.
+     */
+    .fb-case-line { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; margin: 2px 0 8px;
+      font-size: 12.5px; font-weight: 500; line-height: 1.25; color: var(--lf-muted); letter-spacing: 0; }
+    .fb-case-line strong { color: var(--ion-text-color); font-weight: 700; font-variant-numeric: tabular-nums; }
+    .fb-case-line[data-urgency="critical"] > lf-icon:first-child,
+    .fb-case-line[data-urgency="critical"] strong,
+    .fb-case-line[data-urgency="high"] > lf-icon:first-child,
+    .fb-case-line[data-urgency="high"] strong { color: var(--lf-signal-text); }
+    .fb-case-line__sep { opacity: .7; }
+    .fb-post-title { font-size: 17px; font-weight: 700; color: var(--ion-text-color); margin: 0 0 6px; line-height: 1.3; }
+    .fb-fact-row { font-size: 17px; font-weight: 700; color: var(--ion-text-color); margin: 0 0 4px; line-height: 1.3; }
     .fb-fact-row { display: flex; align-items: center; gap: 6px; font-size: 14px; color: var(--lf-muted); margin-bottom: 3px; }
     .fb-fact-row strong { color: var(--ion-text-color); font-weight: 600; }
     .fb-muted { color: var(--lf-muted); }
@@ -701,6 +751,66 @@ export class PostCardComponent implements OnInit, OnChanges, AfterViewChecked {
 
   /** Heading, name and last-seen lines are shown only when the post has not already said them. */
   showHeading(): boolean { return headingIsNew(this.post.title, this.post.body); }
+
+  /* ---------------------- the case line ---------------------- */
+
+  /**
+   * Only a case that is still open gets the line. A found case has its own
+   * green banner; a story or a repost is not a search.
+   */
+  /**
+   * The voice note attached to this post, if there is exactly one and it is the
+   * only thing attached. With photos as well, the note becomes a tile - the
+   * pictures are what people scan for.
+   */
+  voiceNote(): MediaItem | undefined {
+    const notes = (this.post.media ?? []).filter((m) => m.kind === 'audio');
+    if (notes.length !== 1) return undefined;
+    return (this.post.media ?? []).length === 1 ? notes[0] : undefined;
+  }
+
+  /**
+   * The spoken words as text, for anyone who cannot hear the note.
+   *
+   * Only the note's own transcript counts. Earlier this fell back to the post
+   * body, which put "Read it instead" under a player and then repeated the
+   * case's text a second time - a promise the audio did not keep. No transcript
+   * means no control: a voice note without words stays a player, not a dead end.
+   */
+  transcriptOf(note: MediaItem): string {
+    return (note.transcript ?? '').trim();
+  }
+
+  isLiveCase(): boolean {
+    return (this.post.type === 'missing' || this.post.type === 'khumbulekhaya')
+      && this.post.status === 'active' && !this.post.repostOf;
+  }
+
+  /** "3d", "9h", "40m" - the same units the app uses everywhere else. */
+  caseAge(): string {
+    const d = Math.max(0, Date.now() - this.post.createdAt);
+    const m = Math.floor(d / 60_000);
+    if (m < 60) return `${m}m`;
+    const h = Math.floor(m / 60);
+    if (h < 24) return `${h}h`;
+    return `${Math.floor(h / 24)}d`;
+  }
+
+  /**
+   * Time is the only thing that makes a case urgent. A case about a child, or
+   * one still inside its first day, is red; after three days it goes quiet -
+   * not because it matters less, but because everything red stops being read.
+   */
+  caseUrgency(): 'critical' | 'high' | 'normal' {
+    const age = this.post.subject?.age;
+    const hours = (Date.now() - this.post.createdAt) / 3_600_000;
+    if ((age !== null && age !== undefined && age < 18) || hours < 24) return 'critical';
+    return hours < 72 ? 'high' : 'normal';
+  }
+
+  doneAreas(): number {
+    return (this.post.searchParty?.zones ?? []).filter((z) => z.done).length;
+  }
   said(value: string | null | undefined): boolean { return alreadySaid(value, this.post.title, this.post.body); }
 
   ageWord(): string {

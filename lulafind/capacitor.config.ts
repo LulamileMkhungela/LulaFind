@@ -3,10 +3,12 @@ import type { CapacitorConfig } from '@capacitor/cli';
 const config: CapacitorConfig = {
   appId: 'com.lulafind.app',
   appName: 'LulaFind',
-  // Where `ng build` actually writes (angular.json: outputPath browser = '').
-  // This said 'www/browser', which is not a directory this project ever
-  // produces, so `cap sync` failed before it could copy a single asset.
-  webDir: 'www',
+  // Where `ng build` actually writes. angular.json sets
+  // `outputPath = { base: 'www', browser: '' }`, so the entry point lands at
+  // `www/browser/index.html` - not `www/index.html`. Pointing this at `www`
+  // made `cap sync` fail with "must contain an index.html", which meant the
+  // app could not be packaged or installed at all.
+  webDir: 'www/browser',
   server: { androidScheme: 'https', iosScheme: 'https' },
   android: {
     allowMixedContent: false,

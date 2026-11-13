@@ -58,6 +58,23 @@ import { SAPS_MISSING_LIST } from '../../core/data/sa-help';
           <p class="note">Kept off every poster: {{ flyer().withheld }}. Ask a caller to name that mark before you trust them.</p>
         }
 
+        <!--
+          Where to put it. The poster is only half the job; the other half is
+          the wall it ends up on. This is the NGO playbook, in the order that
+          actually produces sightings in South Africa.
+        -->
+        <section class="places" aria-label="Where to put this poster">
+          <h3>Where it works</h3>
+          <ol>
+            <li><strong>Taxi rank and bus stop</strong> - the walk home, and the people who see it daily.</li>
+            <li><strong>Clinic and hospital notice board</strong> - the first place a confused person is taken.</li>
+            <li><strong>The school gate</strong> - ask the office before taping anything.</li>
+            <li><strong>Spaza shop and corner wall</strong> - ask first, and never cover another family's poster.</li>
+            <li><strong>Church and community hall</strong> - announce it on Sunday too.</li>
+          </ol>
+          <p>Ask permission, keep it dry, and take it down the day the case closes.</p>
+        </section>
+
         <div class="actions">
           @if (isMine()) {
             <button class="lf-btn lf-btn--primary lf-btn--block" type="button" (click)="useSelectedInFeed()"
@@ -92,6 +109,13 @@ import { SAPS_MISSING_LIST } from '../../core/data/sa-help';
     .tpl__sw { width: 100%; height: 64px; border-radius: 8px; margin-bottom: 4px; }
     .tpl strong { font-size: 14px; } .tpl small { font-size: 11.5px; color: var(--lf-muted); line-height: 1.25; }
     .note { margin: 4px var(--lf-gap) 0; font-size: 13px; color: var(--lf-muted); }
+    .places { margin: 12px var(--lf-gap) 0; padding: 12px 14px; border-radius: 12px; background: var(--lf-card);
+      box-shadow: var(--lf-shadow); }
+    .places h3 { margin: 0 0 6px; font-size: 14px; font-weight: 800; }
+    .places ol { margin: 0; padding-left: 18px; }
+    .places li { font-size: 12.5px; line-height: 1.45; color: var(--lf-muted); margin-bottom: 4px; }
+    .places li strong { color: var(--ion-text-color); }
+    .places p { margin: 6px 0 0; font-size: 11.5px; color: var(--lf-muted); }
     .photo-required { color: var(--lf-signal-text); font-weight: 600; }
     .feed-saved { margin: 0; color: var(--lf-ubuntu); font-size: 13px; font-weight: 600; text-align: center; }
     .actions .lf-btn:disabled { opacity: .5; cursor: default; }
@@ -252,6 +276,7 @@ export class PosterComponent implements OnInit, AfterViewInit {
         try {
           const { Share } = await import('@capacitor/share');
           await Share.share({ title: post.title, text: `${text}\n${link}`, files: [uri], dialogTitle: 'Share poster' });
+          void this.data.markPosterShared(post.id);
           return;
         } catch { /* closed or unavailable: fall through */ }
       }
@@ -259,11 +284,12 @@ export class PosterComponent implements OnInit, AfterViewInit {
     if (b && typeof navigator !== 'undefined' && 'canShare' in navigator) {
       const file = new File([b], this.fileName(), { type: 'image/png' });
       if (navigator.canShare({ files: [file] })) {
-        try { await navigator.share({ files: [file], title: post.title, text: `${text}\n${link}` }); return; } catch { return; }
+        try { await navigator.share({ files: [file], title: post.title, text: `${text}\n${link}` }); void this.data.markPosterShared(post.id); return; } catch { return; }
       }
     }
     await this.platform.share(post.title, text, link);
     if (b) await this.say('Link shared. Use Save picture to send the poster image too.');
+    void this.data.markPosterShared(post.id);
   }
 
   /** Writes the PNG to the app cache and returns a file:// URI the share sheet accepts. */

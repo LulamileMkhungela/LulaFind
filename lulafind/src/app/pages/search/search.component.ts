@@ -36,6 +36,39 @@ import { cover } from '../../core/data/seed';
       </div>
       @if (!query()) {
         <div class="lf-pad">
+          <!-- What you looked for last, so a family does not retype a name every night. -->
+          @if (recent().length) {
+            <div class="recent">
+              <div class="recent__head">
+                <h3 class="lf-h2">Recent searches</h3>
+                <button type="button" class="recent__clear" (click)="clearRecent()">Clear</button>
+              </div>
+              <div class="lf-scroller">
+                @for (r of recent(); track r) {
+                  <button class="chip" type="button" (click)="apply(r)">
+                    <lf-icon name="clock" [size]="13" /> {{ r }}
+                  </button>
+                }
+              </div>
+            </div>
+          }
+
+          <!-- The three ways people actually arrive: a name, a case number, a place. -->
+          <div class="ways" aria-label="Ways to search">
+            <div class="way">
+              <lf-icon name="user" [size]="17" />
+              <div><strong>A name</strong><span>Surname or first name</span></div>
+            </div>
+            <div class="way">
+              <lf-icon name="book" [size]="17" />
+              <div><strong>A case number</strong><span>ORL/441/09/2026</span></div>
+            </div>
+            <div class="way">
+              <lf-icon name="pin" [size]="17" />
+              <div><strong>A place</strong><span>Orlando West, Soweto</span></div>
+            </div>
+          </div>
+
           <h3 class="lf-h2" style="margin:16px 0 8px">Start with a surname</h3>
           <div class="lf-scroller">
             @for (sp of data.spotlights(); track sp.id) {
@@ -69,8 +102,17 @@ import { cover } from '../../core/data/seed';
       } @else if (searching() && !posts().length && !users().length && !spotlights().length) {
         <p class="search-state" role="status">Searching…</p>
       } @else if (!posts().length && !users().length && !spotlights().length) {
-        <lf-empty icon="search" title="Nothing matches that"
-                  message="Try a surname, a case number, or the town where they went missing." />
+        <div class="nomatch">
+          <lf-empty icon="search" title="Nothing matches “{{ query() }}”"
+                    message="Check the spelling, or try one word instead of two." />
+          <div class="nomatch__quick">
+            <button type="button" class="chip" (click)="apply(query().split(/\s+/)[0] ?? query())">Try “{{ firstWord() }}”</button>
+            <button type="button" class="chip" (click)="clearQuery()">Clear the search</button>
+          </div>
+          <a class="nomatch__help" routerLink="/help">
+            <lf-icon name="phone" [size]="16" /> Looking for someone now? The helplines are on this page
+          </a>
+        </div>
       } @else {
         @if (spotlights().length) {
           <div class="lf-pad">
@@ -140,6 +182,24 @@ import { cover } from '../../core/data/seed';
     .person { display: flex; align-items: center; gap: 11px; padding: 10px 12px; border-radius: var(--lf-radius);
       border: 0; box-shadow: var(--lf-shadow); background: var(--lf-card); color: inherit; text-decoration: none; }
     .person div { display: flex; flex-direction: column; gap: 2px; }
+    .recent { margin-top: 4px; }
+    .recent__head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+    .recent__head h3 { margin: 12px 0 6px; }
+    .recent__clear { border: 0; background: transparent; color: var(--lf-muted); font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; }
+    .chip { display: inline-flex; align-items: center; gap: 5px; height: 34px; padding: 0 12px; border: 0; border-radius: 999px;
+      background: var(--lf-card-2); color: var(--ion-text-color); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+    .chip:hover { background: var(--lf-primary-soft); color: var(--lf-primary-soft-text); }
+    .ways { display: grid; gap: 7px; margin-top: 14px; }
+    .way { display: flex; align-items: center; gap: 11px; padding: 10px 12px; border-radius: var(--lf-radius);
+      background: var(--lf-card); box-shadow: var(--lf-shadow); color: var(--lf-muted); }
+    .way div { display: flex; flex-direction: column; gap: 1px; }
+    .way strong { font-size: 13.5px; color: var(--ion-text-color); }
+    .way span { font-size: 12px; }
+    .nomatch { display: flex; flex-direction: column; gap: 4px; }
+    .nomatch__quick { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; padding: 0 var(--lf-gap) 4px; }
+    .nomatch__help { display: flex; align-items: center; justify-content: center; gap: 6px; margin: 10px var(--lf-gap) 18px;
+      padding: 11px 12px; border-radius: var(--lf-radius); background: color-mix(in srgb, var(--lf-signal) 8%, var(--lf-card));
+      color: var(--lf-signal-text); text-decoration: none; font-size: 13px; font-weight: 700; }
   `]
 })
 export class SearchComponent {
@@ -163,6 +223,52 @@ export class SearchComponent {
   protected readonly provinces = PROVINCES;
   protected readonly provinceName = provinceName;
   query = signal('');
+  /**
+   * Recent searches, newest first, kept on this phone.
+   * The one thing a family does repeatedly is type the same name, so making
+   * them type it every night is a small cruelty the app can simply remove.
+   */
+  readonly recent = signal<string[]>(SearchComponent.readRecent());
+
+  private static readRecent(): string[] {
+    try {
+      const raw = typeof localStorage !== 'undefined' ? localStorage.getItem('lulafind.recentSearches') : null;
+      const list = raw ? (JSON.parse(raw) as unknown) : [];
+      return Array.isArray(list) ? list.filter((x): x is string => typeof x === 'string').slice(0, 6) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  private remember(q: string): void {
+    const needle = q.trim();
+    if (needle.length < 2) return;
+    const next = [needle, ...this.recent().filter((r) => r.toLowerCase() !== needle.toLowerCase())].slice(0, 6);
+    this.recent.set(next);
+    try {
+      if (typeof localStorage !== 'undefined') localStorage.setItem('lulafind.recentSearches', JSON.stringify(next));
+    } catch {
+      /* private mode: the list simply does not survive a reload */
+    }
+  }
+
+  clearRecent(): void {
+    this.recent.set([]);
+    try {
+      if (typeof localStorage !== 'undefined') localStorage.removeItem('lulafind.recentSearches');
+    } catch {
+      /* ignore */
+    }
+  }
+
+  firstWord(): string {
+    return (this.query().trim().split(/\s+/)[0] ?? '').slice(0, 24);
+  }
+
+  clearQuery(): void {
+    void this.onQuery('');
+    void this.router.navigate([], { queryParams: {}, replaceUrl: true });
+  }
   users = signal<UserProfile[]>([]);
   posts = signal<Post[]>([]);
   spotlights = signal<Spotlight[]>([]);
@@ -233,6 +339,7 @@ export class SearchComponent {
     this.posts.set(posts);
     this.users.set(users);
     this.searching.set(false);
+    if (posts.length || users.length || this.spotlights().length) this.remember(needle);
   }
 
   apply(q: string): void {
