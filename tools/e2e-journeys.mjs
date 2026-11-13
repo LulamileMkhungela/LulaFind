@@ -326,13 +326,16 @@ await shot('05b-draft-kept', 'the composer says it kept what was typed');
 await fill('textarea[data-field="body"]', `Full name: Nandi Mokoena\nAge: 28\nLocation (town/suburb, province): Soweto, Gauteng\nWhat happened: ${sentinel} Last seen in a blue jacket.`);
 await sleep(300);
 await tap('Post', { exact: true });
-const returnedHome = await waitForUrl(/\/home/, 8000);
+/* A missing-person case is a poster-type post: after publishing, the app
+   opens the poster maker (?new=1) so the family can put the case on a wall.
+   Anything that cannot carry a poster still goes home. */
+const wentToPoster = await waitForUrl(/\/post\/[^/]+\/poster\?new=1/, 8000);
 const savedState = await state();
 const authorId = savedState.users.find(u => u.email === A.email)?.id;
 const savedPost = savedState.posts.find(p => p.authorId === authorId && /Nandi Mokoena/.test(p.title));
-const posted = returnedHome && !!savedPost;
-journey('New post publishes', 'a persisted post and return to feed', posted,
-  posted ? `the post was stored and returned to ${url()}` : `publication not confirmed (url=${url()}, stored=${!!savedPost})`);
+const posted = wentToPoster && !!savedPost;
+journey('New post publishes', 'a persisted post and the poster maker', posted,
+  posted ? `the post was stored and the poster maker opened at ${url()}` : `publication not confirmed (url=${url()}, stored=${!!savedPost})`);
 const myPostId = savedPost?.id ?? null;
 if (posted) {
   const listed = (await state()).posts.find((p) => p.id === myPostId);
