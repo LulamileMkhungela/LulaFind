@@ -1,4 +1,4 @@
-import { Injectable, inject } from '@angular/core';
+import { Injectable, inject, signal } from '@angular/core';
 import { NavigationEnd, Router } from '@angular/router';
 import { NavController } from '@ionic/angular/nav-controller';
 import { filter } from 'rxjs/operators';
@@ -21,6 +21,13 @@ export class BackStackService {
   private suppressPop = false;
   private static readonly MAX = 40;
 
+  /**
+   * True when going back has somewhere real to land. The tab roots are the
+   * floor of the app: a back arrow there is inert, so the nav hides it
+   * until the person has actually moved in-app.
+   */
+  readonly canGoBack = signal(false);
+
   constructor() {
     this.router.events
       .pipe(filter((e): e is NavigationEnd => e instanceof NavigationEnd))
@@ -30,11 +37,16 @@ export class BackStackService {
           this.suppressPop = false;
           // The navigation is the "back" action itself: drop the page we just left.
           this.stack.pop();
+          this.canGoBack.set(this.stack.length > 1);
           return;
         }
-        if (this.stack[this.stack.length - 1] === url) return;
+        if (this.stack[this.stack.length - 1] === url) {
+          this.canGoBack.set(this.stack.length > 1);
+          return;
+        }
         this.stack.push(url);
         if (this.stack.length > BackStackService.MAX) this.stack.shift();
+        this.canGoBack.set(this.stack.length > 1);
       });
   }
 

@@ -15,11 +15,12 @@ import { BackStackService } from '../../core/services/back-stack.service';
 /**
  * The app's top navigation, laid out like LinkedIn's mobile header.
  *
- *   Every page  [back]  [your photo|search or title] .........  [page action] [bell]
- *
- * The product rule is "from everywhere, you can always go back", so even the
- * tab roots carry the arrow - deep links and stray taps never strand anyone.
+ *   Root pages  [your photo|search or heading] ............  [page action] [bell]
  *   Inner pages [back]  Title  ............................  [page action] [bell]
+ *
+ * The root layout shows a back arrow only once there is real in-app history to
+ * pop (unfocused tab hops do not count); a cold open of Home has none, so the
+ * arrow stays hidden instead of sitting there inert.
  *
  * The photo opens your profile menu, the search bar opens Search, Chats carries
  * its unread badge, and the bell is always the last thing on the right.
@@ -45,13 +46,11 @@ import { BackStackService } from '../../core/services/back-stack.service';
           <ion-title>{{ title() }}</ion-title>
         } @else {
           <div class="row">
-            <!--
-              The product rule: from everywhere, you can always go back. The
-              tab roots used to open with no way out except the tab bar itself.
-            -->
-            <button class="lf-round-btn row-back" type="button" (click)="back()" aria-label="Go back">
-              <lf-icon name="arrowLeft" [size]="20" [weight]="2.4" />
-            </button>
+            @if (canGoBack()) {
+              <button class="lf-round-btn row-back" type="button" (click)="back()" aria-label="Go back">
+                <lf-icon name="arrowLeft" [size]="20" [weight]="2.4" />
+              </button>
+            }
             @if (signedIn()) {
               <a class="me" routerLink="/me" aria-label="Your profile and menu">
                 <lf-avatar [src]="avatar()" [name]="name()" [size]="32" />
@@ -193,7 +192,8 @@ export class TopNavComponent {
   private auth = inject(AuthService);
   private data = inject(DataService);
   private chat = inject(ChatService);
-  private backStack = inject(BackStackService);
+  protected readonly backStack = inject(BackStackService);
+  protected readonly canGoBack = this.backStack.canGoBack;
 
   /**
    * Set on inner pages: shows a back button and the title instead of the
