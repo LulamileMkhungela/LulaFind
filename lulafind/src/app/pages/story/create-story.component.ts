@@ -7,7 +7,7 @@ import { MediaService } from '../../core/services/media.service';
 import { STORY_MAX_PHOTOS } from '../../core/models/media-rules';
 import { Audience, MediaItem } from '../../core/models/types';
 import { STORY_BLACK, storyBg } from '../../core/data/seed';
-import { goBack } from '../../core/utils/back';
+import { BackStackService } from '../../core/services/back-stack.service';
 
 /**
  * The story composer, built the way a WhatsApp status is built:
@@ -267,6 +267,7 @@ export class CreateStoryComponent {
   private auth = inject(AuthService);
   private mediaSvc = inject(MediaService);
   private router = inject(Router);
+  private backStack = inject(BackStackService);
 
   @ViewChild('caption') caption?: ElementRef<HTMLTextAreaElement>;
 
@@ -450,5 +451,5 @@ export class CreateStoryComponent {
   }
 
   openSpotlights(): void { void this.router.navigate(['/spotlight']); }
-  cancel(): void { goBack(this.router, '/home'); }
+  cancel(): void { this.backStack.go('/home'); }
 }

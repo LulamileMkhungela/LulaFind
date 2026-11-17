@@ -179,7 +179,7 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
                       aria-label="Message"
                       (ionInput)="onType($any($event.target).value)"
                       (keydown.enter)="$event.preventDefault(); send()"></ion-textarea>
-        <button class="lf-icon-btn send" (click)="send()" [disabled]="chat.sending() || (!draft.trim() && !pending())">
+        <button class="lf-icon-btn send" (click)="send()" [disabled]="chat.sending() || (!draft.trim() && !pending())" aria-label="Send message">
           <lf-icon name="send" [size]="22" [filled]="true" />
         </button>
       </div>

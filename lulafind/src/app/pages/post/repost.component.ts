@@ -11,7 +11,7 @@ import { DataService } from '../../core/services/data.service';
 import { PostActionsService } from '../../core/services/post-actions.service';
 import { Post, provinceName } from '../../core/models/types';
 import { timeAgo } from '../../core/utils/format';
-import { goBack } from '../../core/utils/back';
+import { BackStackService } from '../../core/services/back-stack.service';
 
 /**
  * "Repost with your thoughts", laid out like LinkedIn's composer: who you are
@@ -97,6 +97,7 @@ import { goBack } from '../../core/utils/back';
 export class RepostComponent implements OnInit {
   private route = inject(ActivatedRoute);
   private router = inject(Router);
+  private backStack = inject(BackStackService);
   private data = inject(DataService);
   private auth = inject(AuthService);
   private actions = inject(PostActionsService);
@@ -129,7 +130,7 @@ export class RepostComponent implements OnInit {
   }
 
   close(): void {
-    goBack(this.router, '/home');
+    this.backStack.go('/home');
   }
 
   async submit(): Promise<void> {

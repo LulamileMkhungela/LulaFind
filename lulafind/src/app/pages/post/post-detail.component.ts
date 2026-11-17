@@ -1,5 +1,6 @@
 import { SearchBoardComponent } from '../../shared/components/search-board.component';
 import { CasePlanComponent } from '../../shared/components/case-plan.component';
+import { CaseFactsComponent } from '../../shared/components/case-facts.component';
 import { Component, ElementRef, OnInit, ViewChild, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { IonContent } from '@ionic/angular/ion-content';
@@ -44,10 +45,11 @@ import { MediaAudioComponent } from '../../shared/components/media-audio.compone
  *   4. The comments, laid out as a conversation: a composer, a LinkedIn sort
  *      control, named message bubbles and replies visibly nested under them.
  *
- * Everything else that used to be stacked here (case facts, contact details,
- * poster, escalation and location links) has been taken off this page so it
- * reads as a post, not a file. Poster and safety tools stay one tap away in the
- * "..." menu and on the pages built for them.
+ * The post the feed showed IS the post here: the case facts (who is missing,
+ * how long it has been open) and a generated poster render exactly as they do
+ * in the feed, plus this page's own job - the conversation. Safety tools and
+ * the case file stay one tap away in the "..." menu and on the pages built
+ * for them.
  */
 import { KeyboardDirective } from '../../shared/keyboard.directive';
 
@@ -56,6 +58,7 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
   standalone: true,
   imports: [
     SearchBoardComponent, CasePlanComponent, IonContent, IonTextarea, IonSkeletonText, RouterLink, IconComponent, AvatarComponent,
+    CaseFactsComponent,
     TopNavComponent, ReactionButtonComponent, ReactionIconComponent, ReactionsSheetComponent, KeyboardDirective,
     MediaImageComponent, MediaVideoComponent, MediaAudioComponent, UserHoverDirective],
   template: `
@@ -123,19 +126,36 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
                     <small>{{ timeAgo(o.createdAt) }} · {{ provinceName(o.province) }}</small>
                   </span>
                 </div>
-                <h2>{{ o.title }}</h2>
-                <p>{{ o.body }}</p>
-                @if (o.media.length) { <lf-media-img [src]="o.media[0].src" [alt]="o.title" /> }
+                <h2 class="embed__title">{{ o.title }}</h2>
+                <p class="embed__text">{{ o.body }}</p>
+                @if (o.poster?.media?.src) {
+                  <img class="embed__img embed__poster" [src]="o.poster!.media!.src" [alt]="'LulaFind poster: ' + o.title" loading="lazy" />
+                } @else if (o.media.length && o.media[0].kind === 'video') {
+                  <video class="embed__img" [src]="o.media[0].src" muted playsinline preload="metadata" [attr.aria-label]="'Video: ' + o.title"></video>
+                } @else if (o.media.length) {
+                  <img class="embed__img" [src]="o.media[0].src" [alt]="o.title" loading="lazy" />
+                }
               </a>
             } @else {
               <p class="embed gone"><lf-icon name="info" [size]="16" /> This post is no longer available.</p>
             }
           } @else {
             @if (headingIsNew(p()!.title, p()!.body)) { <h1 class="title">{{ p()!.title }}</h1> }
+            <!-- The feed card and this page show the same post, so the facts
+                 that make a case readable ride on both. -->
+            <lf-case-facts [post]="p()!" />
             <p class="text">{{ p()!.body }}</p>
 
-            @if (p()!.media.length) {
-              <div class="media" [class.multi]="p()!.media.length > 1">
+            @if (p()!.poster?.media?.src) {
+              <!-- The generated poster is the picture on the post - the feed
+                   shows it, so the post page must too. -->
+              <figure class="media media--poster">
+                <img class="media-poster" [src]="p()!.poster!.media!.src" [alt]="'LulaFind poster: ' + p()!.title" loading="lazy" />
+              </figure>
+            } @else if (p()!.media.length) {
+              <div class="media" [class.multi]="p()!.media.length > 1" (scroll)="onMediaScroll($event)"
+                   [attr.role]="p()!.media.length > 1 ? 'region' : null"
+                   [attr.aria-label]="p()!.media.length > 1 ? 'Photos and videos, ' + (mediaIndex() + 1) + ' of ' + p()!.media.length : null">
                 @for (m of p()!.media; track m.id) {
                   @if (m.kind === 'video') {
                     <lf-media-video [src]="m.src" label="Video in this post" />
@@ -152,7 +172,15 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
                     <lf-media-img [src]="m.src" [alt]="m.caption ?? p()!.title" />
                   }
                 }
+                @if (p()!.media.length > 1) {
+                  <span class="media__count" aria-hidden="true">{{ mediaIndex() + 1 }} / {{ p()!.media.length }}</span>
+                }
               </div>
+              @if (p()!.media.length > 1) {
+                <div class="media__dots" aria-hidden="true">
+                  @for (i of mediaRange(); track i) { <span [class.on]="i === mediaIndex()"></span> }
+                </div>
+              }
             }
           }
 
@@ -753,10 +781,22 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
     .lookingline.on { border-color: transparent; background: color-mix(in srgb, var(--lf-ubuntu) 12%, var(--lf-card)); }
     .lookingline.on lf-icon, .lookingline.on strong { color: var(--lf-ubuntu); }
     .lookingline:disabled { opacity: .65; cursor: wait; }
-    .media { margin: 4px 0 0; }
+    .media { margin: 4px 0 0; position: relative; }
     .media lf-media-img, .media lf-media-video { display: block; width: 100%; max-height: 640px; overflow: hidden; background: #000; }
     .media.multi { display: flex; gap: 2px; overflow-x: auto; scroll-snap-type: x mandatory; }
-    .media.multi lf-media-img, .media.multi lf-media-video { flex: 0 0 88%; scroll-snap-align: start; }
+    .media.multi lf-media-img, .media.multi lf-media-video { flex: 0 0 88%; scroll-snap-align: start; scroll-margin-left: 0; }
+    /* The generated poster, full colour on black, exactly as the feed shows it. */
+    .media--poster { margin: 4px 0 0; padding: 0; background: #101116; display: flex; align-items: center; justify-content: center; }
+    .media-poster { display: block; width: 100%; max-height: 640px; object-fit: contain; background: #101116; }
+    /* The quiet sign that there is more than one picture and it moves sideways. */
+    .media__count {
+      position: absolute; top: 8px; right: 8px; z-index: 2; pointer-events: none;
+      padding: 3px 11px; border-radius: 999px; background: rgba(9, 9, 12, .66);
+      color: #fff; font-size: 11px; font-weight: 700; letter-spacing: .6px; font-variant-numeric: tabular-nums;
+    }
+    .media__dots { display: flex; justify-content: center; gap: 6px; padding: 8px 0 4px; }
+    .media__dots span { width: 6px; height: 6px; border-radius: 50%; background: #c8ccd1; transition: background .15s ease, transform .15s ease; }
+    .media__dots span.on { background: var(--lf-link); transform: scale(1.3); }
     .embed { display: block; margin: 0 var(--edge) 12px; padding: 12px; border: 1px solid var(--lf-line); border-radius: 8px; color: inherit; text-decoration: none; }
     .embed__head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
     .embed__who { display: flex; flex-direction: column; min-width: 0; }
@@ -765,6 +805,12 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
     .embed h2 { margin: 4px 0; font-size: 17px; }
     .embed p { margin: 0; font-size: 15px; line-height: 1.4; white-space: pre-line; }
     .embed img { display: block; width: calc(100% + 24px); margin: 10px -12px -12px; max-height: 300px; object-fit: cover; }
+    /* LinkedIn clamps the embedded post the way the feed does. */
+    .embed__title { margin: 6px 0 4px; font-size: 17px; line-height: 1.3; }
+    .embed__text { margin: 0; font-size: 14px; line-height: 1.4; color: var(--ion-text-color); white-space: pre-line;
+      display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+    .embed__img { display: block; width: calc(100% + 24px); margin: 10px -12px -12px; max-height: 300px; object-fit: cover; border-radius: 0 0 8px 8px; }
+    .embed__poster { object-fit: contain; background: #111; }
     .embed.gone { display: flex; gap: 8px; align-items: center; color: var(--lf-muted); }
     section.gone { display: flex; flex-direction: column; gap: 12px; align-items: flex-start; color: var(--lf-text); }
     section.gone p { margin: 0; color: var(--lf-muted); line-height: 1.5; }
@@ -832,11 +878,15 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
     .field textarea { flex: 1; min-width: 0; max-height: 120px; padding: 6px 0; border: 0; outline: 0; resize: none; overflow-y: auto; overscroll-behavior-y: contain; -webkit-overflow-scrolling: touch; touch-action: pan-y; background: transparent; color: var(--ion-text-color); font: inherit; font-size: 15px; line-height: 1.35; }
     .field .post { height: 30px; padding: 0 14px; margin-bottom: 1px; border: 0; border-radius: 15px; background: var(--lf-primary-fill); color: #fff; font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; }
     .field .post:disabled { opacity: .6; }
-    .attach-actions { display: flex; align-items: center; gap: 4px; min-height: 34px; padding: 3px 0; }
+    .attach-actions { display: flex; align-items: center; gap: 4px; min-height: 34px; padding: 3px 0; flex-wrap: wrap; row-gap: 2px; }
     .attach-actions button { display: inline-flex; align-items: center; gap: 5px; min-height: 32px; padding: 0 8px; border: 0; border-radius: 6px; background: transparent; color: var(--lf-muted); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
     .attach-actions button:hover:not(:disabled) { background: var(--lf-hover); }
     .attach-actions button:disabled { opacity: .4; cursor: default; }
-    .attach-actions span { margin-left: auto; color: var(--lf-muted); font-size: 11px; text-align: right; }
+    .attach-actions span { margin-left: auto; color: var(--lf-muted); font-size: 11px; text-align: right;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+    @media (max-width: 400px) {
+      .attach-actions span { flex: 1 1 100%; margin-left: 0; order: 3; font-size: 10.5px; text-align: left; }
+    }
     .attach-preview { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 2px; }
     .attach-preview__item { position: relative; width: min(150px, 44vw); height: 112px; overflow: hidden; border-radius: 8px; background: #000; }
     .attach-preview__item img, .attach-preview__item video { display: block; width: 100%; height: 100%; object-fit: cover; }
@@ -995,6 +1045,19 @@ export class PostDetailComponent implements OnInit {
   private alert = inject(AlertController);
   private sheets = inject(ActionSheetController);
   private mod = inject(ModerationService);
+  /** Which picture of a multi-photo post is on screen - drives the "1 / 2" pill and the dots. */
+  readonly mediaIndex = signal(0);
+  readonly mediaRange = computed(() => Array.from({ length: this.p()?.media.length ?? 0 }, (_, i) => i));
+
+  onMediaScroll(ev: Event): void {
+    const el = ev.target as HTMLElement;
+    const items = el.querySelectorAll('lf-media-img, lf-media-video, lf-media-audio');
+    if (items.length <= 1) return;
+    const first = items[0] as HTMLElement;
+    const step = (first.offsetWidth || el.clientWidth * 0.88) + 2;
+    this.mediaIndex.set(Math.max(0, Math.min(items.length - 1, Math.round(el.scrollLeft / step))));
+  }
+
   protected media = inject(MediaService);
   protected isAdmin = (): boolean => this.mod.isAdmin();
   private actions = inject(PostActionsService);
