@@ -2,9 +2,10 @@ import { AfterViewChecked, Component, EventEmitter, Input, OnChanges, OnInit, Ou
 import type { ElementRef } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import { DEFAULT_REACTION, DEFAULT_REACTION_LABEL, Comment, MediaItem, Post, POST_TYPE_META, REACTIONS, ReactionKind, UserProfile, isReaction, provinceName } from '../../core/models/types';
-import { alreadySaid, compact, headingIsNew, timeAgo } from '../../core/utils/format';
+import { compact, headingIsNew, timeAgo } from '../../core/utils/format';
 import { AvatarComponent } from './avatar.component';
 import { IconComponent } from './icon.component';
+import { CaseFactsComponent } from './case-facts.component';
 import { MediaAudioComponent } from './media-audio.component';
 import { ReactionsSheetComponent } from './reactions-sheet.component';
 import { UserHoverDirective } from './user-hover-card.component';
@@ -35,7 +36,7 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
 @Component({
   selector: 'lf-post-card',
   standalone: true,
-  imports: [RouterLink, IconComponent, AvatarComponent, ReactionIconComponent, ReactionButtonComponent, ReactionsSheetComponent, UserHoverDirective, MediaAudioComponent],
+  imports: [RouterLink, IconComponent, AvatarComponent, ReactionIconComponent, ReactionButtonComponent, ReactionsSheetComponent, UserHoverDirective, MediaAudioComponent, CaseFactsComponent],
   template: `
     @if (!gone()) {
     <article class="fb-card lf-fade-in"
@@ -132,48 +133,7 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
       } @else {
       <div class="fb-card-body" [routerLink]="'/post/' + post.id">
         @if (showHeading()) { <h3 class="fb-post-title">{{ post.title }}</h3> }
-        @if (post.type === 'pet') {
-          <div class="fb-fact-row">
-            <lf-icon name="paw" [size]="14" />
-            <span><strong>Lost pet:</strong> {{ post.subject?.name || 'Pet' }}</span>
-          </div>
-        } @else if (post.subject?.name && !said(post.subject.name)) {
-          <div class="fb-fact-row">
-            <lf-icon name="user" [size]="14" />
-            <strong>{{ post.subject.name }}</strong>
-            @if (post.subject && post.subject.age !== null) {
-              <span class="fb-muted">· {{ post.subject.age }} {{ ageWord() }}</span>
-            }
-          </div>
-        }
-        @if ((post.lastSeenWhere || post.town) && !said(post.lastSeenWhere || post.town)) {
-          <div class="fb-fact-row">
-            <lf-icon name="pin" [size]="14" />
-            <span>Last seen: {{ post.lastSeenWhere || post.town }}</span>
-          </div>
-        }
-        <!--
-          A live case says, in one line, how long it has been open and how many
-          people are on it. No counting is needed to read it, and the clock is
-          the only thing that turns red - on time, never on engagement.
-        -->
-        @if (isLiveCase()) {
-          <div class="fb-case-line" [attr.data-urgency]="caseUrgency()">
-            <lf-icon name="clock" [size]="13" [weight]="2.2" />
-            <strong>{{ caseAge() }}</strong>
-            <span>open</span>
-            @if ((post.lookingIds?.length ?? 0) > 0) {
-              <span class="fb-case-line__sep">·</span>
-              <lf-icon name="search" [size]="13" />
-              <span>{{ post.lookingIds!.length }} looking</span>
-            }
-            @if (post.searchParty?.open && post.searchParty!.zones.length) {
-              <span class="fb-case-line__sep">·</span>
-              <lf-icon name="map" [size]="13" />
-              <span>{{ doneAreas() }}/{{ post.searchParty!.zones.length }} areas</span>
-            }
-          </div>
-        }
+        <lf-case-facts [post]="post" />
         <p class="fb-post-text" #bodyEl [class.fb-clamp]="!expanded()">{{ post.body }}</p>
         @if (!expanded() && textOverflows()) {
           <button class="fb-readmore" (click)="toggleExpand($event)">…see more</button>
@@ -400,19 +360,7 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
      * facts into a second headline. It now carries its own type, and the
      * clock alone changes colour, and only while time is doing damage.
      */
-    .fb-case-line { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; margin: 2px 0 8px;
-      font-size: 12.5px; font-weight: 500; line-height: 1.25; color: var(--lf-muted); letter-spacing: 0; }
-    .fb-case-line strong { color: var(--ion-text-color); font-weight: 700; font-variant-numeric: tabular-nums; }
-    .fb-case-line[data-urgency="critical"] > lf-icon:first-child,
-    .fb-case-line[data-urgency="critical"] strong,
-    .fb-case-line[data-urgency="high"] > lf-icon:first-child,
-    .fb-case-line[data-urgency="high"] strong { color: var(--lf-signal-text); }
-    .fb-case-line__sep { opacity: .7; }
     .fb-post-title { font-size: 17px; font-weight: 700; color: var(--ion-text-color); margin: 0 0 6px; line-height: 1.3; }
-    .fb-fact-row { font-size: 17px; font-weight: 700; color: var(--ion-text-color); margin: 0 0 4px; line-height: 1.3; }
-    .fb-fact-row { display: flex; align-items: center; gap: 6px; font-size: 14px; color: var(--lf-muted); margin-bottom: 3px; }
-    .fb-fact-row strong { color: var(--ion-text-color); font-weight: 600; }
-    .fb-muted { color: var(--lf-muted); }
     .fb-post-text { font-size: 14.5px; color: var(--ion-text-color); line-height: 1.4; margin: 6px 0 0; white-space: pre-line; }
     .fb-readmore { background: none; border: 0; color: var(--lf-muted); font-family: inherit; font-weight: 400; font-size: 14.5px; cursor: pointer; padding: 0; margin-top: 2px; }
     .fb-readmore:hover { text-decoration: underline; }
@@ -779,43 +727,6 @@ export class PostCardComponent implements OnInit, OnChanges, AfterViewChecked {
    */
   transcriptOf(note: MediaItem): string {
     return (note.transcript ?? '').trim();
-  }
-
-  isLiveCase(): boolean {
-    return (this.post.type === 'missing' || this.post.type === 'khumbulekhaya')
-      && this.post.status === 'active' && !this.post.repostOf;
-  }
-
-  /** "3d", "9h", "40m" - the same units the app uses everywhere else. */
-  caseAge(): string {
-    const d = Math.max(0, Date.now() - this.post.createdAt);
-    const m = Math.floor(d / 60_000);
-    if (m < 60) return `${m}m`;
-    const h = Math.floor(m / 60);
-    if (h < 24) return `${h}h`;
-    return `${Math.floor(h / 24)}d`;
-  }
-
-  /**
-   * Time is the only thing that makes a case urgent. A case about a child, or
-   * one still inside its first day, is red; after three days it goes quiet -
-   * not because it matters less, but because everything red stops being read.
-   */
-  caseUrgency(): 'critical' | 'high' | 'normal' {
-    const age = this.post.subject?.age;
-    const hours = (Date.now() - this.post.createdAt) / 3_600_000;
-    if ((age !== null && age !== undefined && age < 18) || hours < 24) return 'critical';
-    return hours < 72 ? 'high' : 'normal';
-  }
-
-  doneAreas(): number {
-    return (this.post.searchParty?.zones ?? []).filter((z) => z.done).length;
-  }
-  said(value: string | null | undefined): boolean { return alreadySaid(value, this.post.title, this.post.body); }
-
-  ageWord(): string {
-    const age = this.post.subject?.age ?? 0;
-    return age === 1 ? 'year old' : 'years old';
   }
 
   chatLabel(): string {

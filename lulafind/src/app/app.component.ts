@@ -6,6 +6,7 @@ import { AuthService } from './core/services/auth.service';
 import { PlatformService } from './core/services/platform.service';
 import { PushService } from './core/services/push.service';
 import { PrefetchService } from './core/services/prefetch.service';
+import { BackStackService } from './core/services/back-stack.service';
 import { BACKGROUNDS, SettingsService } from './core/services/settings.service';
 import { RepostSheetComponent } from './shared/components/repost-sheet.component';
 import { SendSheetComponent } from './shared/components/send-sheet.component';
@@ -122,6 +123,7 @@ export class AppComponent implements OnInit {
   private push = inject(PushService);
   private router = inject(Router);
   private prefetch = inject(PrefetchService);
+  private backStack = inject(BackStackService);
   private settings = inject(SettingsService);
   readonly notice = supabaseNotice;
   readonly demoMode = demoMode;
@@ -195,7 +197,28 @@ export class AppComponent implements OnInit {
   async ngOnInit(): Promise<void> {
     this.platform.watchKeyboard();
     this.listenForPress();
+    this.listenForHardwareBack();
     await this.configureNative();
+  }
+
+  /**
+   * Android hardware back mirrors the in-app back rule: from everywhere, you
+   * can always go back. Only when there is genuinely nowhere to go (the entry
+   * screen) does the app let the system finish.
+   */
+  private listenForHardwareBack(): void {
+    if (!this.platform.isNative) return;
+    void import('@capacitor/app').then(({ App }) => {
+      void App.addListener('backButton', () => {
+        const url = this.router.url;
+        // The entry screens are the one case where Android may finish the app.
+        if (url.startsWith('/home') || url.startsWith('/auth') || url.startsWith('/onboarding')) {
+          void App.exitApp();
+          return;
+        }
+        this.backStack.go('/home');
+      });
+    }).catch(() => undefined);
   }
 
   /** A light tap on every button, so the app answers the finger. */

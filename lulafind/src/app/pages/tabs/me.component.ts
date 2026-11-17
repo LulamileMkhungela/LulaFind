@@ -327,7 +327,11 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
     .name lf-icon { color: var(--lf-primary); }
     .bio { margin: 0; font-size: 15px; line-height: 1.34; }
     .actions { display: flex; gap: 8px; }
-    .actions .lf-btn { flex: 1; }
+    .actions .lf-btn { flex: 1; white-space: nowrap; }
+    /* Three taps share one row even at 320px. */
+    @media (max-width: 400px) {
+      .actions .lf-btn { gap: 5px; padding: 0 6px; font-size: 12.5px; letter-spacing: 0; }
+    }
     .actions .icon-only { flex: 0 0 44px; padding: 0; }
     .status { display: inline-flex; align-items: center; gap: 7px; align-self: flex-start; padding: 6px 10px; flex-wrap: wrap;
       border-radius: 6px; font-size: 13px; font-weight: 600;
@@ -359,6 +363,12 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
     .stepline__body strong { font-size: 13px; }
     .stepline__body small { font-size: 11.5px; color: var(--lf-muted); line-height: 1.3; }
     .stepline__go { flex: none; font-size: 12px; font-weight: 700; color: var(--lf-primary-soft-text); }
+    /* On a small phone the call-to-action drops under the words instead of
+       squeezing the sentence into one-word lines. */
+    @media (max-width: 400px) {
+      .stepline { flex-wrap: wrap; row-gap: 6px; }
+      .stepline__go { flex-basis: 100%; order: 3; padding-left: 42px; }
+    }
     .menu-tabs { margin-top: 8px; }
     .menu-tabs .tab { flex: 1; }
     .menu-panel { padding-bottom: 8px; }

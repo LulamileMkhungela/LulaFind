@@ -10,12 +10,15 @@ import { AvatarComponent } from './avatar.component';
 import { AuthService } from '../../core/services/auth.service';
 import { DataService } from '../../core/services/data.service';
 import { ChatService } from '../../core/services/chat.service';
-import { goBack } from '../../core/utils/back';
+import { BackStackService } from '../../core/services/back-stack.service';
 
 /**
  * The app's top navigation, laid out like LinkedIn's mobile header.
  *
- *   Root pages  [your photo]  [ search bar that fills the space ]  [bell]
+ *   Every page  [back]  [your photo|search or title] .........  [page action] [bell]
+ *
+ * The product rule is "from everywhere, you can always go back", so even the
+ * tab roots carry the arrow - deep links and stray taps never strand anyone.
  *   Inner pages [back]  Title  ............................  [page action] [bell]
  *
  * The photo opens your profile menu, the search bar opens Search, Chats carries
@@ -42,6 +45,13 @@ import { goBack } from '../../core/utils/back';
           <ion-title>{{ title() }}</ion-title>
         } @else {
           <div class="row">
+            <!--
+              The product rule: from everywhere, you can always go back. The
+              tab roots used to open with no way out except the tab bar itself.
+            -->
+            <button class="lf-round-btn row-back" type="button" (click)="back()" aria-label="Go back">
+              <lf-icon name="arrowLeft" [size]="20" [weight]="2.4" />
+            </button>
             @if (signedIn()) {
               <a class="me" routerLink="/me" aria-label="Your profile and menu">
                 <lf-avatar [src]="avatar()" [name]="name()" [size]="32" />
@@ -65,7 +75,7 @@ import { goBack } from '../../core/utils/back';
                        [value]="query()"
                        (input)="onSearchInput($any($event.target).value)"
                        (focus)="searchOpen.set(true)"
-                       placeholder="Search LulaFind"
+                       [placeholder]="compact() ? 'Search' : 'Search LulaFind'"
                        aria-label="Search LulaFind" />
                 @if (query()) {
                   <button class="clear" type="button" (click)="clearSearch($event)" aria-label="Clear search">
@@ -109,6 +119,8 @@ import { goBack } from '../../core/utils/back';
      * toolbar and the field fills it, still shrinking first when space is tight.
      */
     .row { flex: 1 1 auto; width: auto; display: flex; align-items: center; gap: 10px; padding: 0 0 0 12px; min-width: 0; }
+    .row-back { margin: 0 -2px 0 -8px; flex: none; }
+    @media (max-width: 400px) { .row { gap: 8px; } .row-back { width: 36px; height: 36px; } }
     .me { display: inline-flex; flex-shrink: 0; border-radius: 50%; text-decoration: none; }
     /* The search field that takes every pixel between photo and bell. */
     .search {
@@ -181,6 +193,7 @@ export class TopNavComponent {
   private auth = inject(AuthService);
   private data = inject(DataService);
   private chat = inject(ChatService);
+  private backStack = inject(BackStackService);
 
   /**
    * Set on inner pages: shows a back button and the title instead of the
@@ -201,6 +214,20 @@ export class TopNavComponent {
   readonly name = computed(() => this.auth.user()?.displayName ?? '');
   readonly alerts = computed(() => this.data.unreadNotifications());
   readonly unread = computed(() => this.chat.unreadTotal());
+
+  /**
+   * Small phone: the row shares its pixels between back, avatar and icons,
+   * so the search placeholder shortens to fit instead of clipping mid-word.
+   */
+  readonly compact = signal(false);
+
+  constructor() {
+    if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+      const mq = window.matchMedia('(max-width: 400px)');
+      this.compact.set(mq.matches);
+      mq.addEventListener('change', (e) => this.compact.set(e.matches));
+    }
+  }
 
   /**
    * The search field's text. Kept in the component so the box survives a
@@ -231,6 +258,6 @@ export class TopNavComponent {
   }
 
   back(): void {
-    goBack(this.router, this.backTo() || '/home');
+    this.backStack.go(this.backTo() || '/home');
   }
 }

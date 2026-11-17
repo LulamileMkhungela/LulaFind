@@ -12,6 +12,31 @@ export const posterKicker = (type: PostType): string =>
   : type === 'missing' ? 'MISSING'
   : '';
 
+/**
+ * "Last seen" place line for the poster. Where and town often overlap
+ * ("Orlando taxi rank, Soweto" + town "Orlando West, Soweto"); repeating the
+ * same words twice makes the design look sloppy, so a segment that adds nothing
+ * new is dropped, and the province is only added when neither place says it.
+ */
+export function whereLine(post: Pick<Post, 'lastSeenWhere' | 'town' | 'province'>): string {
+  const parts = [post.lastSeenWhere?.trim() || '', post.town?.trim() || ''].filter(Boolean);
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const part of parts) {
+    for (const raw of part.split(',')) {
+      const piece = raw.trim();
+      if (!piece) continue;
+      const key = piece.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(piece);
+    }
+  }
+  const province = provinceName(post.province);
+  if (province && !seen.has(province.toLowerCase())) out.push(province);
+  return out.join(', ');
+}
+
 /** The safety line across the bottom of the poster. */
 export const posterClose = (_type: PostType): string =>
   'Details and updates are available on LulaFind.';
@@ -27,7 +52,7 @@ export function publicPoster(post: Post): { lines: string[]; withheld: string | 
   if (post.subject?.name) {
     lines.push(post.subject.age != null ? `${post.subject.name}, ${post.subject.age}` : post.subject.name);
   }
-  const where = [post.lastSeenWhere, post.town, provinceName(post.province)].filter(Boolean).join(', ');
+  const where = whereLine(post);
   if (where) lines.push(`Last seen: ${where}${post.lastSeenAt ? ` · ${dayMonth(post.lastSeenAt)}` : ''}`);
   if (post.subject?.clothing) lines.push(`Wearing: ${post.subject.clothing}`);
   if (post.type === 'pet') {
@@ -95,7 +120,7 @@ export function posterContent(post: Post, link: string, withPhoto: string | null
   if (s?.age != null) bits.push(`${s.age} years old`);
   if (s?.gender && s.gender !== 'unknown' && post.type !== 'pet') bits.push(s.gender === 'female' ? 'Female' : s.gender === 'male' ? 'Male' : 'Other');
   const facts: { label: string; value: string }[] = [];
-  const where = [post.lastSeenWhere, post.town, provinceName(post.province)].filter(Boolean).join(', ');
+  const where = whereLine(post);
   if (where) facts.push({ label: 'LAST SEEN', value: where });
   if (post.lastSeenAt) facts.push({ label: 'WHEN', value: dayMonth(post.lastSeenAt) });
   if (s?.clothing) facts.push({ label: post.type === 'pet' ? 'MARKS' : 'WEARING', value: s.clothing });
@@ -206,7 +231,7 @@ function facts(c: Ctx, items: { label: string; value: string }[], x: number, y: 
   // Every fact on one line each, or every fact with room for two. Keeping all
   // the labels matters more than the second line of one value: a family is
   // looking for the date as well as the place.
-  const fits = (lines: number): boolean => y + rows.reduce(() => 0, 0) + rows.length * advance(lines) <= limitY;
+  const fits = (lines: number): boolean => y + rows.length * advance(lines) <= limitY;
   const lines = fits(2) ? 2 : 1;
   for (const f of rows) {
     if (y + 40 + LINE * lines > limitY) break;
@@ -315,7 +340,7 @@ function aurora(c: Ctx, p: PosterContent, img: HTMLImageElement | null): void {
   fitOneLine(c, p.name, 860, 88, 800, SANS, 44); c.fillText(p.name, cx, py + 100);
   if (p.ageLine) { c.font = `500 32px ${SANS}`; c.fillStyle = 'rgba(255,255,255,.85)'; c.fillText(p.ageLine, cx, py + 150); }
   c.textAlign = 'left';
-  facts(c, p.facts, 120, py + 215, 840, 'rgba(255,255,255,.65)', '#fff', 16, 2, 1110);
+  facts(c, p.facts, 120, py + 190, 840, 'rgba(255,255,255,.65)', '#fff', 10, 3, 1114);
   c.fillStyle = '#fff'; rr(c, 64, 1132, 952, 68, 34); c.fill();
   c.fillStyle = '#2b1478'; c.font = `800 28px ${SANS}`; c.textAlign = 'center'; c.fillText(p.contact, cx, 1176, 900);
   c.textAlign = 'left';
@@ -343,7 +368,7 @@ function editorial(c: Ctx, p: PosterContent, img: HTMLImageElement | null): void
   c.fillStyle = '#141414'; c.fillRect(80, 1090, 920, 4);
   c.font = `800 26px ${SANS}`; c.fillStyle = '#d6402a'; spaced(c, true); c.fillText('IF YOU HAVE SEEN THEM', 80, 1145); spaced(c, false);
   c.fillStyle = '#141414'; fitOneLine(c, p.contact, 920, 46, 800, SANS, 26); c.fillText(p.contact, 80, 1205);
-  footer(c, p, '#5a5245', POSTER_H - 68);
+  footer(c, p, '#5a5245', POSTER_H - 104);
 }
 
 /* ---- 4. Beacon: hazard yellow, chunky black type ---- */
@@ -366,8 +391,8 @@ function beacon(c: Ctx, p: PosterContent, img: HTMLImageElement | null): void {
   c.fillStyle = '#111'; rr(c, 64, 990, 952, 150, 24); c.fill();
   c.fillStyle = '#ffd400'; c.font = `800 26px ${SANS}`; spaced(c, true); c.fillText('CALL OR MESSAGE', 100, 1046); spaced(c, false);
   c.fillStyle = '#fff'; fitOneLine(c, p.contact, 880, 48, 800, SANS, 26); c.fillText(p.contact, 100, 1104);
-  c.fillStyle = '#111'; c.font = `600 22px ${SANS}`; c.fillText(p.foot, 64, 1200, 952);
-  c.font = `800 24px ${SANS}`; c.fillText(`Read more: ${p.link || 'LulaFind'}`, 64, 1254, 952);
+  c.fillStyle = '#111'; c.font = `600 22px ${SANS}`; c.fillText(p.foot, 64, 1188, 952);
+  c.font = `800 24px ${SANS}`; c.fillText(`Read more: ${p.link || 'LulaFind'}`, 64, 1242, 952);
 }
 
 /* ---- 5. Ubuntu: deep green, gold and red geometry ---- */
@@ -377,11 +402,11 @@ function ubuntu(c: Ctx, p: PosterContent, img: HTMLImageElement | null): void {
   for (let r = 0; r < 12; r++) for (let k = 0; k < 10; k++) { c.fillStyle = (r + k) % 2 ? '#f4b400' : '#e0392d'; c.beginPath(); c.arc(k * 120 + (r % 2) * 60, r * 120, 34, 0, Math.PI * 2); c.fill(); }
   c.restore();
   const v = c.createLinearGradient(0, 300, 0, POSTER_H); v.addColorStop(0, 'rgba(12,47,42,0)'); v.addColorStop(0.5, 'rgba(12,47,42,.96)'); c.fillStyle = v; c.fillRect(0, 300, POSTER_W, POSTER_H - 300);
-  c.fillStyle = '#f4b400'; c.beginPath(); c.moveTo(0, 0); c.lineTo(540, 0); c.lineTo(0, 300); c.fill();
-  c.fillStyle = '#e0392d'; c.beginPath(); c.moveTo(1080, 0); c.lineTo(760, 0); c.lineTo(1080, 220); c.fill();
+  c.fillStyle = '#f4b400'; c.beginPath(); c.moveTo(0, 0); c.lineTo(420, 0); c.lineTo(0, 210); c.fill();
+  c.fillStyle = '#e0392d'; c.beginPath(); c.moveTo(1080, 0); c.lineTo(740, 0); c.lineTo(1080, 160); c.fill();
 
   c.textAlign = 'left'; c.fillStyle = '#fff';
-  fitOneLine(c, p.kicker, 900, 170, 900, SANS, 80); c.fillText(p.kicker, 64, 330);
+  fitOneLine(c, p.kicker, 900, 150, 900, SANS, 80); c.fillText(p.kicker, 64, 340);
   const cx = 540, cy = 640, r = 250;
   c.beginPath(); c.arc(cx, cy, r + 22, 0, Math.PI * 2); c.fillStyle = '#f4b400'; c.fill();
   c.beginPath(); c.arc(cx, cy, r + 8, 0, Math.PI * 2); c.fillStyle = '#0c2f2a'; c.fill();

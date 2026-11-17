@@ -18,7 +18,7 @@ import {
   Audience, MediaItem, Post, PostPoster, PostType, PROVINCES, ProvinceCode
 } from '../../core/models/types';
 import { uid } from '../../core/utils/format';
-import { goBack } from '../../core/utils/back';
+import { BackStackService } from '../../core/services/back-stack.service';
 import { drawPoster, isPosterType, loadPosterImage, posterContent, POSTER_TEMPLATES, type PosterTemplateId } from '../../core/utils/poster';
 import { PlatformService } from '../../core/services/platform.service';
 
@@ -831,6 +831,7 @@ export class CreatePostComponent implements OnInit, OnDestroy {
   private auth = inject(AuthService);
   private media = inject(MediaService);
   private router = inject(Router);
+  private backStack = inject(BackStackService);
   private route = inject(ActivatedRoute);
   private toaster = inject(ToastController);
   private platform = inject(PlatformService);
@@ -1759,6 +1760,6 @@ export class CreatePostComponent implements OnInit, OnDestroy {
   close(): void {
     // Editing a post and landing here cold: back to the post itself.
     const editId = this.route.snapshot.paramMap.get('id');
-    goBack(this.router, editId ? `/post/${editId}` : '/home');
+    this.backStack.go(editId ? `/post/${editId}` : '/home');
   }
 }

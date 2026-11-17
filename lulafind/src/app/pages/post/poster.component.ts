@@ -39,14 +39,18 @@ import { SAPS_MISSING_LIST } from '../../core/data/sa-help';
           @if (busy()) { <div class="stage__busy">Designing…</div> }
         </div>
 
-        <div class="picker" role="listbox" aria-label="Poster designs">
-          @for (t of templates; track t.id) {
-            <button type="button" class="tpl" role="option" [attr.aria-selected]="tpl() === t.id" [class.on]="tpl() === t.id" [disabled]="busy()" (click)="choose(t.id)">
-              <span class="tpl__sw" [style.background]="'linear-gradient(135deg,' + t.swatch[0] + ' 0%,' + t.swatch[2] + ' 55%,' + t.swatch[1] + ' 100%)'"></span>
-              <strong>{{ t.name }}</strong>
-              <small>{{ t.tagline }}</small>
-            </button>
-          }
+        <div class="picker-wrap">
+          <div class="picker" role="listbox" aria-label="Poster designs - scrolls sideways">
+            @for (t of templates; track t.id) {
+              <button type="button" class="tpl" role="option" [attr.aria-selected]="tpl() === t.id" [class.on]="tpl() === t.id" [disabled]="busy()" (click)="choose(t.id)">
+                <span class="tpl__sw" [style.background]="'linear-gradient(135deg,' + t.swatch[0] + ' 0%,' + t.swatch[2] + ' 55%,' + t.swatch[1] + ' 100%)'"></span>
+                <strong>{{ t.name }}</strong>
+                <small>{{ t.tagline }}</small>
+              </button>
+            }
+            <span class="picker__end" aria-hidden="true"></span>
+          </div>
+          <span class="picker__hint" aria-hidden="true">Swipe for more designs</span>
         </div>
 
         @if (!hasPersonPhoto()) {
@@ -101,8 +105,19 @@ import { SAPS_MISSING_LIST } from '../../core/data/sa-help';
     .stage { position: relative; margin: 14px auto 0; width: min(88%, 420px); border-radius: 14px; overflow: hidden; box-shadow: 0 14px 40px rgba(0,0,0,.45); aspect-ratio: 1080 / 1350; background: #111; }
     .cv { display: block; width: 100%; height: 100%; }
     .stage__busy { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(0,0,0,.45); color: #fff; font-weight: 700; }
+    /* The designs list runs past the screen edge on purpose; the fade and the
+       caption are the sign that there is more sideways, the same sign the post
+       pictures carry. */
+    .picker-wrap { position: relative; }
+    .picker-wrap::after {
+      content: ""; position: absolute; top: 0; bottom: 22px; right: 0; width: 44px;
+      pointer-events: none; background: linear-gradient(to right, transparent, var(--lf-bg, #f2f3f5) 85%);
+    }
     .picker { display: flex; gap: 10px; overflow-x: auto; padding: 16px var(--lf-gap) 8px; scroll-snap-type: x proximity; scrollbar-width: none; }
     .picker::-webkit-scrollbar { display: none; }
+    .picker__end { flex: 0 0 1px; }
+    .picker__hint { display: block; margin: 0 var(--lf-gap) 4px; font-size: 11px; color: var(--lf-muted); }
+    @media (min-width: 700px) { .picker-wrap::after, .picker__hint { display: none; } }
     .tpl { flex: 0 0 132px; scroll-snap-align: start; display: flex; flex-direction: column; gap: 3px; align-items: flex-start; padding: 8px; text-align: left;
       border: 2px solid var(--lf-line); border-radius: 14px; background: var(--lf-card); color: var(--ion-text-color); cursor: pointer; }
     .tpl.on { border-color: var(--lf-primary); background: var(--lf-primary-soft); }
