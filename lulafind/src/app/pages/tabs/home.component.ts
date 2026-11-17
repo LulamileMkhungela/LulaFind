@@ -231,10 +231,14 @@ import { timeAgo } from '../../core/utils/format';
     </ion-content>
   `,
   styles: [`
-    .feed-scopes { display: flex; gap: 4px; margin: 8px var(--lf-gap) 0; padding: 3px; border: 1px solid var(--lf-line); border-radius: 9px; background: var(--lf-card); }
-    .feed-scopes button { flex: 1; min-height: 38px; border: 0; border-radius: 7px; background: transparent; color: var(--lf-muted); font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; }
-    .feed-scopes button:hover { background: var(--lf-hover); }
-    .feed-scopes button.active { background: var(--lf-primary-soft); color: var(--lf-primary-soft-text); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+    /* For you / Network, drawn the way LinkedIn's mobile bar is: a flat,
+       full-width row under the app bar, hairline underneath, the inactive label
+       in muted grey, the active one in ink with a thick underline. No pill,
+       no container - the tab *is* the row. */
+    .feed-scopes { display: flex; margin: 0; padding: 0; border: 0; border-bottom: 1px solid var(--lf-line); border-radius: 0; background: transparent; }
+    .feed-scopes button { flex: 1; min-height: 54px; margin: 0 2px -1px; padding: 0 12px; border: 0; border-bottom: 3px solid transparent; border-radius: 0; background: transparent; color: var(--lf-muted); font: inherit; font-size: 19px; font-weight: 600; letter-spacing: .1px; cursor: pointer; transition: color .15s ease, border-color .15s ease; }
+    .feed-scopes button:hover { color: var(--ion-text-color); background: transparent; }
+    .feed-scopes button.active { color: var(--ion-text-color); font-weight: 800; border-bottom-color: var(--ion-text-color); background: transparent; box-shadow: none; }
     .network-context { margin: 8px var(--lf-gap) 10px; padding: 12px 2px; }
     .network-context__header { display: flex; align-items: flex-start; gap: 10px; }
     .network-context__header > div { flex: 1; display: flex; flex-direction: column; gap: 2px; }
