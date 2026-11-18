@@ -1,6 +1,5 @@
+import { BackStackService } from '../../core/services/back-stack.service';
 import { Component, inject } from '@angular/core';
-import { Location } from '@angular/common';
-import { Router } from '@angular/router';
 import { IonContent } from '@ionic/angular/ion-content';
 
 
@@ -94,7 +93,7 @@ import { SUPPORT_EMAIL, SUPPORT_NAME } from '../../core/config';
 
         <h2 class="lf-h2">Support</h2>
         <p>
-          Email <a href="mailto:{{ support }}">support&#64;{{ support }}</a> - {{ supportName }}.
+          Email <a href="mailto:{{ support }}">{{ support }}</a> - {{ supportName }}.
           We answer every message.
         </p>
 
@@ -120,14 +119,12 @@ import { SUPPORT_EMAIL, SUPPORT_NAME } from '../../core/config';
   `]
 })
 export class TermsComponent {
-  private nav = inject(Location);
-  private router = inject(Router);
+  private backStack = inject(BackStackService);
   protected readonly version = environment.appVersion;
   protected readonly support = SUPPORT_EMAIL;
   protected readonly supportName = SUPPORT_NAME;
 
   back(): void {
-    if (window.history.length > 1) this.nav.back();
-    else void this.router.navigate(['/settings']);
+    this.backStack.go('/settings');
   }
 }

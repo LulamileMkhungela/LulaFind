@@ -50,7 +50,7 @@ import { alreadySaid } from '../../core/utils/format';
           @if ((p.lookingIds?.length ?? 0) > 0) {
             <span class="sep">·</span>
             <lf-icon name="search" [size]="13" />
-            <span>{{ p.lookingIds!.length }} looking</span>
+            <span [attr.title]="'People who marked themselves as looking for this case'">{{ p.lookingIds!.length }} {{ p.lookingIds!.length === 1 ? 'person looking' : 'people looking' }}</span>
           }
           @if (p.searchParty?.open && p.searchParty!.zones.length) {
             <span class="sep">·</span>

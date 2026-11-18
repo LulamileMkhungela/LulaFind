@@ -13,8 +13,8 @@ import { CASE_STEPS, CaseStepId, CaseStepSpec, Post } from '../../core/models/ty
  * put the poster where the person usually goes, and tell the NGOs. It lives on
  * the case so a parent does not have to hold all of it in their head.
  *
- * The officer's details stay on this case - they are never part of the poster or
- * anything shareable, which is why the card says so out loud.
+ * Officer details are part of the case record; users should not assume the
+ * case record is private just because they are not included in a poster.
  */
 @Component({
   selector: 'lf-case-plan',
@@ -51,7 +51,7 @@ import { CASE_STEPS, CaseStepId, CaseStepSpec, Post } from '../../core/models/ty
                      (input)="officerContact.set($any($event.target).value)" aria-label="Investigating officer number" />
               <button class="pill" type="button" (click)="saveOfficer()">Save</button>
             </div>
-            <p class="plan__note">Officer details stay on this case and are never shown to the public.</p>
+            <p class="plan__note">Avoid adding sensitive officer details here; case details may be visible to others.</p>
           } @else if (admin) {
             <p class="plan__note">The family&rsquo;s checklist. Only they can tick it.</p>
           }

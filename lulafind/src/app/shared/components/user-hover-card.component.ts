@@ -74,7 +74,7 @@ export class UserHoverDirective {
             {{ busy() ? '…' : following() ? 'Following' : '+ Follow' }}
           </button>
           <button type="button" class="lf-pill ghost" [disabled]="busy()" (click)="message(u.id)">
-            <lf-icon name="chat" [size]="15" /> {{ mutual() ? 'Message' : 'Follow to message' }}
+            <lf-icon name="chat" [size]="15" /> {{ connected() ? 'Message' : 'Follow to message' }}
           </button>
           <a class="lf-pill ghost" [routerLink]="'/user/' + u.id" (click)="hover.close()">View profile</a>
         </div>
@@ -133,9 +133,9 @@ export class UserHoverCardComponent {
     const id = this.hover.userId();
     return !!id && this.followsFor === id && this.follows();
   });
-  readonly mutual = computed(() => {
+  readonly connected = computed(() => {
     const id = this.hover.userId();
-    return !!id && this.data.followingIds().includes(id) && this.data.followerIds().includes(id);
+    return !!id && (this.data.followingIds().includes(id) || this.data.followerIds().includes(id));
   });
 
   /** The card sits under the name, or above it when the bottom of the screen is near. */
@@ -216,8 +216,9 @@ export class UserHoverCardComponent {
       this.note.set('Sign in to message members.');
       return;
     }
-    if (!this.mutual()) {
-      this.note.set('You can message each other once you follow them and they follow you back.');
+    const gate = await this.chat.gatePerson(id);
+    if (!gate.allowed) {
+      this.note.set(gate.step === 'sign_in' ? 'Sign in to message.' : gate.reason);
       return;
     }
     this.hover.close();

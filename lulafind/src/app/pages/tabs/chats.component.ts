@@ -21,7 +21,7 @@ import { timeAgo } from '../../core/utils/format';
     <ion-content class="lf-page lf-plain">
       <div class="gate-note">
         <lf-icon name="lock" [size]="16" />
-        <span>You can message someone once <strong>you follow each other</strong>.</span>
+        <span>You can message someone when either person follows the other.</span>
       </div>
 
       @if (!auth.signedIn()) {

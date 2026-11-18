@@ -7,7 +7,6 @@ import { AvatarComponent } from '../../shared/components/avatar.component';
 import { LogoComponent } from '../../shared/components/logo.component';
 import { AuthService, AuthProvider } from '../../core/services/auth.service';
 import { DataService } from '../../core/services/data.service';
-import { ProvinceCode, PROVINCES } from '../../core/models/types';
 import { SUPPORT_EMAIL, SUPPORT_NAME } from '../../core/config';
 import { parseFullName } from '../../core/utils/format';
 import { demoMode } from '../../core/data/demo';
@@ -280,17 +279,8 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
             }
 
             @if (signupStep() === 5) {
-              <h2 class="snap-question">Select your province</h2>
-              <p class="snap-subtext">Choose your province to customize local emergency and search party alerts.</p>
-              <div class="snap-field">
-                <label class="snap-label">Province</label>
-                <select class="snap-select" [value]="f.province ?? ''" (change)="f.province = $any($event.target).value">
-                  <option value="" disabled>Select province...</option>
-                  @for (p of provinces; track p.code) {
-                    <option [value]="p.code">{{ p.name }}</option>
-                  }
-                </select>
-              </div>
+              <h2 class="snap-question">Finish creating your account</h2>
+              <p class="snap-subtext">Please confirm the following to continue.</p>
 
               <div class="snap-agree-box">
                 <label class="snap-check">
@@ -577,7 +567,6 @@ export class AuthComponent implements OnInit {
 
   protected readonly support = SUPPORT_EMAIL;
   protected readonly supportName = SUPPORT_NAME;
-  protected readonly provinces = PROVINCES;
   private readonly taken = signal<string[]>([]);
 
   mode = signal<Mode>('welcome');
@@ -595,11 +584,10 @@ export class AuthComponent implements OnInit {
   showPass = signal(false);
   private next = '/home';
 
-  touched = { name: false, email: false, password: false, surname: false, province: false, over18: false, terms: false, otp: false };
+  touched = { name: false, email: false, password: false, surname: false, over18: false, terms: false, otp: false };
 
   f = {
-    displayName: '', email: '', password: '', newPassword: '', confirmPassword: '', surname: '', otp: '',
-    province: null as ProvinceCode | null, town: ''
+    displayName: '', email: '', password: '', newPassword: '', confirmPassword: '', surname: '', otp: ''
   };
 
   /** Name of a Google account waiting to finish signing up. */
@@ -776,10 +764,6 @@ export class AuthComponent implements OnInit {
 
   async signup(): Promise<void> {
     this.error.set('');
-    if (!this.f.province) {
-      this.error.set('Please select your province.');
-      return;
-    }
     if (!this.over18) {
       this.error.set('You must be 18 or older to use LulaFind.');
       return;
@@ -796,8 +780,8 @@ export class AuthComponent implements OnInit {
         email: this.f.email,
         password: this.f.password || 'provider-login',
         surname: '',
-        province: this.f.province,
-        town: this.f.town,
+        province: null,
+        town: '',
         provider: this.auth.pendingProvider()?.provider ?? null,
         over18: this.over18,
         acceptedTerms: this.terms,

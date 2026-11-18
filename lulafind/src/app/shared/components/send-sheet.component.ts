@@ -55,8 +55,7 @@ import { DataService } from '../../core/services/data.service';
               @if (actions.sendQuery().trim()) {
                 Nobody by that name can be sent a post yet.
               } @else {
-                Nobody to send to yet. Follow someone - when someone follows you back you can
-                also send a post straight into your chat with them.
+                Nobody to send to yet. Follow someone, or wait for someone to follow you.
               }
             </p>
           } @else {
@@ -66,7 +65,7 @@ import { DataService } from '../../core/services/data.service';
                 <span class="who">
                   <strong>{{ person.profile.displayName }}</strong>
                   <small>
-                    @if (person.connection) { Connected - also goes to your chat }
+                    @if (person.connection) { Connected · may also go to your chat }
                     @else { Follows you }
                   </small>
                 </span>

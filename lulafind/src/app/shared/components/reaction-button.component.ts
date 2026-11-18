@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, ElementRef, HostListener, computed, inject, input, output, signal } from '@angular/core';
-import { DEFAULT_REACTION, DEFAULT_REACTION_LABEL, REACTIONS, ReactionKind, VoteValue, isReaction } from '../../core/models/types';
+import { DEFAULT_REACTION_LABEL, REACTIONS, ReactionKind, VoteValue, isReaction } from '../../core/models/types';
 import { IconComponent } from './icon.component';
 import { ReactionIconComponent } from './reaction-icon.component';
 
@@ -8,7 +8,7 @@ import { ReactionIconComponent } from './reaction-icon.component';
  *
  *  - The main icon is an outlined thumbs-up and the label reads "Like" until
  *    you react.
- *  - Quick tap: gives a "Like". Tap again to take it back.
+ *  - Tap: opens the reaction choices; selecting the same reaction removes it.
  *  - Hold (or hover with a mouse): the tray opens with Like, Support, Sad and
  *    Have an idea, the way LinkedIn opens its reaction flyout. Slide onto one
  *    and lift your finger, or tap one, to pick it.
@@ -43,7 +43,7 @@ import { ReactionIconComponent } from './reaction-icon.component';
             [attr.aria-label]="ariaLabel()"
             (pointerdown)="down($event)" (pointercancel)="cancel()"
             (pointerleave)="leave($event)" (contextmenu)="$event.preventDefault()"
-            (keydown.enter)="tap($event)" (keydown.space)="tap($event)" (click)="$event.preventDefault()">
+            (keydown.enter)="tap($event)" (keydown.space)="tap($event)" (click)="click($event)">
       @if (current(); as c) {
         <lf-reaction-icon [kind]="c" [size]="22" />
       } @else {
@@ -115,8 +115,8 @@ export class ReactionButtonComponent {
   });
   readonly tone = computed(() => REACTIONS.find((r) => r.key === this.current())?.color ?? 'var(--lf-muted)');
   readonly ariaLabel = computed(() => this.current()
-    ? `Your reaction: ${REACTIONS.find((r) => r.key === this.current())!.label}. Tap to remove, hold to change.`
-    : `${DEFAULT_REACTION_LABEL}. Hold for Support, Sad and Have an idea.`);
+    ? `Your reaction: ${REACTIONS.find((r) => r.key === this.current())!.label}. Choose a reaction or select it again to remove.`
+    : 'Choose a reaction: Like, Support, Sad or Have an idea.');
 
   private timer: ReturnType<typeof setTimeout> | null = null;
   private held = false;
@@ -217,11 +217,16 @@ export class ReactionButtonComponent {
     void ev;
   }
 
+  /** Assistive technologies can activate a button with a click and no pointer events. */
+  click(ev: MouseEvent): void {
+    ev.preventDefault();
+    if (ev.detail === 0) this.tap();
+  }
+
   tap(ev?: Event): void {
     ev?.preventDefault();
-    this.open.set(false);
-    const c = this.current();
-    this.react.emit(c ?? DEFAULT_REACTION);
+    this.hot.set(null);
+    this.open.set(!this.open());
   }
 
   choose(key: ReactionKind, ev?: Event): void {

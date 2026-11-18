@@ -367,7 +367,10 @@ export class FirebaseApi implements LulaApi {
     const all = await this.getList<Story>(this.q.query(this.col('stories'), this.q.orderBy('createdAt', 'desc'), this.q.limit(100)));
     return all.filter((s) => s.expiresAt > Date.now());
   }
-  async saveStory(s: Story) { await this.set(`stories/${s.id}`, s as unknown as Record<string, unknown>); }
+  async saveStory(s: Story) {
+    // Audience-visible story documents must not embed private insights.
+    await this.set(`stories/${s.id}`, { ...s, replies: [], viewers: [] } as unknown as Record<string, unknown>);
+  }
   async storyRepliesFor(storyId: string) {
     return this.getList<StoryReply>(this.col(`stories/${storyId}/replies`));
   }

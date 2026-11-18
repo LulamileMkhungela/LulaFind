@@ -4,7 +4,7 @@ import { IonContent } from '@ionic/angular/ion-content';
 import { IonHeader } from '@ionic/angular/ion-header';
 import { IonToolbar } from '@ionic/angular/ion-toolbar';
 import { IonButtons } from '@ionic/angular/ion-buttons';
-import { IonBackButton } from '@ionic/angular/ion-back-button';
+import { BackStackService } from '../../core/services/back-stack.service';
 import { IonTextarea } from '@ionic/angular/ion-textarea';
 import { IconComponent } from '../../shared/components/icon.component';
 import { AvatarComponent } from '../../shared/components/avatar.component';
@@ -23,11 +23,11 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
 @Component({
   selector: 'lf-chat-room',
   standalone: true,
-  imports: [IonContent, IonHeader, IonToolbar, IonButtons, IonBackButton, IonTextarea, RouterLink, IconComponent, AvatarComponent, KeyboardDirective, MediaImageComponent, MediaVideoComponent, ReactionIconComponent, UserHoverDirective],
+  imports: [IonContent, IonHeader, IonToolbar, IonButtons, IonTextarea, RouterLink, IconComponent, AvatarComponent, KeyboardDirective, MediaImageComponent, MediaVideoComponent, ReactionIconComponent, UserHoverDirective],
   template: `
     <ion-header [translucent]="false">
       <ion-toolbar>
-        <ion-buttons slot="start"><ion-back-button defaultHref="/chats" text=""></ion-back-button></ion-buttons>
+        <ion-buttons slot="start"><button class="lf-icon-btn" type="button" aria-label="Go back" (click)="backStack.go('/home')"><lf-icon name="arrowLeft" [size]="20" /></button></ion-buttons>
         <div class="peer">
           <lf-avatar [src]="peerAvatar()" [name]="peerName()" [size]="34" />
           <div class="peer-copy">
@@ -66,7 +66,7 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
 
       <div class="notice">
         <lf-icon name="lock" [size]="14" />
-        Private chat - you follow each other. Never send money to a stranger.
+        Chat - either of you follows the other. Never send money to a stranger.
       </div>
 
       <div class="thread-frame">
@@ -297,6 +297,7 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
   `]
 })
 export class ChatRoomComponent implements OnInit, OnDestroy {
+  protected readonly backStack = inject(BackStackService);
   @ViewChild(IonContent) private content?: IonContent;
 
   protected chat = inject(ChatService);

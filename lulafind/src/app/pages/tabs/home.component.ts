@@ -6,16 +6,15 @@ import { IonRefresherContent } from '@ionic/angular/ion-refresher-content';
 import { IonSkeletonText } from '@ionic/angular/ion-skeleton-text';
 import { ToastController } from '@ionic/angular/toast-controller';
 import { IconComponent } from '../../shared/components/icon.component';
-import { AvatarComponent } from '../../shared/components/avatar.component';
 import { TopNavComponent } from '../../shared/components/top-nav.component';
 import { EmptyComponent } from '../../shared/components/empty.component';
 import { ChatState, PostCardComponent } from '../../shared/components/post-card.component';
-import { StoryRailComponent } from '../../shared/components/story-rail.component';
 import { PeopleRailComponent } from '../../shared/components/people-rail.component';
 import { DataService } from '../../core/services/data.service';
 import { AuthService } from '../../core/services/auth.service';
 import { ChatService } from '../../core/services/chat.service';
 import { PlatformService } from '../../core/services/platform.service';
+import { prioritizeLocalPosts } from '../../core/utils/local-area';
 import { Post, ReactionKind, provinceName } from '../../core/models/types';
 import { feedWithRails } from '../../core/utils/feed';
 import { LookoutService } from '../../core/services/lookout.service';
@@ -26,7 +25,7 @@ import { timeAgo } from '../../core/utils/format';
   standalone: true,
   imports: [
     IonContent, IonRefresher, IonRefresherContent, IonSkeletonText,
-    TopNavComponent, IconComponent, AvatarComponent, EmptyComponent, PostCardComponent, StoryRailComponent, PeopleRailComponent,
+    TopNavComponent, IconComponent, EmptyComponent, PostCardComponent, PeopleRailComponent,
     RouterLink
   ],
   template: `
@@ -36,6 +35,18 @@ import { timeAgo } from '../../core/utils/format';
       <ion-refresher slot="fixed" (ionRefresh)="onRefresh($event)">
         <ion-refresher-content pullingText="Pull to refresh"></ion-refresher-content>
       </ion-refresher>
+
+      <!-- LinkedIn-style feed scope: discovery stays separate from the member's
+           actual network. The scope is part of the data query, not a visual
+           filter, so a refresh cannot leak a For you post into Network. -->
+      <nav class="feed-scopes" role="tablist" aria-label="Home feed">
+        <button type="button" role="tab" [class.active]="data.filter().scope === 'for-you'"
+                [attr.aria-selected]="data.filter().scope === 'for-you'"
+                (click)="setScope('for-you')">For you</button>
+        <button type="button" role="tab" [class.active]="data.filter().scope === 'network'"
+                [attr.aria-selected]="data.filter().scope === 'network'"
+                (click)="setScope('network')">Network</button>
+      </nav>
 
       <!-- A safety check waiting on you: nothing else on this screen matters more. -->
       @if (duePrompts().length) {
@@ -91,97 +102,18 @@ import { timeAgo } from '../../core/utils/format';
         </section>
       }
 
-      <!-- LinkedIn-style feed scope: discovery stays separate from the member's
-           actual network. The scope is part of the data query, not a visual
-           filter, so a refresh cannot leak a For you post into Network. -->
-      <nav class="feed-scopes" role="tablist" aria-label="Home feed">
-        <button type="button" role="tab" [class.active]="data.filter().scope === 'for-you'"
-                [attr.aria-selected]="data.filter().scope === 'for-you'"
-                (click)="setScope('for-you')">For you</button>
-        <button type="button" role="tab" [class.active]="data.filter().scope === 'network'"
-                [attr.aria-selected]="data.filter().scope === 'network'"
-                (click)="setScope('network')">Network</button>
-      </nav>
-
       @if (data.filter().scope === 'network') {
         <section class="network-context" aria-label="Your network">
-          <div class="network-context__header">
-            <div>
-              <strong>Your network</strong>
-              <span>People, cases and stories from the people and communities around you.</span>
-            </div>
-            <a class="network-context__open" routerLink="/discover"
-               aria-label="Open following, followers and requests">
-              <lf-icon name="users" [size]="20" />
-              <lf-icon name="chevronRight" [size]="15" />
-            </a>
+          <div class="network-context__header"><div><strong>Your network</strong>
+            <span>People you follow, your followers and follow requests.</span></div></div>
+          <div class="network-actions" aria-label="Network connections">
+            <a class="network-action" routerLink="/discover" [queryParams]="{ tab: 'following' }"><lf-icon name="users" [size]="17" /><span><strong>Following</strong><small>{{ data.followingIds().length }} people</small></span></a>
+            <a class="network-action" routerLink="/discover" [queryParams]="{ tab: 'followers' }"><lf-icon name="users" [size]="17" /><span><strong>Followers</strong><small>{{ data.followerIds().length }} people</small></span></a>
+            <a class="network-action" routerLink="/discover" [queryParams]="{ tab: 'requests' }"><lf-icon name="user" [size]="17" /><span><strong>Follow requests</strong><small>{{ data.followRequests().length }} pending</small></span></a>
           </div>
-
-          <div class="network-actions" aria-label="Network actions">
-            <a class="network-action" routerLink="/search">
-              <lf-icon name="search" [size]="17" />
-              <span><strong>Find people and cases</strong><small>Search people, posts and communities</small></span>
-            </a>
-            <button class="network-action" type="button" (click)="onAddStory()">
-              <lf-icon name="book" [size]="17" />
-              <span><strong>Create a story</strong><small>Choose who can see it</small></span>
-            </button>
-          </div>
-
-          <!-- Stories belong to Network only. The general feed does not inject
-               a Story card between posts, so this is the one predictable place
-               to browse them. -->
-          <section class="network-stories" aria-label="Network stories">
-            <div class="network-stories__head">
-              <strong>Stories</strong>
-              <span>Choose whose stories you want to see</span>
-            </div>
-            <div class="story-scopes" role="tablist" aria-label="Story audience filter">
-              <button type="button" role="tab" [class.active]="storyScope() === 'following'"
-                      [attr.aria-selected]="storyScope() === 'following'"
-                      (click)="storyScope.set('following')">Following</button>
-              <button type="button" role="tab" [class.active]="storyScope() === 'followers'"
-                      [attr.aria-selected]="storyScope() === 'followers'"
-                      (click)="storyScope.set('followers')">Followers</button>
-              <button type="button" role="tab" [class.active]="storyScope() === 'public'"
-                      [attr.aria-selected]="storyScope() === 'public'"
-                      (click)="storyScope.set('public')">Public</button>
-            </div>
-            <lf-story-rail [scope]="storyScope()" (addStory)="onAddStory()" />
-          </section>
-
-          @if (data.networkStatuses().length) {
-            <div class="network-strip">
-              <span class="network-strip__label">Statuses</span>
-              @for (u of data.networkStatuses(); track u.id) {
-                <a class="network-person" [routerLink]="'/user/' + u.id">
-                  <lf-avatar [src]="data.avatarFor(u)" [name]="u.displayName" [size]="30" [status]="u.checkIn?.status ?? null" />
-                  <span class="network-person__name">{{ u.displayName.split(' ')[0] }}</span>
-                  <span class="network-person__status">{{ networkStatusLabel(u.checkIn?.status) }}</span>
-                  @if (u.checkIn?.note) { <span class="network-person__note">{{ u.checkIn!.note }}</span> }
-                </a>
-              }
-            </div>
-          }
-
-          @if (data.mySpotlights().length) {
-            <div class="network-strip">
-              <span class="network-strip__label">Spotlights</span>
-              @for (sp of data.mySpotlights(); track sp.id) {
-                <a class="network-spotlight" [routerLink]="'/spotlight/' + sp.id">
-                  <span class="network-spotlight__mark">{{ sp.surname.slice(0, 1) }}</span>
-                  <span>{{ sp.surname }}</span>
-                </a>
-              }
-            </div>
-          }
-
-          @if (!data.networkStatuses().length && !data.mySpotlights().length) {
-            <p class="network-empty">Follow people or join a Spotlight to build this feed.</p>
-          }
         </section>
       }
-
+      @if (data.filter().scope === 'for-you') {
       <!-- The feed is intentionally not gated by visible chips or hidden
            local filters. For you and Network are the only scopes; privacy and
            audience rules remain enforced by the active backend. -->
@@ -227,6 +159,7 @@ import { timeAgo } from '../../core/utils/format';
           <lf-people-rail />
         }
       }
+      }
 
     </ion-content>
   `,
@@ -235,7 +168,7 @@ import { timeAgo } from '../../core/utils/format';
        full-width row under the app bar, hairline underneath, the inactive label
        in muted grey, the active one in ink with a thick underline. No pill,
        no container - the tab *is* the row. */
-    .feed-scopes { display: flex; margin: 0; padding: 0; border: 0; border-bottom: 1px solid var(--lf-line); border-radius: 0; background: transparent; }
+    .feed-scopes { position: sticky; top: 0; z-index: 10; display: flex; margin: 0; padding: 0; border: 0; border-bottom: 1px solid var(--lf-line); border-radius: 0; background: var(--lf-bg); }
     .feed-scopes button { flex: 1; min-height: 54px; margin: 0 2px -1px; padding: 0 12px; border: 0; border-bottom: 3px solid transparent; border-radius: 0; background: transparent; color: var(--lf-muted); font: inherit; font-size: 19px; font-weight: 600; letter-spacing: .1px; cursor: pointer; transition: color .15s ease, border-color .15s ease; }
     .feed-scopes button:hover { color: var(--ion-text-color); background: transparent; }
     .feed-scopes button.active { color: var(--ion-text-color); font-weight: 800; border-bottom-color: var(--ion-text-color); background: transparent; box-shadow: none; }
@@ -382,7 +315,12 @@ export class HomeComponent {
   });
 
 
-  readonly displayedFeed = computed(() => this.data.feed());
+  readonly displayedFeed = computed(() => {
+    const posts = this.data.feed();
+    if (this.data.filter().scope !== 'for-you') return posts;
+    const user = this.auth.user();
+    return prioritizeLocalPosts(posts, user ? { province: user.province, town: user.town ?? '' } : null);
+  });
 
   /** Stories have one home: Network. Keep the For you stream clean, and keep
    * Network posts in one continuous stream rather than inserting extra cards. */
@@ -395,11 +333,15 @@ export class HomeComponent {
   });
 
   private chatGates = signal<Record<string, ChatState>>({});
+  private chatGateSeq = 0;
 
   constructor() {
     void this.chat.load();
     effect(() => {
       const n = this.data.feed().length;
+      this.data.followingIds();
+      this.data.followerIds();
+      this.auth.user();
       if (n >= 0) void this.recomputeGates();
     });
     this.data.startAutoSync();
@@ -431,13 +373,14 @@ export class HomeComponent {
   private async recomputeGates(): Promise<void> {
     // One round trip per post, all at once. Awaiting them in a loop made the
     // feed take visibly longer to settle after every refresh.
+    const request = ++this.chatGateSeq;
     const entries = await Promise.all(this.data.feed().map(async (p): Promise<[string, ChatState]> => {
       if (!p.chatEnabled) return [p.id, 'off' as ChatState];
       const g = await this.chat.gate(p, p.khumbu?.claimedByUserId === this.auth.viewerId);
       const state: ChatState = g.allowed ? 'open' : g.step === 'follow' ? 'locked-follow' : 'off';
       return [p.id, state];
     }));
-    this.chatGates.set(Object.fromEntries(entries));
+    if (request === this.chatGateSeq) this.chatGates.set(Object.fromEntries(entries));
   }
 
   chatStateOf(p: Post): ChatState {
@@ -493,9 +436,8 @@ export class HomeComponent {
       if (thread) await this.router.navigate(['/chats/thread', thread.id]);
       return;
     }
-    // Chat is mutual-follow only. Following is the honest next step, so the
-    // button takes you to the person rather than pretending a reaction helps.
-    await this.router.navigate(['/user', p.authorId]);
+    if (g.step === 'follow') await this.router.navigate(['/user', p.authorId]);
+    else if (g.step === 'disabled') await this.show(g.reason);
   }
 
   async onAddStory(): Promise<void> {

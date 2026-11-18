@@ -5,6 +5,8 @@ import { Preferences } from '@capacitor/preferences';
 import { GeoPoint } from '../models/types';
 import { PlatformService } from './platform.service';
 import { PROVINCES, provinceName, ProvinceCode } from '../models/types';
+import { areaFromOpenStreetMap, LocalArea } from '../utils/local-area';
+import { OPENSTREETMAP_REVERSE_URL } from '../config';
 
 export interface BeaconRecord {
   at: number;
@@ -50,7 +52,7 @@ export class LocationService {
       const raw = await this.readStored();
       if (raw) {
         this.current.set(raw.point);
-        this.province.set(raw.point.label as ProvinceCode ?? this.nearestProvince(raw.point));
+        this.province.set(this.nearestProvince(raw.point));
         this.lastBeacon.set(raw);
       }
     } catch {
@@ -127,7 +129,7 @@ export class LocationService {
   }
 
   /** One-off read of the device position. Returns null if refused. */
-  async readDevicePosition(): Promise<GeoPoint | null> {
+  async readDevicePosition(options: { persist?: boolean } = {}): Promise<GeoPoint | null> {
     this.loading.set(true);
     this.error.set(null);
     try {
@@ -139,30 +141,24 @@ export class LocationService {
           accuracyM: pos.coords.accuracy ?? undefined,
           at: pos.timestamp
         };
-        return this.finish(point);
+        this.permission.set('granted');
+        return options.persist === false ? point : this.finish(point);
       }
-      const pos = await new Promise<GeolocationPosition | null>((resolve) => {
-        if (!('geolocation' in navigator)) return resolve(null);
-        navigator.geolocation.getCurrentPosition(
-          (p) => resolve(p),
-          () => resolve(null),
-          { enableHighAccuracy: true, timeout: 12000 }
-        );
+      const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
+        if (!navigator.geolocation) return reject(new Error('Location is not available on this device.'));
+        navigator.geolocation.getCurrentPosition(resolve, (err) => {
+          if (err.code === 1) this.permission.set('denied');
+          reject(new Error(err.code === 1 ? 'Location permission was declined. You can set your area in Profile.' : 'Your location could not be determined. Set your area in Profile or try again.'));
+        }, { enableHighAccuracy: true, timeout: 12000 });
       });
-      if (!pos) {
-        // Sandbox / web preview without a geolocation provider: fall back to the
-        // centre of Gauteng so the map, distance sort and province filter all
-        // still work while testing.
-        const fallback: GeoPoint = { lat: -26.2041, lng: 28.0473, accuracyM: 0, at: Date.now(), label: 'Approximate' };
-        return this.finish(fallback, true);
-      }
+      this.permission.set('granted');
       const point: GeoPoint = {
         lat: pos.coords.latitude,
         lng: pos.coords.longitude,
         accuracyM: pos.coords.accuracy ?? undefined,
         at: pos.timestamp
       };
-      return this.finish(point);
+      return options.persist === false ? point : this.finish(point);
     } catch (e: any) {
       this.error.set(e?.message ?? 'Location unavailable');
       return null;
@@ -171,14 +167,42 @@ export class LocationService {
     }
   }
 
-  private finish(point: GeoPoint, approximate = false): GeoPoint {
+  private finish(point: GeoPoint): GeoPoint {
     const prov = this.nearestProvince(point);
-    const enriched: GeoPoint = { ...point, label: approximate ? 'Approximate' : provinceName(prov) };
+    const enriched: GeoPoint = { ...point, label: provinceName(prov) };
     this.current.set(enriched);
     this.province.set(prov);
     this.town.set(this.guessTown(point));
     void this.store(enriched);
     return enriched;
+  }
+
+  /** One consented reverse lookup. Only the resulting town/province is saved to the profile. */
+  async detectLocalArea(): Promise<LocalArea | null> {
+    this.error.set(null);
+    if (this.platform.isNative && !(await this.requestPermission())) {
+      this.error.set('Location permission was declined. You can set your area in Profile.');
+      return null;
+    }
+    const point = await this.readDevicePosition({ persist: false });
+    if (!point) return null;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000);
+    try {
+      const params = new URLSearchParams({ format: 'jsonv2', lat: String(point.lat), lon: String(point.lng), zoom: '10', addressdetails: '1' });
+      const response = await fetch(`${OPENSTREETMAP_REVERSE_URL}?${params}`, { signal: controller.signal });
+      if (!response.ok) throw new Error('Lookup unavailable');
+      const area = areaFromOpenStreetMap(await response.json());
+      if (!area) throw new Error('No South African province found');
+      this.province.set(area.province);
+      this.town.set(area.town);
+      return area;
+    } catch {
+      this.error.set('OpenStreetMap could not identify a South African province. Set your area in Profile or try again.');
+      return null;
+    } finally {
+      clearTimeout(timeout);
+    }
   }
 
   /** Distance from the device point to each province centroid, in km. */

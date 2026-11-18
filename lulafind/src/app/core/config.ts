@@ -19,3 +19,6 @@ export const BASE_URL = 'https://lulafind.co.za';
  * Set this to false to hide the on-screen code. Sign-up keeps working.
  */
 export const SHOW_DEMO_OTP = true;
+
+/** Nominatim-compatible reverse geocoder. See docs/LOCATION.md before launch. */
+export const OPENSTREETMAP_REVERSE_URL = 'https://nominatim.openstreetmap.org/reverse';

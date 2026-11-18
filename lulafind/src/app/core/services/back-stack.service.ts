@@ -42,15 +42,20 @@ export class BackStackService {
   go(fallback: string): void {
     const current = this.router.url;
     if (this.stack.length < 2) {
-      // Nothing of ours to pop (cold deep link): slide the Ionic stack if it can.
-      void this.nav.pop().then((popped) => {
-        if (!popped) void this.router.navigateByUrl(fallback);
-      });
+      // A deep link has no known in-app predecessor. Never rely on the
+      // browser/Ionic history, which can point to another app or the same page.
+      if (current !== fallback) void this.nav.navigateBack(fallback);
+
       return;
     }
     const previous = this.stack[this.stack.length - 2];
-    if (previous === current) return; // nowhere to go - inert, never a loop
+    if (previous === current) {
+      if (current !== fallback) void this.nav.navigateBack(fallback);
+      return;
+    }
     this.suppressPop = true;
-    void this.nav.navigateBack(previous);
+    void this.nav.navigateBack(previous).then((ok) => {
+      if (!ok) { this.suppressPop = false; if (this.router.url !== fallback) void this.router.navigateByUrl(fallback); }
+    }).catch(() => { this.suppressPop = false; if (this.router.url !== fallback) void this.router.navigateByUrl(fallback); });
   }
 }

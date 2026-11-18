@@ -89,7 +89,7 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
 
           <header class="head">
             <a class="who" [routerLink]="authorLink()">
-              <lf-avatar [src]="authorAvatar()" [name]="authorName()" [size]="48" />
+              <lf-avatar [src]="authorAvatar()" [name]="authorName()" [size]="48" [status]="p()!.anonymous && !isMine() ? null : data.statusOf(author())" />
               <span class="who__text">
                 <strong>{{ authorName() }}</strong>
                 <span class="headline">{{ authorHeadline() }}</span>
@@ -207,6 +207,9 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
             <button class="act" type="button" (click)="focusComment()" aria-label="Comment" title="Comment"><lf-icon name="comment" [size]="20" /><span class="sr-only">Comment</span></button>
             <button class="act" type="button" (click)="repost()" aria-label="Repost" title="Repost"><lf-icon name="repost" [size]="20" /><span class="sr-only">Repost</span></button>
             <button class="act" type="button" (click)="send()" aria-label="Send" title="Send"><lf-icon name="send" [size]="19" /><span class="sr-only">Send</span></button>
+            @if (!isMine() && p()!.chatEnabled && !p()!.repostOf && !p()!.anonymous) {
+              <button class="act" type="button" (click)="openChat()" [attr.aria-label]="nextChatAction()" [attr.title]="nextChatAction()"><lf-icon name="chat" [size]="20" /></button>
+            }
           </div>
 
           @if (!isMine() || p()!.status === 'active') {
@@ -245,12 +248,6 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
             </button>
           }
 
-          @if (!isMine() && p()!.chatEnabled && !p()!.repostOf) {
-            <button class="chatline" type="button" [class.open]="gate().allowed" (click)="openChat()">
-              <lf-icon [name]="gate().allowed ? 'unlock' : 'lock'" [size]="16" />
-              <span>{{ nextChatAction() }}</span>
-            </button>
-          }
         </article>
 
         @if (isCase() && !p()!.repostOf && (p()!.searchParty || p()!.status === 'active')) {
@@ -500,7 +497,6 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
                     <button type="button" (click)="addCommentVideo()" [disabled]="posting() || media.busy() || commentMedia().length > 0">
                       <lf-icon name="video" [size]="17" /> Video
                     </button>
-                    <span>Attachments stay with this {{ replyTo() ? 'reply' : 'comment' }}</span>
                   </div>
                 </div>
               </div>
@@ -764,6 +760,7 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
     .more { width: 36px; height: 36px; border: 0; border-radius: 50%; background: transparent; color: var(--lf-muted); cursor: pointer; display: grid; place-items: center; }
     .found { display: flex; align-items: center; gap: 8px; margin: 0 var(--edge) 8px; padding: 8px 12px; border-radius: 8px;
       background: color-mix(in srgb, var(--lf-ubuntu) 16%, transparent); color: var(--lf-ubuntu); font-size: 14px; }
+    .post > lf-case-facts { margin-inline: var(--edge); }
     .title { margin: 4px var(--edge) 6px; font-size: 20px; line-height: 1.25; font-weight: 700; letter-spacing: -.2px; }
     .text { margin: 0 var(--edge) 12px; font-size: 16px; line-height: 1.45; white-space: pre-line; word-break: break-word; }
     .followline { display: flex; align-items: center; gap: 8px; width: 100%; margin: 6px 0 0; padding: 10px 12px;
@@ -1357,6 +1354,7 @@ export class PostDetailComponent implements OnInit {
     const state = await this.data.followStatus(p.authorId);
     this.following.set(state === 'accepted');
     this.followRequested.set(state === 'pending');
+    await this.data.refreshProfile(p.authorId);
     await this.refreshGate();
   }
 
@@ -2044,7 +2042,7 @@ export class PostDetailComponent implements OnInit {
 
   async confirmFound(skipName = false): Promise<void> {
     const p = this.p();
-    if (!p || this.foundBusy()) return;
+    if (!p || !this.isMine() || this.foundBusy()) return;
     if (!skipName && !this.finderId()) return;
     this.foundBusy.set(true);
     try {
@@ -2052,7 +2050,8 @@ export class PostDetailComponent implements OnInit {
         whereabouts: this.foundWhere.trim() || 'Safe',
         finderUserId: skipName ? null : this.finderId()
       });
-      if (next) this.p.set(next);
+      if (!next || next.status !== 'found') throw new Error('Could not update the case status. Please try again.');
+      this.p.set(next);
       this.foundOpen.set(false);
       // The case is not officially closed until the police are told - SAPS 92.
       await this.say('Case closed here. Tell the investigating officer and complete a SAPS 92.');
@@ -2083,7 +2082,7 @@ export class PostDetailComponent implements OnInit {
     const g = this.gate();
     if (!g || g.allowed) return 'Message them';
     if (g.step === 'sign_in') return 'Sign in to message';
-    if (g.step === 'follow') return 'Follow each other to message';
+    if (g.step === 'follow') return 'Follow or be followed to message';
     return 'Messaging unavailable';
   }
 
@@ -2126,14 +2125,7 @@ export class PostDetailComponent implements OnInit {
       return;
     }
     if (g.step === 'follow') {
-      await this.data.toggleFollow(p.authorId);
-      const state = await this.data.followStatus(p.authorId);
-      this.following.set(state === 'accepted');
-      this.followRequested.set(state === 'pending');
-      await this.refreshGate();
-      await this.say(state === 'pending'
-        ? 'Follow request sent. You can message each other once they follow you back.'
-        : 'Following. You can message each other once they follow you back.');
+      await this.router.navigate(['/user', p.authorId]);
       return;
     }
     await this.say((g as { reason?: string }).reason ?? 'Chat unavailable');

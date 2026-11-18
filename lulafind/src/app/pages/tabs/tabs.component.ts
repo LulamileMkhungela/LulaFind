@@ -5,7 +5,7 @@ import { IonLabel } from '@ionic/angular/ion-label';
 import { IonTabBar } from '@ionic/angular/ion-tab-bar';
 import { IonTabButton } from '@ionic/angular/ion-tab-button';
 import { IconComponent } from '../../shared/components/icon.component';
-import { AvatarComponent } from '../../shared/components/avatar.component';
+import { DataService } from '../../core/services/data.service';
 import { AuthService } from '../../core/services/auth.service';
 
 /**
@@ -20,7 +20,7 @@ import { AuthService } from '../../core/services/auth.service';
 @Component({
   selector: 'lf-tabs',
   standalone: true,
-  imports: [IonTabs, IonTabBar, IonTabButton, IonLabel, IconComponent, AvatarComponent],
+  imports: [IonTabs, IonTabBar, IonTabButton, IonLabel, IconComponent],
   template: `
     <ion-tabs (ionTabsDidChange)="active.set($event.tab)">
       <ion-tab-bar slot="bottom">
@@ -29,26 +29,24 @@ import { AuthService } from '../../core/services/auth.service';
           <ion-label>Home</ion-label>
         </ion-tab-button>
 
+        <ion-tab-button tab="view">
+          <lf-icon name="eye" [size]="24" />
+          <ion-label>View</ion-label>
+        </ion-tab-button>
         <ion-tab-button tab="spotlight">
           <lf-icon name="users" [size]="24" [weight]="active() === 'spotlight' ? 2.6 : 2" />
           <ion-label>Spotlight</ion-label>
         </ion-tab-button>
-
-        <button class="bar-btn create" type="button" (click)="create()" aria-label="Create a post">
-          <span class="create-disc"><lf-icon name="plus" [size]="24" [weight]="2.6" /></span>
-          <ion-label>Create</ion-label>
-        </button>
-
-        <button class="bar-btn menu" type="button" (click)="openMenu()" aria-label="Your profile and menu">
-          <span class="wrap">
-            @if (auth.signedIn()) {
-              <lf-avatar [src]="auth.userAvatar()" [name]="auth.user()?.displayName ?? ''" [size]="24" />
-            } @else {
-              <lf-icon name="menu" [size]="24" />
-            }
+        <ion-tab-button tab="notifications">
+          <span class="wrap"><lf-icon name="bell" [size]="24" />
+            @if (data.unreadNotifications() > 0) { <span class="tab-dot">{{ data.unreadNotifications() > 99 ? '99+' : data.unreadNotifications() }}</span> }
           </span>
-          <ion-label>Menu</ion-label>
-        </button>
+          <ion-label>Notifications</ion-label>
+        </ion-tab-button>
+        <ion-tab-button tab="shortcuts">
+          <lf-icon name="grid" [size]="24" />
+          <ion-label>Shortcuts</ion-label>
+        </ion-tab-button>
       </ion-tab-bar>
     </ion-tabs>
   `,
@@ -75,7 +73,7 @@ import { AuthService } from '../../core/services/auth.service';
       background: var(--lf-primary);
     }
     ion-label {
-      font-size: 11px;
+      font-size: clamp(9px, 2.7vw, 11px);
       font-weight: 500;
       margin-top: 3px;
       white-space: nowrap;
@@ -123,6 +121,7 @@ import { AuthService } from '../../core/services/auth.service';
   `]
 })
 export class TabsComponent {
+  protected data = inject(DataService);
   private router = inject(Router);
   protected auth = inject(AuthService);
 
@@ -139,7 +138,7 @@ export class TabsComponent {
     const first = url.split(/[?#]/)[0].split('/').filter(Boolean)[0] ?? 'home';
     // Chats is no longer a tab, so /chats lights nothing up - as on LinkedIn,
     // where a pushed page leaves the bar unselected.
-    return ['home', 'spotlight', 'me'].includes(first) ? first : '';
+    return ['home', 'view', 'spotlight', 'notifications', 'shortcuts'].includes(first) ? first : '';
   }
 
   create(): void {

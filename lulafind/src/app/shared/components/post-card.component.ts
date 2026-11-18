@@ -30,8 +30,7 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
  *
  * Two things are deliberately not LinkedIn's: the category chip above the text
  * (this app is about missing people, and the chip is how a case is labelled)
- * and the private-chat row under the action bar (chat only opens for "Have an
- * idea" plus a mutual follow).
+ * and the private-chat icon in the action bar (subject to connection and message settings).
  */
 @Component({
   selector: 'lf-post-card',
@@ -223,6 +222,9 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
         <button class="fb-act" type="button" (click)="onSend()" aria-label="Send" title="Send">
           <lf-icon name="send" [size]="19" /><span class="sr-only">Send</span>
         </button>
+        @if (post.chatEnabled && !isMine() && !post.repostOf && !post.anonymous) {
+          <button class="fb-act" type="button" (click)="chat.emit()" [attr.aria-label]="chatLabel()" [attr.title]="chatLabel()"><lf-icon name="chat" [size]="20" /></button>
+        }
       </div>
 
       <!-- LinkedIn's comment preview: the most-relevant comment sits under the
@@ -241,12 +243,6 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
         </a>
       }
 
-      @if (post.chatEnabled && !isMine() && !post.repostOf) {
-        <button class="fb-chat-cta" [class.open]="chatState === 'open'" (click)="chat.emit()">
-          <lf-icon [name]="chatState === 'open' ? 'unlock' : 'lock'" [size]="15" />
-          {{ chatLabel() }}
-        </button>
-      }
     </article>
     <lf-reactions-sheet [post]="post" [open]="reactionsOpen()" (close)="reactionsOpen.set(false)" />
     }
@@ -732,7 +728,7 @@ export class PostCardComponent implements OnInit, OnChanges, AfterViewChecked {
   chatLabel(): string {
     switch (this.chatState) {
       case 'open': return 'Message them';
-      case 'locked-follow': return 'Follow each other to message';
+      case 'locked-follow': return 'Follow or be followed to message';
       default: return 'Message the poster';
     }
   }

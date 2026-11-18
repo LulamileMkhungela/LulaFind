@@ -13,6 +13,9 @@ export const routes: Routes = [
     children: [
       { path: '', pathMatch: 'full', redirectTo: 'home' },
       { path: 'home', loadComponent: () => import('./pages/tabs/home.component').then((m) => m.HomeComponent) },
+      { path: 'view', loadComponent: () => import('./pages/tabs/view.component').then((m) => m.ViewComponent) },
+      { path: 'shortcuts', loadComponent: () => import('./pages/tabs/shortcuts.component').then((m) => m.ShortcutsComponent) },
+      { path: 'notifications', loadComponent: () => import('./pages/notifications/notifications.component').then((m) => m.NotificationsComponent) },
       { path: 'spotlight', loadComponent: () => import('./pages/tabs/spotlight.component').then((m) => m.SpotlightComponent) },
       {
         path: 'chats',
@@ -27,7 +30,6 @@ export const routes: Routes = [
     ]
   },
   // Notifications is the bell in the top navigation. Chats is a bottom tab (above).
-  { path: 'notifications', canActivate: [authGuard], loadComponent: () => import('./pages/notifications/notifications.component').then((m) => m.NotificationsComponent) },
   { path: 'auth', loadComponent: () => import('./pages/auth/auth.component').then((m) => m.AuthComponent) },
   { path: 'auth/confirm', loadComponent: () => import('./pages/auth/auth.component').then((m) => m.AuthComponent) },
   {

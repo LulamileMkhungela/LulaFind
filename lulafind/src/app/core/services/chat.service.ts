@@ -10,18 +10,7 @@ export type ChatGate =
   | { allowed: false; step: 'follow'; reason: string; peerId: string }
   | { allowed: false; step: 'disabled'; reason: string };
 
-/**
- * Private chat, and only one way in: **you follow each other**.
- *
- * Reactions have nothing to do with it - a reaction is just a reaction, and
- * the app never tells anyone that reacting will "unlock" a chat. If you follow
- * someone and they follow you back, the two of you can message each other.
- *
- * Two exceptions, both intentional:
- *  - the poster themself, who can always be messaged about their own post;
- *  - someone who claimed a Home Sweet Home post as "this is me", because the whole
- *    point is that they can reach the family without being exposed.
- */
+/** Messaging requires an accepted follow in either direction and both people allowing messages. */
 @Injectable({ providedIn: 'root' })
 export class ChatService {
   private api = inject(LULA_API);
@@ -119,38 +108,36 @@ export class ChatService {
     this.messages.set([]);
   }
 
-  /**
-   * Is chat open between the viewer and this post's author?
-   *
-   * One rule: you follow each other. There is no reaction step, and the UI must
-   * never suggest there is one.
-   */
-  async gate(post: Post, claimedByViewer = false): Promise<ChatGate> {
+  /** A connection in either direction is sufficient; pending requests are not. */
+  async gatePerson(peerId: string): Promise<ChatGate> {
     const me = this.auth.viewerId;
-    if (!post.chatEnabled) {
-      return { allowed: false, step: 'disabled', reason: 'The poster turned chat off for this post. Use the comments instead.' };
-    }
     if (!me) return { allowed: false, step: 'sign_in' };
-    if (me === post.authorId) return { allowed: true, reason: 'open' };
-    if (claimedByViewer || post.khumbu?.claimedByUserId === me) return { allowed: true, reason: 'open' };
-
-    const mutual =
-      (await this.api.isFollowing(me, post.authorId)) && (await this.api.isFollowing(post.authorId, me));
-    if (!mutual) {
-      return {
-        allowed: false,
-        step: 'follow',
-        reason: 'You can message each other once you follow each other.',
-        peerId: post.authorId
-      };
+    if (me === peerId) return { allowed: false, step: 'disabled', reason: 'You cannot message yourself.' };
+    const [peer, iFollow, followsMe] = await Promise.all([
+      this.api.user(peerId), this.api.isFollowing(me, peerId), this.api.isFollowing(peerId, me)
+    ]);
+    const self = this.auth.user();
+    if (!peer || peer.suspended || self?.suspended || self?.privacy?.allowMessages === false || peer.privacy?.allowMessages === false ||
+        self?.blockedUserIds?.includes(peerId) || peer.blockedUserIds?.includes(me)) {
+      return { allowed: false, step: 'disabled', reason: 'Messaging is unavailable. Check your message settings or contact the person another way.' };
+    }
+    if (!iFollow && !followsMe) {
+      return { allowed: false, step: 'follow', reason: 'You can message when either of you follows the other.', peerId };
     }
     return { allowed: true, reason: 'open' };
+  }
+
+  async gate(post: Post, _claimedByViewer = false): Promise<ChatGate> {
+    if (!post.chatEnabled) return { allowed: false, step: 'disabled', reason: 'The poster turned chat off for this post. Use the comments instead.' };
+    return this.gatePerson(post.authorId);
   }
 
   /** Find an existing thread with this person (optionally about this post) or create one. */
   async ensureThread(post: Post | null, peerId: string, unlockedVia: ChatThread['unlockedVia'] = 'follow'): Promise<ChatThread | null> {
     const me = this.auth.viewerId;
-    if (!me || me === peerId) return null;
+    if (!me || me === peerId || (post && !post.chatEnabled)) return null;
+    const gate = await this.gatePerson(peerId);
+    if (!gate.allowed) return null;
     const existing = (await this.api.threadsFor(me)).find(
       (t) => t.participantIds.includes(peerId) && (!post || t.postId === post.id)
     );
@@ -174,7 +161,7 @@ export class ChatService {
       threadId: thread.id,
       fromUserId: 'system' as string,
       body: post
-        ? `Private chat opened from "${post.title}". You follow each other. Everything here is only visible to the two of you.`
+        ? `Chat opened from "${post.title}". Be kind, be careful, and never send money to a stranger.`
         : 'Private chat opened. Be kind, be careful, and never send money to a stranger.',
       at: now,
       read: false,
@@ -195,6 +182,13 @@ export class ChatService {
     const threadId = this.openThreadId();
     const text = body.trim();
     if (!me || !threadId || (!text && !media)) return;
+    const thread = await this.api.thread(threadId);
+    const peerId = thread?.participantIds.find((id) => id !== me);
+    if (!thread?.participantIds.includes(me) || !peerId) throw new Error('This conversation is unavailable.');
+    const post = thread.postId ? await this.api.post(thread.postId) : null;
+    if (thread.postId && !post?.chatEnabled) throw new Error('The poster turned chat off for this post.');
+    const gate = await this.gatePerson(peerId);
+    if (!gate.allowed) throw new Error(gate.step === 'sign_in' ? 'Sign in to message.' : gate.reason);
     this.sending.set(true);
     try {
       await this.storeMessage({

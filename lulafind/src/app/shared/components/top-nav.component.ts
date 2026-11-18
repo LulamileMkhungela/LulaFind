@@ -8,7 +8,6 @@ import { IconComponent } from './icon.component';
 import { LogoComponent } from './logo.component';
 import { AvatarComponent } from './avatar.component';
 import { AuthService } from '../../core/services/auth.service';
-import { DataService } from '../../core/services/data.service';
 import { ChatService } from '../../core/services/chat.service';
 import { BackStackService } from '../../core/services/back-stack.service';
 
@@ -45,16 +44,14 @@ import { BackStackService } from '../../core/services/back-stack.service';
           <ion-title>{{ title() }}</ion-title>
         } @else {
           <div class="row">
-            <!--
-              The product rule: from everywhere, you can always go back. The
-              tab roots used to open with no way out except the tab bar itself.
-            -->
-            <button class="lf-round-btn row-back" type="button" (click)="back()" aria-label="Go back">
-              <lf-icon name="arrowLeft" [size]="20" [weight]="2.4" />
-            </button>
+            @if (!isHome()) {
+              <button class="lf-round-btn row-back" type="button" (click)="back()" aria-label="Go back">
+                <lf-icon name="arrowLeft" [size]="20" [weight]="2.4" />
+              </button>
+            }
             @if (signedIn()) {
               <a class="me" routerLink="/me" aria-label="Your profile and menu">
-                <lf-avatar [src]="avatar()" [name]="name()" [size]="32" />
+                <lf-avatar [src]="avatar()" [name]="name()" [size]="32" [status]="status()" />
               </a>
             } @else {
               <a class="me" routerLink="/auth" aria-label="Sign in"><lf-logo [size]="32" label="LulaFind" /></a>
@@ -83,6 +80,7 @@ import { BackStackService } from '../../core/services/back-stack.service';
                   </button>
                 }
               </form>
+              <a class="nav-ico create-link" routerLink="/new" aria-label="Create a post"><lf-icon name="plus" [size]="24" /></a>
             }
           </div>
         }
@@ -98,10 +96,7 @@ import { BackStackService } from '../../core/services/back-stack.service';
             <lf-icon name="messenger" [size]="24" [filled]="unread() > 0" />
             @if (unread() > 0) { <span class="dot">{{ unread() > 99 ? '99+' : unread() }}</span> }
           </a>
-          <a class="nav-ico" routerLink="/notifications" aria-label="Notifications">
-            <lf-icon [name]="alerts() > 0 ? 'bellFilled' : 'bell'" [size]="24" [filled]="alerts() > 0" />
-            @if (alerts() > 0) { <span class="dot">{{ alerts() > 99 ? '99+' : alerts() }}</span> }
-          </a>
+
         </ion-buttons>
       </ion-toolbar>
     </ion-header>
@@ -191,7 +186,6 @@ import { BackStackService } from '../../core/services/back-stack.service';
 export class TopNavComponent {
   private router = inject(Router);
   private auth = inject(AuthService);
-  private data = inject(DataService);
   private chat = inject(ChatService);
   private backStack = inject(BackStackService);
 
@@ -209,10 +203,12 @@ export class TopNavComponent {
   /** Where the back button goes when there is no history. Empty = no back button. */
   readonly backTo = input('');
 
+  isHome(): boolean { return this.router.url.split(/[?#]/)[0] === '/home'; }
+
   readonly signedIn = computed(() => this.auth.signedIn());
   readonly avatar = computed(() => this.auth.userAvatar());
   readonly name = computed(() => this.auth.user()?.displayName ?? '');
-  readonly alerts = computed(() => this.data.unreadNotifications());
+  readonly status = computed(() => this.auth.user()?.checkIn?.status ?? null);
   readonly unread = computed(() => this.chat.unreadTotal());
 
   /**

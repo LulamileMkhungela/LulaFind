@@ -78,8 +78,6 @@ import { cover } from '../../core/data/seed';
           <div class="locked">
             <lf-icon name="lock" [size]="16" />
             <span>Join the {{ sp()!.surname }} community to post here. Anyone can read what is posted.</span>
-            @if (signedIn()) { <button class="lf-btn lf-btn--primary lf-btn--sm" (click)="join()">Join</button> }
-            @else { <a class="lf-btn lf-btn--primary lf-btn--sm" routerLink="/auth">Sign in</a> }
           </div>
         }
         <ion-searchbar placeholder="Search this community" [debounce]="200"
@@ -111,7 +109,7 @@ import { cover } from '../../core/data/seed';
         @if (!posts().length && !people().length) {
           <lf-empty icon="users" [title]="q().trim().length >= 2 ? 'Nothing matches that here' : 'Nothing posted to this spotlight yet'"
                     [message]="member() ? 'Be the first to bring a case, story or update to the community.' : 'Join the community to add the first post.'"
-                    [actionLabel]="member() ? 'Post here' : 'Join this community'" (action)="postHere()" />
+                    />
         }
         @for (p of posts(); track p.id) {
           <lf-post-card [post]="p" [author]="data.authorOf(p.authorId) ?? null" chatState="off"

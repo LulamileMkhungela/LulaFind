@@ -1,9 +1,14 @@
 # Firestore security rules for LulaFind
 
-Copy into **Firebase console → Firestore → Rules**. They encode the product rules
-in the app: only the author can edit a case, escalation consent is author-only,
-private threads are readable only by their two participants, and nobody can write
-another person's location.
+**Warning: historical example only — do not deploy these rules as-is.** They
+have not been verified against the current app or a deployed project. In
+particular, story reads are public and story updates are too permissive, nested
+story reply/view rules are missing, and message creation does not require thread
+membership. The example also references an undefined `isAdmin` helper. Until
+replacement rules are reviewed and tested with the Firebase emulator and the
+actual deployed rules are confirmed, do not rely on this example to protect
+stories, replies or chats. Supabase deployments need their own verified RLS
+policies; this Firestore example does not apply to Supabase.
 
 ```
 rules_version = '2';

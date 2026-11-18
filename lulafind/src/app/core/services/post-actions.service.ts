@@ -20,7 +20,7 @@ import { UserProfile } from '../models/types';
 /** One row in the Send sheet. */
 export interface SendPerson {
   profile: UserProfile;
-  /** True when you follow each other, so it also lands in your chat. */
+  /** An accepted follow in either direction allows an attempt to send in chat. */
   connection: boolean;
 }
 
@@ -144,25 +144,17 @@ export class PostActionsService {
     this.sendQuery.set('');
   }
 
-  /**
-   * Who can be sent this post, in the app.
-   *
-   * Connections (you follow each other) come first, then your followers: they
-   * chose to see your posts, so handing them one is welcome rather than a cold
-   * message. People you merely follow are left out - they have not asked for
-   * anything from you, and the app's rule is that messaging needs a mutual
-   * follow.
-   */
+  /** Accepted connections in either direction, with mutual connections first. */
   private async loadSendPeople(): Promise<void> {
     this.sendLoading.set(true);
     try {
       const mutual = new Set(this.data.followingIds().filter((id) => this.data.followerIds().includes(id)));
-      const ids = [...mutual, ...this.data.followerIds().filter((id) => !mutual.has(id))];
+      const ids = [...new Set([...mutual, ...this.data.followerIds(), ...this.data.followingIds()])];
       const people = await Promise.all(ids.map((id) => this.data.profile(id)));
       this.sendPeople.set(
         people
           .filter((u): u is UserProfile => !!u && u.id !== this.auth.viewerId)
-          .map((u) => ({ profile: u, connection: mutual.has(u.id) }))
+          .map((u) => ({ profile: u, connection: true }))
       );
     } finally {
       this.sendLoading.set(false);
@@ -184,8 +176,7 @@ export class PostActionsService {
    * Send this post to one person, inside LulaFind.
    *
    * It always reaches them as a notification, so it works whoever they are.
-   * When you follow each other it also lands in your chat thread about the post,
-   * which is where a conversation can carry on.
+   * When messaging is allowed it can also land in a chat thread about the post.
    */
   async sendToUser(person: SendPerson): Promise<void> {
     const p = this.sendTarget();
