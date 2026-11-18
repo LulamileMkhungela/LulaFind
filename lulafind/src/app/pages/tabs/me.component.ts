@@ -10,7 +10,6 @@ import { IonItem } from '@ionic/angular/ion-item';
 import { IonLabel } from '@ionic/angular/ion-label';
 import { IonToggle } from '@ionic/angular/ion-toggle';
 import { ToastController } from '@ionic/angular/toast-controller';
-import { AlertController } from '@ionic/angular/alert-controller';
 import { ActionSheetController } from '@ionic/angular/action-sheet-controller';
 import { ReactionKind } from '../../core/models/types';
 import { IconComponent } from '../../shared/components/icon.component';
@@ -21,7 +20,6 @@ import { PostCardComponent } from '../../shared/components/post-card.component';
 import { AuthService } from '../../core/services/auth.service';
 import { DataService } from '../../core/services/data.service';
 import { PlatformService } from '../../core/services/platform.service';
-import { ModerationService } from '../../core/services/moderation.service';
 import { compact, contributorLabel, parseFullName } from '../../core/utils/format';
 import { PROVINCES, ProvinceCode, Post, UserProfile, defaultPrivacy, provinceName } from '../../core/models/types';
 import { CHECK_IN_COPY, RING_KEY, SafetyService } from '../../core/services/safety.service';
@@ -41,8 +39,8 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
 
     <ion-content class="lf-page">
       <div class="page-title">
-        <h1>Menu</h1>
-        <a class="lf-round-btn" routerLink="/settings" aria-label="Settings"><lf-icon name="settings" [size]="19" /></a>
+        <h1>Profile</h1>
+        <a class="profile-settings" routerLink="/settings"><lf-icon name="settings" [size]="19" /> Settings</a>
       </div>
       @if (!me()) {
         <lf-empty icon="user" title="You are browsing as a guest"
@@ -86,7 +84,7 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
             </span>
             <div class="impact__body">
               <div class="impact__top">
-                <strong>Level {{ level().level.level }} · {{ level().level.name }}</strong>
+                <strong>Your impact · Level {{ level().level.level }} · {{ level().level.name }}</strong>
                 <span class="impact__pts">{{ points() }} pts</span>
               </div>
               <div class="impact__bar" role="progressbar" [attr.aria-valuenow]="level().percent"
@@ -99,6 +97,8 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
             </div>
             <lf-icon name="chevronRight" [size]="16" />
           </a>
+
+          <a class="saved-link" routerLink="/saved"><lf-icon name="bookmark" [size]="18" /> Saved cases <lf-icon name="chevronRight" [size]="16" /></a>
 
           <!-- The single next thing this person could do, chosen from what is missing. -->
           @if (nextStep(); as s) {
@@ -156,70 +156,18 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
           </div>
         </div>
 
-        <div class="tabs menu-tabs" role="tablist" aria-label="Menu sections">
-          @for (t of menuTabs; track t.key) {
-            <button class="tab" [class.on]="menuTab() === t.key" [id]="'menu-tab-' + t.key"
-                    role="tab" [attr.aria-selected]="menuTab() === t.key" [attr.aria-controls]="'menu-panel-' + t.key"
-                    (click)="menuTab.set(t.key)">
-              {{ t.label }}
-            </button>
+        <section class="menu-panel menu-posts" aria-label="Your posts">
+          <h2 class="fb-section-title">Posts</h2>
+          @if (myPosts().length) {
+            @for (p of myPosts(); track p.id) {
+              <lf-post-card [post]="p" [author]="data.authorOf(p.authorId) ?? null" chatState="off"
+                            (vote)="vote(p, $event)" (comment)="open(p)" />
+            }
+          } @else {
+            <lf-empty icon="book" title="You have not posted yet" message="Anything you post shows up here instantly."
+                      actionLabel="Create a post" (action)="create()" />
           }
-        </div>
-
-        @if (menuTab() === 'shortcuts') {
-          <section class="menu-panel" id="menu-panel-shortcuts" role="tabpanel" aria-labelledby="menu-tab-shortcuts">
-            <div class="quick">
-              <a class="q" routerLink="/connections"><span class="qi qi-blue"><lf-icon name="users" [size]="20" /></span><span>Friends</span>
-                @if (data.followRequests().length) { <em class="lf-badge">{{ data.followRequests().length }}</em> }</a>
-              <button class="q" type="button" (click)="createStory()"><span class="qi qi-blue"><lf-icon name="image" [size]="20" /></span><span>Add a Story</span></button>
-              <a class="q" routerLink="/safety"><span class="qi qi-green"><lf-icon name="shield" [size]="20" /></span><span>Safety</span></a>
-              <a class="q" routerLink="/tips"><span class="qi qi-yellow"><lf-icon name="info" [size]="20" /></span><span>Tips</span></a>
-              <a class="q" routerLink="/progress"><span class="qi qi-purple"><lf-icon name="award" [size]="20" /></span><span>Your impact</span></a>
-              @if (isAdmin()) {
-                <a class="q" routerLink="/admin"><span class="qi qi-red"><lf-icon name="shield" [size]="20" /></span><span>Admin</span>
-                  @if (mod.openCount() > 0) { <em class="lf-badge">{{ mod.openCount() }}</em> }</a>
-              }
-              <a class="q" routerLink="/found"><span class="qi qi-green"><lf-icon name="check" [size]="20" /></span><span>People found</span></a>
-              <a class="q" routerLink="/faqs"><span class="qi qi-blue"><lf-icon name="info" [size]="20" /></span><span>FAQs</span></a>
-              <a class="q" routerLink="/help"><span class="qi qi-red"><lf-icon name="phone" [size]="20" /></span><span>Get help</span></a>
-              <button class="q" type="button" (click)="signOut()"><span class="qi qi-grey"><lf-icon name="logout" [size]="20" /></span><span>Sign out</span></button>
-            </div>
-
-            @if (data.followRequests().length) {
-              <div class="requests">
-                <div class="lf-row-between">
-                  <h3 class="lf-h2"><lf-icon name="users" [size]="16" /> Follow requests</h3>
-                  <a class="see-all" routerLink="/connections" [queryParams]="{ tab: 'requests' }">See all</a>
-                </div>
-                @for (r of requestPeople(); track r.id) {
-                  <div class="req">
-                    <lf-avatar [src]="data.avatarFor(r.u)" [name]="r.u?.displayName ?? 'Member'" [size]="40" />
-                    <div class="lf-grow">
-                      <strong>{{ r.u?.displayName ?? 'Member' }}</strong>
-                      <span class="lf-small lf-muted">wants to follow you</span>
-                    </div>
-                    <button class="lf-btn lf-btn--sm" (click)="respond(r.id, true)">Accept</button>
-                    <button class="lf-btn lf-btn--sm lf-btn--ghost" (click)="respond(r.id, false)">Decline</button>
-                  </div>
-                }
-              </div>
-            }
-          </section>
-        } @else {
-          <section class="menu-panel menu-posts" [id]="'menu-panel-' + menuTab()" role="tabpanel"
-                   [attr.aria-labelledby]="'menu-tab-' + menuTab()">
-            <h2 class="fb-section-title">{{ menuTab() === 'posts' ? 'Posts' : 'Saved posts' }}</h2>
-            @if (visible().length) {
-              @for (p of visible(); track p.id) {
-                <lf-post-card [post]="p" [author]="data.authorOf(p.authorId) ?? null" chatState="off"
-                              (vote)="vote(p, $event)" (comment)="open(p)" />
-              }
-            } @else {
-              <lf-empty [icon]="menuTab() === 'saved' ? 'bookmark' : 'book'" [title]="emptyTitle()"
-                        [message]="emptyMessage()" [actionLabel]="emptyActionLabel()" (action)="emptyAction()" />
-            }
-          </section>
-        }
+        </section>
       }
     </ion-content>
 
@@ -314,6 +262,9 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
     </ion-modal>
   `,
   styles: [`
+    .saved-link { display:flex; align-items:center; gap:8px; padding:11px 12px; color:var(--lf-primary); text-decoration:none; font-weight:700; border:1px solid var(--lf-line); border-radius:10px; }
+    .saved-link lf-icon:last-child { margin-left:auto; }
+    .profile-settings { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; color: var(--lf-primary); text-decoration: none; font-weight: 600; }
     .hero { position: relative; padding: 0 16px 16px; display: flex; flex-direction: column; gap: 10px;
       background: var(--lf-card); box-shadow: var(--lf-shadow); }
     .cover { height: 150px; margin: 0 -16px -76px;
@@ -423,9 +374,7 @@ export class MeComponent {
   private toast = inject(ToastController);
   private safety = inject(SafetyService);
   private media = inject(MediaService);
-  private alert = inject(AlertController);
   private actionSheet = inject(ActionSheetController);
-  protected mod = inject(ModerationService);
 
   protected readonly compact = compact;
   protected readonly provinceName = provinceName;
@@ -434,34 +383,9 @@ export class MeComponent {
   readonly mostNamed = signal(false);
 
   editing = signal(false);
-  /** The pending requests with each requester's profile attached. */
-  readonly requestPeople = computed(() =>
-    this.data.followRequests().map((r) => ({ id: r.followerId, u: this.data.authorOf(r.followerId) ?? null }))
-  );
-
-  async respond(followerId: string, accept: boolean): Promise<void> {
-    try {
-      await this.data.respondToFollowRequest(followerId, accept);
-      await this.toast.create({
-        message: accept ? 'Accepted. They can follow you now.' : 'Request declined.',
-        duration: 1800, position: 'bottom'
-      }).then((t) => t.present());
-    } catch (e: any) {
-      await this.toast.create({ message: e?.message ?? 'Could not update the request', duration: 2200, position: 'bottom' })
-        .then((t) => t.present());
-    }
-  }
-
-  readonly menuTab = signal<'shortcuts' | 'posts' | 'saved'>('shortcuts');
-  readonly menuTabs = [
-    { key: 'shortcuts' as const, label: 'All shortcuts' },
-    { key: 'posts' as const, label: 'Posts' },
-    { key: 'saved' as const, label: 'Saved' }
-  ];
-
   form = {
     displayName: '', handle: '', surname: '', town: '',
-    province: 'GP' as ProvinceCode, bio: '', findableProfile: true, safetyBeacon: false,
+    province: null as ProvinceCode | null, bio: '', findableProfile: true, safetyBeacon: false,
     showLocation: false, showStats: true, showSpotlights: true, allowMessages: true,
     notifyFollowersOnExpiry: true, requireFollowApproval: false
   };
@@ -476,27 +400,10 @@ export class MeComponent {
   readonly location = computed(() => this.auth.locationLabel(this.me()));
   /** The viewer's own posts at every stage - see DataService.myPosts. */
   readonly myPosts = computed(() => this.data.myPosts());
-  readonly visible = computed(() => this.menuTab() === 'saved' ? this.data.savedPosts() : this.myPosts());
 
   constructor() {
     this.syncForm();
-    void this.loadRequests();
     void this.loadBadge();
-    void this.data.loadSaved();
-  }
-
-  /**
-   * Pull the pending requests, then make sure each requester's profile is in
-   * the author cache so the row can show a name and a picture.
-   */
-  private async loadRequests(): Promise<void> {
-    await this.data.loadFollowRequests();
-    for (const r of this.data.followRequests()) {
-      if (!this.data.authorOf(r.followerId)) {
-        const u = await this.data.profile(r.followerId);
-        if (u) this.data.touchAuthor(u);
-      }
-    }
   }
 
   private syncForm(): void {
@@ -505,30 +412,11 @@ export class MeComponent {
     const p = u.privacy ?? defaultPrivacy();
     this.form = {
       displayName: u.displayName, handle: u.handle, surname: u.surname, town: u.town,
-      province: u.province ?? 'GP', bio: u.bio, findableProfile: u.findableProfile, safetyBeacon: u.safetyBeacon,
+      province: u.province, bio: u.bio, findableProfile: u.findableProfile, safetyBeacon: u.safetyBeacon,
       showLocation: p.showLocation, showStats: p.showStats, showSpotlights: p.showSpotlights,
       allowMessages: p.allowMessages, notifyFollowersOnExpiry: p.notifyFollowersOnExpiry,
       requireFollowApproval: p.requireFollowApproval
     };
-  }
-
-  emptyTitle(): string {
-    return this.menuTab() === 'saved' ? 'Nothing saved yet' : 'You have not posted yet';
-  }
-
-  emptyMessage(): string {
-    return this.menuTab() === 'saved'
-      ? 'Posts you save from the feed will show up here.'
-      : 'Anything you post shows up here instantly.';
-  }
-
-  emptyActionLabel(): string {
-    return this.menuTab() === 'saved' ? 'Browse the feed' : 'Create a post';
-  }
-
-  emptyAction(): void {
-    if (this.menuTab() === 'saved') void this.router.navigateByUrl('/home');
-    else this.create();
   }
 
   touched = { name: false };
@@ -655,8 +543,6 @@ export class MeComponent {
     this.mostNamed.set(n >= await this.data.topContributorCount());
   }
 
-  readonly isAdmin = computed(() => this.auth.user()?.isAdmin === true);
-
   protected readonly ringKey = RING_KEY;
 
   async clearStatus(): Promise<void> {
@@ -718,23 +604,8 @@ export class MeComponent {
     void this.router.navigate(['/create']);
   }
 
-  createStory(): void {
-    void this.router.navigate(['/create-story']);
-  }
-
   goAuth(): void {
     void this.router.navigate(['/auth']);
   }
 
-  async signOut(): Promise<void> {
-    const a = await this.alert.create({
-      header: 'Sign out?',
-      message: 'Your posts stay live. You can sign back in any time.',
-      buttons: [
-        { text: 'Cancel', role: 'cancel' },
-        { text: 'Sign out', role: 'destructive', handler: () => void this.auth.signOut() }
-      ]
-    });
-    await a.present();
-  }
 }

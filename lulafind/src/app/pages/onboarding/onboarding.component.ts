@@ -11,11 +11,10 @@ import { AuthService } from '../../core/services/auth.service';
 import { DataService } from '../../core/services/data.service';
 import { LocationService } from '../../core/services/location.service';
 import { SettingsService } from '../../core/services/settings.service';
-import { PROVINCES, ProvinceCode, provinceName } from '../../core/models/types';
+import { ProvinceCode, provinceName } from '../../core/models/types';
 
 const STEPS = [
   { key: 'hello', title: 'Welcome to LulaFind', icon: 'sparkle' },
-  { key: 'location', title: 'Your province', icon: 'pin' },
   { key: 'privacy', title: 'Your privacy', icon: 'lock' },
   { key: 'consent', title: 'How consent works here', icon: 'shield' },
   { key: 'done', title: 'You are ready', icon: 'check' }
@@ -27,7 +26,7 @@ const STEPS = [
   standalone: true,
   imports: [IonContent, IonProgressBar, IonItem, IonLabel, IonToggle, IconComponent, AvatarComponent],
   template: `
-    <ion-content class="lf-page">
+    <ion-content class="lf-page" [attr.inert]="locationPrompt() ? '' : null">
       <ion-progress-bar [value]="progress()"></ion-progress-bar>
 
       <div class="wrap lf-fade-in">
@@ -43,6 +42,9 @@ const STEPS = [
               LulaFind is a search network, not a comment section. Every case is a real person and every
               upvote means "I have an idea that might bring them home".
             </p>
+            @if (detected()) {
+              <p class="lf-banner lf-banner--success">Your area: {{ provinceName(province ?? undefined) }}@if (town) { · {{ town }} } — you can change it in Profile.</p>
+            }
             <div class="rows">
               <div class="r"><lf-icon name="search" [size]="18" /><span>Post a missing person with a full case file</span></div>
               <div class="r"><lf-icon name="home" [size]="18" /><span>Home Sweet Home for people who left and may not want to return</span></div>
@@ -53,32 +55,6 @@ const STEPS = [
         }
 
         @if (step() === 1) {
-          <div class="center">
-            <p class="lf-muted">Choose the province you are in. We use it to sort cases near you. Nothing is picked for you.</p>
-            <div class="perms">
-              <button class="lf-btn lf-btn--primary lf-btn--block" (click)="useGps()">
-                <lf-icon name="target" [size]="18" /> {{ locText() }}
-              </button>
-              <button class="lf-btn lf-btn--ghost lf-btn--block" (click)="skipGps()">Choose manually</button>
-            </div>
-            @if (detected()) {
-              <div class="lf-banner lf-banner--success">
-                <lf-icon name="check" [size]="18" />
-                <div>Detected: <strong>{{ province ? provinceName(province) : 'your area' }}</strong> near {{ town }}. Tap it below to confirm.</div>
-              </div>
-            }
-            <div class="plist">
-              @for (p of provinces; track p.code) {
-                <button class="prow" [class.on]="province === p.code" (click)="pickProvince(p.code)">
-                  <lf-icon name="pin" [size]="17" /> {{ p.name }}
-                </button>
-              }
-            </div>
-            @if (provinceError) { <p class="err">{{ provinceError }}</p> }
-          </div>
-        }
-
-        @if (step() === 2) {
           <div class="center">
             <p class="lf-muted">You control how visible you are. Everything here can be changed later.</p>
             <ion-item>
@@ -99,7 +75,7 @@ const STEPS = [
           </div>
         }
 
-        @if (step() === 3) {
+        @if (step() === 2) {
           <div class="center">
             <p class="lf-muted">Two rules LulaFind never breaks:</p>
             <div class="rules">
@@ -121,20 +97,20 @@ const STEPS = [
                 <lf-icon name="shield" [size]="20" />
                 <div>
                   <strong>Private chat has a gate</strong>
-                  <span>You follow someone and they follow you back. That is when you can message each other.</span>
+                  <span>You can message when either person follows the other and both allow messages.</span>
                 </div>
               </div>
             </div>
           </div>
         }
 
-        @if (step() === 4) {
+        @if (step() === 3) {
           <div class="center done">
             <lf-avatar [src]="avatar()" [name]="name()" [size]="96" [ring]="true" />
             <h2 class="lf-h2">{{ name() }}</h2>
             <p class="lf-muted">{{ province ? provinceName(province) : 'South Africa' }} · &#64;{{ auth.user()?.handle }}</p>
             <p class="tip">
-              First thing to do: read <strong>what to do in the first 72 hours</strong>. Then browse your province.
+              First thing to do: read <strong>what to do in the first 72 hours</strong>. Then browse cases in your feed.
             </p>
           </div>
         }
@@ -152,8 +128,27 @@ const STEPS = [
         }
       </footer>
     </ion-content>
+    @if (locationPrompt()) {
+      <div class="location-backdrop">
+        <section class="location-dialog" role="dialog" aria-modal="true" aria-labelledby="location-title" aria-describedby="location-description">
+          <lf-icon name="pin" [size]="28" />
+          <h2 id="location-title">See posts near you first</h2>
+          <p id="location-description">Allow a one-time location check to prioritise posts from your town and province. Your device will ask for permission.</p>
+          <p>We send your coordinates to OpenStreetMap's Nominatim service to find your area. Your town and province are saved to your profile; the precise GPS point is not saved for the feed. You can change your area in Profile.</p>
+          <p class="lf-small">Map data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a>.</p>
+          @if (locationError()) { <p class="err" role="alert">{{ locationError() }}</p> }
+          <button class="lf-btn lf-btn--primary lf-btn--block" type="button" autofocus [disabled]="locating()" (click)="useGps()">{{ locating() ? 'Finding your area…' : 'Allow current location' }}</button>
+          <button class="lf-btn lf-btn--ghost lf-btn--block" type="button" [disabled]="locating()" (click)="skipGps()">Not now</button>
+        </section>
+      </div>
+    }
   `,
   styles: [`
+    .location-backdrop { position: fixed; inset: 0; z-index: 400; background: rgba(0,0,0,.6); display: flex; align-items: center; justify-content: center; padding: 16px; }
+    .location-dialog { width: 100%; max-width: 420px; max-height: calc(100dvh - 32px); overflow-y: auto; box-sizing: border-box; padding: 22px; border-radius: 16px; background: var(--lf-card); color: var(--ion-text-color); box-shadow: var(--lf-shadow); }
+    .location-dialog h2 { font-size: 21px; margin: 10px 0; }
+    .location-dialog p { line-height: 1.45; font-size: 14px; }
+    .location-dialog button { margin-top: 10px; }
     .wrap { padding: 20px 22px 120px; max-width: 560px; margin: 0 auto; }
     header { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
     .step { font-size: 12px; color: var(--lf-muted); font-weight: 700; letter-spacing: .5px; }
@@ -196,7 +191,6 @@ export class OnboardingComponent {
   private router = inject(Router);
 
   protected readonly steps = STEPS;
-  protected readonly provinces = PROVINCES;
   protected readonly provinceName = provinceName;
 
   step = signal(0);
@@ -205,9 +199,11 @@ export class OnboardingComponent {
   findable = true;
   beacon = false;
   province: ProvinceCode | null = null;
-  provinceError = '';
   town = '';
   detected = signal(false);
+  locationPrompt = signal(true);
+  locating = signal(false);
+  locationError = signal('');
 
   readonly progress = computed(() => (this.step() + 1) / STEPS.length);
   readonly name = computed(() => this.displayName || this.auth.user()?.displayName || 'Friend');
@@ -222,38 +218,31 @@ export class OnboardingComponent {
     this.findable = u?.findableProfile ?? true;
   }
 
-  locText(): string {
-    if (this.location.permission() === 'granted') return 'Update my location';
-    if (this.location.permission() === 'denied') return 'Location unavailable - choose manually';
-    return 'Use my current location';
-  }
-
   async useGps(): Promise<void> {
-    const ok = this.location.permission() === 'granted' ? true : await this.location.askWithExplanation();
-    if (!ok) return;
-    const p = await this.location.readDevicePosition();
-    if (p) {
-      this.province = this.location.nearestProvince(p);
-      this.town = this.location.town();
+    if (this.locating()) return;
+    this.locating.set(true);
+    this.locationError.set('');
+    try {
+      const area = await this.location.detectLocalArea();
+      if (!area) {
+        this.locationError.set(this.location.error() ?? 'Location is unavailable. You can set your area in Profile.');
+        return;
+      }
+      this.province = area.province;
+      this.town = area.town;
       this.detected.set(true);
+      this.locationPrompt.set(false);
+    } finally {
+      this.locating.set(false);
     }
   }
 
   skipGps(): void {
-    this.detected.set(false);
-  }
-
-  pickProvince(code: ProvinceCode): void {
-    this.province = code;
-    this.provinceError = '';
+    this.locationPrompt.set(false);
+    this.locationError.set('');
   }
 
   next(): void {
-    // the province step: they have to choose one themselves
-    if (this.step() === 1 && !this.province) {
-      this.provinceError = 'Choose your province to continue.';
-      return;
-    }
     this.step.set(Math.min(STEPS.length - 1, this.step() + 1));
   }
 
@@ -262,11 +251,6 @@ export class OnboardingComponent {
   }
 
   async finish(): Promise<void> {
-    if (!this.province) {
-      this.provinceError = 'Choose your province to continue.';
-      this.step.set(1);
-      return;
-    }
     // Alerts stay on by default. The choice lives in Settings, not a setup step.
     this.settings.update({ pushEnabled: true, pushMissingOnly: true });
     await this.auth.completeOnboarding({

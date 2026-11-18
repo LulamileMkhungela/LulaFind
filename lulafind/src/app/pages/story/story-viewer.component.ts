@@ -44,7 +44,7 @@ const HOLD_MS = 420;
       @if (!story()) {
         <div class="ended"><span class="ended-icon"><lf-icon name="clock" [size]="22" /></span><strong>This story is no longer available</strong><p>Stories disappear 24 hours after they are shared.</p><button type="button" (click)="close()">Back to LulaFind</button></div>
       } @else {
-        <main class="story-canvas" (click)="advance()" (pointerdown)="pressStart()" (pointerup)="pressEnd()" (pointercancel)="pressEnd()" (pointerleave)="pressEnd()" (contextmenu)="$event.preventDefault()">
+        <main class="story-canvas" [class.has-photo]="!!currentMedia()" (click)="advance()" (pointerdown)="pressStart()" (pointerup)="pressEnd()" (pointercancel)="pressEnd()" (pointerleave)="pressEnd()" (contextmenu)="$event.preventDefault()">
           @if (currentMedia()) { <img [src]="currentMedia()!.src" class="shot" alt="Story photo" /> }
           @if (story()!.text) { <div class="story-text" [class.over-photo]="!!currentMedia()">{{ story()!.text }}</div> }
           <button class="tap-zone tap-zone--left" type="button" aria-label="Previous photo" (click)="$event.stopPropagation(); previous()"></button>
@@ -70,7 +70,7 @@ const HOLD_MS = 420;
                     </article>
                   }
                 } @else {
-                  <p class="empty-insight">No replies yet. Replies to your story are private and only you can see them.</p>
+                  <p class="empty-insight">No replies yet. Story replies are intended for you and their sender.</p>
                 }
                 @if (story()!.viewers.length) {
                   <div class="insight-heading viewer-heading">Viewers</div>
@@ -83,7 +83,7 @@ const HOLD_MS = 420;
               </div>
             }
           </section>
-          <div class="owner-note"><lf-icon name="lock" [size]="14" /> Only you can see replies and the viewer list.</div>
+          <div class="owner-note"><lf-icon name="lock" [size]="14" /> Replies are intended for you and their sender.</div>
         } @else {
           <footer class="reply-footer">
             @if (me()) {
@@ -96,7 +96,7 @@ const HOLD_MS = 420;
             } @else {
               <button class="sign-in-reply" type="button" (click)="signInToReply()">Sign in to send a private reply</button>
             }
-            <span class="private-hint"><lf-icon name="lock" [size]="12" /> Only {{ authorName() }} can see your reply</span>
+            <span class="private-hint"><lf-icon name="lock" [size]="12" /> Your reply is intended for {{ authorName() }}</span>
           </footer>
         }
         @if (errorMessage()) { <p class="inline-error" role="alert">{{ errorMessage() }}</p> }
@@ -118,9 +118,10 @@ const HOLD_MS = 420;
     .top-action span { font-size: 11px; font-weight: 700; }
     .top-action.delete { color: #ffe0dc; }
     .story-canvas { position: relative; z-index: 0; flex: 1; min-height: 120px; display: flex; align-items: center; justify-content: center; overflow: hidden; cursor: pointer; }
-    .shot { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: rgba(0,0,0,.18); }
+    .story-canvas.has-photo { flex-direction: column; }
+    .shot { display: block; flex: 1 1 0; min-height: 0; width: 100%; object-fit: contain; background: rgba(0,0,0,.18); }
     .story-text { position: relative; z-index: 1; max-width: 650px; padding: 28px 24px; color: #fff; text-shadow: 0 2px 18px rgba(0,0,0,.46); text-align: center; white-space: pre-wrap; overflow-wrap: anywhere; font-size: clamp(20px, 5vw, 30px); line-height: 1.35; font-weight: 780; }
-    .story-text.over-photo { align-self: flex-end; width: 100%; box-sizing: border-box; padding-bottom: 34px; background: linear-gradient(transparent, rgba(0,0,0,.30)); }
+    .story-text.over-photo { flex: 0 1 auto; width: 100%; box-sizing: border-box; padding: 12px 24px 20px; max-height: 30%; overflow-y: auto; background: rgba(0,0,0,.3); }
     .tap-zone { position: absolute; z-index: 2; top: 0; bottom: 0; width: 30%; border: 0; background: transparent; }
     .tap-zone--left { left: 0; }
     .tap-zone--right { right: 0; }

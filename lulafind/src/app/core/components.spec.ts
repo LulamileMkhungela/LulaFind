@@ -1,6 +1,6 @@
 import { Component, ViewChild } from '@angular/core';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
-import { describe, expect, it, beforeEach } from 'vitest';
+import { describe, expect, it, beforeEach, vi } from 'vitest';
 import { provideRouter, Router } from '@angular/router';
 import { provideIonicAngular } from '@ionic/angular';
 import { ToastController } from '@ionic/angular/toast-controller';
@@ -22,6 +22,8 @@ import { RepostSheetComponent } from '../shared/components/repost-sheet.componen
 import { PostActionsService } from './services/post-actions.service';
 import { PlatformService } from './services/platform.service';
 import { AuthComponent } from '../pages/auth/auth.component';
+import { OnboardingComponent } from '../pages/onboarding/onboarding.component';
+import { LocationService } from './services/location.service';
 import { SpotlightComponent } from '../pages/tabs/spotlight.component';
 import { MeComponent } from '../pages/tabs/me.component';
 import { ProgressComponent } from '../pages/progress/progress.component';
@@ -40,6 +42,8 @@ import { TermsComponent } from '../pages/terms/terms.component';
 import { PostDetailComponent } from '../pages/post/post-detail.component';
 import { ChatRoomComponent } from '../pages/chat/chat-room.component';
 import { HomeComponent } from '../pages/tabs/home.component';
+import { ViewComponent } from '../pages/tabs/view.component';
+import { ShortcutsComponent } from '../pages/tabs/shortcuts.component';
 import { routes as APP_ROUTES } from '../app.routes';
 import { authGuard } from './guards/auth.guard';
 import { TabsComponent } from '../pages/tabs/tabs.component';
@@ -47,6 +51,7 @@ import { ReactionsSheetComponent } from '../shared/components/reactions-sheet.co
 import { AdminComponent } from '../pages/admin/admin.component';
 import { SearchComponent } from '../pages/search/search.component';
 import { ConnectionsComponent } from '../pages/connections/connections.component';
+import { DiscoverComponent } from '../pages/tabs/discover.component';
 import { SpotlightDetailComponent } from '../pages/spotlight/spotlight-detail.component';
 import { MediaImageComponent, MediaVideoComponent } from '../shared/components/media-image.component';
 import { SendSheetComponent } from '../shared/components/send-sheet.component';
@@ -71,6 +76,7 @@ class RouteStubComponent {}
 
 const ROUTES = [
   { path: 'auth', component: RouteStubComponent },
+  { path: 'onboarding', component: RouteStubComponent },
   { path: 'home', component: RouteStubComponent },
   { path: 'spotlight', component: RouteStubComponent },
   { path: 'me', component: RouteStubComponent },
@@ -113,17 +119,119 @@ function bed(): void {
 describe('Components render', () => {
   beforeEach(bed);
 
-  it('shows the five bottom tabs: Home, Spotlight, Create, Discover, Menu', async () => {
+  it('asks after signup before accessing location and keeps the chosen province when declined', async () => {
+    const auth = TestBed.inject(AuthService);
+    await auth.signInDemo();
+    const location = TestBed.inject(LocationService);
+    const detect = vi.spyOn(location, 'detectLocalArea');
+    const f = TestBed.createComponent(OnboardingComponent);
+    f.detectChanges();
+    const el = f.nativeElement as HTMLElement;
+    expect(el.querySelector('[role="dialog"]')?.textContent).toContain('OpenStreetMap');
+    expect(detect).not.toHaveBeenCalled();
+    const selected = f.componentInstance.province;
+    f.componentInstance.skipGps();
+    f.detectChanges();
+    expect(el.querySelector('[role="dialog"]')).toBeNull();
+    expect(f.componentInstance.province).toBe(selected);
+    expect(detect).not.toHaveBeenCalled();
+  });
+
+  it('uses a detected area in the saved onboarding profile and retains a manual fallback', async () => {
+    const auth = TestBed.inject(AuthService);
+    await auth.signInDemo();
+    const location = TestBed.inject(LocationService);
+    const detect = vi.spyOn(location, 'detectLocalArea').mockResolvedValue({ province: 'WC', town: 'Cape Town' });
+    vi.spyOn(TestBed.inject(DataService), 'refresh').mockResolvedValue();
+    const f = TestBed.createComponent(OnboardingComponent);
+    f.detectChanges();
+    await f.componentInstance.useGps();
+    f.detectChanges();
+    expect(detect).toHaveBeenCalledTimes(1);
+    expect(f.componentInstance.locationPrompt()).toBe(false);
+    expect(f.componentInstance.province).toBe('WC');
+    expect(f.componentInstance.town).toBe('Cape Town');
+    await f.componentInstance.finish();
+    expect(auth.user()?.province).toBe('WC');
+    expect(auth.user()?.town).toBe('Cape Town');
+  });
+
+  it('prioritises local posts only in For you and responds to profile changes', async () => {
+    const auth = TestBed.inject(AuthService);
+    await auth.signInDemo();
+    const data = TestBed.inject(DataService);
+    const original = db.posts().slice(0, 3);
+    const posts = [
+      { ...original[0], province: 'WC' as const, town: 'Cape Town' },
+      { ...original[1], province: 'GP' as const, town: 'Pretoria' },
+      { ...original[2], province: 'GP' as const, town: 'Johannesburg' }
+    ];
+    vi.spyOn(data, 'startAutoSync').mockImplementation(() => {});
+    const f = TestBed.createComponent(HomeComponent);
+    await auth.updateProfile({ province: 'GP', town: 'Johannesburg' });
+    data.feed.set(posts);
+    expect(f.componentInstance.displayedFeed().map(p => p.id)).toEqual([posts[2].id, posts[1].id, posts[0].id]);
+    await auth.updateProfile({ province: 'WC', town: 'Cape Town' });
+    data.feed.set(posts);
+    expect(f.componentInstance.displayedFeed()[0].id).toBe(posts[0].id);
+    data.setFilter({ scope: 'network' });
+    expect(f.componentInstance.displayedFeed().map(p => p.id)).toEqual(posts.map(p => p.id));
+    f.destroy();
+  });
+
+  it('creates an account without a province, then directs the new member to the location popup', async () => {
+    const auth = TestBed.inject(AuthService);
+    vi.spyOn(TestBed.inject(DataService), 'refresh').mockResolvedValue();
+    const router = TestBed.inject(Router);
+    const navigate = vi.spyOn(router, 'navigateByUrl').mockResolvedValue(true);
+    const f = TestBed.createComponent(AuthComponent);
+    f.componentInstance.startSignup();
+    f.componentInstance.signupStep.set(5);
+    f.componentInstance.f.displayName = 'New Person';
+    f.componentInstance.f.email = 'new.member@example.co.za';
+    f.componentInstance.f.password = 'password123';
+    f.componentInstance.over18 = true;
+    f.componentInstance.terms = true;
+    f.detectChanges();
+    expect((f.nativeElement as HTMLElement).textContent).not.toContain('Select your province');
+    expect((f.nativeElement as HTMLElement).querySelector('select')).toBeNull();
+    await f.componentInstance.signup();
+    expect(auth.user()?.province).toBeNull();
+    expect(auth.needsOnboarding()).toBe(true);
+    expect(navigate).toHaveBeenCalledWith('/onboarding');
+    const onboarding = TestBed.createComponent(OnboardingComponent);
+    onboarding.detectChanges();
+    expect((onboarding.nativeElement as HTMLElement).querySelector('[role="dialog"]')).toBeTruthy();
+  });
+
+  it('lets a new member decline location and finish without inventing a province', async () => {
+    const auth = TestBed.inject(AuthService);
+    await auth.signUp({ displayName: 'New Person', email: 'no-location@example.co.za', password: 'password123',
+      surname: '', province: null, town: '', over18: true, acceptedTerms: true, otpVerified: true });
+    const data = TestBed.inject(DataService);
+    vi.spyOn(data, 'refresh').mockResolvedValue();
+    const f = TestBed.createComponent(OnboardingComponent);
+    f.detectChanges();
+    f.componentInstance.skipGps();
+    f.componentInstance.next();
+    f.detectChanges();
+    expect((f.nativeElement as HTMLElement).textContent).not.toContain('Your province');
+    await f.componentInstance.finish();
+    expect(auth.user()?.province).toBeNull();
+    expect(auth.needsOnboarding()).toBe(false);
+    const profile = TestBed.createComponent(MeComponent);
+    expect(profile.componentInstance.form.province).toBeNull();
+  });
+
+  it('shows the five bottom tabs in the requested order', async () => {
     const f = TestBed.createComponent(TabsComponent);
     f.detectChanges();
     await f.whenStable();
-    const html = (f.nativeElement as HTMLElement).innerHTML;
-    for (const label of ['Home', 'Spotlight', 'Create', 'Menu']) {
-      expect(html, label).toContain(label);
-    }
-    // Chats moved to the top navigation, and the Photo tab is gone.
-    expect(html).not.toContain('tab="chats"');
-    expect(html).not.toContain('Create a post with a photo');
+    const el = f.nativeElement as HTMLElement;
+    expect([...el.querySelectorAll('ion-tab-button')].map((tab) => tab.textContent?.trim()))
+      .toEqual(['Home', 'View', 'Spotlight', 'Notifications', 'Shortcuts']);
+    expect(el.querySelector('[tab="chats"]')).toBeNull();
+    expect(el.querySelector('.create')).toBeNull();
   });
 
   it('renders the feed filter bar with a province dropdown', async () => {
@@ -213,7 +321,8 @@ describe('Components render', () => {
     expect(el.querySelector('.fb-stats-right .fb-dot')).toBeTruthy();
     // The four actions, each with its word.
     const actions = [...el.querySelectorAll('.fb-act')].map((b) => (b.textContent ?? '').trim());
-    expect(actions).toEqual(['Like', 'Comment', 'Repost', 'Send']);
+    expect(actions.slice(0, 4)).toEqual(['Like', 'Comment', 'Repost', 'Send']);
+    expect(el.querySelector('.fb-actions button lf-icon[name="chat"]')).toBeTruthy();
   });
 
   it('leaves the long text boxes uncapped and gives every one of them the phone keyboard features', async () => {
@@ -462,6 +571,34 @@ describe('Components render', () => {
     expect(html).not.toContain('Make a poster');
   });
 
+  it('changes and persists the post status through the Mark as found confirmation', async () => {
+    TestBed.overrideProvider(ToastController, { useValue: { create: async () => ({ present: async () => undefined }) } });
+    const auth = TestBed.inject(AuthService);
+    const data = TestBed.inject(DataService);
+    await auth.signInDemo();
+    await data.loadFeed();
+    const f = TestBed.createComponent(PostDetailComponent);
+    f.componentInstance.p.set(data.post('p_thato')!);
+    await settle(f);
+    const el = f.nativeElement as HTMLElement;
+    const open = [...el.querySelectorAll('button')].find((b) => b.textContent?.trim() === 'Mark as found');
+    expect(open).toBeTruthy();
+    open!.click();
+    f.detectChanges();
+    expect(el.querySelector('.sheetwrap')).toBeTruthy();
+    const input = el.querySelector('.sheetwrap input') as HTMLInputElement;
+    input.value = 'Safe at home';
+    input.dispatchEvent(new Event('input'));
+    const confirm = [...el.querySelectorAll<HTMLButtonElement>('.sheetwrap button')].find((b) => b.textContent?.includes('Close without naming'))!;
+    confirm.click();
+    await settle(f);
+    expect(f.componentInstance.p()?.status).toBe('found');
+    expect(db.post('p_thato')?.status).toBe('found');
+    expect(db.post('p_thato')?.outcome.whereaboutsFound).toBe('Safe at home');
+    expect(el.querySelector('.sheetwrap')).toBeNull();
+    expect(el.textContent).toContain('Found');
+  });
+
   it('lists the people behind a reaction count when the Reactions sheet opens', async () => {
     const data = TestBed.inject(DataService);
     await data.loadFeed();
@@ -563,6 +700,16 @@ describe('Components render', () => {
     const out = await api.patchPost('p_1', { outcomeNudgeAt: 5 });
     expect(writes, 'the change was written the ordinary way').toEqual(['p_1']);
     expect(out?.id).toBe('p_1');
+  });
+
+  it('never writes private replies or viewer IDs into an audience-visible Supabase story', async () => {
+    const api = new SupabaseApi();
+    let written: unknown;
+    (api as unknown as { upsert: unknown }).upsert = async (_collection: string, payload: unknown) => { written = payload; };
+    const original = db.story(db.stories('u_demo')[0].id)!;
+    const reply = { id: 'private-r', storyId: original.id, authorId: 'u_johan', body: 'private', at: Date.now() };
+    await api.saveStory({ ...original, replies: [reply], viewers: ['u_johan'] });
+    expect(written).toMatchObject({ id: original.id, replies: [], viewers: [] });
   });
 
   it('explains a refused photo upload on the screen, not in a console', async () => {
@@ -802,6 +949,9 @@ describe('Components render', () => {
     const others = (await api.users()).filter((u) => u.id !== me);
     const follower = others[0];
     const connection = others[1] ?? others[0];
+    const following = others[2];
+    expect(following).toBeTruthy();
+    await api.follow(me, following.id);
     await api.follow(follower.id, me);
     await api.follow(me, connection.id);
     await api.follow(connection.id, me);
@@ -814,7 +964,10 @@ describe('Components render', () => {
     expect(actions.sendPeople().length, 'people can be sent to').toBeGreaterThan(0);
     expect(actions.sendPeople().some((p) => p.connection), 'a connection is marked as such').toBe(true);
 
-    // Anyone shown can receive it; those you follow each other also get a chat.
+    expect(actions.sendPeople().find((p) => p.profile.id === follower.id)?.connection).toBe(true);
+    expect(actions.sendPeople().find((p) => p.profile.id === following.id)?.connection).toBe(true);
+
+    // Anyone shown can receive a notification; chat also respects messaging settings.
     for (const person of actions.sendPeople()) {
       expect(person.profile.id, 'never yourself').not.toBe(me);
     }
@@ -923,8 +1076,11 @@ describe('Components render', () => {
     f.componentInstance.comment.subscribe(() => comments.push(1));
     const reactBtn = el.querySelector('.fb-actions lf-reaction-button .btn') as HTMLButtonElement;
     reactBtn.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    f.detectChanges();
+    expect(el.querySelectorAll('.tray .opt').length).toBe(4);
+    (el.querySelector('.tray .opt[data-key="like"]') as HTMLButtonElement).click();
     ([...el.querySelectorAll('.fb-actions .fb-act')][1] as HTMLButtonElement).click();
-    expect(votes.length).toBe(1);
+    expect(votes).toEqual(['like']);
     expect(comments.length).toBe(1);
   });
 
@@ -948,28 +1104,29 @@ describe('Components render', () => {
     expect(html).not.toContain('network-stories');
   });
 
-  it('keeps the Network story rail visible even when there are fewer than eight posts', async () => {
+  it('shows the story rail in View independently of feed length, not in Network', async () => {
     const auth = TestBed.inject(AuthService);
     const data = TestBed.inject(DataService);
     await auth.signInDemo();
     await data.loadStatic();
     data.setFilter({ scope: 'network' });
-
-    const f = TestBed.createComponent(HomeComponent);
-    await settle(f);
-    expect((f.nativeElement as HTMLElement).querySelector('.network-context .network-stories lf-story-rail')).toBeTruthy();
-  });
-
-  it('keeps the Network story rail visible even when there are fewer than eight posts', async () => {
-    const auth = TestBed.inject(AuthService);
-    const data = TestBed.inject(DataService);
-    await auth.signInDemo();
-    await data.loadStatic();
-    data.setFilter({ scope: 'network' });
-
-    const f = TestBed.createComponent(HomeComponent);
-    await settle(f);
-    expect((f.nativeElement as HTMLElement).querySelector('.network-context .network-stories lf-story-rail')).toBeTruthy();
+    const home = TestBed.createComponent(HomeComponent);
+    await settle(home);
+    const homeEl = home.nativeElement as HTMLElement;
+    expect(homeEl.querySelector('.network-context')).toBeTruthy();
+    expect(homeEl.querySelector('lf-story-rail')).toBeNull();
+    expect(homeEl.querySelector('lf-post-card')).toBeNull();
+    for (const label of ['Following', 'Followers', 'Follow requests']) expect(homeEl.textContent).toContain(label);
+    const view = TestBed.createComponent(ViewComponent);
+    await settle(view);
+    const el = view.nativeElement as HTMLElement;
+    expect(el.querySelector('lf-story-rail')).toBeTruthy();
+    for (const label of ['Following', 'Followers', 'Public', 'Statuses']) expect(el.textContent).toContain(label);
+    const publicButton = [...el.querySelectorAll('button')].find((b) => b.textContent?.trim() === 'Public')!;
+    publicButton.click();
+    await settle(view);
+    expect(view.componentInstance.scope()).toBe('public');
+    expect(el.textContent).toContain('Public status browsing is not available');
   });
 
   it('sends a visitor who is not signed in to the login screen, not to Home', async () => {
@@ -1311,7 +1468,7 @@ describe('Components render', () => {
     expect((card.nativeElement as HTMLElement).innerHTML).toContain('see more');
   });
 
-  it('organizes the Menu into shortcuts, posts, and saved sections', async () => {
+  it('keeps account links and the saved-cases entry on Profile', async () => {
     const auth = TestBed.inject(AuthService);
     const data = TestBed.inject(DataService);
     await auth.signInDemo();
@@ -1323,12 +1480,30 @@ describe('Components render', () => {
     await f.whenStable();
 
     const el = f.nativeElement as HTMLElement;
-    const tabs = Array.from(el.querySelectorAll('[role="tab"]')).map((tab) => tab.textContent?.trim());
-    expect(tabs).toEqual(['All shortcuts', 'Posts', 'Saved']);
+    expect(el.textContent).toContain('Posts');
+    expect(el.querySelector('a[routerlink="/saved"]')).toBeTruthy();
+    expect(el.querySelector('.quick')).toBeNull();
+    expect(el.textContent).toContain('followers');
+    expect(el.textContent).toContain('following');
+    expect(el.textContent).toContain('Your impact');
+    expect(el.querySelector('a[routerlink="/settings"]')).toBeTruthy();
+    expect(el.querySelector('a[routerlink="/progress"]')).toBeTruthy();
 
-    f.componentInstance.menuTab.set('saved');
-    f.detectChanges();
-    expect((f.nativeElement as HTMLElement).innerHTML).toContain('Saved posts');
+  });
+
+  it('keeps profile and account actions out of Shortcuts without removing useful tools', async () => {
+    await TestBed.inject(AuthService).signInDemo();
+    const f = TestBed.createComponent(ShortcutsComponent);
+    await settle(f);
+    const el = f.nativeElement as HTMLElement;
+    const hrefs = Array.from(el.querySelectorAll('main a')).map((a) => a.getAttribute('href'));
+    for (const path of ['/me', '/connections', '/progress', '/settings', '/create-story', '/saved']) {
+      expect(hrefs).not.toContain(path);
+    }
+    for (const path of ['/safety', '/tips', '/found', '/faqs', '/help']) {
+      expect(hrefs).toContain(path);
+    }
+    expect(el.querySelector('main')?.textContent).not.toContain('Sign out');
   });
 
   it('shows the member their impact, the next step and the honest list of what counts', async () => {
@@ -1674,6 +1849,25 @@ describe('Components render', () => {
     expect(withPrivacy).toContain('My Spotlight');
     expect(withPrivacy).toContain('My followers');
     expect(withPrivacy).toContain('People who follow you can view');
+    const fEl = f.nativeElement as HTMLElement;
+    const followerOption = [...fEl.querySelectorAll<HTMLButtonElement>('.panel .line')].find((b) => b.textContent?.includes('My followers'))!;
+    followerOption.click();
+    f.detectChanges();
+    expect(f.componentInstance.audience()).toBe('followers');
+    expect(f.componentInstance.panel()).toBe('none');
+    f.componentInstance.toggle('privacy');
+    f.detectChanges();
+    const spotlightOption = [...fEl.querySelectorAll<HTMLButtonElement>('.panel .line')].find((b) => b.textContent?.includes('My Spotlight'))!;
+    spotlightOption.click();
+    f.detectChanges();
+    expect(f.componentInstance.panel()).toBe('none');
+    expect(f.componentInstance.audience()).toBe('surname');
+    expect(fEl.querySelector('.community-picker')).toBeTruthy();
+    f.componentInstance.media.set([{ id: 'test-image', kind: 'image', src: 'data:image/png;base64,AA==' }]);
+    f.detectChanges();
+    const photo = fEl.querySelector('.canvas .shot')!;
+    const caption = fEl.querySelector('.canvas .caption')!;
+    expect(photo.compareDocumentPosition(caption) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it('keeps stories manual even for saved autoplay settings, and a hold will not skip one', async () => {
@@ -1737,26 +1931,29 @@ describe('Components render', () => {
     const me = auth.viewerId!;
     const thread = {
       id: 'thread-inbox-update',
-      participantIds: [me, 'u_friend'],
+      participantIds: [me, 'u_lerato'],
       postId: null,
       createdAt: 1,
       lastMessageAt: 1,
-      unread: { [me]: 0, u_friend: 0 },
+      unread: { [me]: 0, u_lerato: 0 },
       unlockedVia: 'follow' as const
     };
+    await db.upsertFollow({ id: 'f_demo_lerato', followerId: me, followingId: 'u_lerato', at: Date.now(), status: 'accepted' });
     await api.saveThread(thread);
     await chat.openThread(thread.id);
     await chat.send('I am still looking. Thank you for checking in.');
 
     const updated = await api.thread(thread.id);
     expect(updated?.lastMessageAt).toBeGreaterThan(1);
-    expect(updated?.unread.u_friend).toBe(1);
+    expect(updated?.unread.u_lerato).toBe(1);
     expect(updated?.unread[me]).toBe(0);
     expect(chat.messages().at(-1)?.body).toContain('still looking');
   });
 
   it('renders a profile and hides what the owner hid', async () => {
+    await TestBed.inject(AuthService).signInDemo();
     const data = TestBed.inject(DataService);
+    data.followingIds.set(['u_kabelo']);
     await data.loadFeed();
     await data.loadStatic();
     const owner = (await data.profile('u_kabelo'))!;
@@ -1893,6 +2090,8 @@ describe('Search boxes actually search', () => {
     // reading is open, posting is not
     expect(html).toContain('Join the Ndlela community to post here');
     expect(html).toContain('Anyone can read what is posted.');
+    expect([...((f.nativeElement as HTMLElement).querySelectorAll('button'))].filter((b) => /Join this community/.test(b.textContent ?? '')).length).toBe(1);
+    expect((f.nativeElement as HTMLElement).querySelector('.locked button')).toBeNull();
     expect(f.componentInstance.posts().length).toBeGreaterThan(0);
   });
 
@@ -2014,6 +2213,62 @@ describe('Search boxes actually search', () => {
     expect(f.componentInstance.matchingRows()).toEqual([]);
     type(f, '');
     expect(f.componentInstance.matchingRows().length).toBe(rows.length);
+  });
+});
+
+describe('Connection status rings', () => {
+  beforeEach(bed);
+
+  it('shows either accepted direction in Network and Friends, but not a pending request', async () => {
+    const auth = TestBed.inject(AuthService);
+    const data = TestBed.inject(DataService);
+    await auth.signInDemo();
+    // Pieter follows the demo account; Kabelo is followed by it. A request
+    // from Lindiwe does not by itself make their status visible.
+    const pieter = db.user('u_pieter')!;
+    const kabelo = db.user('u_kabelo')!;
+    const lindiwe = db.user('u_lindiwe')!;
+    db.removeFollow('u_kabelo', 'u_demo');
+    db.upsertUser({ ...lindiwe, checkIn: pieter.checkIn });
+    db.upsertFollow({ id: 'pending-status', followerId: lindiwe.id, followingId: 'u_demo', at: Date.now(), status: 'pending' });
+    await data.loadUserScoped();
+    const network = TestBed.createComponent(DiscoverComponent);
+    network.componentInstance.open.set({ following: true, followers: true, requests: true, statuses: true });
+    network.detectChanges();
+    await network.whenStable();
+    network.detectChanges();
+    const statusIn = (section: string, name: string): string | null | undefined => {
+      const rows = [...(network.nativeElement as HTMLElement).querySelectorAll(`#sect-${section} .who`)];
+      return rows.find((row) => row.textContent?.includes(name))?.querySelector('.avatar-shell')?.getAttribute('data-status');
+    };
+    expect(statusIn('followers', pieter.displayName)).toBe('unfamiliar');
+    expect(statusIn('following', kabelo.displayName)).toBe('safe');
+    expect(statusIn('requests', lindiwe.displayName)).toBeNull();
+    expect(statusIn('statuses', pieter.displayName)).toBe('unfamiliar');
+    expect(network.componentInstance.rowsFor('following').some((r) => r.id === pieter.id)).toBe(false);
+
+    const friends = TestBed.createComponent(ConnectionsComponent);
+    friends.componentInstance.tab.set('followers');
+    friends.detectChanges();
+    await friends.whenStable();
+    friends.detectChanges();
+    const findFriend = (name: string): Element | undefined => [...(friends.nativeElement as HTMLElement).querySelectorAll('.who')]
+      .find((row) => row.textContent?.includes(name));
+    expect(findFriend(pieter.displayName)?.querySelector('.avatar-shell')?.getAttribute('data-status')).toBe('unfamiliar');
+    friends.componentInstance.tab.set('following');
+    friends.detectChanges();
+    expect(findFriend(kabelo.displayName)?.querySelector('.avatar-shell')?.getAttribute('data-status')).toBe('safe');
+
+    // Re-read existing connections too, so a changed status replaces the cached one.
+    db.upsertUser({ ...pieter, checkIn: { ...pieter.checkIn!, status: 'safe' } });
+    await data.loadUserScoped();
+    network.detectChanges();
+    expect(statusIn('followers', pieter.displayName)).toBe('safe');
+    db.removeFollow('u_pieter', 'u_demo');
+    await data.loadUserScoped();
+    network.detectChanges();
+    expect(data.statusOf(data.authorOf('u_pieter'))).toBeNull();
+    expect(network.componentInstance.statusPeople().some((r) => r.id === pieter.id)).toBe(false);
   });
 });
 
@@ -2238,6 +2493,13 @@ describe('Email and Google sign-in', () => {
     });
     // and the profile is really in the data layer, not just on screen
     expect((await api.user('00000000-0000-4000-8000-000000000199'))?.email).toBe('oauth.new@example.com');
+
+    // Email confirmation can return after signup without a chosen province.
+    callback?.('SIGNED_IN', { user: { id: 'confirmed-no-province', email: 'confirmed@example.com',
+      user_metadata: { lulafindSignupComplete: true, acceptedTerms: true, over18: true, displayName: 'Confirmed Member' } } });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(auth.user()).toMatchObject({ id: 'confirmed-no-province', province: null, onboarded: false });
+    expect(auth.needsOnboarding()).toBe(true);
 
     // A Google account with no usable name still asks - for the name only, and
     // without pretending a half-built account is signed in.

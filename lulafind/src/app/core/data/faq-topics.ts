@@ -99,7 +99,7 @@ export const FAQ_TOPICS: Topic[] = [
     question: 'How does private chat work?',
     match: ['private chat', 'message the poster', 'how do i chat', 'dm', 'message someone'],
     answer: {
-      text: 'A private chat opens once you and the poster follow each other. Reactions - Like, Support, Sad, Have an idea - are only reactions and never open a chat. That keeps chats between people who really want to help. Never send money to someone you have not met.'
+      text: 'Chat opens when either you or the poster follows the other and both allow messages. Reactions - Like, Support, Sad, Have an idea - are only reactions and never open a chat. That keeps chats between people who really want to help. Never send money to someone you have not met.'
     }
   },
   {

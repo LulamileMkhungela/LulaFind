@@ -107,7 +107,7 @@ import { SUPPORT_EMAIL, SUPPORT_NAME } from '../../core/config';
           <a class="row" routerLink="/admin"><lf-icon name="shield" [size]="18" /><span>Admin - reports and moderation</span><lf-icon name="chevronRight" [size]="16" /></a>
         }
         <a class="row" routerLink="/faqs"><lf-icon name="info" [size]="18" /><span>FAQs</span><lf-icon name="chevronRight" [size]="16" /></a>
-        <p class="lf-small lf-muted" style="margin-top:10px">Who sees your profile is set in <strong>Me → Edit profile</strong>.</p>
+        <p class="lf-small lf-muted" style="margin-top:10px">Message and profile preferences are in <strong>Profile → Edit profile</strong>.</p>
         <!-- The safety-post choice. Off until the person turns it on, and the
              audience is theirs to pick - exactly what the lookout rules read. -->
         <ion-item>
@@ -126,13 +126,10 @@ import { SUPPORT_EMAIL, SUPPORT_NAME } from '../../core/config';
             </ion-select>
           </ion-item>
         }
-        <!--
-          Last seen is shown to everyone; this is the one control over it, and it
-          is what the profile and the lookout screen read before showing a town.
-        -->
+        <!-- This setting controls whether location may be shown. -->
         <ion-item>
           <ion-label><strong>Show my town and last seen</strong><br />
-            <span class="lf-muted lf-small">Everyone can see the town on your cases and when you were last around</span></ion-label>
+            <span class="lf-muted lf-small">Your case town may be public. Profile last-seen details are shown only to people you follow or who follow you.</span></ion-label>
           <ion-toggle [checked]="showLastSeen()" (ionChange)="setShowLastSeen($any($event.detail).checked)"></ion-toggle>
         </ion-item>
         <ion-item>
@@ -183,7 +180,7 @@ import { SUPPORT_EMAIL, SUPPORT_NAME } from '../../core/config';
           In an emergency call <strong>10111</strong>.
         </p>
         <p class="lf-small lf-muted">
-          Support: <a href="mailto:{{ support }}">support&#64;{{ support }}</a> · {{ supportName }}.
+          Support: <a href="mailto:{{ support }}">{{ support }}</a> · {{ supportName }}.
           LulaFind is for people 18 and older.
         </p>
         <div class="lf-row" style="gap:8px;flex-wrap:wrap">

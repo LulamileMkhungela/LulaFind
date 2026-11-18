@@ -110,6 +110,7 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
                     message="Create it and it becomes the home for every post with that surname."
                     actionLabel="Create a spotlight" (action)="openCreate(query())" />
         }
+        <p class="badge-key">Joined means you are a member. Verified means the page has been marked as verified. A page can have both labels or neither.</p>
         <div class="grid" [class.lf-safe-bottom]="!posts().length">
           @for (s of list(); track s.id) {
             <a class="tile" [routerLink]="'/spotlight/' + s.id">
@@ -119,8 +120,10 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
                 <span>{{ s.postIds.length }} posts · {{ s.followers }} members</span>
                 @if (s.province) { <span>{{ provinceName(s.province) }}</span> }
               </div>
-              @if (joined(s)) { <span class="lf-chip lf-tiny">Joined</span> }
-              @else if (s.verified) { <span class="lf-chip lf-tiny">Verified</span> }
+              @if (joined(s) || s.verified) { <span class="tile-badges">
+                @if (joined(s)) { <span class="lf-chip lf-tiny">Joined</span> }
+                @if (s.verified) { <span class="lf-chip lf-tiny">Verified</span> }
+              </span> }
             </a>
           }
         </div>
@@ -242,6 +245,8 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
       background: var(--lf-primary-soft); color: var(--lf-link); }
     .section { margin: 0; padding: 16px var(--lf-gap) 8px; font-size: 17px; font-weight: 700; display: flex; gap: 8px;
       align-items: baseline; }
+    .badge-key { margin: 4px var(--lf-gap) 10px; color: var(--lf-muted); font-size: 12px; line-height: 1.4; }
+    .tile-badges { position:absolute; top:8px; right:8px; left:8px; display:flex; justify-content:flex-end; flex-wrap:wrap; gap:4px; }
     .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; padding: 0 var(--lf-gap) 16px; }
     @media (min-width: 620px) { .grid { grid-template-columns: repeat(3, 1fr); } }
     @media (min-width: 768px) { .grid, .section, .mine-card, .form { max-width: var(--lf-maxw); margin-left: auto; margin-right: auto; box-sizing: border-box; } }
@@ -251,7 +256,7 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
     .tile .meta { padding: 8px 12px 12px; display: flex; flex-direction: column; gap: 2px; }
     .tile .meta strong { font-size: 15px; font-weight: 600; }
     .tile .meta span { font-size: 13px; color: var(--lf-muted); }
-    .tile .lf-chip { position: absolute; top: 8px; right: 8px; background: rgba(0,0,0,.55); color: #fff; border: 0; }
+    .tile .lf-chip { position: static; background: rgba(0,0,0,.55); color: #fff; border: 0; }
     .form { background: var(--lf-card); padding: 16px var(--lf-gap) 24px; box-shadow: var(--lf-shadow); }
     .intro { margin: 0 0 14px; line-height: 1.45; }
     ion-item { margin-bottom: 8px; }

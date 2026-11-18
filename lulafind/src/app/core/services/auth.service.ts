@@ -258,12 +258,12 @@ export class AuthService {
       const displayName = String(metadata.displayName ?? metadata.full_name ?? metadata.name ?? '').trim();
       const parsed = parseFullName(displayName);
       const province = metadata.province as UserProfile['province'] | undefined;
-      if (parsed && province) {
+      if (parsed) {
         const profile = this.withTrustedSupabaseRole(await this.makeProfile({
           displayName: parsed.full,
           email: String(authUser.email ?? metadata.email ?? ''),
           password: '', surname: parsed.surname,
-          province, town: String(metadata.town ?? ''),
+          province: province ?? null, town: String(metadata.town ?? ''),
           over18: true, acceptedTerms: true
         }, authUser.id), authUser);
         await this.api.saveUser(profile);
@@ -277,7 +277,7 @@ export class AuthService {
 
     // Google already told us who this is. Take the name and the address from
     // the account instead of asking the person to type what Google has, then
-    // send them straight to the one step LulaFind actually needs: province.
+    // send them to onboarding, where they can choose whether to share location.
     const email = String(authUser.email ?? metadata.email ?? '').trim();
     const googleName = String(
       metadata.full_name ?? metadata.name ?? metadata.displayName ?? email.split('@')[0] ?? ''
@@ -526,7 +526,6 @@ export class AuthService {
     if (!parsed) throw new Error('Enter your first name and surname');
     if (!p.provider && p.password.length < 8) throw new Error('Password must be at least 8 characters');
     if (!p.provider && p.otpVerified !== true) throw new Error('Enter the code we emailed you');
-    if (!p.province) throw new Error('Choose your province');
     if (!p.over18) throw new Error('You must be 18 or older to use LulaFind');
     if (!p.acceptedTerms) throw new Error('Accept the terms before you continue');
 

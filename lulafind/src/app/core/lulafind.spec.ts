@@ -353,7 +353,7 @@ describe('Repost and feed activity', () => {
   });
 });
 
-describe('ChatService - private chat is mutual follow only', () => {
+describe('ChatService - chat requires a follow in either direction', () => {
   beforeEach(bed);
 
   it('blocks chat when the viewer does not follow the poster', async () => {
@@ -371,7 +371,7 @@ describe('ChatService - private chat is mutual follow only', () => {
     expect((gate as any).step).toBe('follow');
   });
 
-  it('a one-way follow is not enough; following back opens the chat', async () => {
+  it('a one-way follow in either direction opens the chat', async () => {
     const data = svc<DataService>(DataService);
     const chat = svc<ChatService>(ChatService);
     await svc<AuthService>(AuthService).signInDemo();
@@ -384,8 +384,9 @@ describe('ChatService - private chat is mutual follow only', () => {
 
     await data.toggleFollow(post.authorId); // I follow them
     const oneWay = await chat.gate(data.post(post.id)!);
-    expect(oneWay.allowed).toBe(false);
-    expect((oneWay as any).step).toBe('follow');
+    expect(oneWay.allowed).toBe(true);
+    db.removeFollow('u_demo', post.authorId);
+    expect((await chat.gate(data.post(post.id)!)).allowed).toBe(false);
 
     await db.upsertFollow({ id: 'f_back', followerId: post.authorId, followingId: 'u_demo', at: Date.now(), status: 'accepted' });
     const mutual = await chat.gate(data.post(post.id)!);
@@ -418,7 +419,7 @@ describe('ChatService - private chat is mutual follow only', () => {
     expect((gate as any).step).toBe('disabled');
   });
 
-  it('lets the person a Home Sweet Home post is about reach the family', async () => {
+  it('a claimed case does not bypass the follow requirement', async () => {
     const data = svc<DataService>(DataService);
     const chat = svc<ChatService>(ChatService);
     await svc<AuthService>(AuthService).signInDemo();
@@ -426,7 +427,21 @@ describe('ChatService - private chat is mutual follow only', () => {
 
     signInAs('u_lindiwe');
     const gate = await chat.gate(data.post('p_lindiwe')!, true);
-    expect(gate.allowed).toBe(true);
+    expect(gate.allowed).toBe(false);
+  });
+
+  it('blocks new and existing chat when either person disables messaging', async () => {
+    const auth = svc<AuthService>(AuthService);
+    const chat = svc<ChatService>(ChatService);
+    await auth.signInDemo();
+    const peer = db.user('u_ayanda')!;
+    await db.upsertFollow({ id: 'connection', followerId: peer.id, followingId: 'u_demo', at: Date.now(), status: 'accepted' });
+    const thread = await chat.ensureThread(null, peer.id);
+    expect(thread).toBeTruthy();
+    db.upsertUser({ ...peer, privacy: { ...peer.privacy, allowMessages: false } });
+    expect((await chat.gatePerson(peer.id)).allowed).toBe(false);
+    expect(await chat.ensureThread(null, peer.id)).toBeNull();
+    await expect(chat.send('hello')).rejects.toThrow(/unavailable/i);
   });
 
   it('creates a thread and stores messages', async () => {
@@ -1280,11 +1295,17 @@ describe('Safety check-ins', () => {
     expect(defaultPrivacy().showLocation).toBe(false);
   });
 
-  it('seeds a green, orange and red check-in a visitor can see', () => {
+  it('shows status colours to connections only, never guests or unrelated members', () => {
     const data = svc<DataService>(DataService);
+    expect(data.statusOf(db.user('u_kabelo')!)).toBeNull();
+    signInAs('u_demo');
+    data.followingIds.set(['u_kabelo', 'u_pieter']);
+    data.followerIds.set(['u_ayanda']);
     expect(data.statusOf(db.user('u_kabelo')!)).toBe('safe');
     expect(data.statusOf(db.user('u_pieter')!)).toBe('unfamiliar');
     expect(data.statusOf(db.user('u_ayanda')!)).toBe('need_help');
+    data.followingIds.set([]); data.followerIds.set([]);
+    expect(data.statusOf(db.user('u_kabelo')!)).toBeNull();
   });
 
   it('shows a status on the profile and hides it again', async () => {
@@ -1300,7 +1321,9 @@ describe('Safety check-ins', () => {
     expect(safety.visibleCheckIn((await data.profile('u_lerato'))!, 'u_lerato')).toBeNull();
   });
 
-  it('strips the location from a visitor when the owner hid it', () => {
+  it('strips the location from a connected visitor when the owner hid it', () => {
+    signInAs('u_pieter');
+    svc<DataService>(DataService).followingIds.set(['u_lerato']);
     const safety = svc<SafetyService>(SafetyService);
     const owner = {
       ...db.user('u_lerato')!,
@@ -1318,6 +1341,8 @@ describe('Safety check-ins', () => {
   });
 
   it('expires a live share after an hour', () => {
+    signInAs('u_pieter');
+    svc<DataService>(DataService).followerIds.set(['u_lerato']);
     const safety = svc<SafetyService>(SafetyService);
     const owner = {
       ...db.user('u_lerato')!,

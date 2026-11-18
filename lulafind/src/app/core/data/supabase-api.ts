@@ -1507,7 +1507,9 @@ export class SupabaseApi implements LulaApi {
     // Stories are written straight with the author's UID as owner_id. A story
     // that gets rejected here is the one the person is trying to share right
     // now, so it fails loudly rather than falling back to a local copy.
-    await this.upsert('stories', s, s.authorId);
+    // Replies and views belong in their restricted collections, never in a
+    // story payload readable by its audience (e.g. when deleting a story).
+    await this.upsert('stories', { ...s, replies: [], viewers: [] }, s.authorId);
   }
 
   async storyRepliesFor(storyId: string): Promise<StoryReply[]> {

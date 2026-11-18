@@ -240,7 +240,7 @@ export class SafetyService {
    * their status or is not sharing.
    */
   visibleCheckIn(u: UserProfile | null | undefined, viewerId: string | null): CheckIn | null {
-    if (!u?.checkIn) return null;
+    if (!u?.checkIn || !this.data.canSeeStatus(u, viewerId)) return null;
     const c = u.checkIn;
     if (u.id === viewerId) return c;
     if (!u.privacy?.showLocation && c.location) {

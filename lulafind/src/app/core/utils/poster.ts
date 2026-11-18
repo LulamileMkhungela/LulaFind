@@ -169,7 +169,29 @@ function cover(c: Ctx, img: HTMLImageElement, x: number, y: number, w: number, h
 }
 
 function wrap(c: Ctx, text: string, maxW: number): string[] {
-  const words = text.split(/\s+/).filter(Boolean);
+  // Words are measured at the active font. A token wider than the box is one
+  // that used to print straight off the canvas (a long surname), so it is
+  // broken at hyphens first - 'Mokoena-' / 'Ndlovu' - and only hard-broken
+  // mid-word when even a single piece cannot fit.
+  const words: string[] = [];
+  for (const raw of text.split(/\s+/).filter(Boolean)) {
+    if (c.measureText(raw).width <= maxW) { words.push(raw); continue; }
+    for (const part of raw.split(/(?<=-)/)) {
+      if (!part) continue;
+      if (c.measureText(part).width <= maxW) { words.push(part); continue; }
+      let rest = part;
+      while (c.measureText(rest).width > maxW) {
+        let fit = 1, lo = 1, hi = rest.length;
+        while (lo <= hi) {
+          const mid = (lo + hi) >> 1;
+          if (c.measureText(rest.slice(0, mid)).width <= maxW) { fit = mid; lo = mid + 1; } else hi = mid - 1;
+        }
+        words.push(rest.slice(0, fit));
+        rest = rest.slice(fit);
+      }
+      if (rest) words.push(rest);
+    }
+  }
   const lines: string[] = [];
   let line = '';
   for (const w of words) {
@@ -210,12 +232,15 @@ function fitOneLine(c: Ctx, text: string, maxW: number, size: number, weight: nu
  * `limitY` is the bottom edge this block may not cross - the contact bar sits
  * just below it on several designs, and a fact drawn under that bar is text a
  * reader cannot read (the date on the Thato poster was half-hidden behind it).
- * A row that would only fit on one line is drawn on one line; a row with no
- * room at all is left out, because a poster that states two facts clearly beats
- * one that states three with the last one cut in half.
+ * Every row is fitted on its own: a value gets a second line only if that line
+ * still ends above `limitY`, otherwise it is drawn on one line (shrinking to
+ * fit, with an ellipsis at 20px), and a row that does not fit at all is left
+ * out. A poster that states two facts clearly beats one that states three with
+ * the last one cut in half.
  */
 function facts(c: Ctx, items: { label: string; value: string }[], x: number, y: number, w: number,
-               label: string, value: string, gap = 30, maxItems = 4, limitY = POSTER_H - 96): number {
+               label: string, value: string, gap = 30, maxItems = 4, limitY = POSTER_H - 96,
+               singleLine = false): number {
   const LINE = 34 * 1.25;
   // The case number is never the fact that gets dropped: it is the one line on
   // the poster that tells a reader the police are already involved, and the app
@@ -227,20 +252,16 @@ function facts(c: Ctx, items: { label: string; value: string }[], x: number, y: 
         const caseNo = items.slice(maxItems - 1).find((f) => /case/i.test(f.label));
         return caseNo ? [...keep, caseNo] : items.slice(0, maxItems);
       })();
-  const advance = (lines: number): number => 40 + LINE * lines + gap - 8;
-  // Every fact on one line each, or every fact with room for two. Keeping all
-  // the labels matters more than the second line of one value: a family is
-  // looking for the date as well as the place.
-  const fits = (lines: number): boolean => y + rows.length * advance(lines) <= limitY;
-  const lines = fits(2) ? 2 : 1;
   for (const f of rows) {
-    if (y + 40 + LINE * lines > limitY) break;
+    const remaining = limitY - y;
+    if (remaining < 40 + LINE) break; // not even a label plus one line of value fits
     c.fillStyle = label; c.font = `700 22px ${SANS}`;
     if ('letterSpacing' in c) (c as unknown as { letterSpacing: string }).letterSpacing = '3px';
     c.fillText(f.label, x, y);
     if ('letterSpacing' in c) (c as unknown as { letterSpacing: string }).letterSpacing = '0px';
     c.fillStyle = value;
-    y = para(c, f.value, x, y + 40, w, 34, 1.25, lines, 600) + gap - 8;
+    const maxLines = !singleLine && remaining >= 40 + LINE * 2 ? 2 : 1;
+    y = para(c, f.value, x, y + 40, w, 34, 1.25, maxLines, 600) + gap - 8;
   }
   return y;
 }
@@ -364,7 +385,8 @@ function editorial(c: Ctx, p: PosterContent, img: HTMLImageElement | null): void
   c.strokeStyle = '#141414'; c.lineWidth = 3; c.strokeRect(px, py, pw, ph);
   c.fillStyle = '#d6402a'; c.fillRect(px + 24, py + ph - 24, pw, 24);
 
-  facts(c, p.facts, 600, py + 30, 400, '#d6402a', '#141414', 30, 4);
+  // Ends above the 1090 rule and the contact block.
+  facts(c, p.facts, 600, py + 30, 400, '#d6402a', '#141414', 30, 4, 1082);
   c.fillStyle = '#141414'; c.fillRect(80, 1090, 920, 4);
   c.font = `800 26px ${SANS}`; c.fillStyle = '#d6402a'; spaced(c, true); c.fillText('IF YOU HAVE SEEN THEM', 80, 1145); spaced(c, false);
   c.fillStyle = '#141414'; fitOneLine(c, p.contact, 920, 46, 800, SANS, 26); c.fillText(p.contact, 80, 1205);
@@ -384,10 +406,12 @@ function beacon(c: Ctx, p: PosterContent, img: HTMLImageElement | null): void {
   c.fillStyle = '#111'; rr(c, px + 14, py + 14, pw, ph, 20); c.fill();
   if (img) { c.save(); rr(c, px, py, pw, ph, 20); c.clip(); cover(c, img, px, py, pw, ph); c.restore(); } else noPhoto(c, px, py, pw, ph, 20, '#fff', '#eee', '#111');
   c.strokeStyle = '#111'; c.lineWidth = 6; rr(c, px, py, pw, ph, 20); c.stroke();
-  c.fillStyle = '#111'; fitOneLine(c, p.name, 420, 66, 900, SANS, 34);
-  const nm = wrap(c, p.name, 420); let y = py + 60; for (const l of nm.slice(0, 2)) { c.fillText(l, 590, y); y += 74; }
-  if (p.ageLine) { c.font = `700 32px ${SANS}`; c.fillText(p.ageLine, 590, y - 8); y += 50; }
-  facts(c, p.facts, 590, y + 20, 410, '#7a6500', '#111', 24, 3, 1050);
+  // Name auto-fits up to two lines and ellipses the second if even 26px cannot
+  // fit it - a long surname used to lose its tail with no warning.
+  let y = para(c, p.name, 590, py + 60, 420, 66, 1.12, 2, 800, SANS) - 10;
+  if (p.ageLine) { c.font = `700 32px ${SANS}`; c.fillText(p.ageLine, 590, y); y += 46; }
+  // The contact bar starts at y=990: facts must stay above it.
+  facts(c, p.facts, 590, y + 8, 410, '#7a6500', '#111', 24, 3, 975);
   c.fillStyle = '#111'; rr(c, 64, 990, 952, 150, 24); c.fill();
   c.fillStyle = '#ffd400'; c.font = `800 26px ${SANS}`; spaced(c, true); c.fillText('CALL OR MESSAGE', 100, 1046); spaced(c, false);
   c.fillStyle = '#fff'; fitOneLine(c, p.contact, 880, 48, 800, SANS, 26); c.fillText(p.contact, 100, 1104);
@@ -406,28 +430,29 @@ function ubuntu(c: Ctx, p: PosterContent, img: HTMLImageElement | null): void {
   c.fillStyle = '#e0392d'; c.beginPath(); c.moveTo(1080, 0); c.lineTo(740, 0); c.lineTo(1080, 160); c.fill();
 
   c.textAlign = 'left'; c.fillStyle = '#fff';
-  fitOneLine(c, p.kicker, 900, 150, 900, SANS, 80); c.fillText(p.kicker, 64, 340);
-  const cx = 540, cy = 640, r = 250;
+  fitOneLine(c, p.kicker, 900, 150, 900, SANS, 80); c.fillText(p.kicker, 64, 330);
+  const cx = 540, cy = 588, r = 214;
   c.beginPath(); c.arc(cx, cy, r + 22, 0, Math.PI * 2); c.fillStyle = '#f4b400'; c.fill();
   c.beginPath(); c.arc(cx, cy, r + 8, 0, Math.PI * 2); c.fillStyle = '#0c2f2a'; c.fill();
   c.save(); c.beginPath(); c.arc(cx, cy, r, 0, Math.PI * 2); c.clip();
   if (img) cover(c, img, cx - r, cy - r, r * 2, r * 2); else { c.fillStyle = '#17574d'; c.fillRect(cx - r, cy - r, r * 2, r * 2); c.fillStyle = 'rgba(255,255,255,.6)'; c.beginPath(); c.arc(cx, cy - 40, 80, 0, Math.PI * 2); c.fill(); c.beginPath(); c.ellipse(cx, cy + 200, 150, 130, 0, Math.PI, 0); c.fill(); }
   c.restore();
   c.textAlign = 'center'; c.fillStyle = '#fff';
-  fitOneLine(c, p.name, 900, 88, 800, SANS, 44); c.fillText(p.name, cx, 930);
-  if (p.ageLine) { c.fillStyle = '#f4b400'; c.font = `700 34px ${SANS}`; c.fillText(p.ageLine, cx, 975); }
+  fitOneLine(c, p.name, 900, 84, 800, SANS, 40); c.fillText(p.name, cx, 895);
+  if (p.ageLine) { c.fillStyle = '#f4b400'; c.font = `700 32px ${SANS}`; c.fillText(p.ageLine, cx, 936); }
   c.textAlign = 'left';
-  facts(c, p.facts, 110, 1003, 860, '#f4b400', '#fff', 6, 2, 1168);
-  c.fillStyle = '#f4b400'; rr(c, 64, 1180, 952, 60, 30); c.fill();
-  c.fillStyle = '#0c2f2a'; c.font = `800 26px ${SANS}`; c.textAlign = 'center'; c.fillText(p.contact, cx, 1219, 900); c.textAlign = 'left';
-  footer(c, p, 'rgba(255,255,255,.6)', POSTER_H - 100);
+  // Two facts by design; single-line values keep the SAPS case on the poster.
+  facts(c, p.facts, 110, 966, 860, '#f4b400', '#fff', 6, 2, 1170, true);
+  c.fillStyle = '#f4b400'; rr(c, 64, 1184, 952, 58, 29); c.fill();
+  c.fillStyle = '#0c2f2a'; c.font = `800 25px ${SANS}`; c.textAlign = 'center'; c.fillText(p.contact, cx, 1221, 900); c.textAlign = 'left';
+  footer(c, p, 'rgba(255,255,255,.6)', POSTER_H - 92);
 }
 
 /* ---- 6. Noir: full-bleed photo, cinematic type ---- */
 function noir(c: Ctx, p: PosterContent, img: HTMLImageElement | null): void {
   c.fillStyle = '#000'; c.fillRect(0, 0, POSTER_W, POSTER_H);
   if (img) cover(c, img, 0, 0, POSTER_W, POSTER_H);
-  else { const g = c.createLinearGradient(0, 0, POSTER_W, POSTER_H); g.addColorStop(0, '#2b2b2b'); g.addColorStop(1, '#0b0b0b'); c.fillStyle = g; c.fillRect(0, 0, POSTER_W, POSTER_H); c.fillStyle = 'rgba(255,255,255,.12)'; c.beginPath(); c.arc(540, 480, 190, 0, Math.PI * 2); c.fill(); c.beginPath(); c.ellipse(540, 900, 340, 300, 0, Math.PI, 0); c.fill(); }
+  else { const g = c.createLinearGradient(0, 0, POSTER_W, POSTER_H); g.addColorStop(0, '#2b2b2b'); g.addColorStop(1, '#0b0b0b'); c.fillStyle = g; c.fillRect(0, 0, POSTER_W, POSTER_H); c.fillStyle = 'rgba(255,255,255,.08)'; c.beginPath(); c.arc(540, 400, 140, 0, Math.PI * 2); c.fill(); c.beginPath(); c.ellipse(540, 680, 280, 210, 0, Math.PI, 0); c.fill(); }
   const top = c.createLinearGradient(0, 0, 0, 380); top.addColorStop(0, 'rgba(0,0,0,.85)'); top.addColorStop(1, 'rgba(0,0,0,0)'); c.fillStyle = top; c.fillRect(0, 0, POSTER_W, 380);
   const bot = c.createLinearGradient(0, 520, 0, POSTER_H); bot.addColorStop(0, 'rgba(0,0,0,0)'); bot.addColorStop(0.55, 'rgba(0,0,0,.88)'); bot.addColorStop(1, 'rgba(0,0,0,.98)'); c.fillStyle = bot; c.fillRect(0, 520, POSTER_W, POSTER_H - 520);
   c.textAlign = 'left'; c.fillStyle = '#fff'; spaced(c, true); c.font = `700 34px ${SANS}`; c.fillText(p.kicker, 72, 110); spaced(c, false);
@@ -435,7 +460,7 @@ function noir(c: Ctx, p: PosterContent, img: HTMLImageElement | null): void {
   fitOneLine(c, p.name, 930, 130, 800, SERIF, 60); c.fillText(p.name, 72, 790);
   if (p.ageLine) { c.fillStyle = 'rgba(255,255,255,.75)'; c.font = `italic 500 38px ${SERIF}`; c.fillText(p.ageLine, 72, 846); }
   c.fillStyle = 'rgba(255,255,255,.4)'; c.fillRect(72, 878, 936, 2);
-  facts(c, p.facts, 72, 925, 900, 'rgba(255,255,255,.5)', '#fff', 12, 3, POSTER_H - 130);
+  facts(c, p.facts, 72, 916, 900, 'rgba(255,255,255,.5)', '#fff', 8, 3, POSTER_H - 130);
   c.fillStyle = '#fff'; c.font = `800 30px ${SANS}`; c.fillText(p.contact, 72, POSTER_H - 96, 936);
   footer(c, p, 'rgba(255,255,255,.55)', POSTER_H - 46);
 }
@@ -493,10 +518,10 @@ function halo(c: Ctx, p: PosterContent, img: HTMLImageElement | null): void {
   c.fillText(p.name, px, py + ph + 90);
   if (p.ageLine) { c.fillStyle = '#8ee7f7'; c.font = `600 34px ${SANS}`; c.fillText(p.ageLine, px, py + ph + 136); }
   // Two facts only, so the text can never run under the contact pill.
-  facts(c, p.facts, px, py + ph + 190, pw, 'rgba(255,255,255,.55)', '#ffffff', 14, 2);
+  facts(c, p.facts, px, py + ph + 190, pw, 'rgba(255,255,255,.55)', '#ffffff', 14, 2, POSTER_H - 160);
 
   // contact in a glass pill
-  const by = POSTER_H - 140;
+  const by = POSTER_H - 165;
   rr(c, px, by, pw, 76, 38);
   const pill = c.createLinearGradient(px, 0, px + pw, 0);
   pill.addColorStop(0, 'rgba(124,92,255,.95)'); pill.addColorStop(1, 'rgba(34,211,238,.92)');

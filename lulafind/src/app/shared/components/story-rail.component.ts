@@ -105,6 +105,7 @@ import { AuthService } from '../../core/services/auth.service';
       background: var(--lf-card-2);
     }
     .fb-story-top-img lf-avatar { width: 100%; height: 100%; }
+    .fb-story-top-img ::ng-deep .avatar-shell { width: 100% !important; height: 100% !important; }
     .fb-story-top-img ::ng-deep img,
     .fb-story-top-img ::ng-deep .fallback {
       width: 100% !important;

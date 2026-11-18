@@ -89,7 +89,7 @@ type Tab = 'following' | 'followers' | 'requests' | 'statuses';
 
                 @if (!statusPeople().length) {
                   <lf-empty icon="users" title="No statuses right now"
-                            message="When people you follow set a status - I'm safe, I need help, or watch me - it shows here." />
+                            message="When people you follow or who follow you set a status, it shows here." />
                 } @else {
                   <div class="list">
                     @for (r of statusPeople(); track r.id) {
@@ -128,7 +128,8 @@ type Tab = 'following' | 'followers' | 'requests' | 'statuses';
                   @for (r of rowsFor(s.key); track r.id) {
                     <div class="row">
                       <a [routerLink]="['/user', r.id]" class="who">
-                        <lf-avatar [src]="data.avatarFor(r.u)" [name]="r.u?.displayName ?? 'Member'" [size]="56" />
+                        <lf-avatar [src]="data.avatarFor(r.u)" [name]="r.u?.displayName ?? 'Member'" [size]="56"
+                                   [status]="data.statusOf(r.u)" />
                         <div class="txt">
                           <strong>{{ r.u?.displayName ?? 'Member' }}</strong>
                           <span class="lf-tiny lf-muted">
@@ -303,7 +304,7 @@ export class DiscoverComponent {
       : key === 'followers' ? this.data.followerIds()
       : key === 'requests' ? this.data.followRequests().map((r) => r.followerId)
       : this.statusPeople().map((r) => r.id);
-    return ids.map((id) => ({ id, u: this.people()[id] ?? this.data.authorOf(id) ?? null }));
+    return ids.map((id) => ({ id, u: this.data.authorOf(id) ?? this.people()[id] ?? null }));
   }
 
   constructor() {
@@ -332,7 +333,7 @@ export class DiscoverComponent {
       missing.forEach((id) => this.asked.add(id));
       if (missing.length) void this.data.people(missing).then((list) => {
         const next = { ...this.people() };
-        for (const u of list) { next[u.id] = u; this.data.touchAuthor(u); }
+        for (const u of list) { next[u.id] = u; if (!this.data.authorOf(u.id)) this.data.touchAuthor(u); }
         this.people.set(next);
       });
     });
@@ -378,8 +379,8 @@ export class DiscoverComponent {
   emptyText(key: Tab): string {
     switch (key) {
       case 'requests': return 'When someone asks to follow you, you can accept or ignore it here.';
-      case 'following': return 'Follow people from their profile or a post. Private chat opens when you follow each other.';
-      case 'statuses': return 'When people you follow set a status - I\u2019m safe, I need help, or watch me - it shows here.';
+      case 'following': return 'Follow people from their profile or a post. Chat opens when either person follows the other.';
+      case 'statuses': return 'When people you follow or who follow you set a status, it shows here.';
       default: return 'People who follow you show up here.';
     }
   }
@@ -419,7 +420,7 @@ export class DiscoverComponent {
   async unfollow(r: { id: string; u: UserProfile | null }): Promise<void> {
     const a = await this.alert.create({
       header: `Unfollow ${r.u?.displayName ?? 'this person'}?`,
-      message: 'Their posts stop being boosted in your feed, and private chat closes unless you follow each other again.',
+      message: 'Their posts stop being boosted in your feed, and chat closes if neither of you follows the other.',
       buttons: [
         { text: 'Cancel', role: 'cancel' },
         { text: 'Unfollow', role: 'destructive', handler: () => { void this.run(r.id, () => this.data.toggleFollow(r.id), 'Unfollowed'); } }

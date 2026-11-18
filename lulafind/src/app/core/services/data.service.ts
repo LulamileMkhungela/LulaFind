@@ -570,6 +570,13 @@ export class DataService {
     ]);
     void this.loadFollowedCases();
     void this.checkWatched();
+    // Refresh the connected profiles, including already cached ones: check-ins
+    // can change independently of the follow relationship. Ignore stale reads
+    // after a newer refresh or an account change.
+    const connected = [...new Set([...following.map((edge) => edge.followingId), ...followers.map((edge) => edge.followerId)])];
+    const profiles = await Promise.all(connected.map((person) => this.api.user(person).catch(() => undefined)));
+    if (request !== this.userScopedSeq || id !== this.auth.viewerId) return;
+    for (const profile of profiles) if (profile && this.canSeeStatus(profile, id)) this.touchAuthor(profile);
   }
 
   /* ------------------------- voting ---------------------------- */
@@ -2883,18 +2890,15 @@ export class DataService {
     return scored.slice(0, limit).map((s) => s.u);
   }
 
-  /**
-   * The check-in status a viewer is allowed to see on an avatar ring.
-   * The person always sees their own; everyone else only when the person has
-   * not hidden their location. Returns null when there is nothing to show.
-   */
-  statusOf(u?: UserProfile | null, viewerId: string | null = this.auth.viewerId): UserProfile['checkIn'] extends null ? never : (import('../models/types').CheckInStatus | null) {
-    const c = u?.checkIn;
-    if (!u || !c) return null;
-    if (u.id === viewerId) return c.status;
-    if (!u.privacy?.showLocation && c.location) return null;
-    if (c.liveShareOn && c.liveUntil && c.liveUntil <= Date.now()) return c.status;
-    return c.status;
+  /** Status is visible only to the owner or an accepted connection in either direction. */
+  canSeeStatus(u: UserProfile | null | undefined, viewerId: string | null = this.auth.viewerId): boolean {
+    if (!u || !viewerId) return false;
+    if (u.id === viewerId) return true;
+    return viewerId === this.auth.viewerId && (this.followingIds().includes(u.id) || this.followerIds().includes(u.id));
+  }
+
+  statusOf(u?: UserProfile | null, viewerId: string | null = this.auth.viewerId): import('../models/types').CheckInStatus | null {
+    return this.canSeeStatus(u, viewerId) ? u?.checkIn?.status ?? null : null;
   }
 
   /* ---------------------- follow requests ---------------------- */

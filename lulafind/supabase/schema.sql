@@ -303,6 +303,21 @@ returns boolean language sql stable security definer set search_path = pg_catalo
     );
 $$;
 
+-- Status is shared only with the owner and an accepted connection in either direction.
+create or replace function public.lula_status_connected(person text)
+returns boolean language sql stable security definer set search_path = pg_catalog as $$
+  select public.lula_uid() is not null and (
+    person = public.lula_uid() or exists (
+      select 1 from public.records f where f.collection = 'follows'
+        and coalesce(f.payload->>'status', 'accepted') = 'accepted'
+        and ((f.payload->>'followerId' = public.lula_uid() and f.payload->>'followingId' = person)
+          or (f.payload->>'followerId' = person and f.payload->>'followingId' = public.lula_uid()))
+    )
+  );
+$$;
+revoke all on function public.lula_status_connected(text) from public;
+grant execute on function public.lula_status_connected(text) to anon, authenticated;
+
 -- Public-profile read surface; email, role fields, and unconsented location are not exposed.
 create or replace view public.lula_user_profiles_public with (security_barrier = true) as
 with profile_source as (
@@ -380,7 +395,7 @@ select
       'requireFollowApproval', require_follow_approval
     ),
     'checkIn', case
-      when payload->'checkIn' is null or payload->'checkIn' = 'null'::jsonb then 'null'::jsonb
+      when not public.lula_status_connected(id) or payload->'checkIn' is null or payload->'checkIn' = 'null'::jsonb then 'null'::jsonb
       else jsonb_build_object(
         'status', payload #> '{checkIn,status}',
         'note', case when show_location then coalesce(payload #> '{checkIn,note}', '""'::jsonb) else '""'::jsonb end,
@@ -1312,6 +1327,71 @@ revoke all on function public.lula_lookout_ask_due() from public;
 grant execute on function public.lula_patch_lookout(text, jsonb) to authenticated;
 grant execute on function public.lula_answer_lookout(text, text, boolean) to authenticated;
 grant execute on function public.lula_lookout_ask_due() to authenticated;
+
+-- Restrictive policies supplement the ordinary record policies. They do not
+-- grant access by themselves. Two distinct participants, a connection in at
+-- least one direction, and both message settings are required for new chat.
+create or replace function public.lula_chat_members_allowed(thread_payload jsonb)
+returns boolean language sql stable security definer set search_path = pg_catalog as $$
+  with members as (
+    select array_agg(v) as ids from jsonb_array_elements_text(
+      case when jsonb_typeof(thread_payload->'participantIds') = 'array'
+        then thread_payload->'participantIds' else '[]'::jsonb end) v
+  )
+  select coalesce((select
+    cardinality(m.ids) = 2 and m.ids[1] <> m.ids[2] and public.lula_uid() = any(m.ids)
+    and public.lula_status_connected(case when m.ids[1] = public.lula_uid() then m.ids[2] else m.ids[1] end)
+    and (select count(*) from public.records u where u.collection = 'users' and u.id = any(m.ids)
+      and coalesce(u.payload #>> '{privacy,allowMessages}', 'true') = 'true'
+      and coalesce(u.payload->>'suspended', 'false') = 'false'
+      and not (coalesce(u.payload->'blockedUserIds', '[]'::jsonb) ?
+        (case when u.id = m.ids[1] then m.ids[2] else m.ids[1] end))) = 2
+    and (nullif(thread_payload->>'postId', '') is null or exists (
+      select 1 from public.records p where p.collection = 'posts' and p.id = thread_payload->>'postId'
+        and coalesce(p.payload->>'chatEnabled', 'false') = 'true'))
+    from members m), false);
+$$;
+create or replace function public.lula_chat_thread_allowed(thread_id text)
+returns boolean language sql stable security definer set search_path = pg_catalog as $$
+  select exists (select 1 from public.records t where t.collection = 'threads'
+    and t.id = thread_id and public.lula_chat_members_allowed(t.payload));
+$$;
+revoke all on function public.lula_chat_members_allowed(jsonb) from public;
+revoke all on function public.lula_chat_thread_allowed(text) from public;
+grant execute on function public.lula_chat_members_allowed(jsonb) to anon, authenticated;
+grant execute on function public.lula_chat_thread_allowed(text) to anon, authenticated;
+
+drop policy if exists "lula chat connection insert" on public.records;
+create policy "lula chat connection insert" on public.records as restrictive for insert to anon, authenticated
+with check (public.lula_is_admin() or (collection <> 'threads' or public.lula_chat_members_allowed(payload))
+  and (collection <> 'messages' or public.lula_chat_thread_allowed(payload->>'threadId')));
+
+drop policy if exists "lula chat connection update" on public.records;
+create policy "lula chat connection update" on public.records as restrictive for update to anon, authenticated
+using (public.lula_is_admin() or collection <> 'messages' or public.lula_chat_thread_allowed(payload->>'threadId'))
+with check (public.lula_is_admin() or collection <> 'messages' or public.lula_chat_thread_allowed(payload->>'threadId'));
+
+-- Participants may update unread counts but may not replace the members of an
+-- existing conversation or reassign a message to another thread or sender.
+create or replace function public.lula_guard_chat_identity()
+returns trigger language plpgsql set search_path = pg_catalog as $$
+begin
+  if old.collection = 'threads' and (new.collection <> old.collection or
+    new.payload->'participantIds' is distinct from old.payload->'participantIds' or
+    new.payload->'postId' is distinct from old.payload->'postId' or new.id <> old.id) then
+    raise exception 'Thread participants cannot be changed';
+  end if;
+  if old.collection = 'messages' and (new.collection <> old.collection or
+    new.payload->'threadId' is distinct from old.payload->'threadId' or
+    new.payload->'fromUserId' is distinct from old.payload->'fromUserId' or new.id <> old.id) then
+    raise exception 'Message identity cannot be changed';
+  end if;
+  return new;
+end;
+$$;
+drop trigger if exists lula_guard_chat_identity on public.records;
+create trigger lula_guard_chat_identity before update on public.records
+for each row execute function public.lula_guard_chat_identity();
 
 -- BEGIN GENERATED SEARCH COORDINATION (scripts/sync-search-schema.mjs)
 -- Search coordination v1. Apply after schema.sql and post-interactions.sql.

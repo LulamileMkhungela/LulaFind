@@ -1,3 +1,4 @@
+import { BackStackService } from '../../core/services/back-stack.service';
 import { Component, computed, inject, signal } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import { IonContent } from '@ionic/angular/ion-content';
@@ -95,6 +96,7 @@ import { timeAgo } from '../../core/utils/format';
   `]
 })
 export class SavedComponent {
+  private backStack = inject(BackStackService);
   protected data = inject(DataService);
   protected router = inject(Router);
   private sheet = inject(ActionSheetController);
@@ -133,7 +135,7 @@ export class SavedComponent {
   }
 
   back(): void {
-    if (history.length > 1) history.back(); else void this.router.navigate(['/me']);
+    this.backStack.go('/me');
   }
 
   async options(p: Post): Promise<void> {

@@ -4,7 +4,7 @@ import { IonContent } from '@ionic/angular/ion-content';
 import { IonHeader } from '@ionic/angular/ion-header';
 import { IonToolbar } from '@ionic/angular/ion-toolbar';
 import { IonButtons } from '@ionic/angular/ion-buttons';
-import { IonBackButton } from '@ionic/angular/ion-back-button';
+import { BackStackService } from '../../core/services/back-stack.service';
 import { IonTitle } from '@ionic/angular/ion-title';
 import { IonSkeletonText } from '@ionic/angular/ion-skeleton-text';
 import { ToastController } from '@ionic/angular/toast-controller';
@@ -18,13 +18,13 @@ import { escalationNote } from '../../core/data/sa-help';
   selector: 'lf-escalate',
   standalone: true,
   imports: [
-    IonContent, IonHeader, IonToolbar, IonButtons, IonBackButton, IonTitle, IonSkeletonText,
+    IonContent, IonHeader, IonToolbar, IonButtons, IonTitle, IonSkeletonText,
     RouterLink, IconComponent
   ],
   template: `
     <ion-header [translucent]="false">
       <ion-toolbar>
-        <ion-buttons slot="start"><ion-back-button [defaultHref]="'/post/' + id" text=""></ion-back-button></ion-buttons>
+        <ion-buttons slot="start"><button class="lf-icon-btn" type="button" aria-label="Go back" (click)="backStack.go(id ? '/post/' + id : '/home')"><lf-icon name="arrowLeft" [size]="20" /></button></ion-buttons>
         <ion-title>Call for help</ion-title>
       </ion-toolbar>
     </ion-header>
@@ -110,6 +110,7 @@ import { escalationNote } from '../../core/data/sa-help';
   `]
 })
 export class EscalateComponent implements OnInit {
+  protected readonly backStack = inject(BackStackService);
   protected escalation = inject(EscalationService);
   protected data = inject(DataService);
   private route = inject(ActivatedRoute);

@@ -1,3 +1,4 @@
+import { BackStackService } from '../../core/services/back-stack.service';
 import { Component, computed, effect, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { IonContent } from '@ionic/angular/ion-content';
@@ -52,7 +53,8 @@ type Tab = 'requests' | 'following' | 'followers';
           @for (r of matchingRows(); track r.id) {
             <div class="row">
               <a [routerLink]="'/user/' + r.id" class="who">
-                <lf-avatar [src]="data.avatarFor(r.u)" [name]="r.u?.displayName ?? 'Member'" [size]="56" />
+                <lf-avatar [src]="data.avatarFor(r.u)" [name]="r.u?.displayName ?? 'Member'" [size]="56"
+                                   [status]="data.statusOf(r.u)" />
                 <div class="txt">
                   <strong>{{ r.u?.displayName ?? 'Member' }}</strong>
                   <span class="lf-tiny lf-muted">
@@ -111,6 +113,7 @@ type Tab = 'requests' | 'following' | 'followers';
   `]
 })
 export class ConnectionsComponent {
+  private backStack = inject(BackStackService);
   protected data = inject(DataService);
   private router = inject(Router);
   private route = inject(ActivatedRoute);
@@ -133,7 +136,7 @@ export class ConnectionsComponent {
   });
 
   readonly rows = computed(() => this.ids().map((id): { id: string; u: UserProfile | null } =>
-    ({ id, u: (this.people()[id] as UserProfile | undefined) ?? this.data.authorOf(id) ?? null })));
+    ({ id, u: this.data.authorOf(id) ?? (this.people()[id] as UserProfile | undefined) ?? null })));
 
   /** `rows()` narrowed to whatever is typed in the search field. */
   readonly matchingRows = computed(() => {
@@ -152,7 +155,7 @@ export class ConnectionsComponent {
       missing.forEach((id) => this.asked.add(id));
       if (missing.length) void this.data.people(missing).then((list) => {
         const next = { ...this.people() };
-        for (const u of list) { next[u.id] = u; this.data.touchAuthor(u); }
+        for (const u of list) { next[u.id] = u; if (!this.data.authorOf(u.id)) this.data.touchAuthor(u); }
         this.people.set(next);
       });
     });
@@ -168,12 +171,12 @@ export class ConnectionsComponent {
     return this.tab() === 'requests'
       ? 'When someone asks to follow you, you can confirm or delete it here.'
       : this.tab() === 'following'
-        ? 'Follow people from their profile or a post. Private chat opens when you follow each other.'
+        ? 'Follow people from their profile or a post. Chat opens when either person follows the other.'
         : 'People who follow you show up here.';
   }
 
   back(): void {
-    if (history.length > 1) history.back(); else void this.router.navigate(['/me']);
+    this.backStack.go('/me');
   }
 
   private async run(id: string, job: () => Promise<unknown>, done: string): Promise<void> {
@@ -195,7 +198,7 @@ export class ConnectionsComponent {
   async unfollow(r: { id: string; u: UserProfile | null }): Promise<void> {
     const a = await this.alert.create({
       header: `Unfollow ${r.u?.displayName ?? 'this person'}?`,
-      message: 'Their posts stop being boosted in your feed, and private chat closes unless you follow each other again.',
+      message: 'Their posts stop being boosted in your feed, and chat closes if neither of you follows the other.',
       buttons: [
         { text: 'Cancel', role: 'cancel' },
         { text: 'Unfollow', role: 'destructive', handler: () => { void this.run(r.id, () => this.data.toggleFollow(r.id), 'Unfollowed'); } }

@@ -47,18 +47,10 @@ import { cover } from '../../core/data/seed';
         <div class="hero" [attr.data-status]="checkIn()?.status ?? null">
           <img class="banner" [src]="banner()" alt="" />
           <div class="ident">
-            <lf-avatar [src]="avatar()" [name]="u()!.displayName" [size]="82" [ring]="true"
+            <lf-avatar [src]="avatar()" [name]="u()!.displayName" [size]="82"
                [status]="checkIn()?.status ?? null" />
             <h1 class="lf-h2">
               {{ u()!.displayName }}
-              <!-- The status sits against the name where a verified tick would
-                   be, so one glance at who this is also says how they are. -->
-              @if (checkIn()?.status; as st) {
-                <span class="statustick" [attr.data-key]="st" [attr.title]="checkInLabel()"
-                      [attr.aria-label]="checkInLabel()" role="img">
-                  <lf-icon [name]="statusIcon(st)" [size]="12" [weight]="3" />
-                </span>
-              }
               @if (u()!.verified) { <lf-icon name="award" [size]="16" /> }
               @if (u()!.isAdmin) { <span class="lf-chip lf-chip--success lf-tiny">admin</span> }
               @if (u()!.suspended) { <span class="lf-chip lf-chip--danger lf-tiny">suspended</span> }
@@ -494,6 +486,7 @@ export class ProfileComponent implements OnInit {
     void this.tick();
     const u = this.u();
     if (!u) return null;
+    if (!this.data.canSeeStatus(u, this.auth.viewerId)) return null;
     const canSeePlace = this.isMe() || u.privacy?.showLastSeen !== false;
     return lastSeenOf(u, this.openLookout(), { canSeePlace });
   });
@@ -612,6 +605,8 @@ export class ProfileComponent implements OnInit {
       const state = await this.data.followStatus(u.id);
       this.following.set(state === 'accepted');
       this.followRequested.set(state === 'pending');
+      const updated = await this.data.refreshProfile(u.id);
+      if (updated) this.u.set(updated);
     } catch (e: any) {
       await this.say(e?.message ?? 'Could not follow');
     }
@@ -624,9 +619,9 @@ export class ProfileComponent implements OnInit {
       await this.router.navigate(['/auth']);
       return;
     }
-    const mutual = await this.data.mutualFollow(u.id);
-    if (!mutual) {
-      await this.say('Private chat needs a shared post plus mutual follows. Follow them first.');
+    const gate = await this.chat.gatePerson(u.id);
+    if (!gate.allowed) {
+      await this.say(gate.step === 'sign_in' ? 'Sign in to message.' : gate.reason);
       return;
     }
     const thread = await this.chat.ensureThread(null, u.id, 'friend');

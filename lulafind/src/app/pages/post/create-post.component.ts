@@ -575,7 +575,7 @@ interface MissingField { key: string; label: string; }
                   <div class="privacy-switches">
                     <label class="switch-row"><input type="checkbox" [checked]="f().anonymous" (change)="patch({ anonymous: $any($event.target).checked })" /><span><strong>Post anonymously</strong><small>Your profile stays private on this post.</small></span></label>
                     <label class="switch-row"><input type="checkbox" [checked]="f().allowComments" (change)="patch({ allowComments: $any($event.target).checked })" /><span><strong>Allow comments</strong><small>People can share leads in the thread.</small></span></label>
-                    <label class="switch-row"><input type="checkbox" [checked]="f().chatEnabled" (change)="patch({ chatEnabled: $any($event.target).checked })" /><span><strong>Allow private chat</strong><small>Chat still needs an idea vote and mutual follow.</small></span></label>
+                    <label class="switch-row"><input type="checkbox" [checked]="f().chatEnabled" (change)="patch({ chatEnabled: $any($event.target).checked })" /><span><strong>Allow private chat</strong><small>Chat requires an accepted follow in either direction and both people allowing messages.</small></span></label>
                   </div>
                 </section>
               }
@@ -593,7 +593,7 @@ interface MissingField { key: string; label: string; }
                   <div class="privacy-switches">
                     <label class="switch-row"><input type="checkbox" [checked]="f().anonymous" (change)="patch({ anonymous: $any($event.target).checked })" /><span><strong>Post anonymously</strong><small>Your profile stays private on this post.</small></span></label>
                     <label class="switch-row"><input type="checkbox" [checked]="f().allowComments" (change)="patch({ allowComments: $any($event.target).checked })" /><span><strong>Allow comments</strong><small>People can share leads in the thread.</small></span></label>
-                    <label class="switch-row"><input type="checkbox" [checked]="f().chatEnabled" (change)="patch({ chatEnabled: $any($event.target).checked })" /><span><strong>Allow private chat</strong><small>Chat still needs a mutual follow.</small></span></label>
+                    <label class="switch-row"><input type="checkbox" [checked]="f().chatEnabled" (change)="patch({ chatEnabled: $any($event.target).checked })" /><span><strong>Allow private chat</strong><small>Chat requires an accepted follow in either direction and both people allowing messages.</small></span></label>
                     @if (type() === 'khumbulekhaya') {
                       <label class="switch-row"><input type="checkbox" [checked]="f().askWanted" (change)="patch({ askWanted: $any($event.target).checked })" /><span><strong>Ask the community if they are being looked for</strong><small>People can answer yes or no.</small></span></label>
                     }

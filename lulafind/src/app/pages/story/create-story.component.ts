@@ -29,9 +29,6 @@ import { BackStackService } from '../../core/services/back-stack.service';
   imports: [IconComponent],
   template: `
     <div class="stage" [style.background]="bg()">
-      @if (currentMedia(); as m) {
-        <img class="shot" [src]="m.src" alt="Story photo" />
-      }
       <div class="scrim"></div>
 
       <!-- top bar -->
@@ -50,7 +47,8 @@ import { BackStackService } from '../../core/services/back-stack.service';
       </header>
 
       <!-- the canvas: tap and type, WhatsApp style -->
-      <div class="canvas" (click)="focusText()">
+      <div class="canvas" [class.has-photo]="!!currentMedia()" (click)="focusText()">
+        @if (currentMedia(); as m) { <img class="shot" [src]="m.src" alt="Story photo" /> }
         <textarea #caption class="caption" rows="1"
                   inputmode="text" autocorrect="on" autocomplete="on" autocapitalize="sentences" spellcheck="true"
                   [style.color]="inkColour()"
@@ -75,22 +73,23 @@ import { BackStackService } from '../../core/services/back-stack.service';
                 @if (audience() === option.key) { <lf-icon name="check" [size]="18" /> }
               </button>
             }
-            @if (audience() === 'surname') {
-              @if (mySpotlights().length) {
-                <div class="panel__row">
-                  <span>Community</span>
-                  <select [value]="spotlightId() ?? ''" (change)="spotlightId.set($any($event.target).value || null)">
-                    <option value="">Choose a Spotlight</option>
-                    @for (spotlight of mySpotlights(); track spotlight.id) { <option [value]="spotlight.id">{{ spotlight.surname }}</option> }
-                  </select>
-                </div>
-              } @else {
-                <p class="panel__note">You have not joined a Spotlight yet, so this story will not be shared. Join one first.</p>
-                <button class="linkbtn" type="button" (click)="openSpotlights()">Find a Spotlight</button>
-              }
-            }
-            <p class="panel__note">Replies are private. Only you can read them.</p>
+            <p class="panel__note">Replies are intended for you and the person who sent them.</p>
           </div>
+        }
+
+        @if (audience() === 'surname') {
+          @if (mySpotlights().length) {
+            <div class="panel__row community-picker">
+              <label for="story-community">Spotlight community</label>
+              <select id="story-community" [value]="spotlightId() ?? ''" (change)="spotlightId.set($any($event.target).value || null)">
+                <option value="">Choose a Spotlight</option>
+                @for (spotlight of mySpotlights(); track spotlight.id) { <option [value]="spotlight.id">{{ spotlight.surname }}</option> }
+              </select>
+            </div>
+          } @else {
+            <div class="panel__row community-picker"><span>Join a Spotlight before sharing to it.</span>
+              <button class="linkbtn" type="button" (click)="openSpotlights()">Find a Spotlight</button></div>
+          }
         }
 
         @if (panel() === 'text') {
@@ -180,7 +179,7 @@ import { BackStackService } from '../../core/services/back-stack.service';
       color: #fff; overflow: hidden;
       padding-top: env(safe-area-inset-top);
     }
-    .shot { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+    .shot { display: block; width: 100%; min-height: 0; flex: 1 1 0; object-fit: contain; }
     .scrim { position: absolute; inset: 0; pointer-events: none;
       background: linear-gradient(180deg, rgba(0,0,0,.42), transparent 22%, transparent 55%, rgba(0,0,0,.55)); }
 
@@ -196,6 +195,9 @@ import { BackStackService } from '../../core/services/back-stack.service';
     /* the canvas IS the story: words typed straight onto it, centred like WhatsApp */
     .canvas { position: relative; z-index: 1; flex: 1; display: flex; flex-direction: column; align-items: center;
       justify-content: center; padding: 24px 22px; min-height: 0; }
+    .canvas.has-photo { justify-content: flex-start; gap: 8px; padding: 6px 16px 12px; }
+    .canvas.has-photo .caption { flex: 0 1 auto; max-height: 22vh; overflow-y: auto; }
+    .canvas.has-photo .hint { flex: none; }
     .caption {
       width: 100%; max-width: 620px; box-sizing: border-box;
       border: 0; outline: 0; background: transparent; resize: none; overflow: hidden;
@@ -222,6 +224,7 @@ import { BackStackService } from '../../core/services/back-stack.service';
       background: rgba(20,20,22,.92); backdrop-filter: blur(8px); }
     .panel__title { margin: 0; font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: rgba(255,255,255,.7); }
     .panel__row { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 13px; }
+    .community-picker { padding: 8px 10px; border-radius: 10px; background: rgba(20,20,22,.92); }
     .panel__row select { min-height: 36px; padding: 0 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,.25);
       background: rgba(255,255,255,.08); color: #fff; font: inherit; font-size: 13px; }
     .panel__note { margin: 0; font-size: 12px; line-height: 1.4; color: rgba(255,255,255,.7); }
@@ -398,6 +401,7 @@ export class CreateStoryComponent {
     this.error.set('');
     if (audience === 'surname' && !this.spotlightId()) this.spotlightId.set(this.mySpotlights()[0]?.id ?? null);
     if (audience !== 'surname') this.spotlightId.set(null);
+    this.panel.set('none');
   }
 
   async addPhoto(): Promise<void> {

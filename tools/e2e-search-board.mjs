@@ -26,12 +26,17 @@ async function has(text) {
 }
 async function openBoard() {
   if (page.url().includes('/onboarding')) {
+    if (await page.$('.location-dialog')) {
+      await page.waitForSelector('.location-dialog .lf-btn--ghost', { visible: true });
+      await page.$eval('.location-dialog .lf-btn--ghost', b => b.click());
+    }
     await page.evaluate(() => [...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Skip').click());
     await page.waitForFunction(() => !location.pathname.includes('/onboarding'));
     await page.goto(`${base}/post/p_thato?demo=1`, { waitUntil: 'networkidle0' });
   }
   await page.waitForSelector('lf-search-board summary');
   await page.$eval('lf-search-board summary', el => el.click());
+  await page.waitForSelector('lf-search-board .content');
 }
 async function step(name, fn) { await fn(); steps.push(name); console.log(`PASS ${name}`); }
 try {

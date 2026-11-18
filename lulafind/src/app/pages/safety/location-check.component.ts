@@ -4,7 +4,7 @@ import { IonContent } from '@ionic/angular/ion-content';
 import { IonHeader } from '@ionic/angular/ion-header';
 import { IonToolbar } from '@ionic/angular/ion-toolbar';
 import { IonButtons } from '@ionic/angular/ion-buttons';
-import { IonBackButton } from '@ionic/angular/ion-back-button';
+import { BackStackService } from '../../core/services/back-stack.service';
 import { IonTitle } from '@ionic/angular/ion-title';
 import { IonSkeletonText } from '@ionic/angular/ion-skeleton-text';
 import { IonTextarea } from '@ionic/angular/ion-textarea';
@@ -24,11 +24,11 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
   selector: 'lf-location-check',
   standalone: true,
   imports: [
-    IonContent, IonHeader, IonToolbar, IonButtons, IonBackButton, IonTitle, IonSkeletonText, IonTextarea, IconComponent, KeyboardDirective],
+    IonContent, IonHeader, IonToolbar, IonButtons, IonTitle, IonSkeletonText, IonTextarea, IconComponent, KeyboardDirective],
   template: `
     <ion-header [translucent]="false">
       <ion-toolbar>
-        <ion-buttons slot="start"><ion-back-button [defaultHref]="'/post/' + id" text=""></ion-back-button></ion-buttons>
+        <ion-buttons slot="start"><button class="lf-icon-btn" type="button" aria-label="Go back" (click)="backStack.go(id ? '/post/' + id : '/home')"><lf-icon name="arrowLeft" [size]="20" /></button></ion-buttons>
         <ion-title>Location & consent</ion-title>
       </ion-toolbar>
     </ion-header>
@@ -142,6 +142,7 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
   `]
 })
 export class LocationCheckComponent implements OnInit {
+  protected readonly backStack = inject(BackStackService);
   protected data = inject(DataService);
   private location = inject(LocationService);
   private auth = inject(AuthService);
