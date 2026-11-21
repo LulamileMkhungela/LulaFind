@@ -49,7 +49,9 @@ import { ReactionIconComponent } from './reaction-icon.component';
       } @else {
         <lf-icon name="thumbup" [size]="21" />
       }
-      <span class="label sr-only">{{ label() }}</span>
+      <!-- The word is the target, not a screen-reader extra: "Like" says what
+           the control does before it is pressed. -->
+      <span class="label">{{ label() }}</span>
     </button>
   `,
   styles: [`
@@ -65,15 +67,17 @@ import { ReactionIconComponent } from './reaction-icon.component';
       -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; touch-action: manipulation;
     }
     .btn:hover, .btn:active { background: var(--lf-hover); }
-    .btn .label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+    .btn .label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    /* The icon keeps its size when the label steps down: a 10px word next to a
+       shrunken glyph reads as a broken row. */
+    .btn lf-icon, .btn lf-reaction-icon { flex: none; }
     /* On phones the label steps down so the words stay whole next to
        Comment / Repost / Send. */
     @media (max-width: 430px) { .btn { font-size: 13px; gap: 4px; } }
     @media (max-width: 360px) { .btn { font-size: 11.5px; gap: 3px; } }
     @media (max-width: 340px) {
       /* The very small phones: the label steps down rather than losing a word. */
-      .btn { font-size: 10px; gap: 2px; padding: 0; }
-      .btn lf-icon svg { width: 17px; height: 17px; }
+      .btn { font-size: 10.5px; gap: 3px; padding: 0; }
     }
     .btn.on { color: var(--tone); }
     .scrim { position: fixed; inset: 0; z-index: 40; }

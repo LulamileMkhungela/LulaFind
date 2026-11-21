@@ -80,7 +80,7 @@ import { BackStackService } from '../../core/services/back-stack.service';
                   </button>
                 }
               </form>
-              <a class="nav-ico create-link" routerLink="/new" aria-label="Create a post"><lf-icon name="plus" [size]="24" /></a>
+              <a class="nav-ico create-link" routerLink="/new" aria-label="Create a post" title="Create a post"><lf-icon name="plus" [size]="24" /></a>
             }
           </div>
         }

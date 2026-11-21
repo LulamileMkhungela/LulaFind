@@ -15,6 +15,18 @@ create index if not exists records_collection_updated_idx
 create index if not exists records_story_id_idx
   on public.records (collection, (payload->>'storyId'));
 
+-- Filtered feeds and card reads filter inside the payload jsonb. Without these,
+-- every province / author / status filter scans the whole post collection.
+-- (Shipped live in the photos_bucket_restore_audio_and_limits migration.)
+create index if not exists records_posts_author_idx
+  on public.records ((payload->>'authorId')) where collection = 'posts';
+create index if not exists records_posts_status_idx
+  on public.records ((payload->>'status')) where collection = 'posts';
+create index if not exists records_posts_province_idx
+  on public.records ((payload->>'province')) where collection = 'posts';
+create index if not exists records_by_owner_idx
+  on public.records (owner_id) where owner_id is not null;
+
 -- Upgrading a project that used Supabase Auth: owner ids become text so they
 -- can hold Firebase UIDs. Policies that mention owner_id must go first; they
 -- are all recreated further down.

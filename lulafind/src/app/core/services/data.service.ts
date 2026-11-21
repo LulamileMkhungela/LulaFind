@@ -461,13 +461,48 @@ export class DataService {
 
   async loadCommentsFor(postId: string): Promise<void> {
     if (!postId || this.cardComments()[postId]) return;
-    try {
-      const list = await this.api.commentsFor(postId);
-      this.cardComments.update((all) => ({ ...all, [postId]: list }));
-    } catch {
+    // One request per post for the whole page, not one flight each.
+    return this.loadCommentsForMany([postId]).then(() => undefined);
+  }
+
+  private commentQueue = new Set<string>();
+  private commentFlush: ReturnType<typeof setTimeout> | null = null;
+
+  /**
+   * Queue the comment previews a screen is about to show.
+   *
+   * Cards mount one after another, so asking per card sent one request per
+   * post at almost the same moment. Everything asked for within a frame is
+   * collected here and fetched together, in parallel, with one shared view of
+   * what is already cached - the screen fills its previews in one round-trip
+   * instead of twenty.
+   */
+  primeComments(postIds: string[]): void {
+    const missing = postIds.filter((id) => id && !this.cardComments()[id]);
+    if (!missing.length) return;
+    for (const id of missing) this.commentQueue.add(id);
+    if (this.commentFlush) return;
+    this.commentFlush = setTimeout(() => {
+      this.commentFlush = null;
+      const batch = [...this.commentQueue];
+      this.commentQueue.clear();
+      void this.loadCommentsForMany(batch);
+    }, 16);
+  }
+
+  /** Fetch several posts' comments at once. Already-loaded posts are skipped. */
+  async loadCommentsForMany(postIds: string[]): Promise<void> {
+    const wanted = [...new Set(postIds)].filter((id) => id && !this.cardComments()[id]);
+    if (!wanted.length) return;
+    const loaded = await Promise.all(wanted.map(async (id) => {
+      try { return [id, await this.api.commentsFor(id)] as const; }
       // A preview under a card is not worth an error banner; the counts the
       // card already has stay as they were and tapping still opens the post.
-    }
+      catch { return null; }
+    }));
+    const found: Record<string, Comment[]> = {};
+    for (const entry of loaded) if (entry) found[entry[0]] = entry[1];
+    if (Object.keys(found).length) this.cardComments.update((all) => ({ ...all, ...found }));
   }
 
   /** Forget a post's prefetched comments, e.g. after a comment is deleted. */

@@ -87,38 +87,45 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
         }
 
         @if (mine().length && !query() && letter() === 'all') {
-          <h3 class="section">Spotlights you joined</h3>
-          <div class="grid">
+          <div class="section"><h3>Spotlights you joined</h3><span class="section__count">{{ mine().length }}</span></div>
+          <!--
+            A horizontal rail, not a second full-size grid. The tile below is
+            the same community the "Your surname" card already points at; a
+            grid here made the whole page read as three copies of one list.
+          -->
+          <div class="rail">
             @for (s of mine(); track s.id) {
-              <a class="tile" [routerLink]="'/spotlight/' + s.id">
-                <img [src]="coverOf(s.surname, s.coverHue)" [alt]="s.surname" loading="lazy" />
-                <div class="meta">
+              <a class="chip-card" [routerLink]="'/spotlight/' + s.id">
+                <img [src]="coverOf(s.surname, s.coverHue)" [alt]="" loading="lazy" />
+                <span class="chip-card__text">
                   <strong>{{ s.surname }}</strong>
-                  <span>{{ s.postIds.length }} posts · {{ s.followers }} members</span>
-                </div>
+                  <small>{{ s.postIds.length }} posts · {{ s.followers }} members</small>
+                </span>
               </a>
             }
           </div>
         }
 
-        <h3 class="section">
-          {{ query() ? 'Spotlights' : letter() === 'all' ? 'All spotlights' : 'Surnames starting with ' + letter() }}
-          <span class="lf-muted lf-tiny">{{ list().length }}</span>
-        </h3>
+        <div class="section">
+          <h3>{{ query() ? 'Spotlights' : letter() === 'all' ? 'All spotlights' : 'Starting with ' + letter() }}</h3>
+          <span class="section__count">{{ list().length }}</span>
+          <!-- The legend used to be a paragraph above the grid. Two coloured
+               dots say the same thing and take one line. -->
+          <span class="legend" aria-hidden="true"><i class="dot dot--joined"></i>You joined <i class="dot dot--verified"></i>Verified</span>
+        </div>
         @if (!list().length) {
           <lf-empty icon="users" [title]="query() ? 'No ' + query().trim() + ' spotlight yet' : 'No spotlight for that letter yet'"
                     message="Create it and it becomes the home for every post with that surname."
                     actionLabel="Create a spotlight" (action)="openCreate(query())" />
         }
-        <p class="badge-key">Joined means you are a member. Verified means the page has been marked as verified. A page can have both labels or neither.</p>
         <div class="grid" [class.lf-safe-bottom]="!posts().length">
           @for (s of list(); track s.id) {
             <a class="tile" [routerLink]="'/spotlight/' + s.id">
               <img [src]="coverOf(s.surname, s.coverHue)" [alt]="s.surname" loading="lazy" />
               <div class="meta">
                 <strong>{{ s.surname }}</strong>
-                <span>{{ s.postIds.length }} posts · {{ s.followers }} members</span>
-                @if (s.province) { <span>{{ provinceName(s.province) }}</span> }
+                <span class="tile-stats">{{ s.postIds.length }} posts · {{ s.followers }} members</span>
+                @if (s.province) { <span class="tile-meta">{{ provinceName(s.province) }}</span> }
               </div>
               @if (joined(s) || s.verified) { <span class="tile-badges">
                 @if (joined(s)) { <span class="lf-chip lf-tiny">Joined</span> }
@@ -243,19 +250,37 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
     .mine-card strong { font-size: 16px; font-weight: 700; }
     .mine-card .disc { width: 56px; height: 56px; border-radius: 10px; display: grid; place-items: center; flex: none;
       background: var(--lf-primary-soft); color: var(--lf-link); }
-    .section { margin: 0; padding: 16px var(--lf-gap) 8px; font-size: 17px; font-weight: 700; display: flex; gap: 8px;
-      align-items: baseline; }
+    .section { margin: 0; padding: 16px var(--lf-gap) 8px; display: flex; gap: 8px; align-items: center; }
+    .section h3 { margin: 0; font-size: 17px; font-weight: 700; line-height: 1.15; }
+    .section__count { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 6px; box-sizing: border-box;
+      border-radius: 10px; background: var(--lf-card-2); color: var(--lf-muted); font-size: 11.5px; font-weight: 700; }
+    .legend { margin-left: auto; display: inline-flex; align-items: center; gap: 4px; color: var(--lf-muted); font-size: 11px; font-weight: 600; }
+    .legend .dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; margin-left: 4px; }
+    .legend .dot--joined { background: var(--lf-primary); }
+    .legend .dot--verified { background: var(--lf-ubuntu); }
     .badge-key { margin: 4px var(--lf-gap) 10px; color: var(--lf-muted); font-size: 12px; line-height: 1.4; }
     .tile-badges { position:absolute; top:8px; right:8px; left:8px; display:flex; justify-content:flex-end; flex-wrap:wrap; gap:4px; }
+    .rail { display: flex; gap: 8px; overflow-x: auto; padding: 0 var(--lf-gap) 12px; scrollbar-width: none; }
+    .rail::-webkit-scrollbar { display: none; }
+    .chip-card { flex: none; display: inline-flex; align-items: center; gap: 9px; padding: 6px 12px 6px 6px;
+      border-radius: 999px; background: var(--lf-card); border: 1px solid var(--lf-line-soft);
+      color: inherit; text-decoration: none; box-shadow: var(--lf-shadow); }
+    .chip-card:active { background: var(--lf-hover); }
+    .chip-card img { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; flex: none; }
+    .chip-card__text { display: flex; flex-direction: column; min-width: 0; }
+    .chip-card__text strong { font-size: 14px; font-weight: 700; }
+    .chip-card__text small { color: var(--lf-muted); font-size: 11px; white-space: nowrap; }
     .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; padding: 0 var(--lf-gap) 16px; }
     @media (min-width: 620px) { .grid { grid-template-columns: repeat(3, 1fr); } }
     @media (min-width: 768px) { .grid, .section, .mine-card, .form { max-width: var(--lf-maxw); margin-left: auto; margin-right: auto; box-sizing: border-box; } }
     .tile { position: relative; border-radius: var(--lf-radius); overflow: hidden; border: 0; box-shadow: var(--lf-shadow);
       background: var(--lf-card); text-decoration: none; color: inherit; display: block; }
-    .tile img { width: 100%; height: 96px; object-fit: cover; display: block; }
-    .tile .meta { padding: 8px 12px 12px; display: flex; flex-direction: column; gap: 2px; }
-    .tile .meta strong { font-size: 15px; font-weight: 600; }
-    .tile .meta span { font-size: 13px; color: var(--lf-muted); }
+    .tile img { width: 100%; height: 92px; object-fit: cover; display: block; }
+    .tile .meta { padding: 8px 10px 10px; display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+    .tile .meta strong { font-size: 15px; font-weight: 700; }
+    .tile .meta span { color: var(--lf-muted); font-size: 12px; line-height: 1.3; }
+    .tile .tile-stats { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .tile .tile-meta { font-size: 11.5px; }
     .tile .lf-chip { position: static; background: rgba(0,0,0,.55); color: #fff; border: 0; }
     .form { background: var(--lf-card); padding: 16px var(--lf-gap) 24px; box-shadow: var(--lf-shadow); }
     .intro { margin: 0 0 14px; line-height: 1.45; }

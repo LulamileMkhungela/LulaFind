@@ -59,22 +59,10 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
             <span class="fb-author-name" [lfUserHover]="post.authorId">{{ authorName() }}</span>
           </div>
           @if (authorHeadline()) { <span class="fb-headline">{{ authorHeadline() }}</span> }
-          <!-- Line 1: where it is, then what kind of post it is. -->
+          <!-- Where and when, then who can see it: one quiet line, the way a
+               timeline reads it. -->
           <div class="fb-sub-meta">
-            <span>{{ provinceName(post.province) }}</span>
-            <span class="fb-dot">·</span>
-            <span class="fb-kind" [class.fb-kind--success]="post.status === 'found'">
-              <lf-icon [name]="meta().icon" [size]="12" /> {{ statusLabel() }}
-            </span>
-          </div>
-          <!-- Line 2: when, then who can see it. -->
-          <div class="fb-sub-meta">
-            <span>{{ timeAgo(post.createdAt) }}</span>
-            @if (post.editedAt) {
-              <span class="fb-dot">·</span>
-              <span class="fb-edited" [attr.title]="'Edited ' + timeAgo(post.editedAt)">Edited</span>
-            }
-            <span class="fb-dot">·</span>
+            <span class="fb-sub-meta__text">{{ whereWhen() }}</span>
             <lf-icon [name]="audienceIcon()" [size]="12" [attr.title]="audienceTitle()" [attr.aria-label]="audienceTitle()" />
           </div>
         </div>
@@ -131,14 +119,26 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
         }
       } @else {
       <div class="fb-card-body" [routerLink]="'/post/' + post.id">
+        <!--
+          The kind of post is the one fact that changes how everything below is
+          read ("sighting" and "missing" are not the same request), so it tags
+          the post itself rather than the author: a tinted chip on its own line
+          above the title. It never competes with a long name, a Follow button
+          or the place-and-time line for the same 390px.
+        -->
+        <span class="fb-kind-chip" [attr.data-tone]="kindTone()" [class.is-found]="post.status === 'found'">
+          <lf-icon [name]="meta().icon" [size]="11" [weight]="2.4" />{{ kindLabel() }}
+        </span>
         @if (showHeading()) { <h3 class="fb-post-title">{{ post.title }}</h3> }
-        <lf-case-facts [post]="post" />
         <p class="fb-post-text" #bodyEl [class.fb-clamp]="!expanded()">{{ post.body }}</p>
         @if (!expanded() && textOverflows()) {
           <button class="fb-readmore" (click)="toggleExpand($event)">…see more</button>
         } @else if (expanded() && textOverflows()) {
           <button class="fb-readmore" (click)="toggleExpand($event)">see less</button>
         }
+        <!-- The facts sit under the words, not above them: a person reads the
+             appeal first, then the details they can act on. -->
+        <lf-case-facts [post]="post" />
       </div>
 
       @if (post.poster?.media?.src) {
@@ -207,25 +207,38 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
         </div>
       }
 
-      <!-- The action bar this component's own header describes: react (hold
-           for the tray) - Comment - Repost - Send. It went missing from the
-           markup, so a post in the feed had no way to be reacted to or
-           commented on even though every handler below still existed. -->
+      <!--
+        The action bar: react (hold for the tray) - Comment - Repost - Send.
+        Every one of them carries its word, not just its icon: an outline glyph
+        alone is a guessing game on a phone, and the words are what make the
+        row read as a social post rather than a toolbar.
+      -->
       <div class="fb-actions" (click)="$event.stopPropagation()">
         <lf-reaction-button class="fb-act" [value]="myReaction()" (react)="onReact($event)" />
         <button class="fb-act" type="button" (click)="comment.emit()" aria-label="Comment" title="Comment">
-          <lf-icon name="comment" [size]="20" /><span class="sr-only">Comment</span>
+          <lf-icon name="comment" [size]="20" /><span class="fb-act__label">Comment</span>
         </button>
         <button class="fb-act" type="button" (click)="onRepost()" aria-label="Repost" title="Repost">
-          <lf-icon name="repost" [size]="20" /><span class="sr-only">Repost</span>
+          <lf-icon name="repost" [size]="20" /><span class="fb-act__label">Repost</span>
         </button>
         <button class="fb-act" type="button" (click)="onSend()" aria-label="Send" title="Send">
-          <lf-icon name="send" [size]="19" /><span class="sr-only">Send</span>
+          <lf-icon name="send" [size]="19" /><span class="fb-act__label">Send</span>
         </button>
         @if (post.chatEnabled && !isMine() && !post.repostOf && !post.anonymous) {
-          <button class="fb-act" type="button" (click)="chat.emit()" [attr.aria-label]="chatLabel()" [attr.title]="chatLabel()"><lf-icon name="chat" [size]="20" /></button>
+          <button class="fb-act fb-act--chat" type="button" (click)="chat.emit()" [attr.aria-label]="chatLabel()" [attr.title]="chatLabel()">
+            <lf-icon name="chat" [size]="20" /><span class="fb-act__label">Message</span>
+          </button>
         }
       </div>
+
+      <!-- The comment box, the way a timeline draws it: your face, a pill that
+           says what tapping does, and the shortcut icons. Tapping anywhere in
+           the pill opens the post, focused on its comment field. -->
+      <button class="fb-comment-cta" type="button" [routerLink]="'/post/' + post.id" [queryParams]="{ comment: 1 }">
+        <lf-avatar [src]="myAvatar()" [name]="myName()" [size]="32" />
+        <span class="fb-comment-cta__pill">Write a comment…</span>
+        <span class="fb-comment-cta__ic" aria-hidden="true"><lf-icon name="smile" [size]="19" /></span>
+      </button>
 
       <!-- LinkedIn's comment preview: the most-relevant comment sits under the
            action bar, so the conversation is visible without opening the post. -->
@@ -268,6 +281,8 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
       display: block; padding: 8px 16px 0; font-size: 12px; line-height: 1.3;
       color: var(--lf-muted); text-decoration: none;
     }
+    .fb-card { border-radius: 10px; border: 1px solid var(--lf-line-soft); overflow: hidden; }
+    @media (min-width: 700px) { .fb-card { border-radius: 12px; } }
     .fb-activity strong { font-weight: 600; color: inherit; }
     .fb-card-header {
       display: flex;
@@ -314,14 +329,14 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
     .fb-sub-meta {
       display: flex;
       align-items: center;
-      gap: 2px;
+      gap: 5px;
       font-size: 12.5px;
       color: var(--lf-muted);
-      margin-top: 2px;
+      margin-top: 4px;
       white-space: nowrap;
       overflow: hidden;
     }
-    .fb-sub-meta > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+    .fb-sub-meta__text { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
     .fb-sub-meta .fb-dot, .fb-sub-meta > lf-icon { flex: 0 0 auto; }
     /*
      * Follow and … share this column, centred on the name's line. The column is
@@ -347,6 +362,42 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
     /* The post kind now rides in the meta line, not in a chip under the avatar. */
     .fb-kind { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 3px; font-weight: 600; }
     .fb-kind--success { color: var(--lf-ubuntu); }
+    /*
+     * The kind chip. It sits on the name's line and answers the one question
+     * that changes how the rest of the card is read. The tint comes from the
+     * post's own tone, so a danger warning and a lost pet never look alike,
+     * and it shrinks to an icon-only disc before it would clip the name.
+     */
+    .fb-kind-chip {
+      display: inline-flex;
+      margin: 0 0 8px;
+      align-items: center;
+      gap: 4px;
+      min-width: 0;
+      padding: 2px 8px 2px 6px;
+      border-radius: 999px;
+      font-size: 11.5px;
+      font-weight: 700;
+      line-height: 1.5;
+      letter-spacing: .1px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      --tone: var(--lf-primary);
+      color: color-mix(in srgb, var(--tone) 78%, var(--ion-text-color));
+      background: color-mix(in srgb, var(--tone) 13%, transparent);
+    }
+    .fb-kind-chip lf-icon { flex: none; }
+    .fb-kind-chip[data-tone="danger"] { --tone: var(--lf-signal); }
+    .fb-kind-chip[data-tone="warm"] { --tone: var(--lf-marigold); }
+    .fb-kind-chip[data-tone="warn"] { --tone: var(--lf-marigold); }
+    .fb-kind-chip[data-tone="info"] { --tone: var(--lf-primary); }
+    .fb-kind-chip[data-tone="success"],
+    .fb-kind-chip.is-found { --tone: var(--lf-ubuntu); }
+    .fb-kind-chip[data-tone="neutral"] { --tone: var(--lf-muted); }
+    /* The chip keeps its own words; the place-and-time after it is what
+       ellipsizes. A chip that clips to "Missing perso" is worse than a place
+       that ends in "…" - the kind is the part nobody can infer. */
 
 
     .fb-card-body { padding: 8px 16px 12px; cursor: pointer; }
@@ -357,6 +408,7 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
      * clock alone changes colour, and only while time is doing damage.
      */
     .fb-post-title { font-size: 17px; font-weight: 700; color: var(--ion-text-color); margin: 0 0 6px; line-height: 1.3; }
+    .fb-kind-chip + .fb-post-title { margin-top: 0; }
     .fb-post-text { font-size: 14.5px; color: var(--ion-text-color); line-height: 1.4; margin: 6px 0 0; white-space: pre-line; }
     .fb-readmore { background: none; border: 0; color: var(--lf-muted); font-family: inherit; font-weight: 400; font-size: 14.5px; cursor: pointer; padding: 0; margin-top: 2px; }
     .fb-readmore:hover { text-decoration: underline; }
@@ -442,7 +494,7 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
 
     /* React - Comment - Repost - Send, the bar LinkedIn puts under every post. */
     .fb-actions {
-      display: flex; align-items: center; margin: 6px 8px 8px; padding-top: 2px;
+      display: flex; align-items: center; margin: 6px 8px 2px; padding-top: 2px;
       border-top: 1px solid var(--lf-line-soft);
     }
     .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
@@ -454,6 +506,51 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
     }
     .fb-act:hover, .fb-act:active { background: var(--lf-hover); }
     .fb-act.on { color: var(--lf-primary); }
+    .fb-act__label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    /*
+     * A fifth action (Message) only appears on a live case. The four words
+     * that carry the interaction keep their labels; Message, which is also on
+     * the post page, keeps its icon and its accessible name, so no cell has to
+     * clip a word to fit.
+     */
+    @media (max-width: 430px) {
+      .fb-act { font-size: 12.5px; gap: 4px; font-weight: 600; }
+      /* 18px glyphs, so "Comment" fits with its icon in a quarter of 390px. */
+      .fb-act lf-icon svg { width: 18px; height: 18px; }
+      .fb-act--chat .fb-act__label { display: none; }
+      .fb-act--chat { flex: 0 0 40px; }
+    }
+    @media (max-width: 360px) {
+      /* At 320px the row still says all four words: the type steps down and
+         lightens rather than the words disappearing. */
+      .fb-act { font-size: 11.5px; font-weight: 500; gap: 3px; letter-spacing: -.1px; }
+      .fb-act--chat { flex: 0 0 36px; }
+    }
+
+    /* Your face, a pill that says what tapping does, then the shortcut icon. */
+    .fb-comment-cta {
+      width: calc(100% - 24px); margin: 0 12px 10px; padding: 0;
+      display: flex; align-items: center; gap: 8px;
+      border: 0; background: transparent; color: inherit; font: inherit; cursor: pointer;
+      text-align: left;
+    }
+    .fb-comment-cta__pill {
+      flex: 1; min-width: 0;
+      height: 34px; padding: 0 14px;
+      display: flex; align-items: center;
+      border-radius: 999px;
+      background: var(--lf-input);
+      color: var(--lf-muted);
+      font-size: 14px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .fb-comment-cta:hover .fb-comment-cta__pill,
+    .fb-comment-cta:active .fb-comment-cta__pill { background: var(--lf-hover); }
+    .fb-comment-cta__ic {
+      flex: none; width: 32px; height: 32px; border-radius: 50%;
+      display: grid; place-items: center; color: var(--lf-muted);
+    }
+    .fb-comment-cta:hover .fb-comment-cta__ic { background: var(--lf-hover); }
     @media (max-width: 380px) { .fb-act { font-size: 12px; gap: 4px; } }
 
     .fb-chat-cta {
@@ -535,6 +632,46 @@ export class PostCardComponent implements OnInit, OnChanges, AfterViewChecked {
     return (kinds.length ? kinds : [DEFAULT_REACTION]).slice(0, 3);
   });
   readonly authorAvatar = computed(() => this.data.avatarFor(this.post?.anonymous && !this.isMine() ? null : this.author));
+
+  /** The reader's own face, for the "Write a comment…" box. */
+  readonly myAvatar = computed(() => this.auth.userAvatar());
+  readonly myName = computed(() => this.auth.user()?.displayName ?? 'You');
+
+  /**
+   * The chip's colour follows the post's own tone, including the tones the
+   * PostType table does not carry (`found` is an outcome, not a kind).
+   */
+  readonly kindTone = computed(() => {
+    const p = this.post;
+    if (!p) return 'neutral';
+    if (p.status === 'found') return 'success';
+    return POST_TYPE_META[p.type]?.tone ?? 'neutral';
+  });
+
+  /** The chip's word: the kind, or the outcome when the case is closed. */
+  kindLabel(): string {
+    if (!this.post) return '';
+    if (this.post.status === 'found') return 'Found - home safe';
+    return POST_TYPE_META[this.post.type]?.label ?? 'Post';
+  }
+
+  /**
+   * "Orlando West, Soweto, Gauteng · 3d" - where, then when.
+   *
+   * The province is never dropped, even when a town is known: "Soweto" alone
+   * is not an answer to "how far is this from me?", and the line ellipsizes
+   * rather than losing the part that matters.
+   */
+  whereWhen(): string {
+    const p = this.post;
+    if (!p) return '';
+    const town = (p.town ?? '').trim();
+    const province = provinceName(p.province);
+    const place = town && province ? `${town}, ${province}` : town || province;
+    const when = timeAgo(p.createdAt);
+    const edited = p.editedAt ? ` · edited ${timeAgo(p.editedAt)}` : '';
+    return `${place} · ${when}${edited}`;
+  }
   readonly authorStatus = computed(() =>
     this.post?.anonymous && !this.isMine() ? null : this.data.statusOf(this.author));
   readonly statusWord = computed(() => {
@@ -595,7 +732,7 @@ export class PostCardComponent implements OnInit, OnChanges, AfterViewChecked {
    * only when the post claims to have any. A card with no comments does no work.
    */
   private loadComment(): void {
-    if (this.post?.commentCount > 0) void this.data.loadCommentsFor(this.post.id);
+    if (this.post?.commentCount > 0) this.data.primeComments([this.post.id]);
   }
 
   /**
