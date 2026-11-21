@@ -1280,7 +1280,7 @@ describe('Following a case, and muting a Spotlight', () => {
     expect(newOnes(afterMute).length).toBe(0);
   });
 
-  it('still tells a muted member when the case they follow changes', async () => {
+  it('still tells a muted member when the case they follow changes - by name, not as chatter', async () => {
     const data = svc<DataService>(DataService);
     await data.refresh();
     signInAs('u_kabelo');
@@ -1288,8 +1288,36 @@ describe('Following a case, and muting a Spotlight', () => {
     await data.toggleFollowCase('case-followed');
     const before = new Set(db.notifications('u_kabelo').map((n) => n.id));
     await data.notifyPostNetwork({ ...db.post('p_thato')!, id: 'case-followed', spotlightId: 'sp_mokoena' } as Post);
-    // The mute silences the chatter, not the case in their follow list.
-    expect(db.notifications('u_kabelo').some((n) => !before.has(n.id) && n.postId === 'case-followed')).toBe(true);
+
+    const fresh = db.notifications('u_kabelo').filter((n) => !before.has(n.id) && n.postId === 'case-followed');
+    // The mute silences the chatter, not the case in their follow list...
+    expect(fresh.length).toBe(1);
+    // ...and the alert says which case, instead of "someone posted in a Spotlight".
+    expect(fresh[0].reason).toBe('case_follow');
+    expect(fresh[0].title).toContain('New case');
+    expect(fresh[0].title).toContain(db.post('p_thato')!.subject!.name);
+    expect(fresh[0].title).not.toContain('posted in the');
+  });
+
+  it('drops a muted Spotlight out of the bell, and a Spotlight alert for a case no longer followed', async () => {
+    const data = svc<DataService>(DataService);
+    await data.refresh();
+    signInAs('u_kabelo');
+    await data.toggleSpotlightAlerts('sp_mokoena');
+    // An alert the member already has from before they muted it.
+    db.pushNotification({
+      id: 'n-old', userId: 'u_kabelo', kind: 'spotlight', title: 'Someone posted in Mokoena',
+      body: 'Old news', at: Date.now(), read: false, route: '/post/p_thato', postId: 'p_thato'
+    });
+    // A follow alert for a case they have now stepped away from.
+    db.pushNotification({
+      id: 'n-follow', userId: 'u_kabelo', kind: 'missing', title: 'New case', body: 'You follow this case.',
+      at: Date.now(), read: false, route: '/post/p_lindiwe', postId: 'p_lindiwe', reason: 'case_follow'
+    } as never);
+    // The Mokoena Spotlight's own post, still reachable through data for the filter.
+    const visible = data.visibleNotifications().map((n) => n.id);
+    expect(visible).not.toContain('n-old');
+    expect(visible).not.toContain('n-follow');
   });
 });
 

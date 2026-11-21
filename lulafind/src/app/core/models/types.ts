@@ -837,6 +837,15 @@ export interface Notification {
   read: boolean;
   route: string | null;
   postId: string | null;
+  /**
+   * Why this alert exists, when it is not obvious from the kind.
+   *
+   * 'case_follow' means "you follow this case" - the only reason a person who
+   * muted a Spotlight still hears about a post there. The bell uses it to keep
+   * a notice honest: an unfollowed case stops alerting without taking the other
+   * notifications about that post away with it.
+   */
+  reason?: 'case_follow';
 }
 
 export interface Tip {

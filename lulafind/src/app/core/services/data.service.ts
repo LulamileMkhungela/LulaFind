@@ -167,7 +167,44 @@ export class DataService {
   /** people who follow the signed-in account */
   readonly followerIds = signal<string[]>([]);
 
-  readonly unreadNotifications = computed(() => this.notifications().filter((n) => !n.read).length);
+  /**
+   * The bell as the member asked to see it.
+   *
+   * Muting a Spotlight, or unfollowing a case, has to apply to the alerts that
+   * are already there - a switch that only governs future posts leaves
+   * yesterday's rows sitting in the list, which reads as "that did nothing".
+   * Hidden here rather than deleted: the account's history stays whole, and
+   * turning alerts back on does not take anything away.
+   */
+  readonly visibleNotifications = computed(() => {
+    const muted = this.mutedSpotlightIds();
+    const followed = this.followedCaseIds();
+    return this.notifications().filter((n) => {
+      if (!n.postId) return true;
+      // A case the person stepped away from: its follow alerts go quiet.
+      if (!n.read && !followed.includes(n.postId) && this.isFollowAlert(n)) return false;
+      if (!muted.length) return true;
+      // A Spotlight post they muted - unless it is about a case they follow.
+      const post = this.post(n.postId);
+      if (post?.spotlightId && muted.includes(post.spotlightId) && !followed.includes(n.postId)) return false;
+      return true;
+    });
+  });
+
+  /**
+   * True for the alert this app writes when a followed case gets news.
+   *
+   * Matched on the wording the fan-out uses, because those rows share the
+   * 'missing' and 'spotlight' kinds with case alerts from the whole province -
+   * kind alone would hide those too.
+   */
+  private isFollowAlert(n: Notification): boolean {
+    if (n.reason === 'case_follow') return true;
+    // Alerts written before the reason field existed carry it in their words.
+    return n.body.startsWith('You follow this case');
+  }
+
+  readonly unreadNotifications = computed(() => this.visibleNotifications().filter((n) => !n.read).length);
   /**
    * The viewer's own posts, whatever stage they are at.
    *
@@ -535,6 +572,11 @@ export class DataService {
     if (request !== this.staticSeq) return;
     void this.loadLookouts();
     this.spotlights.set(spots);
+    // Mute choices ride on the profile, so they are known as soon as the account
+    // is - not only after the Spotlight's own page has been opened. The bell
+    // filters on them, so a mute must hold before that page is ever visited.
+    const mutedNow = this.auth.user()?.mutedSpotlightIds;
+    if (Array.isArray(mutedNow)) this.mutedSpotlightIds.set(mutedNow);
     const me = this.auth.viewerId;
     // The story rail only ever shows the first handful, and each story costs an
     // extra view query. Keep the first eight visible stories so a long history
@@ -1307,6 +1349,9 @@ export class DataService {
     // The account copy is what makes a follow survive a new phone. A failed
     // write must not undo the local choice - it is re-sent with the next save.
     await this.auth.updateProfile({ followedCaseIds: next }).catch(() => undefined);
+    // Unfollowing stops the news: the unread alerts about this case have no
+    // reason to stay, and a person who unfollowed should not open the bell to
+    // the thing they just stepped away from.
     return !has;
   }
 
@@ -1339,6 +1384,7 @@ export class DataService {
     await this.auth.updateProfile({ mutedSpotlightIds: next }).catch(() => undefined);
     return !muted;
   }
+
 
   isFollowingCase(postId: string): boolean {
     return this.followedCaseIds().includes(postId);
@@ -2415,40 +2461,62 @@ export class DataService {
     if (canNotifyNetwork) following.forEach((edge) => recipients.add(edge.followingId));
 
     let spotlightName = '';
-    // Members who muted this Spotlight still belong to it - they just do not
-    // want a bell entry for every post in it. They keep their membership and
-    // their posting rights; only the alert is skipped.
-    let mutedMembers: string[] = [];
     if (post.spotlightId) {
       const spotlight = spotlights.find((item) => item.id === post.spotlightId);
       if (spotlight) {
         spotlightName = spotlight.surname;
         spotlight.memberIds.forEach((id) => recipients.add(id));
-        mutedMembers = spotlight.memberIds;
       }
     }
     recipients.delete(author.id);
-    if (mutedMembers.length) {
-      // The mute list lives on each member's profile, so read it once for the
-      // people who could otherwise receive this post.
-      const people = await this.api.users().catch(() => [] as UserProfile[]);
-      const muted = new Set(
-        people
-          .filter((u) => !!post.spotlightId && (u.mutedSpotlightIds ?? []).includes(post.spotlightId))
-          .map((u) => u.id)
-      );
-      // A case alert is different from "someone posted": a person who muted the
-      // chatter still wants to know when the case they are watching changes.
-      if (post.type === 'missing' || post.type === 'khumbulekhaya') {
-        const watching = new Set(people.filter((u) => (u.followedCaseIds ?? []).includes(post.id)).map((u) => u.id));
-        for (const id of muted) if (!watching.has(id)) recipients.delete(id);
-      } else {
-        for (const id of muted) recipients.delete(id);
+
+    const isSpotlightPost = !!post.spotlightId && !!spotlightName;
+    const isCase = post.type === 'missing' || post.type === 'khumbulekhaya';
+    // The mute list and the follow list live on the profile, so read people once
+    // - and only when either list can matter here.
+    const people = (post.spotlightId || isCase)
+      ? (await this.api.users().catch(() => [] as UserProfile[]))
+      : [];
+
+    /**
+     * A person can act on a case without being a member: follow it and you are
+     * told about it wherever it is posted, including inside a Spotlight you
+     * muted. The alert must also name the case - a generic "someone posted in
+     * the Khumalo Spotlight" tells a follower nothing about the case they are
+     * watching. Followers are therefore taken out of the generic fan-out and
+     * given this one instead, so nobody gets the same news twice.
+     */
+    const caseFollowers = new Set<string>();
+    if (isCase) {
+      const who = post.subject?.name?.trim() || post.title;
+      const title = isSpotlightPost
+        ? `New case in the ${spotlightName} Spotlight: ${who}`
+        : `New case: ${who}`;
+      const body = isSpotlightPost
+        ? `You follow this case. ${author.displayName} posted it in the ${spotlightName} Spotlight.`
+        : `You follow this case. ${author.displayName} just posted it.`;
+      for (const u of people) {
+        if (u.id === author.id || !(u.followedCaseIds ?? []).includes(post.id)) continue;
+        caseFollowers.add(u.id);
+        recipients.delete(u.id);
+        await this.api.pushNotification({
+          id: uid('n'), userId: u.id, kind: 'missing', title, body, reason: 'case_follow',
+          at: Date.now(), read: false, route: `/post/${post.id}`, postId: post.id
+        });
+      }
+    }
+
+    // Members who muted this Spotlight still belong to it - they keep their
+    // membership and their posting rights and can read and post there. Only the
+    // per-post alert is skipped, and a case they follow has already reached them.
+    if (post.spotlightId) {
+      for (const u of people) {
+        if (!(u.mutedSpotlightIds ?? []).includes(post.spotlightId) || caseFollowers.has(u.id)) continue;
+        recipients.delete(u.id);
       }
     }
     if (!recipients.size) return;
 
-    const isSpotlightPost = !!post.spotlightId && !!spotlightName;
     const title = isSpotlightPost
       ? `${author.displayName} posted in the ${spotlightName} Spotlight`
       : `${author.displayName} shared a new post`;

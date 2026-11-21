@@ -108,7 +108,8 @@ export class NotificationsComponent {
   private settings = inject(SettingsService);
 
   protected readonly timeAgo = timeAgo;
-  readonly items = computed(() => this.data.notifications());
+  /** Muted Spotlights and unfollowed cases are already filtered out upstream. */
+  readonly items = computed(() => this.data.visibleNotifications());
 
   /**
    * LinkedIn's two filters, plus the two that matter on a missing-person app: the
