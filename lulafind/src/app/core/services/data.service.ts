@@ -16,6 +16,7 @@ import {
 import { RewardService } from './reward.service';
 import { avatar, cover, hueOf, scene } from '../data/seed';
 import { HOUR, DAY, compact, uid } from '../utils/format';
+import { caseInArea, surnameMatches } from '../data/places';
 import { helpersOf, helpSummary } from '../utils/aftercare';
 import { withTimeout } from '../utils/net';
 import { AuthService } from './auth.service';
@@ -2539,6 +2540,7 @@ export class DataService {
     const child = isChildCase(post);
     const users = await this.api.users().catch(() => [] as UserProfile[]);
     const place = [post.town, provinceName(post.province)].filter(Boolean).join(', ');
+    const who = post.subject?.name?.trim() || 'Someone';
     let sent = 0;
     for (const u of users) {
       if (u.id === post.authorId || u.suspended) continue;
@@ -2546,9 +2548,41 @@ export class DataService {
       if (prefs) {
         if (!prefs.enabled) continue;
         if (prefs.childrenOnly && !child) continue;
-        if (prefs.province !== 'all' && prefs.province !== post.province) continue;
+        // Areas chosen by the member replace the single province check: a case
+        // that lands in none of the places they picked is not their news.
+        if (prefs.areas?.length) {
+          if (!prefs.areas.some((a) => caseInArea(a, post))) continue;
+        } else if (prefs.province !== 'all' && prefs.province !== post.province) {
+          continue;
+        }
       } else if (u.province && u.province !== post.province) {
         // No saved preferences: province-level alerts, never a silent drop.
+        continue;
+      }
+
+      /**
+       * A watched surname is the loudest thing a person can ask for, so it gets
+       * its own message and is not subject to the area rule twice: the surname
+       * already carries the places the member attached to it ("Mokoena in
+       * Soweto and Pretoria"). Naming it - "A Mokoena case in Soweto" - is the
+       * whole point; a generic "a new missing case" buries the reason.
+       */
+      const watch = (prefs?.surnames ?? []).find((w) =>
+        surnameMatches(w.surname, post) && (!w.areas.length || w.areas.some((a) => caseInArea(a, post)))
+      );
+      if (watch) {
+        await this.api.pushNotification({
+          id: uid('n'),
+          userId: u.id,
+          kind: 'missing',
+          title: `A ${watch.surname} case${post.town ? ` in ${post.town.split(',')[0]}` : ''}`,
+          body: `${who} · ${place}. You asked to be told about the ${watch.surname} surname here.`,
+          at: Date.now(),
+          read: false,
+          route: `/post/${post.id}`,
+          postId: post.id
+        });
+        sent++;
         continue;
       }
       await this.api.pushNotification({
@@ -2556,7 +2590,7 @@ export class DataService {
         userId: u.id,
         kind: 'missing',
         title: child ? 'A child is missing nearby' : 'A new missing case nearby',
-        body: `${post.subject?.name?.trim() || 'Someone'} · ${place}. Open the case for the poster.`,
+        body: `${who} · ${place}. Open the case for the poster.`,
         at: Date.now(),
         read: false,
         route: `/post/${post.id}`,

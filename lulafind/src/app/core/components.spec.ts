@@ -285,7 +285,8 @@ describe('Components render', () => {
     // width than a card with a Follow button has - the place name was being cut
     // and the globe pushed away from the words it describes.
     expect(html).toContain('fb-kind');
-    expect(html).toContain('Missing person');
+    // The category is one now: a card does not say missing *or* found, the case does.
+    expect(html).toContain('Missing &amp; Found');
     expect(html).toContain('fb-sub-meta__place');
     expect(html).toContain('Orlando West, Soweto');
     expect(html).toContain('fb-sub-meta__when');
@@ -1362,7 +1363,10 @@ describe('Components render', () => {
     await f.whenStable();
     const html: string = (f.nativeElement as HTMLElement).innerHTML;
     expect(html).toContain('What are you posting?');
-    expect(html).toContain('Missing person');
+    // One category for both sides of a case, and announcements where the pet
+    // type used to be.
+    expect(html).toContain('Missing &amp; Found');
+    expect(html).toContain('Announcement');
     expect(f.componentInstance.mySpotlights().map((s: any) => s.surname)).toEqual(['Mokoena']);
 
     f.componentInstance.setType('missing');

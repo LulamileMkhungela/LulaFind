@@ -1612,7 +1612,7 @@ export class PostDetailComponent implements OnInit {
   headlineOf(id: string): string { return this.data.authorOf(id)?.bio ?? ''; }
   avatarOf(id: string): string { return this.data.avatarFor(this.data.authorOf(id)); }
   liked(c: Comment): boolean { const me = this.me(); return !!me && (c.likedIds ?? []).includes(me); }
-  canLead(): boolean { const t = this.p()?.type; return !!t && !this.isMine() && (t === 'missing' || t === 'sighting' || t === 'pet' || t === 'khumbulekhaya'); }
+  canLead(): boolean { const t = this.p()?.type; return !!t && !this.isMine() && (t === 'missing' || t === 'sighting' || t === 'announcement' || t === 'khumbulekhaya'); }
 
   toggleSort(): void { this.sort.set(this.sort() === 'relevant' ? 'recent' : 'relevant'); }
 

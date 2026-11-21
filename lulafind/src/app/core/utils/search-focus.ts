@@ -22,7 +22,7 @@ const MILE_GUIDE =
  */
 export function searchFocus(post: Post, now = Date.now()): SearchFocus | null {
   if (post.status !== 'active') return null;
-  if (post.type !== 'missing' && post.type !== 'pet') return null;
+  if (post.type !== 'missing' && post.type !== 'announcement') return null;
 
   const place = post.lastSeenWhere?.trim() || post.town?.trim() || 'the last-seen place';
   const hours = post.lastSeenAt ? (now - post.lastSeenAt) / 3_600_000 : 0;
@@ -37,12 +37,12 @@ export function searchFocus(post: Post, now = Date.now()): SearchFocus | null {
     };
   }
 
-  if (post.type === 'pet') {
+  if (post.type === 'announcement') {
     return {
       ring: hours < 6 ? 'green' : 'amber',
       title: hours < 6 ? 'Look here first' : 'Check the next streets',
       where: place,
-      why: 'Start where the pet was last seen, then the yards and streets next to that place.'
+      why: 'Start where it was last seen, then the yards and streets next to that place.'
     };
   }
 

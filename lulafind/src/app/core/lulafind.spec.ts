@@ -517,7 +517,7 @@ describe('EscalationService - a note is not a dispatch', () => {
   it('does not offer a fake Amber Alert, Pink Drive, or an unverified NGO', () => {
     const esc = svc<EscalationService>(EscalationService);
     const child: Post = { ...db.post('p_thato')! };
-    const pet: Post = { ...db.post('p_thato')!, type: 'pet' };
+    const pet: Post = { ...db.post('p_thato')!, type: 'announcement' };
     const ids = (post: Post) => esc.partnersFor(post).map((p) => p.id);
     expect(ids(child)).not.toContain('amber-sa');
     expect(ids(child)).not.toContain('pink-drive');
@@ -649,7 +649,7 @@ describe('Home Sweet Home flow', () => {
     const home = data.broughtHome();
     expect(home.some((p) => p.id === 'p_found')).toBe(true);
     expect(home.some((p) => p.type === 'vehicle')).toBe(false);
-    expect(home.some((p) => p.type === 'pet')).toBe(true);
+    expect(home.some((p) => p.type === 'announcement')).toBe(true);
     expect(home.every((p) => p.status === 'found')).toBe(true);
   });
 
@@ -1321,6 +1321,65 @@ describe('Following a case, and muting a Spotlight', () => {
   });
 });
 
+describe('Surname alerts, in the places a person picks', () => {
+  beforeEach(bed);
+
+  it('names the surname when a case matches it in a chosen place', async () => {
+    const data = svc<DataService>(DataService);
+    signInAs('u_sipho'); // KZN, not the author
+    const auth = svc<AuthService>(AuthService);
+    await data.saveAlertPrefs({
+      enabled: true, childrenOnly: false, province: 'all', radiusKm: 50,
+      areas: [{ kind: 'province', key: 'GP', label: 'Gauteng' }],
+      surnames: [{ surname: 'Mokoena', areas: [{ kind: 'city', key: 'soweto', label: 'Soweto' }] }]
+    });
+    expect(auth.user()!.alertPrefs!.surnames![0].surname).toBe('Mokoena');
+
+    const before = new Set(db.notifications('u_sipho').map((n) => n.id));
+    await data.alertCase(db.post('p_thato')!); // Thato Mokoena, Orlando West, Soweto
+    const fresh = db.notifications('u_sipho').filter((n) => !before.has(n.id));
+    // The reason is in the sentence: "A Mokoena case", not "a new missing case".
+    const watch = fresh.find((n) => n.title.includes('Mokoena'));
+    expect(watch).toBeTruthy();
+    expect(watch!.body).toContain('surname');
+  });
+
+  it('stays quiet for a surname outside the places it was pinned to', async () => {
+    const data = svc<DataService>(DataService);
+    signInAs('u_sipho');
+    await data.saveAlertPrefs({
+      enabled: true, childrenOnly: false, province: 'all', radiusKm: 50,
+      areas: [{ kind: 'province', key: 'GP', label: 'Gauteng' }],
+      // Mokoena, but only in a place this case is not.
+      surnames: [{ surname: 'Mokoena', areas: [{ kind: 'city', key: 'pretoria', label: 'Pretoria' }] }]
+    });
+    const before = new Set(db.notifications('u_sipho').map((n) => n.id));
+    await data.alertCase(db.post('p_thato')!);
+    const fresh = db.notifications('u_sipho').filter((n) => !before.has(n.id));
+    // Their Gauteng area still earns the ordinary alert - what must not happen
+    // is the surname one, which would claim the case is in a place it is not.
+    expect(fresh.some((n) => n.title.includes('Mokoena'))).toBe(false);
+  });
+
+  it('does not fire for a surname that is only part of another word', async () => {
+    const data = svc<DataService>(DataService);
+    signInAs('u_sipho');
+    // The surname is a fragment of a longer one, in both the name and the title.
+    const post = { ...db.post('p_thato')!, id: 'p_surname_edge', title: 'Help find Thabo Mokoenane, 14',
+      subject: { ...db.post('p_thato')!.subject!, name: 'Thabo Mokoenane' } };
+    await data.saveAlertPrefs({
+      enabled: true, childrenOnly: false, province: 'all', radiusKm: 50,
+      areas: [{ kind: 'province', key: 'GP', label: 'Gauteng' }],
+      surnames: [{ surname: 'Mokoena', areas: [] }]
+    });
+    const before = new Set(db.notifications('u_sipho').map((n) => n.id));
+    await data.alertCase(post);
+    const fresh = db.notifications('u_sipho').filter((n) => !before.has(n.id));
+    // A provincial alert is fine; what must not happen is a "Mokoena case".
+    expect(fresh.some((n) => n.title.includes('Mokoena'))).toBe(false);
+  });
+});
+
 describe('Where to look first', () => {
   const base = {
     status: 'active' as const,
@@ -1499,10 +1558,10 @@ describe('Competitor-parity features', () => {
       province: 'GP' as const, town: 'Roodepoort', audience: 'public' as const
     };
     const pet = await data.createPost({
-      ...base, type: 'pet', title: 'Brown Labrador "Bongani" - last seen Brixton',
+      ...base, type: 'announcement', title: 'Brown Labrador "Bongani" - last seen Brixton',
       body: 'Slipped his collar at the park. Red collar with a tag, very friendly, answers to Bongani.'
     });
-    expect(pet.type).toBe('pet');
+    expect(pet.type).toBe('announcement');
 
     for (const type of ['vehicle', 'danger', 'story'] as const) {
       await expect(data.createPost({ ...base, type, title: 'x', body: 'y' })).rejects.toThrow(/no longer available/);

@@ -760,7 +760,7 @@ export const seedPosts = (): Post[] => {
 
     base({
       id: 'p_found_pet',
-      type: 'pet',
+      type: 'announcement',
       authorId: 'u_lerato',
       title: 'FOUND: Rex the boerboel is back in Mamelodi',
       body:

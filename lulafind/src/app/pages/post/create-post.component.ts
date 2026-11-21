@@ -31,9 +31,9 @@ const blankForm = (): ComposerForm => ({
 });
 
 const CATEGORIES: { key: PostType; label: string; icon: string }[] = [
-  { key: 'missing', label: 'Missing person', icon: 'search' },
+  { key: 'missing', label: 'Missing & Found', icon: 'search' },
   { key: 'khumbulekhaya', label: 'Home Sweet Home', icon: 'home' },
-  { key: 'pet', label: 'Lost pet', icon: 'paw' },
+  { key: 'announcement', label: 'Announcement', icon: 'megaphone' },
   { key: 'sighting', label: 'Sighting', icon: 'pin' }
 ];
 
@@ -99,8 +99,8 @@ function templateForType(type: PostType): string {
       return 'Full name:\nAge:\nGender:\nLocation (town/suburb, province):\nWhen last seen:\nWhat happened:';
     case 'khumbulekhaya':
       return 'Full name:\nAge:\nLocation last seen (town/suburb, province):\nWhen they left:\nWhat happened:';
-    case 'pet':
-      return 'Pet name:\nAge:\nGender:\nLocation (town/suburb, province):\nWhen last seen:\nWhat happened:';
+    case 'announcement':
+      return 'What I am announcing (lost or found):\nWhat it is:\nWhere:\nWhen:\nHow people can help:';
     case 'sighting':
       return 'Location (town/suburb, province):\nWhen seen:\nWhat I personally saw:';
     default:
@@ -551,10 +551,20 @@ interface MissingField { key: string; label: string; }
                     }
                   }
 
-                  @if (type() === 'pet') {
-                    <div class="section-heading compact"><strong>Pet details</strong><span>Optional</span></div>
-                    <label class="field full"><span>Pet's name</span><input placeholder="Name and breed" [value]="s().name" (input)="patchSubject({ name: $any($event.target).value })" /></label>
-                    <label class="field full"><span>Colour, collar or identifying marks</span><input placeholder="A short description" [value]="s().distinguishing" (input)="patchSubject({ distinguishing: $any($event.target).value })" /></label>
+                  @if (type() === 'announcement') {
+                    <div class="section-heading compact"><strong>What are you announcing?</strong><span>Your words</span></div>
+                    <!--
+                      An announcement is an open field on purpose. A lost dog, a
+                      found wallet, a water cut, a funeral notice - the app does
+                      not know which of these the person needs to say, so it asks
+                      for what it is and lets them write the rest.
+                    -->
+                    <label class="field full"><span>What is it? <small>(optional)</small></span>
+                      <input placeholder="A lost dog, a found wallet, a notice for the street" [value]="s().name" (input)="patchSubject({ name: $any($event.target).value })" />
+                    </label>
+                    <label class="field full"><span>Anything that identifies it <small>(optional)</small></span>
+                      <input placeholder="Colour, collar, a mark, a reference" [value]="s().distinguishing" (input)="patchSubject({ distinguishing: $any($event.target).value })" />
+                    </label>
                   }
 
                   @if (type() === 'sighting') {
@@ -566,12 +576,10 @@ interface MissingField { key: string; label: string; }
                   @if (type() !== 'sighting') {
                     <label class="field full"><span>Last seen near</span><input placeholder="Neighbourhood or public place" [value]="f().lastSeenWhere" (input)="patch({ lastSeenWhere: $any($event.target).value })" /></label>
                   }
-                  @if (type() !== 'pet' && type() !== 'sighting') {
+                  @if (type() !== 'announcement' && type() !== 'sighting') {
                     <label class="field full"><span>SAPS case number <small>(optional)</small></span><input placeholder="Police case reference" [value]="f().caseNumber" (input)="patch({ caseNumber: $any($event.target).value })" /></label>
                   }
-                  @if (type() === 'pet') {
-                    <label class="field full"><span>Last seen near</span><input placeholder="Neighbourhood or public place" [value]="f().lastSeenWhere" (input)="patch({ lastSeenWhere: $any($event.target).value })" /></label>
-                  }
+
                   @if (type() === 'khumbulekhaya') {
                     <label class="field full"><span>What might the family want them to know?</span><input placeholder="Optional — don't assume they want to come home" [value]="khumbuReason()" (input)="setKhumbu($any($event.target).value)" /></label>
                     <label class="switch-row"><input type="checkbox" [checked]="f().askWanted" (change)="patch({ askWanted: $any($event.target).checked })" /><span><strong>Ask the community if they are being looked for</strong><small>People can answer yes or no.</small></span></label>
@@ -1055,7 +1063,7 @@ export class CreatePostComponent implements OnInit, OnDestroy {
 
   protected readonly canAddDetails = computed(() => {
     const t = this.type();
-    return t === 'missing' || t === 'khumbulekhaya' || t === 'pet' || t === 'sighting';
+    return t === 'missing' || t === 'khumbulekhaya' || t === 'announcement' || t === 'sighting';
   });
 
   /* ------------------------- dictation ------------------------- */
@@ -1551,7 +1559,7 @@ export class CreatePostComponent implements OnInit, OnDestroy {
     switch (this.type()) {
       case 'missing': return 'Share the important details. Where were they last seen? What might help someone recognise them?';
       case 'khumbulekhaya': return 'Tell the family what they need to know. Keep in mind they may not want to return home.';
-      case 'pet': return 'Describe when and where your pet went missing and how people can help.';
+      case 'announcement': return 'Say what you lost or found, where, and how people can help. Your own words are the whole point.';
       case 'sighting': return 'Share only what you personally saw, when and where. Avoid guesses or naming suspects.';
       default: return 'Write a short update for your community…';
     }
@@ -1561,7 +1569,7 @@ export class CreatePostComponent implements OnInit, OnDestroy {
     switch (this.type()) {
       case 'missing': return 'Add person and case details';
       case 'khumbulekhaya': return 'Add family context';
-      case 'pet': return 'Add pet details';
+      case 'announcement': return 'Add the details';
       case 'sighting': return 'Add sighting details';
       default: return 'Add more details';
     }
@@ -1636,7 +1644,7 @@ export class CreatePostComponent implements OnInit, OnDestroy {
       ? (f.lastSeenAt ? new Date(f.lastSeenAt).getTime() : null)
       : values.when;
     const subject = this.editing() ? (() => {
-      const personType = type === 'missing' || type === 'khumbulekhaya' || type === 'pet';
+      const personType = type === 'missing' || type === 'khumbulekhaya' || type === 'announcement';
       return personType ? {
         name: s.name.trim(), age: s.age ? Number(s.age) : null, gender: s.gender,
         height: s.height.trim(), build: '', skinTone: '', hair: s.hair.trim(), eyes: '',

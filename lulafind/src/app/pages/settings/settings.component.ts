@@ -1,4 +1,4 @@
-import { Component, computed, inject } from '@angular/core';
+import { Component, computed, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { IonContent } from '@ionic/angular/ion-content';
 
@@ -19,7 +19,8 @@ import { TopNavComponent } from '../../shared/components/top-nav.component';
 import { BACKGROUNDS, BackgroundKey, SettingsService } from '../../core/services/settings.service';
 import { AuthService } from '../../core/services/auth.service';
 import { DataService } from '../../core/services/data.service';
-import { AlertPrefs, Audience, defaultPrivacy } from '../../core/models/types';
+import { AlertArea, AlertPrefs, Audience, SurnameWatch, defaultPrivacy } from '../../core/models/types';
+import { PLACES, citiesIn, slug } from '../../core/data/places';
 import { ModerationService } from '../../core/services/moderation.service';
 import { PlatformService } from '../../core/services/platform.service';
 import { PermissionsService, PermKind } from '../../core/services/permissions.service';
@@ -84,13 +85,90 @@ import { SUPPORT_EMAIL, SUPPORT_NAME } from '../../core/config';
             <span class="lf-muted lf-small">For new case alerts: silence everything except urgent child cases</span></ion-label>
           <ion-toggle [checked]="s().pushMissingOnly" (ionChange)="set({ pushMissingOnly: $any($event.detail).checked })"></ion-toggle>
         </ion-item>
-        <ion-item>
-          <ion-label position="stacked">Alert province</ion-label>
-          <ion-select [value]="s().pushProvince" (ionChange)="set({ pushProvince: $any($event.detail).value })">
-            <ion-select-option value="all">All provinces</ion-select-option>
-            @for (p of provinces; track p.code) { <ion-select-option [value]="p.code">{{ p.name }}</ion-select-option> }
-          </ion-select>
-        </ion-item>
+        <!--
+          Where, and whose name.
+
+          One province was never enough: somebody in Soweto is in Gauteng *and*
+          in Johannesburg *and* next to Roodepoort, and a family surname is
+          spread across all of them. So the places are a list, chosen from the
+          real metros, districts and towns, and each surname carries the places
+          it should be heard in.
+        -->
+        <div class="area-block">
+          <div class="area-head">
+            <strong>Where to alert you</strong>
+            <span class="lf-small lf-muted">{{ areaSummary() }}</span>
+          </div>
+          <div class="area-chips" role="group" aria-label="Places to be alerted about">
+            @if (!areas().length) { <span class="lf-small lf-muted">Everywhere in the country.</span> }
+            @for (a of areas(); track a.kind + a.key) {
+              <button type="button" class="chip on" (click)="removeArea(a)" [attr.aria-label]="'Stop alerts for ' + a.label">
+                {{ a.label }} <span aria-hidden="true">×</span>
+              </button>
+            }
+          </div>
+          <label class="field">
+            <span class="lf-small lf-muted">Add a province, metro, district or town</span>
+            <select class="add-area" (change)="addArea($any($event.target).value); $any($event.target).value=''">
+              <option value="">Choose a place…</option>
+              @for (p of places; track p.code) {
+                <optgroup [label]="p.label">
+                  <option [value]="p.code">{{ p.label }} (whole province)</option>
+                  @for (m of p.metros; track m.key) {
+                    <option [value]="'m:' + m.key">Metro: {{ m.label }}</option>
+                  }
+                  @for (c of p.cities; track c.key) {
+                    <option [value]="'c:' + p.code + ':' + c.key">{{ c.label }}</option>
+                  }
+                </optgroup>
+                @for (m of p.metros; track m.key) {
+                  <optgroup [label]="m.label + ' · ' + p.label">
+                    @for (c of m.cities; track c.key) {
+                      <option [value]="'c:' + p.code + ':' + c.key">Town: {{ c.label }}</option>
+                    }
+                  </optgroup>
+                }
+              }
+            </select>
+          </label>
+        </div>
+
+        <div class="area-block">
+          <div class="area-head">
+            <strong>Surnames you follow</strong>
+            <span class="lf-small lf-muted">Told about a case by name, in the places you pick</span>
+          </div>
+          @if (!surnames().length) {
+            <p class="lf-small lf-muted">No surnames yet. Add one to hear about that family's cases by name.</p>
+          }
+          @for (w of surnames(); track w.surname; let i = $index) {
+            <div class="surname-row">
+              <div class="surname-top">
+                <strong>{{ w.surname }}</strong>
+                <span class="lf-small lf-muted">{{ watchPlaces(w.areas) }}</span>
+                <button type="button" class="linklike" (click)="removeSurname(i)" [attr.aria-label]="'Stop following the ' + w.surname + ' surname'">Remove</button>
+              </div>
+              <div class="area-chips">
+                @for (a of w.areas; track a.kind + a.key) {
+                  <button type="button" class="chip" (click)="removeWatchArea(i, a)">{{ a.label }} <span aria-hidden="true">×</span></button>
+                }
+                <select class="add-area small" (change)="addWatchArea(i, $any($event.target).value); $any($event.target).value=''">
+                  <option value="">Add a place…</option>
+                  @for (p of places; track p.code) {
+                    <option [value]="p.code">{{ p.label }}</option>
+                    @for (c of allCities(p.code); track c.key) { <option [value]="'c:' + p.code + ':' + c.key">{{ c.label }}</option> }
+                  }
+                </select>
+              </div>
+            </div>
+          }
+          <div class="surname-add">
+            <input class="snap-input" placeholder="e.g. Mokoena" [value]="draftSurname()"
+                   (input)="draftSurname.set($any($event.target).value)"
+                   (keydown.enter)="addSurname()" aria-label="Surname to follow" />
+            <button type="button" class="lf-btn lf-btn--primary lf-btn--sm" (click)="addSurname()">Follow surname</button>
+          </div>
+        </div>
         <ion-item>
           <ion-label position="stacked">Alert radius · {{ s().pushRadiusKm }} km<br />
             <span class="lf-muted lf-small">How far from your last location you still want case alerts</span></ion-label>
@@ -229,6 +307,25 @@ import { SUPPORT_EMAIL, SUPPORT_NAME } from '../../core/config';
     .card { margin: 8px var(--lf-gap); padding: 12px 16px; border-radius: var(--lf-radius);
       border: 0; box-shadow: var(--lf-shadow); background: var(--lf-card); }
     .card h3 { margin: 0 0 8px; font-size: 17px; font-weight: 700; }
+    /* Where, and whose name. Chips for what is chosen, one picker for what is not. */
+    .area-block { padding: 12px 16px 4px; border-top: 1px solid var(--lf-line-soft); }
+    .area-head { display: flex; flex-direction: column; gap: 2px; margin-bottom: 8px; }
+    .area-chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+    .chip { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px;
+      border-radius: 999px; border: 1px solid var(--lf-line-soft); background: var(--lf-card-2);
+      color: inherit; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+    .chip.on { background: var(--lf-primary-soft); border-color: transparent; color: var(--lf-link); }
+    .add-area { width: 100%; height: 38px; margin: 6px 0 10px; padding: 0 10px; border-radius: 10px;
+      border: 1px solid var(--lf-line); background: var(--lf-card); color: inherit; font: inherit; font-size: 14px; }
+    .add-area.small { width: auto; min-width: 130px; height: 30px; margin: 0; font-size: 13px; border-radius: 999px; }
+    .surname-row { padding: 8px 0; border-top: 1px solid var(--lf-line-soft); }
+    .surname-top { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+    .surname-top .linklike { margin-left: auto; }
+    .surname-add { display: flex; gap: 8px; align-items: center; padding: 10px 0 14px; }
+    .surname-add .snap-input { flex: 1; min-width: 0; height: 38px; padding: 0 12px; border-radius: 10px;
+      border: 1px solid var(--lf-line); background: var(--lf-card); color: inherit; font: inherit; }
+    .linklike { border: 0; background: none; color: var(--lf-link); font: inherit; font-size: 13px;
+      font-weight: 600; cursor: pointer; padding: 0; }
     .bg-picker { display: flex; flex-direction: column; gap: 8px; padding: 12px 16px; }
     .bg-picker__head { display: flex; flex-direction: column; }
     .bg-picker__row { display: flex; gap: 12px; flex-wrap: wrap; }
@@ -264,6 +361,136 @@ export class SettingsComponent {
 
   protected readonly provinces = PROVINCES;
   protected readonly version = environment.appVersion;
+
+  /* --------------------- where, and whose name --------------------- */
+
+  protected readonly places = PLACES;
+  /** The places this member wants case alerts in. Empty means everywhere. */
+  readonly areas = computed<AlertArea[]>(() => this.auth.user()?.alertPrefs?.areas ?? []);
+  /** Surnames they follow, each with its own places. */
+  readonly surnames = computed<SurnameWatch[]>(() => this.auth.user()?.alertPrefs?.surnames ?? []);
+  readonly draftSurname = signal('');
+
+  /** "3 places · 1 surname", so the block says what it is holding. */
+  readonly areaSummary = computed(() => {
+    const a = this.areas().length;
+    const n = this.surnames().length;
+    if (!a && !n) return 'Everywhere in the country';
+    const parts: string[] = [];
+    parts.push(a ? `${a} ${a === 1 ? 'place' : 'places'}` : 'everywhere');
+    if (n) parts.push(`${n} ${n === 1 ? 'surname' : 'surnames'}`);
+    return parts.join(' · ');
+  });
+
+  /** Every town in a province, for the surname place picker. */
+  allCities(code: string): { key: string; label: string }[] {
+    return citiesIn(code).map((c) => ({ key: c.key, label: c.label }));
+  }
+
+  watchPlaces(areas: AlertArea[]): string {
+    return areas.length ? areas.map((a) => a.label).join(', ') : 'anywhere';
+  }
+
+  /**
+   * Turn one picker value into an area.
+   *
+   *   GP          -> the whole province
+   *   m:ethekwini -> a metropolitan municipality
+   *   c:GP:soweto -> a town or city, with its province kept for matching
+   */
+  private toArea(value: string): AlertArea | null {
+    if (!value) return null;
+    if (value.startsWith('m:')) {
+      const key = value.slice(2);
+      const metro = PLACES.flatMap((p) => p.metros).find((m) => m.key === key);
+      return metro ? { kind: 'metro', key: metro.key, label: metro.label } : null;
+    }
+    if (value.startsWith('c:')) {
+      const [, code, key] = value.split(':');
+      const found = citiesIn(code).find((c) => c.key === key);
+      return found ? { kind: 'city', key: found.key, label: found.label } : null;
+    }
+    const province = PLACES.find((p) => p.code === value);
+    return province ? { kind: 'province', key: province.code, label: province.label } : null;
+  }
+
+  addArea(value: string): void {
+    const area = this.toArea(value);
+    if (!area) return;
+    if (this.areas().some((a) => a.kind === area.kind && a.key === area.key)) return;
+    void this.saveAreas([...this.areas(), area]);
+  }
+
+  removeArea(area: AlertArea): void {
+    void this.saveAreas(this.areas().filter((a) => !(a.kind === area.kind && a.key === area.key)));
+  }
+
+  async addSurname(): Promise<void> {
+    const surname = this.draftSurname().trim();
+    if (!surname) return;
+    // Surnames are compared case-insensitively, so "Mokoena" and "mokoena" are
+    // one entry rather than two rows that both fire.
+    if (this.surnames().some((w) => slug(w.surname) === slug(surname))) {
+      this.draftSurname.set('');
+      await this.say(`You already follow the ${surname} surname.`);
+      return;
+    }
+    // A new surname starts with the places already chosen - if somebody set
+    // "Soweto and Pretoria" as where they care about, that is where they care
+    // about a surname too. They can narrow it per surname afterwards.
+    await this.saveSurnames([...this.surnames(), { surname, areas: this.areas() }]);
+    this.draftSurname.set('');
+  }
+
+  removeSurname(index: number): void {
+    void this.saveSurnames(this.surnames().filter((_, i) => i !== index));
+  }
+
+  addWatchArea(index: number, value: string): void {
+    const area = this.toArea(value);
+    if (!area) return;
+    const next = this.surnames().map((w, i) => {
+      if (i !== index) return w;
+      if (w.areas.some((a) => a.kind === area.kind && a.key === area.key)) return w;
+      return { ...w, areas: [...w.areas, area] };
+    });
+    void this.saveSurnames(next);
+  }
+
+  removeWatchArea(index: number, area: AlertArea): void {
+    const next = this.surnames().map((w, i) =>
+      i === index ? { ...w, areas: w.areas.filter((a) => !(a.kind === area.kind && a.key === area.key)) } : w
+    );
+    void this.saveSurnames(next);
+  }
+
+  private async saveAreas(areas: AlertArea[]): Promise<void> {
+    await this.savePrefs({ ...this.prefs(), areas });
+  }
+
+  private async saveSurnames(surnames: SurnameWatch[]): Promise<void> {
+    await this.savePrefs({ ...this.prefs(), surnames });
+  }
+
+  /** The saved preferences, with the on-screen switches as the source of truth. */
+  private prefs(): AlertPrefs {
+    return {
+      enabled: this.s().pushEnabled,
+      childrenOnly: this.s().pushMissingOnly,
+      province: this.s().pushProvince as AlertPrefs['province'],
+      radiusKm: this.s().pushRadiusKm,
+      areas: this.areas(),
+      surnames: this.surnames()
+    };
+  }
+
+  private async savePrefs(next: AlertPrefs): Promise<void> {
+    if (!this.auth.signedIn()) {
+      await this.say('Sign in to choose where you are alerted.');
+      return;
+    }
+    await this.data.saveAlertPrefs(next);
+  }
 
   protected readonly backgrounds = BACKGROUNDS;
   readonly s = computed(() => this.settings.settings());
@@ -332,13 +559,8 @@ export class SettingsComponent {
 
   private async saveAlertPrefs(): Promise<void> {
     if (!this.auth.signedIn()) return;
-    const a = this.s();
-    await this.data.saveAlertPrefs({
-      enabled: a.pushEnabled,
-      childrenOnly: a.pushMissingOnly,
-      province: a.pushProvince as AlertPrefs['province'],
-      radiusKm: a.pushRadiusKm
-    });
+    // A switch must not wipe the places and surnames saved above it.
+    await this.data.saveAlertPrefs(this.prefs());
   }
 
   async setFindable(v: boolean): Promise<void> {
