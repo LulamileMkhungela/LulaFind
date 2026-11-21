@@ -68,7 +68,8 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
                on their profile and in the hover card, where it is the subject
                rather than a third line stacked under a name. -->
           <div class="fb-sub-meta">
-            <span class="fb-sub-meta__text">{{ whereWhen() }}</span>
+            <span class="fb-sub-meta__place">{{ whereLine() }}</span>
+            <span class="fb-sub-meta__when">{{ whenLine() }}</span>
             <lf-icon class="fb-audience" [name]="audienceIcon()" [size]="12"
                      [attr.title]="audienceTitle()" [attr.aria-label]="audienceTitle()" />
           </div>
@@ -326,25 +327,33 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
      * their width, so "KwaZulu-Natal · Missing person" reads as
      * "KwaZulu-Nata… · Missing person" rather than "Missing / person".
      */
+    /*
+     * One quiet line: where, when, then who can see it - and the glyph sits
+     * against the words because nothing in this row grows to fill the width.
+     *
+     * The line used to keep everything on one unbreakable row, so a long place
+     * name ("Umlazi, Durban, KwaZulu-Natal") ate the width, the time was cut to
+     * an ellipsis and the globe stayed pinned at the far edge of the text, which
+     * is exactly the gap this row is meant to avoid. The place ellipsizes to
+     * nothing first; the time and the glyph keep their full width and stay
+     * together.
+     */
     .fb-sub-meta {
       display: flex;
-      align-items: center;
-      gap: 5px;
+      align-items: baseline;
+      gap: 4px;
       font-size: 12.5px;
       color: var(--lf-muted);
       margin-top: 4px;
       white-space: nowrap;
-      overflow: hidden;
+      min-width: 0;
     }
-    /*
-     * The text does not grow: it takes the width it needs and the audience
-     * glyph follows immediately, so a short line like "Soweto · 2h" ends in
-     * the globe instead of stranding it at the right edge of the card. Only
-     * when the words would run past the column does the text ellipsize.
-     */
-    .fb-sub-meta__text { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-    .fb-sub-meta .fb-dot, .fb-sub-meta > lf-icon { flex: 0 0 auto; }
-    .fb-sub-meta > .fb-audience { margin-left: 1px; }
+    .fb-sub-meta__place { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+    /* The separator rides with the time, so a clipped place never leaves a dot behind. */
+    .fb-sub-meta__when { flex: 0 0 auto; }
+    .fb-sub-meta__when::before { content: '·'; margin-right: 4px; opacity: .7; }
+    .fb-sub-meta > lf-icon { flex: 0 0 auto; }
+    .fb-sub-meta > .fb-audience { margin-left: 0; align-self: center; }
     /*
      * Follow and … share this column, centred on the name's line. The column is
      * the height of one line of text; the … keeps a 32px tap target by bleeding
@@ -616,15 +625,31 @@ export class PostCardComponent implements OnInit, OnChanges, AfterViewChecked {
    * is not an answer to "how far is this from me?", and the line ellipsizes
    * rather than losing the part that matters.
    */
-  whereWhen(): string {
+  /**
+   * The place on its own, so a long one can be clipped without eating the time.
+   *
+   * Town first, province only when no town is known. The province used to be
+   * appended ("Umlazi, Durban, KwaZulu-Natal"), which spelled out something the
+   * facts block and the case title already say and - on a card with a Follow
+   * button - left so little width that the place name itself was cut. "Umlazi,
+   * Durban · 6d" is the whole address a reader needs above the fold.
+   */
+  whereLine(): string {
     const p = this.post;
     if (!p) return '';
-    const town = (p.town ?? '').trim();
-    const province = provinceName(p.province);
-    const place = town && province ? `${town}, ${province}` : town || province;
-    const when = timeAgo(p.createdAt);
-    const edited = p.editedAt ? ` · edited ${timeAgo(p.editedAt)}` : '';
-    return `${place} · ${when}${edited}`;
+    return (p.town ?? '').trim() || provinceName(p.province);
+  }
+
+  /** When, and whether it was edited - never clipped; it is the short half. */
+  whenLine(): string {
+    const p = this.post;
+    if (!p) return '';
+    return `${timeAgo(p.createdAt)}${p.editedAt ? ` · edited ${timeAgo(p.editedAt)}` : ''}`;
+  }
+
+  /** The whole line as one string, for anyone who needs it as text. */
+  whereWhen(): string {
+    return [this.whereLine(), this.whenLine()].filter(Boolean).join(' · ');
   }
   readonly authorStatus = computed(() =>
     this.post?.anonymous && !this.isMine() ? null : this.data.statusOf(this.author));

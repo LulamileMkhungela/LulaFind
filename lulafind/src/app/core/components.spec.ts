@@ -279,11 +279,15 @@ describe('Components render', () => {
     expect(html).toContain('fb-clamp');
     expect(html).toContain('see more');
     expect(html).toContain('fb-stats-bar');
-    // The kind tags the post itself; the line under the name is where and
-    // when, and it keeps the province even when a town is known.
+    // The kind tags the post itself; the line under the name is where and when.
+    // It leads with the town, because "Umlazi, Durban, KwaZulu-Natal" cost more
+    // width than a card with a Follow button has - the place name was being cut
+    // and the globe pushed away from the words it describes.
     expect(html).toContain('fb-kind');
     expect(html).toContain('Missing person');
-    expect(html).toContain('Gauteng');
+    expect(html).toContain('fb-sub-meta__place');
+    expect(html).toContain('Orlando West, Soweto');
+    expect(html).toContain('fb-sub-meta__when');
     expect(html).not.toContain('fb-chips');
     // The card carries the X-shaped action row: react, comment and repost on
     // the left with their counts, the reaction stack and Send grouped right.
