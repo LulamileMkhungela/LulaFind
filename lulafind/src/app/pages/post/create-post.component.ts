@@ -673,7 +673,15 @@ interface MissingField { key: string; label: string; }
     .section-heading { display: flex; align-items: center; justify-content: space-between; margin: 0 0 9px; color: var(--fb-text); font-size: 15px; }
     .section-heading span { color: var(--fb-muted); font-size: 13px; font-weight: 500; }
     .category-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }
-    .category { position: relative; display: flex; align-items: center; gap: 9px; min-height: 40px; padding: 7px 10px; border: 1px solid var(--fb-line); border-radius: 8px; background: var(--lf-card); color: var(--fb-text); text-align: left; font-size: 14px; font-weight: 600; cursor: pointer; transition: background .16s ease, border-color .16s ease, transform .16s ease; }
+    /*
+     * "Missing & Found" is two words and a symbol where "Missing person" was
+     * two words: on a 390px phone the chip had no room for the third line and
+     * clipped it. The label may wrap to two lines, the row grows to fit them,
+     * and the padding stays tight enough that the second column still fits.
+     */
+    .category { position: relative; display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 8px 9px 8px 8px; border: 1px solid var(--fb-line); border-radius: 8px; background: var(--lf-card); color: var(--fb-text); text-align: left; font-size: 13.5px; font-weight: 600; line-height: 1.2; cursor: pointer; transition: background .16s ease, border-color .16s ease, transform .16s ease; }
+    .category span { min-width: 0; overflow-wrap: anywhere; }
+    .category .selected-check { position: absolute; top: 4px; right: 4px; }
     .category lf-icon { color: var(--fb-blue); }
     .category.selected { border-color: var(--lf-primary); background: var(--lf-primary-soft); color: var(--lf-primary-soft-text); }
     .category:active { transform: scale(.98); }
