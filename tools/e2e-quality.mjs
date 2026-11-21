@@ -336,8 +336,8 @@ await fill('input[placeholder="At least 8 characters"]', A.pass);
 await tap('Continue', { exact: true });
 await fill('input[type="email"]', A.email);
 await tap('Continue', { exact: true });
-await waitForText(/Select your province/, 6000);
-await fill('select.snap-select', 'GP');
+// Step 5 is the 18 + terms gate; province is asked for in onboarding.
+await waitForText(/Finish creating your account/, 6000);
 await tick('18 or older');
 await tick('I agree to the Terms');
 await tap('Agree and continue', { exact: true });

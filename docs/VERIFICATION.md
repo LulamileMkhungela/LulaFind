@@ -24,13 +24,13 @@ Admin Admin queue. Actions are recorded. Email delivery: configure the Supabase 
 ### 4. Straight after pressing Publish and alert
 
 ```text
-Admin1 Admin queue. Actions are recorded. Email delivery: configure the Supabase report webhook and provider secrets.  Reports People Review Posts A child case waits here until you confirm it. Nobody is alerted until you publish it. Nothing waitingEvery child case has been checked.
+Admin Admin queue. Actions are recorded. Email delivery: configure the Supabase report webhook and provider secrets.  Reports People Review Posts A child case waits here until you confirm it. Nobody is alerted until you publish it. Nothing waitingEvery child case has been checked.
 ```
 
 ### 5. The same member’s Notifications after publishing
 
 ```text
-Notifications2 Mark all as read  All Unread2 Mentions PostsTodayThandi Mokoena shared a new postHelp find Thandi Mokoena in SowetonowA child is missing nearbyThandi Mokoena · Soweto, Gauteng. Open the case for the poster.now · 13 km from you
+Notifications Mark all as read  All Unread2 Mentions PostsTodayThandi Mokoena shared a new postHelp find Thandi Mokoena in SowetonowA child is missing nearbyThandi Mokoena · Soweto, Gauteng. Open the case for the poster.now · 13 km from you
 ```
 
 ### 6. The mother’s own Notifications (never her own case)
@@ -42,19 +42,19 @@ Notifications2 Mark all as read  All Unread2 Mentions PostsTodayThandi Mokoena s
 ### 7. The focused case page with the status actions
 
 ```text
-Post5Thandi MokoenaCommunity organiser. If you see something, say something. Ubuntu. now  · Gauteng · Help find Thandi Mokoena in SowetoShe was last seen walking to the taxi rank after work on Tuesday evening.LikeCommentRepostSendFirst hours0 of 7Journey1 eventCase openedPosted by Younow Mark as found Still searching Photo  Video Attachments stay with this comment
+PostThandi Mokoena Community organiser. If you see something, say something. Ubuntu. now  Gauteng Help find Thandi Mokoena in SowetoLast seen: Orlando WestShe was last seen walking to the taxi rank after work on Tuesday evening.LikeCommentRepostSendFirst hours0 of 7Journey1 eventCase openedPosted by Younow Mark as found Still searching Photo  Video
 ```
 
 ### 8. After the poster confirms they are still searching
 
 ```text
-Post5Thandi MokoenaCommunity organiser. If you see something, say something. Ubuntu. now  · Gauteng · Help find Thandi Mokoena in SowetoShe was last seen walking to the taxi rank after work on Tuesday evening.LikeCommentRepostSendFirst hours0 of 7Journey2 eventsStill searchingThe family confirmed the case is opennowCase openedPosted by YounowStill searching. Confirmed now. This case remains open. Mark as found Still searching Photo  Video Attachments stay with this comment
+PostThandi Mokoena Community organiser. If you see something, say something. Ubuntu. now  Gauteng Help find Thandi Mokoena in SowetoLast seen: Orlando WestShe was last seen walking to the taxi rank after work on Tuesday evening.LikeCommentRepostSendFirst hours0 of 7Journey2 eventsStill searchingThe family confirmed the case is opennowCase openedPosted by YounowStill searching. Confirmed now. This case remains open. Mark as found Still searching Photo  Video
 ```
 
 ### 11. A closed case, as the family sees it
 
 ```text
-Post5Thandi MokoenaCommunity organiser. If you see something, say something. Ubuntu. now  · Gauteng · Found · Home in Soweto  · 13 Nov 2026 Help find Thandi Mokoena in SowetoShe was last seen walking to the taxi rank after work on Tuesday evening.LikeCommentRepostSendFirst hours0 of 7Journey3 eventsCase closed as foundHome in Soweto · found by Lerato MahlangunowFoundHome in Soweto · found by Lerato MahlangunowCase openedPosted by YounowHome in Soweto. The case is closed.2 things finish it properly. None of them are urgent today.Tell the investigating officerComplete a SAPS 92 with the officer handling the case. That is what takes it off the police circulation list.Thank the 1 person who helpedThey get one message from you. It is the reason they will help the next family.Thank themLerato Mahlangu Photo  Video Attachments stay with this comment
+PostThandi Mokoena Community organiser. If you see something, say something. Ubuntu. now  Gauteng Found · Home in Soweto  · 21 Nov 2026 Help find Thandi Mokoena in SowetoLast seen: Orlando WestShe was last seen walking to the taxi rank after work on Tuesday evening.LikeCommentRepostSendFirst hours0 of 7Journey3 eventsCase closed as foundHome in Soweto · found by Lerato MahlangunowFoundHome in Soweto · found by Lerato MahlangunowCase openedPosted by YounowHome in Soweto. The case is closed.2 things finish it properly. None of them are urgent today.Tell the investigating officerComplete a SAPS 92 with the officer handling the case. That is what takes it off the police circulation list.Thank the 1 person who helpedThey get one message from you. It is the reason they will help the next family.Thank themLerato Mahlangu Photo  Video
 ```
 
 ### 12a. Closed cases the *feed* holds - the reason the page cannot be built from the feed
@@ -66,6 +66,6 @@ Post5Thandi MokoenaCommunity organiser. If you see something, say something. Ubu
 ### 12. The public /found page
 
 ```text
-Found5They came homeCases that closed on LulaFind. Names are kept off this page - only the people who found them are shown.Missing person · foundnowHelp find Thandi Mokoena in Soweto Soweto, Gauteng · found within the hourLMLerato Mahlangu found themContributor x1Home in SowetoPet · found12hFOUND: Rex the boerboel is back in Mamelodi Mamelodi, Pretoria, Gauteng · found after 3 daysHome in MamelodiVehicle · found1dFOUND: White Toyota Hilux recovered in Bloemfontein Bloemfontein, Free State · found after 5 daysRecovered in BloemfonteinStory · found2dWe found Nomsa after 41 days. Here is what actually worked. Boksburg, Gauteng · found within the hourShelter in BoksburgMissing person · found3dFOUND: Baby Anele (8 months) reunited with her mother in Nelspruit Nelspruit, Mpumalanga · found after 2 daysSafe at home, Nelspruit
+FoundThey came homeCases that closed on LulaFind. Names are kept off this page - only the people who found them are shown.Missing person · foundnowHelp find Thandi Mokoena in Soweto Soweto, Gauteng · found within the hourLMLerato Mahlangu found themContributor x1Home in SowetoPet · found12hFOUND: Rex the boerboel is back in Mamelodi Mamelodi, Pretoria, Gauteng · found after 3 daysHome in MamelodiVehicle · found1dFOUND: White Toyota Hilux recovered in Bloemfontein Bloemfontein, Free State · found after 5 daysRecovered in BloemfonteinStory · found2dWe found Nomsa after 41 days. Here is what actually worked. Boksburg, Gauteng · found within the hourShelter in BoksburgMissing person · found3dFOUND: Baby Anele (8 months) reunited with her mother in Nelspruit Nelspruit, Mpumalanga · found after 2 daysSafe at home, Nelspruit
 ```
 

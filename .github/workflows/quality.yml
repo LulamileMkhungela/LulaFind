@@ -50,8 +50,8 @@ jobs:
           node tools/e2e-search-board.mjs
           node tools/e2e-journeys.mjs
           node tools/e2e-lookout.mjs
-          # Keep the full historical contract visible: currently fails because
-          # the first-hours checklist isn't exposed on the case page.
+          # The full historical contract: the first-hours checklist is exposed
+          # on the case page again, so this drives the whole journey and passes.
           node tools/e2e-drive.mjs
       - uses: actions/upload-artifact@v4
         if: always()

@@ -129,6 +129,9 @@ async function fill(selector, value) {
 /** Sign up through the real five-step screen. */
 async function signUp(name, email, password) {
   await goto('/auth');
+  // A live session redirects /auth to /home, so make sure we are really on the
+  // email screen before looking for its buttons.
+  if (!/What's your name|Create new account/.test(await text())) await signOut();
   await tap('Create new account');
   await waitForText(/What's your name/);
   await fill('input[placeholder="e.g. John Doe"]', name);
@@ -141,8 +144,9 @@ async function signUp(name, email, password) {
   await sleep(500);
   await fill('input[type="email"]', email);
   await tap('Continue', { exact: true });
-  await waitForText(/Select your province/, 6000);
-  await fill('select.snap-select', 'GP');
+  // Step 5 is the 18 + terms gate. Province is asked for once, during
+  // onboarding, so there is no province field to fill here.
+  await waitForText(/Finish creating your account/, 6000);
   await tick('18 or older');
   await tick('I agree to the Terms');
   await tap('Agree and continue', { exact: true });
@@ -187,12 +191,16 @@ async function alertText() {
     .map((a) => (a.innerText || a.textContent || '').replace(/\s+/g, ' ').trim()).join(' | '));
 }
 
+/* Sign-out moved to Settings; tapping it on /me does nothing and leaves the
+   session live, which turns every later "land on /auth" step into a false
+   failure on /home. See the same note in tools/e2e-lookout.mjs. */
 async function signOut() {
-  await goto('/me');
+  await goto('/settings');
   await tap('Sign out');
-  await sleep(600);
-  await tapAlert('Sign out');
   await sleep(1200);
+  // No confirmation dialog: signing out is reversible and the app does not
+  // ask. Only destructive deletes do.
+  if (await alertText()) await tapAlert('Sign out');
   if (!/\/auth/.test(page.url())) problems.push(`sign out did not return to the sign-in screen (at ${url()})`);
 }
 
@@ -278,16 +286,16 @@ await shot('03-signup-email-rule', 'an address without a domain is refused');
 await fill('input[type="email"]', A.email);
 await tap('Continue', { exact: true });
 
-/* Step 5 - province, age and terms are the last gates. */
-await waitForText(/Select your province|Step 5 of 5/, 6000);
+/* Step 5 - 18 and the terms are the last gates. Province is collected in
+   onboarding, after the account exists, so it is not part of this screen. */
+await waitForText(/Finish creating your account|Step 5 of 5/, 6000);
 await tap('Agree and continue', { exact: true });
 await sleep(900);
 const gateText = await text();
-const provinceError = /select your province|18 or older|accept the terms/i.test(gateText);
-journey('Sign-up step 5: province, age and terms', 'province + 18 + terms', provinceError,
-  provinceError ? 'the last step refuses to create the account without them' : 'the last step created the account with nothing chosen');
+const gateError = /18 or older|accept the terms|agree to the terms/i.test(gateText);
+journey('Sign-up step 5: 18 and the terms', 'the two boxes at step 5', gateError,
+  gateError ? 'the last step refuses to create the account without them' : 'the last step created the account with nothing chosen');
 await shot('04-signup-final-gate', 'the last step and its rules');
-await fill('select.snap-select', 'GP');
 await tick('18 or older');
 await tick('I agree to the Terms');
 await tap('Agree and continue', { exact: true });
