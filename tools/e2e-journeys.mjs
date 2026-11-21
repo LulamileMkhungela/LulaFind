@@ -317,7 +317,7 @@ journey('New post: required data', 'category, story, province, town', checklist 
 await shot('05-new-post-required', 'Post with nothing filled: the list of what is missing');
 
 /* Interrupted halfway: leave the screen and come back. Nothing typed may vanish. */
-await tap('Missing person');
+await tap('Missing & Found');
 await sleep(500);
 const sentinel = 'Nandi left for the taxi rank at 06:10 and has not been seen since.';
 await fill('textarea[data-field="body"]', sentinel);

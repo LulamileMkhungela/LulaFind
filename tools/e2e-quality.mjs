@@ -350,7 +350,7 @@ console.log('  signed up:', page.url().replace(BASE, ''));
 
 const userId = await page.evaluate(() => JSON.parse(localStorage.getItem('lulafind.db.snapshot') || '{}').users?.[0]?.id ?? null);
 await goto('/new', 1600);
-await tap('Missing person');
+await tap('Missing & Found');
 await fill('textarea[data-field="body"]', 'Nandi left for the taxi rank at 06:10 on Tuesday morning and has not been seen since. She was wearing a blue jacket and black takkies. Her phone went off near the rank at 06:40.');
 await fill('.location-grid select', 'GP');
 await fill('input[placeholder="e.g. Soweto"]', 'Soweto');

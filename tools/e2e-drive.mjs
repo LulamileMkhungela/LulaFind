@@ -326,7 +326,7 @@ await shot('12-poster-second-template', 'Ubuntu template, freshly drawn');
 console.log('\n== 5. write a post ==');
 await goto('/new', 2200);
 await shot('13-new-post');
-await tap('Missing person', { selector: '.category-grid button, button, [role="button"]', what: 'post category' });
+await tap('Missing & Found', { selector: '.category-grid button, button, [role="button"]', what: 'post category' });
 await sleep(900);
 await shot('13b-new-post-missing');
 await fill('textarea.body-input, textarea[data-field="body"]', 'Full name: Andile Mokoena\nAge: 28\nLocation (town/suburb, province): Khayelitsha, Western Cape\nWhat happened: He left for the taxi rank on Sunday morning and has not come home since. He was wearing a blue jacket.', { what: 'case template' });

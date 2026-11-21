@@ -1,208 +1,203 @@
 {
  "byWidth": {
   "320": {
-   "overflow": 0,
-   "clipped": 0,
+   "overflow": 8,
+   "clipped": 2,
    "tiny": 0,
    "collisions": 0,
-   "contrast": 0,
+   "contrast": 32,
    "sideways": 0,
    "align": 1,
    "words": [
-    96,
-    53,
-    54,
-    50,
-    47,
-    93,
+    34,
     52,
-    104,
+    41,
+    74,
+    61,
+    93,
+    83,
+    106,
     123,
     57,
     42,
-    32,
+    35,
     58,
-    47,
+    63,
     153,
-    101,
-    60,
+    34,
+    83,
     53
    ]
   },
   "360": {
    "overflow": 0,
-   "clipped": 0,
+   "clipped": 2,
    "tiny": 0,
    "collisions": 0,
-   "contrast": 0,
+   "contrast": 32,
    "sideways": 0,
-   "align": 0,
+   "align": 1,
    "words": [
-    96,
-    53,
-    54,
-    53,
-    47,
-    120,
+    34,
     52,
-    110,
+    41,
+    78,
+    69,
+    120,
+    83,
+    112,
     123,
     57,
     42,
-    32,
+    35,
     58,
-    47,
+    63,
     156,
-    101,
-    57,
-    55
+    34,
+    83,
+    53
    ]
   },
   "390": {
    "overflow": 0,
-   "clipped": 0,
+   "clipped": 2,
    "tiny": 0,
    "collisions": 0,
-   "contrast": 0,
+   "contrast": 32,
    "sideways": 0,
-   "align": 0,
+   "align": 1,
    "words": [
-    96,
-    53,
-    54,
-    53,
-    47,
-    120,
+    34,
     52,
-    114,
+    41,
+    78,
+    69,
+    120,
+    83,
+    116,
     124,
     57,
     42,
-    32,
+    35,
     58,
-    47,
+    63,
     156,
-    101,
-    57,
-    55
+    34,
+    83,
+    53
    ]
   },
   "414": {
    "overflow": 0,
-   "clipped": 0,
+   "clipped": 2,
    "tiny": 0,
    "collisions": 0,
-   "contrast": 0,
+   "contrast": 32,
    "sideways": 0,
-   "align": 0,
+   "align": 1,
    "words": [
-    96,
-    53,
-    54,
-    53,
-    73,
-    120,
+    34,
     52,
-    114,
+    41,
+    78,
+    80,
+    120,
+    86,
+    116,
     124,
     57,
     42,
-    32,
+    35,
     58,
-    47,
+    63,
     158,
-    101,
-    53,
-    55
+    34,
+    86,
+    53
    ]
   },
   "768": {
    "overflow": 0,
-   "clipped": 0,
-   "tiny": 0,
+   "clipped": 2,
+   "tiny": 2,
    "collisions": 0,
-   "contrast": 0,
+   "contrast": 32,
    "sideways": 0,
    "align": 1,
    "words": [
-    96,
-    53,
-    54,
-    53,
-    73,
-    129,
+    34,
     52,
-    124,
+    41,
+    79,
+    83,
+    129,
+    106,
+    126,
     145,
     57,
     42,
-    32,
+    35,
     58,
-    47,
+    63,
     216,
-    101,
-    51,
-    70
+    34,
+    106,
+    57
    ]
   },
   "1024": {
    "overflow": 0,
-   "clipped": 0,
-   "tiny": 0,
+   "clipped": 2,
+   "tiny": 2,
    "collisions": 0,
-   "contrast": 0,
+   "contrast": 32,
    "sideways": 0,
    "align": 1,
    "words": [
-    96,
-    53,
-    54,
-    53,
-    73,
-    135,
+    34,
     52,
-    124,
+    41,
+    79,
+    83,
+    135,
+    106,
+    126,
     145,
     57,
     42,
-    32,
+    35,
     58,
-    47,
+    63,
     217,
-    101,
-    51,
-    70
+    34,
+    106,
+    57
    ]
   }
  },
  "cold": {
-  "fcp": 160,
-  "lcp": 340,
-  "dcl": 142,
-  "load": 165,
-  "requests": 222,
-  "transferredKb": 30
+  "fcp": 140,
+  "lcp": 140,
+  "dcl": 131,
+  "load": 150,
+  "requests": 244,
+  "transferredKb": 36
  },
  "routeTimes": [
   {
    "label": "Spotlight",
-   "ms": 34
+   "ms": 27
   },
   {
    "label": "Chats",
-   "ms": 21
+   "ms": 13
   },
   {
    "label": "Me",
-   "ms": 64
+   "ms": 26
   }
  ],
- "taps": [
-  {
-   "name": "open comments",
-   "ms": 39
-  }
- ],
+ "taps": [],
  "runtime": {
   "longTasks": [],
   "cls": 0
@@ -215,17 +210,36 @@
    "vw": 320,
    "pageScrollsSideways": false,
    "scrollWidth": 320,
-   "overflow": [],
+   "overflow": [
+    {
+     "el": "ion-tab-button.md.tab-has-label",
+     "right": 52,
+     "vw": 320
+    },
+    {
+     "el": "ion-tab-button.md.tab-has-label",
+     "right": 323,
+     "vw": 320
+    }
+   ],
    "clipped": [],
    "tinyTargets": [],
    "tinyCount": 0,
-   "smallCount": 16,
+   "smallCount": 7,
    "collisions": [],
-   "lowContrast": [],
-   "lowContrastCount": 0,
-   "wordsAboveFold": 96,
+   "lowContrast": [
+    {
+     "el": "ion-label.sc-ion-label-md-h.md",
+     "text": "Home",
+     "size": 9,
+     "got": 3.12,
+     "need": 4.5
+    }
+   ],
+   "lowContrastCount": 1,
+   "wordsAboveFold": 34,
    "leftEdges": [
-    0
+    24
    ]
   },
   {
@@ -235,15 +249,48 @@
    "vw": 320,
    "pageScrollsSideways": false,
    "scrollWidth": 320,
-   "overflow": [],
+   "overflow": [
+    {
+     "el": "ion-tab-button.md.tab-has-label",
+     "right": 47,
+     "vw": 320
+    },
+    {
+     "el": "ion-tab-button.md.tab-has-label",
+     "right": 325,
+     "vw": 320
+    }
+   ],
    "clipped": [],
    "tinyTargets": [],
    "tinyCount": 0,
    "smallCount": 33,
    "collisions": [],
-   "lowContrast": [],
-   "lowContrastCount": 0,
-   "wordsAboveFold": 53,
+   "lowContrast": [
+    {
+     "el": "button.pill.on",
+     "text": "All",
+     "size": 14,
+     "got": 4.03,
+     "need": 4.5
+    },
+    {
+     "el": "button.lf-btn.lf-btn--primary",
+     "text": "Create a spotlight",
+     "size": 15,
+     "got": 3.12,
+     "need": 4.5
+    },
+    {
+     "el": "ion-label.sc-ion-label-md-h.md",
+     "text": "Spotlight",
+     "size": 9,
+     "got": 3.12,
+     "need": 4.5
+    }
+   ],
+   "lowContrastCount": 3,
+   "wordsAboveFold": 52,
    "leftEdges": [
     0
    ]
@@ -259,11 +306,19 @@
    "clipped": [],
    "tinyTargets": [],
    "tinyCount": 0,
-   "smallCount": 3,
+   "smallCount": 5,
    "collisions": [],
-   "lowContrast": [],
-   "lowContrastCount": 0,
-   "wordsAboveFold": 54,
+   "lowContrast": [
+    {
+     "el": "button.lf-btn.lf-btn--primary",
+     "text": "Browse the feed",
+     "size": 15,
+     "got": 3.12,
+     "need": 4.5
+    }
+   ],
+   "lowContrastCount": 1,
+   "wordsAboveFold": 41,
    "leftEdges": []
   },
   {
@@ -279,13 +334,42 @@
    "tinyCount": 0,
    "smallCount": 12,
    "collisions": [],
-   "lowContrast": [],
-   "lowContrastCount": 0,
-   "wordsAboveFold": 50,
+   "lowContrast": [
+    {
+     "el": "a.profile-settings",
+     "text": "Settings",
+     "size": 16,
+     "got": 2.79,
+     "need": 4.5
+    },
+    {
+     "el": "a.saved-link",
+     "text": "Saved cases",
+     "size": 16,
+     "got": 3.12,
+     "need": 4.5
+    },
+    {
+     "el": "button.lf-btn.lf-btn--primary",
+     "text": "Check in",
+     "size": 12.5,
+     "got": 3.12,
+     "need": 4.5
+    },
+    {
+     "el": "button.lf-btn.lf-btn--primary",
+     "text": "Create a post",
+     "size": 15,
+     "got": 3.12,
+     "need": 4.5
+    }
+   ],
+   "lowContrastCount": 4,
+   "wordsAboveFold": 74,
    "leftEdges": [
     0,
     16,
-    32
+    28
    ]
   },
   {
@@ -299,11 +383,19 @@
    "clipped": [],
    "tinyTargets": [],
    "tinyCount": 0,
-   "smallCount": 10,
+   "smallCount": 11,
    "collisions": [],
-   "lowContrast": [],
-   "lowContrastCount": 0,
-   "wordsAboveFold": 47,
+   "lowContrast": [
+    {
+     "el": "button.lf-btn.lf-btn--primary",
+     "text": "Follow surname",
+     "size": 14,
+     "got": 3.12,
+     "need": 4.5
+    }
+   ],
+   "lowContrastCount": 1,
+   "wordsAboveFold": 61,
    "leftEdges": [
     12
    ]
@@ -321,8 +413,23 @@
    "tinyCount": 0,
    "smallCount": 5,
    "collisions": [],
-   "lowContrast": [],
-   "lowContrastCount": 0,
+   "lowContrast": [
+    {
+     "el": "button.lf-btn.lf-btn--primary",
+     "text": "Send an \"I am safe\" check-in n",
+     "size": 16,
+     "got": 3.12,
+     "need": 4.5
+    },
+    {
+     "el": "button.lf-btn.lf-btn--primary",
+     "text": "Start the lookout",
+     "size": 16,
+     "got": 3.12,
+     "need": 4.5
+    }
+   ],
+   "lowContrastCount": 2,
    "wordsAboveFold": 93,
    "leftEdges": [
     54,
@@ -337,14 +444,57 @@
    "pageScrollsSideways": false,
    "scrollWidth": 320,
    "overflow": [],
-   "clipped": [],
+   "clipped": [
+    {
+     "el": "span.sr-only",
+     "text": "Start dictation",
+     "needs": 95,
+     "has": 1
+    }
+   ],
    "tinyTargets": [],
    "tinyCount": 0,
-   "smallCount": 8,
+   "smallCount": 13,
    "collisions": [],
-   "lowContrast": [],
-   "lowContrastCount": 0,
-   "wordsAboveFold": 52,
+   "lowContrast": [
+    {
+     "el": "button.post-button",
+     "text": "Post",
+     "size": 15,
+     "got": 3.12,
+     "need": 4.5
+    },
+    {
+     "el": "span",
+     "text": "Missing & Found",
+     "size": 13,
+     "got": 4.03,
+     "need": 4.5
+    },
+    {
+     "el": "span",
+     "text": "We kept what you typed. Carry ",
+     "size": 13.5,
+     "got": 4.03,
+     "need": 4.5
+    },
+    {
+     "el": "button",
+     "text": "Start fresh",
+     "size": 13.5,
+     "got": 4.03,
+     "need": 4.5
+    },
+    {
+     "el": "span",
+     "text": "Generate",
+     "size": 14,
+     "got": 2.79,
+     "need": 4.5
+    }
+   ],
+   "lowContrastCount": 5,
+   "wordsAboveFold": 83,
    "leftEdges": [
     10
    ]
@@ -362,9 +512,24 @@
    "tinyCount": 0,
    "smallCount": 10,
    "collisions": [],
-   "lowContrast": [],
-   "lowContrastCount": 0,
-   "wordsAboveFold": 104,
+   "lowContrast": [
+    {
+     "el": "button.on",
+     "text": "All 37",
+     "size": 13,
+     "got": 4.03,
+     "need": 4.5
+    },
+    {
+     "el": "button.lf-btn.lf-btn--primary",
+     "text": "Still stuck? Open the Help pag",
+     "size": 16,
+     "got": 3.12,
+     "need": 4.5
+    }
+   ],
+   "lowContrastCount": 2,
+   "wordsAboveFold": 106,
    "leftEdges": [
     0,
     16
@@ -404,8 +569,23 @@
    "tinyCount": 0,
    "smallCount": 6,
    "collisions": [],
-   "lowContrast": [],
-   "lowContrastCount": 0,
+   "lowContrast": [
+    {
+     "el": "button.pill.on",
+     "text": "All",
+     "size": 14,
+     "got": 4.03,
+     "need": 4.5
+    },
+    {
+     "el": "button.lf-btn.lf-btn--primary",
+     "text": "Browse the feed",
+     "size": 15,
+     "got": 3.12,
+     "need": 4.5
+    }
+   ],
+   "lowContrastCount": 2,
    "wordsAboveFold": 57,
    "leftEdges": []
   },
@@ -422,10 +602,20 @@
    "tinyCount": 0,
    "smallCount": 5,
    "collisions": [],
-   "lowContrast": [],
-   "lowContrastCount": 0,
+   "lowContrast": [
+    {
+     "el": "button.pill.on",
+     "text": "Following · 0",
+     "size": 14,
+     "got": 4.03,
+     "need": 4.5
+    }
+   ],
+   "lowContrastCount": 1,
    "wordsAboveFold": 42,
-   "leftEdges": []
+   "leftEdges": [
+    12
+   ]
   },
   {
    "width": 320,
@@ -434,15 +624,41 @@
    "vw": 320,
    "pageScrollsSideways": false,
    "scrollWidth": 320,
-   "overflow": [],
+   "overflow": [
+    {
+     "el": "ion-tab-button.md.tab-has-label",
+     "right": 46,
+     "vw": 320
+    },
+    {
+     "el": "ion-tab-button.md.tab-has-label",
+     "right": 326,
+     "vw": 320
+    }
+   ],
    "clipped": [],
    "tinyTargets": [],
    "tinyCount": 0,
-   "smallCount": 3,
+   "smallCount": 6,
    "collisions": [],
-   "lowContrast": [],
-   "lowContrastCount": 0,
-   "wordsAboveFold": 32,
+   "lowContrast": [
+    {
+     "el": "button.chip.on",
+     "text": "All",
+     "size": 13.5,
+     "got": 4.03,
+     "need": 4.5
+    },
+    {
+     "el": "ion-label.sc-ion-label-md-h.md",
+     "text": "Notifications",
+     "size": 9,
+     "got": 3.12,
+     "need": 4.5
+    }
+   ],
+   "lowContrastCount": 2,
+   "wordsAboveFold": 35,
    "leftEdges": []
   },
   {
@@ -476,11 +692,11 @@
    "clipped": [],
    "tinyTargets": [],
    "tinyCount": 0,
-   "smallCount": 9,
+   "smallCount": 8,
    "collisions": [],
    "lowContrast": [],
    "lowContrastCount": 0,
-   "wordsAboveFold": 47,
+   "wordsAboveFold": 63,
    "leftEdges": [
     0,
     12
@@ -509,47 +725,108 @@
   {
    "width": 320,
    "path": "/ask-lula",
-   "rendered": true,
+   "rendered": false,
    "vw": 320,
    "pageScrollsSideways": false,
    "scrollWidth": 320,
-   "overflow": [],
+   "overflow": [
+    {
+     "el": "ion-tab-button.md.tab-has-label",
+     "right": 52,
+     "vw": 320
+    },
+    {
+     "el": "ion-tab-button.md.tab-has-label",
+     "right": 323,
+     "vw": 320
+    }
+   ],
    "clipped": [],
    "tinyTargets": [],
    "tinyCount": 0,
-   "smallCount": 8,
+   "smallCount": 7,
    "collisions": [],
-   "lowContrast": [],
-   "lowContrastCount": 0,
-   "wordsAboveFold": 101,
+   "lowContrast": [
+    {
+     "el": "ion-label.sc-ion-label-md-h.md",
+     "text": "Home",
+     "size": 9,
+     "got": 3.12,
+     "need": 4.5
+    }
+   ],
+   "lowContrastCount": 1,
+   "wordsAboveFold": 34,
    "leftEdges": [
-    12
+    24
    ]
   },
   {
    "width": 320,
-   "path": "/post/p_muoaz007c8fbod/poster",
+   "path": "/new",
    "rendered": true,
    "vw": 320,
    "pageScrollsSideways": false,
    "scrollWidth": 320,
    "overflow": [],
-   "clipped": [],
+   "clipped": [
+    {
+     "el": "span.sr-only",
+     "text": "Start dictation",
+     "needs": 95,
+     "has": 1
+    }
+   ],
    "tinyTargets": [],
    "tinyCount": 0,
-   "smallCount": 3,
+   "smallCount": 13,
    "collisions": [],
-   "lowContrast": [],
-   "lowContrastCount": 0,
-   "wordsAboveFold": 60,
+   "lowContrast": [
+    {
+     "el": "button.post-button",
+     "text": "Post",
+     "size": 15,
+     "got": 3.12,
+     "need": 4.5
+    },
+    {
+     "el": "span",
+     "text": "Missing & Found",
+     "size": 13,
+     "got": 4.03,
+     "need": 4.5
+    },
+    {
+     "el": "span",
+     "text": "We kept what you typed. Carry ",
+     "size": 13.5,
+     "got": 4.03,
+     "need": 4.5
+    },
+    {
+     "el": "button",
+     "text": "Start fresh",
+     "size": 13.5,
+     "got": 4.03,
+     "need": 4.5
+    },
+    {
+     "el": "span",
+     "text": "Generate",
+     "size": 14,
+     "got": 2.79,
+     "need": 4.5
+    }
+   ],
+   "lowContrastCount": 5,
+   "wordsAboveFold": 83,
    "leftEdges": [
-    19,
-    12
+    10
    ]
   },
   {
    "width": 320,
-   "path": "/user/u_muoayt355ps7hv",
+   "path": "/user/u_mwqyy2cfz1mumc",
    "rendered": true,
    "vw": 320,
    "pageScrollsSideways": false,
@@ -558,10 +835,25 @@
    "clipped": [],
    "tinyTargets": [],
    "tinyCount": 0,
-   "smallCount": 12,
+   "smallCount": 7,
    "collisions": [],
-   "lowContrast": [],
-   "lowContrastCount": 0,
+   "lowContrast": [
+    {
+     "el": "a.lf-btn.lf-btn--sm",
+     "text": "Be on the lookout",
+     "size": 14,
+     "got": 3.12,
+     "need": 4.5
+    },
+    {
+     "el": "button.quickbtn.safe",
+     "text": "I am safe",
+     "size": 14,
+     "got": 3.28,
+     "need": 4.5
+    }
+   ],
+   "lowContrastCount": 2,
    "wordsAboveFold": 53,
    "leftEdges": [
     0
@@ -578,13 +870,21 @@
    "clipped": [],
    "tinyTargets": [],
    "tinyCount": 0,
-   "smallCount": 16,
+   "smallCount": 7,
    "collisions": [],
-   "lowContrast": [],
-   "lowContrastCount": 0,
-   "wordsAboveFold": 96,
+   "lowContrast": [
+    {
+     "el": "ion-label.sc-ion-label-md-h.md",
+     "text": "Home",
+     "size": 9.72,
+     "got": 3.12,
+     "need": 4.5
+    }
+   ],
+   "lowContrastCount": 1,
+   "wordsAboveFold": 34,
    "leftEdges": [
-    0
+    24
    ]
   },
   {
@@ -600,9 +900,31 @@
    "tinyCount": 0,
    "smallCount": 33,
    "collisions": [],
-   "lowContrast": [],
-   "lowContrastCount": 0,
-   "wordsAboveFold": 53,
+   "lowContrast": [
+    {
+     "el": "button.pill.on",
+     "text": "All",
+     "size": 14,
+     "got": 4.03,
+     "need": 4.5
+    },
+    {
+     "el": "button.lf-btn.lf-btn--primary",
+     "text": "Create a spotlight",
+     "size": 15,
+     "got": 3.12,
+     "need": 4.5
+    },
+    {
+     "el": "ion-label.sc-ion-label-md-h.md",
+     "text": "Spotlight",
+     "size": 9.72,
+     "got": 3.12,
+     "need": 4.5
+    }
+   ],
+   "lowContrastCount": 3,
+   "wordsAboveFold": 52,
    "leftEdges": [
     0
    ]
@@ -618,11 +940,19 @@
    "clipped": [],
    "tinyTargets": [],
    "tinyCount": 0,
-   "smallCount": 3,
+   "smallCount": 5,
    "collisions": [],
-   "lowContrast": [],
-   "lowContrastCount": 0,
-   "wordsAboveFold": 54,
+   "lowContrast": [
+    {
+     "el": "button.lf-btn.lf-btn--primary",
+     "text": "Browse the feed",
+     "size": 15,
+     "got": 3.12,
+     "need": 4.5
+    }
+   ],
+   "lowContrastCount": 1,
+   "wordsAboveFold": 41,
    "leftEdges": []
   },
   {
@@ -638,12 +968,42 @@
    "tinyCount": 0,
    "smallCount": 12,
    "collisions": [],
-   "lowContrast": [],
-   "lowContrastCount": 0,
-   "wordsAboveFold": 53,
+   "lowContrast": [
+    {
+     "el": "a.profile-settings",
+     "text": "Settings",
+     "size": 16,
+     "got": 2.79,
+     "need": 4.5
+    },
+    {
+     "el": "a.saved-link",
+     "text": "Saved cases",
+     "size": 16,
+     "got": 3.12,
+     "need": 4.5
+    },
+    {
+     "el": "button.lf-btn.lf-btn--primary",
+     "text": "Check in",
+     "size": 12.5,
+     "got": 3.12,
+     "need": 4.5
+    },
+    {
+     "el": "button.lf-btn.lf-btn--primary",
+     "text": "Create a post",
+     "size": 15,
+     "got": 3.12,
+     "need": 4.5
+    }
+   ],
+   "lowContrastCount": 4,
+   "wordsAboveFold": 78,
    "leftEdges": [
     0,
-    16
+    16,
+    28
    ]
   },
   {
@@ -657,11 +1017,19 @@
    "clipped": [],
    "tinyTargets": [],
    "tinyCount": 0,
-   "smallCount": 10,
+   "smallCount": 11,
    "collisions": [],
-   "lowContrast": [],
-   "lowContrastCount": 0,
-   "wordsAboveFold": 47,
+   "lowContrast": [
+    {
+     "el": "button.lf-btn.lf-btn--primary",
+     "text": "Follow surname",
+     "size": 14,
+     "got": 3.12,
+     "need": 4.5
+    }
+   ],
+   "lowContrastCount": 1,
+   "wordsAboveFold": 69,
    "leftEdges": [
     12
    ]
@@ -679,8 +1047,23 @@
    "tinyCount": 0,
    "smallCount": 5,
    "collisions": [],
-   "lowContrast": [],
-   "lowContrastCount": 0,
+   "lowContrast": [
+    {
+     "el": "button.lf-btn.lf-btn--primary",
+     "text": "Send an \"I am safe\" check-in n",
+     "size": 16,
+     "got": 3.12,
+     "need": 4.5
+    },
+    {
+     "el": "button.lf-btn.lf-btn--primary",
+     "text": "Start the lookout",
+     "size": 16,
+     "got": 3.12,
+     "need": 4.5
+    }
+   ],
+   "lowContrastCount": 2,
    "wordsAboveFold": 120,
    "leftEdges": [
     54,
@@ -695,14 +1078,57 @@
    "pageScrollsSideways": false,
    "scrollWidth": 360,
    "overflow": [],
-   "clipped": [],
+   "clipped": [
+    {
+     "el": "span.sr-only",
+     "text": "Start dictation",
+     "needs": 95,
+     "has": 1
+    }
+   ],
    "tinyTargets": [],
    "tinyCount": 0,
-   "smallCount": 8,
+   "smallCount": 13,
    "collisions": [],
-   "lowContrast": [],
-   "lowContrastCount": 0,
-   "wordsAboveFold": 52,
+   "lowContrast": [
+    {
+     "el": "button.post-button",
+     "text": "Post",
+     "size": 15,
+     "got": 3.12,
+     "need": 4.5
+    },
+    {
+     "el": "span",
+     "text": "Missing & Found",
+     "size": 13,
+     "got": 4.03,
+     "need": 4.5
+    },
+    {
+     "el": "span",
+     "text": "We kept what you typed. Carry ",
+     "size": 13.5,
+     "got": 4.03,
+     "need": 4.5
+    },
+    {
+     "el": "button",
+     "text": "Start fresh",
+     "size": 13.5,
+     "got": 4.03,
+     "need": 4.5
+    },
+    {
+     "el": "span",
+     "text": "Generate",
+     "size": 14,
+     "got": 2.79,
+     "need": 4.5
+    }
+   ],
+   "lowContrastCount": 5,
+   "wordsAboveFold": 83,
    "leftEdges": [
     10
    ]
@@ -720,9 +1146,24 @@
    "tinyCount": 0,
    "smallCount": 10,
    "collisions": [],
-   "lowContrast": [],
-   "lowContrastCount": 0,
-   "wordsAboveFold": 110,
+   "lowContrast": [
+    {
+     "el": "button.on",
+     "text": "All 37",
+     "size": 13,
+     "got": 4.03,
+     "need": 4.5
+    },
+    {
+     "el": "button.lf-btn.lf-btn--primary",
+     "text": "Still stuck? Open the Help pag",
+     "size": 16,
+     "got": 3.12,
+     "need": 4.5
+    }
+   ],
+   "lowContrastCount": 2,
+   "wordsAboveFold": 112,
    "leftEdges": [
     0,
     16
@@ -762,8 +1203,23 @@
    "tinyCount": 0,
    "smallCount": 6,
    "collisions": [],
-   "lowContrast": [],
-   "lowContrastCount": 0,
+   "lowContrast": [
+    {
+     "el": "button.pill.on",
+     "text": "All",
+     "size": 14,
+     "got": 4.03,
+     "need": 4.5
+    },
+    {
+     "el": "button.lf-btn.lf-btn--primary",
+     "text": "Browse the feed",
+     "size": 15,
+     "got": 3.12,
+     "need": 4.5
+    }
+   ],
+   "lowContrastCount": 2,
    "wordsAboveFold": 57,
    "leftEdges": []
   },
@@ -780,10 +1236,20 @@
    "tinyCount": 0,
    "smallCount": 5,
    "collisions": [],
-   "lowContrast": [],
-   "lowContrastCount": 0,
+   "lowContrast": [
+    {
+     "el": "button.pill.on",
+     "text": "Following · 0",
+     "size": 14,
+     "got": 4.03,
+     "need": 4.5
+    }
+   ],
+   "lowContrastCount": 1,
    "wordsAboveFold": 42,
-   "leftEdges": []
+   "leftEdges": [
+    12
+   ]
   },
   {
    "width": 360,
@@ -796,11 +1262,26 @@
    "clipped": [],
    "tinyTargets": [],
    "tinyCount": 0,
-   "smallCount": 3,
+   "smallCount": 6,
    "collisions": [],
-   "lowContrast": [],
-   "lowContrastCount": 0,
-   "wordsAboveFold": 32,
+   "lowContrast": [
+    {
+     "el": "button.chip.on",
+     "text": "All",
+     "size": 13.5,
+     "got": 4.03,
+     "need": 4.5
+    },
+    {
+     "el": "ion-label.sc-ion-label-md-h.md",
+     "text": "Notifications",
+     "size": 9.72,
+     "got": 3.12,
+     "need": 4.5
+    }
+   ],
+   "lowContrastCount": 2,
+   "wordsAboveFold": 35,
    "leftEdges": []
   },
   {
@@ -834,11 +1315,11 @@
    "clipped": [],
    "tinyTargets": [],
    "tinyCount": 0,
-   "smallCount": 9,
+   "smallCount": 8,
    "collisions": [],
    "lowContrast": [],
    "lowContrastCount": 0,
-   "wordsAboveFold": 47,
+   "wordsAboveFold": 63,
    "leftEdges": [
     0,
     12
@@ -867,7 +1348,7 @@
   {
    "width": 360,
    "path": "/ask-lula",
-   "rendered": true,
+   "rendered": false,
    "vw": 360,
    "pageScrollsSideways": false,
    "scrollWidth": 360,
@@ -875,39 +1356,89 @@
    "clipped": [],
    "tinyTargets": [],
    "tinyCount": 0,
-   "smallCount": 8,
+   "smallCount": 7,
    "collisions": [],
-   "lowContrast": [],
-   "lowContrastCount": 0,
-   "wordsAboveFold": 101,
+   "lowContrast": [
+    {
+     "el": "ion-label.sc-ion-label-md-h.md",
+     "text": "Home",
+     "size": 9.72,
+     "got": 3.12,
+     "need": 4.5
+    }
+   ],
+   "lowContrastCount": 1,
+   "wordsAboveFold": 34,
    "leftEdges": [
-    12
+    24
    ]
   },
   {
    "width": 360,
-   "path": "/post/p_muoaz007c8fbod/poster",
+   "path": "/new",
    "rendered": true,
    "vw": 360,
    "pageScrollsSideways": false,
    "scrollWidth": 360,
    "overflow": [],
-   "clipped": [],
+   "clipped": [
+    {
+     "el": "span.sr-only",
+     "text": "Start dictation",
+     "needs": 95,
+     "has": 1
+    }
+   ],
    "tinyTargets": [],
    "tinyCount": 0,
-   "smallCount": 3,
+   "smallCount": 13,
    "collisions": [],
-   "lowContrast": [],
-   "lowContrastCount": 0,
-   "wordsAboveFold": 57,
+   "lowContrast": [
+    {
+     "el": "button.post-button",
+     "text": "Post",
+     "size": 15,
+     "got": 3.12,
+     "need": 4.5
+    },
+    {
+     "el": "span",
+     "text": "Missing & Found",
+     "size": 13,
+     "got": 4.03,
+     "need": 4.5
+    },
+    {
+     "el": "span",
+     "text": "We kept what you typed. Carry ",
+     "size": 13.5,
+     "got": 4.03,
+     "need": 4.5
+    },
+    {
+     "el": "button",
+     "text": "Start fresh",
+     "size": 13.5,
+     "got": 4.03,
+     "need": 4.5
+    },
+    {
+     "el": "span",
+     "text": "Generate",
+     "size": 14,
+     "got": 2.79,
+     "need": 4.5
+    }
+   ],
+   "lowContrastCount": 5,
+   "wordsAboveFold": 83,
    "leftEdges": [
-    22,
-    12
+    10
    ]
   },
   {
    "width": 360,
-   "path": "/user/u_muoayt355ps7hv",
+   "path": "/user/u_mwqyy2cfz1mumc",
    "rendered": true,
    "vw": 360,
    "pageScrollsSideways": false,
@@ -916,11 +1447,26 @@
    "clipped": [],
    "tinyTargets": [],
    "tinyCount": 0,
-   "smallCount": 12,
+   "smallCount": 7,
    "collisions": [],
-   "lowContrast": [],
-   "lowContrastCount": 0,
-   "wordsAboveFold": 55,
+   "lowContrast": [
+    {
+     "el": "a.lf-btn.lf-btn--sm",
+     "text": "Be on the lookout",
+     "size": 14,
+     "got": 3.12,
+     "need": 4.5
+    },
+    {
+     "el": "button.quickbtn.safe",
+     "text": "I am safe",
+     "size": 14,
+     "got": 3.28,
+     "need": 4.5
+    }
+   ],
+   "lowContrastCount": 2,
+   "wordsAboveFold": 53,
    "leftEdges": [
     0
    ]
@@ -936,13 +1482,21 @@
    "clipped": [],
    "tinyTargets": [],
    "tinyCount": 0,
-   "smallCount": 16,
+   "smallCount": 7,
    "collisions": [],
-   "lowContrast": [],
-   "lowContrastCount": 0,
-   "wordsAboveFold": 96,
+   "lowContrast": [
+    {
+     "el": "ion-label.sc-ion-label-md-h.md",
+     "text": "Home",
+     "size": 10.53,
+     "got": 3.12,
+     "need": 4.5
+    }
+   ],
+   "lowContrastCount": 1,
+   "wordsAboveFold": 34,
    "leftEdges": [
-    0
+    24
    ]
   },
   {
@@ -958,9 +1512,31 @@
    "tinyCount": 0,
    "smallCount": 33,
    "collisions": [],
-   "lowContrast": [],
-   "lowContrastCount": 0,
-   "wordsAboveFold": 53,
+   "lowContrast": [
+    {
+     "el": "button.pill.on",
+     "text": "All",
+     "size": 14,
+     "got": 4.03,
+     "need": 4.5
+    },
+    {
+     "el": "button.lf-btn.lf-btn--primary",
+     "text": "Create a spotlight",
+     "size": 15,
+     "got": 3.12,
+     "need": 4.5
+    },
+    {
+     "el": "ion-label.sc-ion-label-md-h.md",
+     "text": "Spotlight",
+     "size": 10.53,
+     "got": 3.12,
+     "need": 4.5
+    }
+   ],
+   "lowContrastCount": 3,
+   "wordsAboveFold": 52,
    "leftEdges": [
     0
    ]
@@ -976,11 +1552,19 @@
    "clipped": [],
    "tinyTargets": [],
    "tinyCount": 0,
-   "smallCount": 3,
+   "smallCount": 5,
    "collisions": [],
-   "lowContrast": [],
-   "lowContrastCount": 0,
-   "wordsAboveFold": 54,
+   "lowContrast": [
+    {
+     "el": "button.lf-btn.lf-btn--primary",
+     "text": "Browse the feed",
+     "size": 15,
+     "got": 3.12,
+     "need": 4.5
+    }
+   ],
+   "lowContrastCount": 1,
+   "wordsAboveFold": 41,
    "leftEdges": []
   },
   {
@@ -996,12 +1580,42 @@
    "tinyCount": 0,
    "smallCount": 12,
    "collisions": [],
-   "lowContrast": [],
-   "lowContrastCount": 0,
-   "wordsAboveFold": 53,
+   "lowContrast": [
+    {
+     "el": "a.profile-settings",
+     "text": "Settings",
+     "size": 16,
+     "got": 2.79,
+     "need": 4.5
+    },
+    {
+     "el": "a.saved-link",
+     "text": "Saved cases",
+     "size": 16,
+     "got": 3.12,
+     "need": 4.5
+    },
+    {
+     "el": "button.lf-btn.lf-btn--primary",
+     "text": "Check in",
+     "size": 12.5,
+     "got": 3.12,
+     "need": 4.5
+    },
+    {
+     "el": "button.lf-btn.lf-btn--primary",
+     "text": "Create a post",
+     "size": 15,
+     "got": 3.12,
+     "need": 4.5
+    }
+   ],
+   "lowContrastCount": 4,
+   "wordsAboveFold": 78,
    "leftEdges": [
     0,
-    16
+    16,
+    28
    ]
   },
   {
@@ -1015,11 +1629,19 @@
    "clipped": [],
    "tinyTargets": [],
    "tinyCount": 0,
-   "smallCount": 10,
+   "smallCount": 11,
    "collisions": [],
-   "lowContrast": [],
-   "lowContrastCount": 0,
-   "wordsAboveFold": 47,
+   "lowContrast": [
+    {
+     "el": "button.lf-btn.lf-btn--primary",
+     "text": "Follow surname",
+     "size": 14,
+     "got": 3.12,
+     "need": 4.5
+    }
+   ],
+   "lowContrastCount": 1,
+   "wordsAboveFold": 69,
    "leftEdges": [
     12
    ]
@@ -1037,8 +1659,23 @@
    "tinyCount": 0,
    "smallCount": 5,
    "collisions": [],
-   "lowContrast": [],
-   "lowContrastCount": 0,
+   "lowContrast": [
+    {
+     "el": "button.lf-btn.lf-btn--primary",
+     "text": "Send an \"I am safe\" check-in n",
+     "size": 16,
+     "got": 3.12,
+     "need": 4.5
+    },
+    {
+     "el": "button.lf-btn.lf-btn--primary",
+     "text": "Start the lookout",
+     "size": 16,
+     "got": 3.12,
+     "need": 4.5
+    }
+   ],
+   "lowContrastCount": 2,
    "wordsAboveFold": 120,
    "leftEdges": [
     54,
@@ -1053,14 +1690,57 @@
    "pageScrollsSideways": false,
    "scrollWidth": 390,
    "overflow": [],
-   "clipped": [],
+   "clipped": [
+    {
+     "el": "span.sr-only",
+     "text": "Start dictation",
+     "needs": 95,
+     "has": 1
+    }
+   ],
    "tinyTargets": [],
    "tinyCount": 0,
-   "smallCount": 8,
+   "smallCount": 11,
    "collisions": [],
-   "lowContrast": [],
-   "lowContrastCount": 0,
-   "wordsAboveFold": 52,
+   "lowContrast": [
+    {
+     "el": "button.post-button",
+     "text": "Post",
+     "size": 15,
+     "got": 3.12,
+     "need": 4.5
+    },
+    {
+     "el": "span",
+     "text": "Missing & Found",
+     "size": 14,
+     "got": 4.03,
+     "need": 4.5
+    },
+    {
+     "el": "span",
+     "text": "We kept what you typed. Carry ",
+     "size": 13.5,
+     "got": 4.03,
+     "need": 4.5
+    },
+    {
+     "el": "button",
+     "text": "Start fresh",
+     "size": 13.5,
+     "got": 4.03,
+     "need": 4.5
+    },
+    {
+     "el": "span",
+     "text": "Generate",
+     "size": 14,
+     "got": 2.79,
+     "need": 4.5
+    }
+   ],
+   "lowContrastCount": 5,
+   "wordsAboveFold": 83,
    "leftEdges": [
     14
    ]
@@ -1078,9 +1758,24 @@
    "tinyCount": 0,
    "smallCount": 10,
    "collisions": [],
-   "lowContrast": [],
-   "lowContrastCount": 0,
-   "wordsAboveFold": 114,
+   "lowContrast": [
+    {
+     "el": "button.on",
+     "text": "All 37",
+     "size": 13,
+     "got": 4.03,
+     "need": 4.5
+    },
+    {
+     "el": "button.lf-btn.lf-btn--primary",
+     "text": "Still stuck? Open the Help pag",
+     "size": 16,
+     "got": 3.12,
+     "need": 4.5
+    }
+   ],
+   "lowContrastCount": 2,
+   "wordsAboveFold": 116,
    "leftEdges": [
     0,
     16
@@ -1120,8 +1815,23 @@
    "tinyCount": 0,
    "smallCount": 6,
    "collisions": [],
-   "lowContrast": [],
-   "lowContrastCount": 0,
+   "lowContrast": [
+    {
+     "el": "button.pill.on",
+     "text": "All",
+     "size": 14,
+     "got": 4.03,
+     "need": 4.5
+    },
+    {
+     "el": "button.lf-btn.lf-btn--primary",
+     "text": "Browse the feed",
+     "size": 15,
+     "got": 3.12,
+     "need": 4.5
+    }
+   ],
+   "lowContrastCount": 2,
    "wordsAboveFold": 57,
    "leftEdges": []
   },
@@ -1138,10 +1848,20 @@
    "tinyCount": 0,
    "smallCount": 5,
    "collisions": [],
-   "lowContrast": [],
-   "lowContrastCount": 0,
+   "lowContrast": [
+    {
+     "el": "button.pill.on",
+     "text": "Following · 0",
+     "size": 14,
+     "got": 4.03,
+     "need": 4.5
+    }
+   ],
+   "lowContrastCount": 1,
    "wordsAboveFold": 42,
-   "leftEdges": []
+   "leftEdges": [
+    12
+   ]
   },
   {
    "width": 390,
@@ -1154,11 +1874,26 @@
    "clipped": [],
    "tinyTargets": [],
    "tinyCount": 0,
-   "smallCount": 3,
+   "smallCount": 6,
    "collisions": [],
-   "lowContrast": [],
-   "lowContrastCount": 0,
-   "wordsAboveFold": 32,
+   "lowContrast": [
+    {
+     "el": "button.chip.on",
+     "text": "All",
+     "size": 13.5,
+     "got": 4.03,
+     "need": 4.5
+    },
+    {
+     "el": "ion-label.sc-ion-label-md-h.md",
+     "text": "Notifications",
+     "size": 10.53,
+     "got": 3.12,
+     "need": 4.5
+    }
+   ],
+   "lowContrastCount": 2,
+   "wordsAboveFold": 35,
    "leftEdges": []
   },
   {
@@ -1186,187 +1921,6 @@
    "vw": 390,
    "pageScrollsSideways": false,
    "scrollWidth": 390,
-   "overflow": [],
-   "clipped": [],
-   "tinyTargets": [],
-   "tinyCount": 0,
-   "smallCount": 12,
-   "collisions": [],
-   "lowContrast": [],
-   "lowContrastCount": 0,
-   "wordsAboveFold": 47,
-   "leftEdges": [
-    0,
-    12
-   ]
-  },
-  {
-   "width": 390,
-   "path": "/tips",
-   "rendered": true,
-   "vw": 390,
-   "pageScrollsSideways": false,
-   "scrollWidth": 390,
-   "overflow": [],
-   "clipped": [],
-   "tinyTargets": [],
-   "tinyCount": 0,
-   "smallCount": 17,
-   "collisions": [],
-   "lowContrast": [],
-   "lowContrastCount": 0,
-   "wordsAboveFold": 156,
-   "leftEdges": [
-    12
-   ]
-  },
-  {
-   "width": 390,
-   "path": "/ask-lula",
-   "rendered": true,
-   "vw": 390,
-   "pageScrollsSideways": false,
-   "scrollWidth": 390,
-   "overflow": [],
-   "clipped": [],
-   "tinyTargets": [],
-   "tinyCount": 0,
-   "smallCount": 8,
-   "collisions": [],
-   "lowContrast": [],
-   "lowContrastCount": 0,
-   "wordsAboveFold": 101,
-   "leftEdges": [
-    12
-   ]
-  },
-  {
-   "width": 390,
-   "path": "/post/p_muoaz007c8fbod/poster",
-   "rendered": true,
-   "vw": 390,
-   "pageScrollsSideways": false,
-   "scrollWidth": 390,
-   "overflow": [],
-   "clipped": [],
-   "tinyTargets": [],
-   "tinyCount": 0,
-   "smallCount": 3,
-   "collisions": [],
-   "lowContrast": [],
-   "lowContrastCount": 0,
-   "wordsAboveFold": 57,
-   "leftEdges": [
-    23,
-    12
-   ]
-  },
-  {
-   "width": 390,
-   "path": "/user/u_muoayt355ps7hv",
-   "rendered": true,
-   "vw": 390,
-   "pageScrollsSideways": false,
-   "scrollWidth": 390,
-   "overflow": [],
-   "clipped": [],
-   "tinyTargets": [],
-   "tinyCount": 0,
-   "smallCount": 12,
-   "collisions": [],
-   "lowContrast": [],
-   "lowContrastCount": 0,
-   "wordsAboveFold": 55,
-   "leftEdges": [
-    0
-   ]
-  },
-  {
-   "width": 414,
-   "path": "/home",
-   "rendered": true,
-   "vw": 414,
-   "pageScrollsSideways": false,
-   "scrollWidth": 414,
-   "overflow": [],
-   "clipped": [],
-   "tinyTargets": [],
-   "tinyCount": 0,
-   "smallCount": 16,
-   "collisions": [],
-   "lowContrast": [],
-   "lowContrastCount": 0,
-   "wordsAboveFold": 96,
-   "leftEdges": [
-    0
-   ]
-  },
-  {
-   "width": 414,
-   "path": "/spotlight",
-   "rendered": true,
-   "vw": 414,
-   "pageScrollsSideways": false,
-   "scrollWidth": 414,
-   "overflow": [],
-   "clipped": [],
-   "tinyTargets": [],
-   "tinyCount": 0,
-   "smallCount": 33,
-   "collisions": [],
-   "lowContrast": [],
-   "lowContrastCount": 0,
-   "wordsAboveFold": 53,
-   "leftEdges": [
-    0
-   ]
-  },
-  {
-   "width": 414,
-   "path": "/chats",
-   "rendered": true,
-   "vw": 414,
-   "pageScrollsSideways": false,
-   "scrollWidth": 414,
-   "overflow": [],
-   "clipped": [],
-   "tinyTargets": [],
-   "tinyCount": 0,
-   "smallCount": 3,
-   "collisions": [],
-   "lowContrast": [],
-   "lowContrastCount": 0,
-   "wordsAboveFold": 54,
-   "leftEdges": []
-  },
-  {
-   "width": 414,
-   "path": "/me",
-   "rendered": true,
-   "vw": 414,
-   "pageScrollsSideways": false,
-   "scrollWidth": 414,
-   "overflow": [],
-   "clipped": [],
-   "tinyTargets": [],
-   "tinyCount": 0,
-   "smallCount": 12,
-   "collisions": [],
-   "lowContrast": [],
-   "lowContrastCount": 0,
-   "wordsAboveFold": 53,
-   "leftEdges": [
-    0,
-    16
-   ]
-  },
-  {
-   "width": 414,
-   "path": "/settings",
-   "rendered": true,
-   "vw": 414,
-   "pageScrollsSideways": false,
-   "scrollWidth": 414,
    "overflow": [],
    "clipped": [],
    "tinyTargets": [],
@@ -1375,7 +1929,329 @@
    "collisions": [],
    "lowContrast": [],
    "lowContrastCount": 0,
-   "wordsAboveFold": 73,
+   "wordsAboveFold": 63,
+   "leftEdges": [
+    0,
+    12
+   ]
+  },
+  {
+   "width": 390,
+   "path": "/tips",
+   "rendered": true,
+   "vw": 390,
+   "pageScrollsSideways": false,
+   "scrollWidth": 390,
+   "overflow": [],
+   "clipped": [],
+   "tinyTargets": [],
+   "tinyCount": 0,
+   "smallCount": 17,
+   "collisions": [],
+   "lowContrast": [],
+   "lowContrastCount": 0,
+   "wordsAboveFold": 156,
+   "leftEdges": [
+    12
+   ]
+  },
+  {
+   "width": 390,
+   "path": "/ask-lula",
+   "rendered": false,
+   "vw": 390,
+   "pageScrollsSideways": false,
+   "scrollWidth": 390,
+   "overflow": [],
+   "clipped": [],
+   "tinyTargets": [],
+   "tinyCount": 0,
+   "smallCount": 7,
+   "collisions": [],
+   "lowContrast": [
+    {
+     "el": "ion-label.sc-ion-label-md-h.md",
+     "text": "Home",
+     "size": 10.53,
+     "got": 3.12,
+     "need": 4.5
+    }
+   ],
+   "lowContrastCount": 1,
+   "wordsAboveFold": 34,
+   "leftEdges": [
+    24
+   ]
+  },
+  {
+   "width": 390,
+   "path": "/new",
+   "rendered": true,
+   "vw": 390,
+   "pageScrollsSideways": false,
+   "scrollWidth": 390,
+   "overflow": [],
+   "clipped": [
+    {
+     "el": "span.sr-only",
+     "text": "Start dictation",
+     "needs": 95,
+     "has": 1
+    }
+   ],
+   "tinyTargets": [],
+   "tinyCount": 0,
+   "smallCount": 11,
+   "collisions": [],
+   "lowContrast": [
+    {
+     "el": "button.post-button",
+     "text": "Post",
+     "size": 15,
+     "got": 3.12,
+     "need": 4.5
+    },
+    {
+     "el": "span",
+     "text": "Missing & Found",
+     "size": 14,
+     "got": 4.03,
+     "need": 4.5
+    },
+    {
+     "el": "span",
+     "text": "We kept what you typed. Carry ",
+     "size": 13.5,
+     "got": 4.03,
+     "need": 4.5
+    },
+    {
+     "el": "button",
+     "text": "Start fresh",
+     "size": 13.5,
+     "got": 4.03,
+     "need": 4.5
+    },
+    {
+     "el": "span",
+     "text": "Generate",
+     "size": 14,
+     "got": 2.79,
+     "need": 4.5
+    }
+   ],
+   "lowContrastCount": 5,
+   "wordsAboveFold": 83,
+   "leftEdges": [
+    14
+   ]
+  },
+  {
+   "width": 390,
+   "path": "/user/u_mwqyy2cfz1mumc",
+   "rendered": true,
+   "vw": 390,
+   "pageScrollsSideways": false,
+   "scrollWidth": 390,
+   "overflow": [],
+   "clipped": [],
+   "tinyTargets": [],
+   "tinyCount": 0,
+   "smallCount": 7,
+   "collisions": [],
+   "lowContrast": [
+    {
+     "el": "a.lf-btn.lf-btn--sm",
+     "text": "Be on the lookout",
+     "size": 14,
+     "got": 3.12,
+     "need": 4.5
+    },
+    {
+     "el": "button.quickbtn.safe",
+     "text": "I am safe",
+     "size": 14,
+     "got": 3.28,
+     "need": 4.5
+    }
+   ],
+   "lowContrastCount": 2,
+   "wordsAboveFold": 53,
+   "leftEdges": [
+    0
+   ]
+  },
+  {
+   "width": 414,
+   "path": "/home",
+   "rendered": true,
+   "vw": 414,
+   "pageScrollsSideways": false,
+   "scrollWidth": 414,
+   "overflow": [],
+   "clipped": [],
+   "tinyTargets": [],
+   "tinyCount": 0,
+   "smallCount": 7,
+   "collisions": [],
+   "lowContrast": [
+    {
+     "el": "ion-label.sc-ion-label-md-h.md",
+     "text": "Home",
+     "size": 11,
+     "got": 3.12,
+     "need": 4.5
+    }
+   ],
+   "lowContrastCount": 1,
+   "wordsAboveFold": 34,
+   "leftEdges": [
+    24
+   ]
+  },
+  {
+   "width": 414,
+   "path": "/spotlight",
+   "rendered": true,
+   "vw": 414,
+   "pageScrollsSideways": false,
+   "scrollWidth": 414,
+   "overflow": [],
+   "clipped": [],
+   "tinyTargets": [],
+   "tinyCount": 0,
+   "smallCount": 33,
+   "collisions": [],
+   "lowContrast": [
+    {
+     "el": "button.pill.on",
+     "text": "All",
+     "size": 14,
+     "got": 4.03,
+     "need": 4.5
+    },
+    {
+     "el": "button.lf-btn.lf-btn--primary",
+     "text": "Create a spotlight",
+     "size": 15,
+     "got": 3.12,
+     "need": 4.5
+    },
+    {
+     "el": "ion-label.sc-ion-label-md-h.md",
+     "text": "Spotlight",
+     "size": 11,
+     "got": 3.12,
+     "need": 4.5
+    }
+   ],
+   "lowContrastCount": 3,
+   "wordsAboveFold": 52,
+   "leftEdges": [
+    0
+   ]
+  },
+  {
+   "width": 414,
+   "path": "/chats",
+   "rendered": true,
+   "vw": 414,
+   "pageScrollsSideways": false,
+   "scrollWidth": 414,
+   "overflow": [],
+   "clipped": [],
+   "tinyTargets": [],
+   "tinyCount": 0,
+   "smallCount": 5,
+   "collisions": [],
+   "lowContrast": [
+    {
+     "el": "button.lf-btn.lf-btn--primary",
+     "text": "Browse the feed",
+     "size": 15,
+     "got": 3.12,
+     "need": 4.5
+    }
+   ],
+   "lowContrastCount": 1,
+   "wordsAboveFold": 41,
+   "leftEdges": []
+  },
+  {
+   "width": 414,
+   "path": "/me",
+   "rendered": true,
+   "vw": 414,
+   "pageScrollsSideways": false,
+   "scrollWidth": 414,
+   "overflow": [],
+   "clipped": [],
+   "tinyTargets": [],
+   "tinyCount": 0,
+   "smallCount": 12,
+   "collisions": [],
+   "lowContrast": [
+    {
+     "el": "a.profile-settings",
+     "text": "Settings",
+     "size": 16,
+     "got": 2.79,
+     "need": 4.5
+    },
+    {
+     "el": "a.saved-link",
+     "text": "Saved cases",
+     "size": 16,
+     "got": 3.12,
+     "need": 4.5
+    },
+    {
+     "el": "button.lf-btn.lf-btn--primary",
+     "text": "Check in",
+     "size": 15,
+     "got": 3.12,
+     "need": 4.5
+    },
+    {
+     "el": "button.lf-btn.lf-btn--primary",
+     "text": "Create a post",
+     "size": 15,
+     "got": 3.12,
+     "need": 4.5
+    }
+   ],
+   "lowContrastCount": 4,
+   "wordsAboveFold": 78,
+   "leftEdges": [
+    0,
+    16,
+    28
+   ]
+  },
+  {
+   "width": 414,
+   "path": "/settings",
+   "rendered": true,
+   "vw": 414,
+   "pageScrollsSideways": false,
+   "scrollWidth": 414,
+   "overflow": [],
+   "clipped": [],
+   "tinyTargets": [],
+   "tinyCount": 0,
+   "smallCount": 12,
+   "collisions": [],
+   "lowContrast": [
+    {
+     "el": "button.lf-btn.lf-btn--primary",
+     "text": "Follow surname",
+     "size": 14,
+     "got": 3.12,
+     "need": 4.5
+    }
+   ],
+   "lowContrastCount": 1,
+   "wordsAboveFold": 80,
    "leftEdges": [
     12
    ]
@@ -1393,8 +2269,23 @@
    "tinyCount": 0,
    "smallCount": 5,
    "collisions": [],
-   "lowContrast": [],
-   "lowContrastCount": 0,
+   "lowContrast": [
+    {
+     "el": "button.lf-btn.lf-btn--primary",
+     "text": "Send an \"I am safe\" check-in n",
+     "size": 16,
+     "got": 3.12,
+     "need": 4.5
+    },
+    {
+     "el": "button.lf-btn.lf-btn--primary",
+     "text": "Start the lookout",
+     "size": 16,
+     "got": 3.12,
+     "need": 4.5
+    }
+   ],
+   "lowContrastCount": 2,
    "wordsAboveFold": 120,
    "leftEdges": [
     54,
@@ -1409,14 +2300,57 @@
    "pageScrollsSideways": false,
    "scrollWidth": 414,
    "overflow": [],
-   "clipped": [],
+   "clipped": [
+    {
+     "el": "span.sr-only",
+     "text": "Start dictation",
+     "needs": 95,
+     "has": 1
+    }
+   ],
    "tinyTargets": [],
    "tinyCount": 0,
-   "smallCount": 8,
+   "smallCount": 11,
    "collisions": [],
-   "lowContrast": [],
-   "lowContrastCount": 0,
-   "wordsAboveFold": 52,
+   "lowContrast": [
+    {
+     "el": "button.post-button",
+     "text": "Post",
+     "size": 15,
+     "got": 3.12,
+     "need": 4.5
+    },
+    {
+     "el": "span",
+     "text": "Missing & Found",
+     "size": 14,
+     "got": 4.03,
+     "need": 4.5
+    },
+    {
+     "el": "span",
+     "text": "We kept what you typed. Carry ",
+     "size": 13.5,
+     "got": 4.03,
+     "need": 4.5
+    },
+    {
+     "el": "button",
+     "text": "Start fresh",
+     "size": 13.5,
+     "got": 4.03,
+     "need": 4.5
+    },
+    {
+     "el": "span",
+     "text": "Generate",
+     "size": 14,
+     "got": 2.79,
+     "need": 4.5
+    }
+   ],
+   "lowContrastCount": 5,
+   "wordsAboveFold": 86,
    "leftEdges": [
     14
    ]
@@ -1434,9 +2368,24 @@
    "tinyCount": 0,
    "smallCount": 10,
    "collisions": [],
-   "lowContrast": [],
-   "lowContrastCount": 0,
-   "wordsAboveFold": 114,
+   "lowContrast": [
+    {
+     "el": "button.on",
+     "text": "All 37",
+     "size": 13,
+     "got": 4.03,
+     "need": 4.5
+    },
+    {
+     "el": "button.lf-btn.lf-btn--primary",
+     "text": "Still stuck? Open the Help pag",
+     "size": 16,
+     "got": 3.12,
+     "need": 4.5
+    }
+   ],
+   "lowContrastCount": 2,
+   "wordsAboveFold": 116,
    "leftEdges": [
     0,
     16
@@ -1476,8 +2425,23 @@
    "tinyCount": 0,
    "smallCount": 6,
    "collisions": [],
-   "lowContrast": [],
-   "lowContrastCount": 0,
+   "lowContrast": [
+    {
+     "el": "button.pill.on",
+     "text": "All",
+     "size": 14,
+     "got": 4.03,
+     "need": 4.5
+    },
+    {
+     "el": "button.lf-btn.lf-btn--primary",
+     "text": "Browse the feed",
+     "size": 15,
+     "got": 3.12,
+     "need": 4.5
+    }
+   ],
+   "lowContrastCount": 2,
    "wordsAboveFold": 57,
    "leftEdges": []
   },
@@ -1494,10 +2458,20 @@
    "tinyCount": 0,
    "smallCount": 5,
    "collisions": [],
-   "lowContrast": [],
-   "lowContrastCount": 0,
+   "lowContrast": [
+    {
+     "el": "button.pill.on",
+     "text": "Following · 0",
+     "size": 14,
+     "got": 4.03,
+     "need": 4.5
+    }
+   ],
+   "lowContrastCount": 1,
    "wordsAboveFold": 42,
-   "leftEdges": []
+   "leftEdges": [
+    12
+   ]
   },
   {
    "width": 414,
@@ -1510,11 +2484,26 @@
    "clipped": [],
    "tinyTargets": [],
    "tinyCount": 0,
-   "smallCount": 3,
+   "smallCount": 6,
    "collisions": [],
-   "lowContrast": [],
-   "lowContrastCount": 0,
-   "wordsAboveFold": 32,
+   "lowContrast": [
+    {
+     "el": "button.chip.on",
+     "text": "All",
+     "size": 13.5,
+     "got": 4.03,
+     "need": 4.5
+    },
+    {
+     "el": "ion-label.sc-ion-label-md-h.md",
+     "text": "Notifications",
+     "size": 11,
+     "got": 3.12,
+     "need": 4.5
+    }
+   ],
+   "lowContrastCount": 2,
+   "wordsAboveFold": 35,
    "leftEdges": []
   },
   {
@@ -1546,11 +2535,11 @@
    "clipped": [],
    "tinyTargets": [],
    "tinyCount": 0,
-   "smallCount": 18,
+   "smallCount": 17,
    "collisions": [],
    "lowContrast": [],
    "lowContrastCount": 0,
-   "wordsAboveFold": 47,
+   "wordsAboveFold": 63,
    "leftEdges": [
     0,
     12
@@ -1579,7 +2568,7 @@
   {
    "width": 414,
    "path": "/ask-lula",
-   "rendered": true,
+   "rendered": false,
    "vw": 414,
    "pageScrollsSideways": false,
    "scrollWidth": 414,
@@ -1587,18 +2576,89 @@
    "clipped": [],
    "tinyTargets": [],
    "tinyCount": 0,
-   "smallCount": 8,
+   "smallCount": 7,
    "collisions": [],
-   "lowContrast": [],
-   "lowContrastCount": 0,
-   "wordsAboveFold": 101,
+   "lowContrast": [
+    {
+     "el": "ion-label.sc-ion-label-md-h.md",
+     "text": "Home",
+     "size": 11,
+     "got": 3.12,
+     "need": 4.5
+    }
+   ],
+   "lowContrastCount": 1,
+   "wordsAboveFold": 34,
    "leftEdges": [
-    12
+    24
    ]
   },
   {
    "width": 414,
-   "path": "/post/p_muoaz007c8fbod/poster",
+   "path": "/new",
+   "rendered": true,
+   "vw": 414,
+   "pageScrollsSideways": false,
+   "scrollWidth": 414,
+   "overflow": [],
+   "clipped": [
+    {
+     "el": "span.sr-only",
+     "text": "Start dictation",
+     "needs": 95,
+     "has": 1
+    }
+   ],
+   "tinyTargets": [],
+   "tinyCount": 0,
+   "smallCount": 11,
+   "collisions": [],
+   "lowContrast": [
+    {
+     "el": "button.post-button",
+     "text": "Post",
+     "size": 15,
+     "got": 3.12,
+     "need": 4.5
+    },
+    {
+     "el": "span",
+     "text": "Missing & Found",
+     "size": 14,
+     "got": 4.03,
+     "need": 4.5
+    },
+    {
+     "el": "span",
+     "text": "We kept what you typed. Carry ",
+     "size": 13.5,
+     "got": 4.03,
+     "need": 4.5
+    },
+    {
+     "el": "button",
+     "text": "Start fresh",
+     "size": 13.5,
+     "got": 4.03,
+     "need": 4.5
+    },
+    {
+     "el": "span",
+     "text": "Generate",
+     "size": 14,
+     "got": 2.79,
+     "need": 4.5
+    }
+   ],
+   "lowContrastCount": 5,
+   "wordsAboveFold": 86,
+   "leftEdges": [
+    14
+   ]
+  },
+  {
+   "width": 414,
+   "path": "/user/u_mwqyy2cfz1mumc",
    "rendered": true,
    "vw": 414,
    "pageScrollsSideways": false,
@@ -1607,32 +2667,26 @@
    "clipped": [],
    "tinyTargets": [],
    "tinyCount": 0,
-   "smallCount": 3,
+   "smallCount": 7,
    "collisions": [],
-   "lowContrast": [],
-   "lowContrastCount": 0,
+   "lowContrast": [
+    {
+     "el": "a.lf-btn.lf-btn--sm",
+     "text": "Be on the lookout",
+     "size": 14,
+     "got": 3.12,
+     "need": 4.5
+    },
+    {
+     "el": "button.quickbtn.safe",
+     "text": "I am safe",
+     "size": 14,
+     "got": 3.28,
+     "need": 4.5
+    }
+   ],
+   "lowContrastCount": 2,
    "wordsAboveFold": 53,
-   "leftEdges": [
-    25,
-    12
-   ]
-  },
-  {
-   "width": 414,
-   "path": "/user/u_muoayt355ps7hv",
-   "rendered": true,
-   "vw": 414,
-   "pageScrollsSideways": false,
-   "scrollWidth": 414,
-   "overflow": [],
-   "clipped": [],
-   "tinyTargets": [],
-   "tinyCount": 0,
-   "smallCount": 12,
-   "collisions": [],
-   "lowContrast": [],
-   "lowContrastCount": 0,
-   "wordsAboveFold": 55,
    "leftEdges": [
     0
    ]
@@ -1648,13 +2702,21 @@
    "clipped": [],
    "tinyTargets": [],
    "tinyCount": 0,
-   "smallCount": 16,
+   "smallCount": 7,
    "collisions": [],
-   "lowContrast": [],
-   "lowContrastCount": 0,
-   "wordsAboveFold": 96,
+   "lowContrast": [
+    {
+     "el": "ion-label.sc-ion-label-md-h.md",
+     "text": "Home",
+     "size": 11,
+     "got": 3.12,
+     "need": 4.5
+    }
+   ],
+   "lowContrastCount": 1,
+   "wordsAboveFold": 34,
    "leftEdges": [
-    44
+    56
    ]
   },
   {
@@ -1670,9 +2732,31 @@
    "tinyCount": 0,
    "smallCount": 33,
    "collisions": [],
-   "lowContrast": [],
-   "lowContrastCount": 0,
-   "wordsAboveFold": 53,
+   "lowContrast": [
+    {
+     "el": "button.pill.on",
+     "text": "All",
+     "size": 14,
+     "got": 4.03,
+     "need": 4.5
+    },
+    {
+     "el": "button.lf-btn.lf-btn--primary",
+     "text": "Create a spotlight",
+     "size": 15,
+     "got": 3.12,
+     "need": 4.5
+    },
+    {
+     "el": "ion-label.sc-ion-label-md-h.md",
+     "text": "Spotlight",
+     "size": 11,
+     "got": 3.12,
+     "need": 4.5
+    }
+   ],
+   "lowContrastCount": 3,
+   "wordsAboveFold": 52,
    "leftEdges": [
     0
    ]
@@ -1688,11 +2772,19 @@
    "clipped": [],
    "tinyTargets": [],
    "tinyCount": 0,
-   "smallCount": 3,
+   "smallCount": 5,
    "collisions": [],
-   "lowContrast": [],
-   "lowContrastCount": 0,
-   "wordsAboveFold": 54,
+   "lowContrast": [
+    {
+     "el": "button.lf-btn.lf-btn--primary",
+     "text": "Browse the feed",
+     "size": 15,
+     "got": 3.12,
+     "need": 4.5
+    }
+   ],
+   "lowContrastCount": 1,
+   "wordsAboveFold": 41,
    "leftEdges": []
   },
   {
@@ -1708,12 +2800,42 @@
    "tinyCount": 0,
    "smallCount": 12,
    "collisions": [],
-   "lowContrast": [],
-   "lowContrastCount": 0,
-   "wordsAboveFold": 53,
+   "lowContrast": [
+    {
+     "el": "a.profile-settings",
+     "text": "Settings",
+     "size": 16,
+     "got": 2.79,
+     "need": 4.5
+    },
+    {
+     "el": "a.saved-link",
+     "text": "Saved cases",
+     "size": 16,
+     "got": 3.12,
+     "need": 4.5
+    },
+    {
+     "el": "button.lf-btn.lf-btn--primary",
+     "text": "Check in",
+     "size": 15,
+     "got": 3.12,
+     "need": 4.5
+    },
+    {
+     "el": "button.lf-btn.lf-btn--primary",
+     "text": "Create a post",
+     "size": 15,
+     "got": 3.12,
+     "need": 4.5
+    }
+   ],
+   "lowContrastCount": 4,
+   "wordsAboveFold": 79,
    "leftEdges": [
     44,
     60,
+    72,
     0
    ]
   },
@@ -1728,11 +2850,19 @@
    "clipped": [],
    "tinyTargets": [],
    "tinyCount": 0,
-   "smallCount": 11,
+   "smallCount": 12,
    "collisions": [],
-   "lowContrast": [],
-   "lowContrastCount": 0,
-   "wordsAboveFold": 73,
+   "lowContrast": [
+    {
+     "el": "button.lf-btn.lf-btn--primary",
+     "text": "Follow surname",
+     "size": 14,
+     "got": 3.12,
+     "need": 4.5
+    }
+   ],
+   "lowContrastCount": 1,
+   "wordsAboveFold": 83,
    "leftEdges": [
     44,
     12
@@ -1751,8 +2881,23 @@
    "tinyCount": 0,
    "smallCount": 5,
    "collisions": [],
-   "lowContrast": [],
-   "lowContrastCount": 0,
+   "lowContrast": [
+    {
+     "el": "button.lf-btn.lf-btn--primary",
+     "text": "Send an \"I am safe\" check-in n",
+     "size": 16,
+     "got": 3.12,
+     "need": 4.5
+    },
+    {
+     "el": "button.lf-btn.lf-btn--primary",
+     "text": "Start the lookout",
+     "size": 16,
+     "got": 3.12,
+     "need": 4.5
+    }
+   ],
+   "lowContrastCount": 2,
    "wordsAboveFold": 129,
    "leftEdges": [
     86,
@@ -1767,14 +2912,67 @@
    "pageScrollsSideways": false,
    "scrollWidth": 768,
    "overflow": [],
-   "clipped": [],
-   "tinyTargets": [],
-   "tinyCount": 0,
-   "smallCount": 8,
+   "clipped": [
+    {
+     "el": "span.sr-only",
+     "text": "Start dictation",
+     "needs": 95,
+     "has": 1
+    }
+   ],
+   "tinyTargets": [
+    {
+     "el": "button",
+     "text": "Start fresh",
+     "w": 82,
+     "h": 16,
+     "x": 577,
+     "y": 290,
+     "right": 659
+    }
+   ],
+   "tinyCount": 1,
+   "smallCount": 12,
    "collisions": [],
-   "lowContrast": [],
-   "lowContrastCount": 0,
-   "wordsAboveFold": 52,
+   "lowContrast": [
+    {
+     "el": "button.post-button",
+     "text": "Post",
+     "size": 15,
+     "got": 3.12,
+     "need": 4.5
+    },
+    {
+     "el": "span",
+     "text": "Missing & Found",
+     "size": 14,
+     "got": 4.03,
+     "need": 4.5
+    },
+    {
+     "el": "span",
+     "text": "We kept what you typed. Carry ",
+     "size": 13.5,
+     "got": 4.03,
+     "need": 4.5
+    },
+    {
+     "el": "button",
+     "text": "Start fresh",
+     "size": 13.5,
+     "got": 4.03,
+     "need": 4.5
+    },
+    {
+     "el": "span",
+     "text": "Generate",
+     "size": 14,
+     "got": 2.79,
+     "need": 4.5
+    }
+   ],
+   "lowContrastCount": 5,
+   "wordsAboveFold": 106,
    "leftEdges": [
     98
    ]
@@ -1792,9 +2990,24 @@
    "tinyCount": 0,
    "smallCount": 10,
    "collisions": [],
-   "lowContrast": [],
-   "lowContrastCount": 0,
-   "wordsAboveFold": 124,
+   "lowContrast": [
+    {
+     "el": "button.on",
+     "text": "All 37",
+     "size": 13,
+     "got": 4.03,
+     "need": 4.5
+    },
+    {
+     "el": "button.lf-btn.lf-btn--primary",
+     "text": "Still stuck? Open the Help pag",
+     "size": 16,
+     "got": 3.12,
+     "need": 4.5
+    }
+   ],
+   "lowContrastCount": 2,
+   "wordsAboveFold": 126,
    "leftEdges": [
     44,
     60
@@ -1833,8 +3046,23 @@
    "tinyCount": 0,
    "smallCount": 6,
    "collisions": [],
-   "lowContrast": [],
-   "lowContrastCount": 0,
+   "lowContrast": [
+    {
+     "el": "button.pill.on",
+     "text": "All",
+     "size": 14,
+     "got": 4.03,
+     "need": 4.5
+    },
+    {
+     "el": "button.lf-btn.lf-btn--primary",
+     "text": "Browse the feed",
+     "size": 15,
+     "got": 3.12,
+     "need": 4.5
+    }
+   ],
+   "lowContrastCount": 2,
    "wordsAboveFold": 57,
    "leftEdges": []
   },
@@ -1851,10 +3079,20 @@
    "tinyCount": 0,
    "smallCount": 5,
    "collisions": [],
-   "lowContrast": [],
-   "lowContrastCount": 0,
+   "lowContrast": [
+    {
+     "el": "button.pill.on",
+     "text": "Following · 0",
+     "size": 14,
+     "got": 4.03,
+     "need": 4.5
+    }
+   ],
+   "lowContrastCount": 1,
    "wordsAboveFold": 42,
-   "leftEdges": []
+   "leftEdges": [
+    12
+   ]
   },
   {
    "width": 768,
@@ -1867,11 +3105,26 @@
    "clipped": [],
    "tinyTargets": [],
    "tinyCount": 0,
-   "smallCount": 3,
+   "smallCount": 6,
    "collisions": [],
-   "lowContrast": [],
-   "lowContrastCount": 0,
-   "wordsAboveFold": 32,
+   "lowContrast": [
+    {
+     "el": "button.chip.on",
+     "text": "All",
+     "size": 13.5,
+     "got": 4.03,
+     "need": 4.5
+    },
+    {
+     "el": "ion-label.sc-ion-label-md-h.md",
+     "text": "Notifications",
+     "size": 11,
+     "got": 3.12,
+     "need": 4.5
+    }
+   ],
+   "lowContrastCount": 2,
+   "wordsAboveFold": 35,
    "leftEdges": []
   },
   {
@@ -1903,11 +3156,11 @@
    "clipped": [],
    "tinyTargets": [],
    "tinyCount": 0,
-   "smallCount": 18,
+   "smallCount": 17,
    "collisions": [],
    "lowContrast": [],
    "lowContrastCount": 0,
-   "wordsAboveFold": 47,
+   "wordsAboveFold": 63,
    "leftEdges": [
     0,
     12
@@ -1936,7 +3189,7 @@
   {
    "width": 768,
    "path": "/ask-lula",
-   "rendered": true,
+   "rendered": false,
    "vw": 768,
    "pageScrollsSideways": false,
    "scrollWidth": 768,
@@ -1944,55 +3197,129 @@
    "clipped": [],
    "tinyTargets": [],
    "tinyCount": 0,
-   "smallCount": 8,
+   "smallCount": 7,
    "collisions": [],
-   "lowContrast": [],
-   "lowContrastCount": 0,
-   "wordsAboveFold": 101,
+   "lowContrast": [
+    {
+     "el": "ion-label.sc-ion-label-md-h.md",
+     "text": "Home",
+     "size": 11,
+     "got": 3.12,
+     "need": 4.5
+    }
+   ],
+   "lowContrastCount": 1,
+   "wordsAboveFold": 34,
    "leftEdges": [
-    12
+    56
    ]
   },
   {
    "width": 768,
-   "path": "/post/p_muoaz007c8fbod/poster",
+   "path": "/new",
    "rendered": true,
    "vw": 768,
    "pageScrollsSideways": false,
    "scrollWidth": 768,
    "overflow": [],
-   "clipped": [],
-   "tinyTargets": [],
-   "tinyCount": 0,
-   "smallCount": 3,
-   "collisions": [],
-   "lowContrast": [],
-   "lowContrastCount": 0,
-   "wordsAboveFold": 51,
-   "leftEdges": [
-    174,
-    136
-   ]
-  },
-  {
-   "width": 768,
-   "path": "/user/u_muoayt355ps7hv",
-   "rendered": true,
-   "vw": 768,
-   "pageScrollsSideways": false,
-   "scrollWidth": 768,
-   "overflow": [],
-   "clipped": [],
-   "tinyTargets": [],
-   "tinyCount": 0,
+   "clipped": [
+    {
+     "el": "span.sr-only",
+     "text": "Start dictation",
+     "needs": 95,
+     "has": 1
+    }
+   ],
+   "tinyTargets": [
+    {
+     "el": "button",
+     "text": "Start fresh",
+     "w": 82,
+     "h": 16,
+     "x": 577,
+     "y": 290,
+     "right": 659
+    }
+   ],
+   "tinyCount": 1,
    "smallCount": 12,
    "collisions": [],
-   "lowContrast": [],
-   "lowContrastCount": 0,
-   "wordsAboveFold": 70,
+   "lowContrast": [
+    {
+     "el": "button.post-button",
+     "text": "Post",
+     "size": 15,
+     "got": 3.12,
+     "need": 4.5
+    },
+    {
+     "el": "span",
+     "text": "Missing & Found",
+     "size": 14,
+     "got": 4.03,
+     "need": 4.5
+    },
+    {
+     "el": "span",
+     "text": "We kept what you typed. Carry ",
+     "size": 13.5,
+     "got": 4.03,
+     "need": 4.5
+    },
+    {
+     "el": "button",
+     "text": "Start fresh",
+     "size": 13.5,
+     "got": 4.03,
+     "need": 4.5
+    },
+    {
+     "el": "span",
+     "text": "Generate",
+     "size": 14,
+     "got": 2.79,
+     "need": 4.5
+    }
+   ],
+   "lowContrastCount": 5,
+   "wordsAboveFold": 106,
    "leftEdges": [
-    0,
-    44
+    98
+   ]
+  },
+  {
+   "width": 768,
+   "path": "/user/u_mwqyy2cfz1mumc",
+   "rendered": true,
+   "vw": 768,
+   "pageScrollsSideways": false,
+   "scrollWidth": 768,
+   "overflow": [],
+   "clipped": [],
+   "tinyTargets": [],
+   "tinyCount": 0,
+   "smallCount": 7,
+   "collisions": [],
+   "lowContrast": [
+    {
+     "el": "a.lf-btn.lf-btn--sm",
+     "text": "Be on the lookout",
+     "size": 14,
+     "got": 3.12,
+     "need": 4.5
+    },
+    {
+     "el": "button.quickbtn.safe",
+     "text": "I am safe",
+     "size": 14,
+     "got": 3.28,
+     "need": 4.5
+    }
+   ],
+   "lowContrastCount": 2,
+   "wordsAboveFold": 57,
+   "leftEdges": [
+    0
    ]
   },
   {
@@ -2006,13 +3333,21 @@
    "clipped": [],
    "tinyTargets": [],
    "tinyCount": 0,
-   "smallCount": 16,
+   "smallCount": 7,
    "collisions": [],
-   "lowContrast": [],
-   "lowContrastCount": 0,
-   "wordsAboveFold": 96,
+   "lowContrast": [
+    {
+     "el": "ion-label.sc-ion-label-md-h.md",
+     "text": "Home",
+     "size": 11,
+     "got": 3.12,
+     "need": 4.5
+    }
+   ],
+   "lowContrastCount": 1,
+   "wordsAboveFold": 34,
    "leftEdges": [
-    172
+    184
    ]
   },
   {
@@ -2028,9 +3363,31 @@
    "tinyCount": 0,
    "smallCount": 33,
    "collisions": [],
-   "lowContrast": [],
-   "lowContrastCount": 0,
-   "wordsAboveFold": 53,
+   "lowContrast": [
+    {
+     "el": "button.pill.on",
+     "text": "All",
+     "size": 14,
+     "got": 4.03,
+     "need": 4.5
+    },
+    {
+     "el": "button.lf-btn.lf-btn--primary",
+     "text": "Create a spotlight",
+     "size": 15,
+     "got": 3.12,
+     "need": 4.5
+    },
+    {
+     "el": "ion-label.sc-ion-label-md-h.md",
+     "text": "Spotlight",
+     "size": 11,
+     "got": 3.12,
+     "need": 4.5
+    }
+   ],
+   "lowContrastCount": 3,
+   "wordsAboveFold": 52,
    "leftEdges": [
     0
    ]
@@ -2046,11 +3403,19 @@
    "clipped": [],
    "tinyTargets": [],
    "tinyCount": 0,
-   "smallCount": 3,
+   "smallCount": 5,
    "collisions": [],
-   "lowContrast": [],
-   "lowContrastCount": 0,
-   "wordsAboveFold": 54,
+   "lowContrast": [
+    {
+     "el": "button.lf-btn.lf-btn--primary",
+     "text": "Browse the feed",
+     "size": 15,
+     "got": 3.12,
+     "need": 4.5
+    }
+   ],
+   "lowContrastCount": 1,
+   "wordsAboveFold": 41,
    "leftEdges": []
   },
   {
@@ -2066,12 +3431,42 @@
    "tinyCount": 0,
    "smallCount": 12,
    "collisions": [],
-   "lowContrast": [],
-   "lowContrastCount": 0,
-   "wordsAboveFold": 53,
+   "lowContrast": [
+    {
+     "el": "a.profile-settings",
+     "text": "Settings",
+     "size": 16,
+     "got": 2.79,
+     "need": 4.5
+    },
+    {
+     "el": "a.saved-link",
+     "text": "Saved cases",
+     "size": 16,
+     "got": 3.12,
+     "need": 4.5
+    },
+    {
+     "el": "button.lf-btn.lf-btn--primary",
+     "text": "Check in",
+     "size": 15,
+     "got": 3.12,
+     "need": 4.5
+    },
+    {
+     "el": "button.lf-btn.lf-btn--primary",
+     "text": "Create a post",
+     "size": 15,
+     "got": 3.12,
+     "need": 4.5
+    }
+   ],
+   "lowContrastCount": 4,
+   "wordsAboveFold": 79,
    "leftEdges": [
     172,
     188,
+    200,
     0
    ]
   },
@@ -2086,11 +3481,19 @@
    "clipped": [],
    "tinyTargets": [],
    "tinyCount": 0,
-   "smallCount": 11,
+   "smallCount": 12,
    "collisions": [],
-   "lowContrast": [],
-   "lowContrastCount": 0,
-   "wordsAboveFold": 73,
+   "lowContrast": [
+    {
+     "el": "button.lf-btn.lf-btn--primary",
+     "text": "Follow surname",
+     "size": 14,
+     "got": 3.12,
+     "need": 4.5
+    }
+   ],
+   "lowContrastCount": 1,
+   "wordsAboveFold": 83,
    "leftEdges": [
     172,
     12
@@ -2109,8 +3512,23 @@
    "tinyCount": 0,
    "smallCount": 5,
    "collisions": [],
-   "lowContrast": [],
-   "lowContrastCount": 0,
+   "lowContrast": [
+    {
+     "el": "button.lf-btn.lf-btn--primary",
+     "text": "Send an \"I am safe\" check-in n",
+     "size": 16,
+     "got": 3.12,
+     "need": 4.5
+    },
+    {
+     "el": "button.lf-btn.lf-btn--primary",
+     "text": "Start the lookout",
+     "size": 16,
+     "got": 3.12,
+     "need": 4.5
+    }
+   ],
+   "lowContrastCount": 2,
    "wordsAboveFold": 135,
    "leftEdges": [
     214,
@@ -2125,14 +3543,67 @@
    "pageScrollsSideways": false,
    "scrollWidth": 1024,
    "overflow": [],
-   "clipped": [],
-   "tinyTargets": [],
-   "tinyCount": 0,
-   "smallCount": 8,
+   "clipped": [
+    {
+     "el": "span.sr-only",
+     "text": "Start dictation",
+     "needs": 95,
+     "has": 1
+    }
+   ],
+   "tinyTargets": [
+    {
+     "el": "button",
+     "text": "Start fresh",
+     "w": 82,
+     "h": 16,
+     "x": 705,
+     "y": 290,
+     "right": 787
+    }
+   ],
+   "tinyCount": 1,
+   "smallCount": 12,
    "collisions": [],
-   "lowContrast": [],
-   "lowContrastCount": 0,
-   "wordsAboveFold": 52,
+   "lowContrast": [
+    {
+     "el": "button.post-button",
+     "text": "Post",
+     "size": 15,
+     "got": 3.12,
+     "need": 4.5
+    },
+    {
+     "el": "span",
+     "text": "Missing & Found",
+     "size": 14,
+     "got": 4.03,
+     "need": 4.5
+    },
+    {
+     "el": "span",
+     "text": "We kept what you typed. Carry ",
+     "size": 13.5,
+     "got": 4.03,
+     "need": 4.5
+    },
+    {
+     "el": "button",
+     "text": "Start fresh",
+     "size": 13.5,
+     "got": 4.03,
+     "need": 4.5
+    },
+    {
+     "el": "span",
+     "text": "Generate",
+     "size": 14,
+     "got": 2.79,
+     "need": 4.5
+    }
+   ],
+   "lowContrastCount": 5,
+   "wordsAboveFold": 106,
    "leftEdges": [
     226
    ]
@@ -2150,9 +3621,24 @@
    "tinyCount": 0,
    "smallCount": 10,
    "collisions": [],
-   "lowContrast": [],
-   "lowContrastCount": 0,
-   "wordsAboveFold": 124,
+   "lowContrast": [
+    {
+     "el": "button.on",
+     "text": "All 37",
+     "size": 13,
+     "got": 4.03,
+     "need": 4.5
+    },
+    {
+     "el": "button.lf-btn.lf-btn--primary",
+     "text": "Still stuck? Open the Help pag",
+     "size": 16,
+     "got": 3.12,
+     "need": 4.5
+    }
+   ],
+   "lowContrastCount": 2,
+   "wordsAboveFold": 126,
    "leftEdges": [
     172,
     188
@@ -2191,8 +3677,23 @@
    "tinyCount": 0,
    "smallCount": 6,
    "collisions": [],
-   "lowContrast": [],
-   "lowContrastCount": 0,
+   "lowContrast": [
+    {
+     "el": "button.pill.on",
+     "text": "All",
+     "size": 14,
+     "got": 4.03,
+     "need": 4.5
+    },
+    {
+     "el": "button.lf-btn.lf-btn--primary",
+     "text": "Browse the feed",
+     "size": 15,
+     "got": 3.12,
+     "need": 4.5
+    }
+   ],
+   "lowContrastCount": 2,
    "wordsAboveFold": 57,
    "leftEdges": []
   },
@@ -2209,10 +3710,20 @@
    "tinyCount": 0,
    "smallCount": 5,
    "collisions": [],
-   "lowContrast": [],
-   "lowContrastCount": 0,
+   "lowContrast": [
+    {
+     "el": "button.pill.on",
+     "text": "Following · 0",
+     "size": 14,
+     "got": 4.03,
+     "need": 4.5
+    }
+   ],
+   "lowContrastCount": 1,
    "wordsAboveFold": 42,
-   "leftEdges": []
+   "leftEdges": [
+    12
+   ]
   },
   {
    "width": 1024,
@@ -2225,11 +3736,26 @@
    "clipped": [],
    "tinyTargets": [],
    "tinyCount": 0,
-   "smallCount": 3,
+   "smallCount": 6,
    "collisions": [],
-   "lowContrast": [],
-   "lowContrastCount": 0,
-   "wordsAboveFold": 32,
+   "lowContrast": [
+    {
+     "el": "button.chip.on",
+     "text": "All",
+     "size": 13.5,
+     "got": 4.03,
+     "need": 4.5
+    },
+    {
+     "el": "ion-label.sc-ion-label-md-h.md",
+     "text": "Notifications",
+     "size": 11,
+     "got": 3.12,
+     "need": 4.5
+    }
+   ],
+   "lowContrastCount": 2,
+   "wordsAboveFold": 35,
    "leftEdges": []
   },
   {
@@ -2261,11 +3787,11 @@
    "clipped": [],
    "tinyTargets": [],
    "tinyCount": 0,
-   "smallCount": 18,
+   "smallCount": 17,
    "collisions": [],
    "lowContrast": [],
    "lowContrastCount": 0,
-   "wordsAboveFold": 47,
+   "wordsAboveFold": 63,
    "leftEdges": [
     0,
     12
@@ -2294,7 +3820,7 @@
   {
    "width": 1024,
    "path": "/ask-lula",
-   "rendered": true,
+   "rendered": false,
    "vw": 1024,
    "pageScrollsSideways": false,
    "scrollWidth": 1024,
@@ -2302,36 +3828,99 @@
    "clipped": [],
    "tinyTargets": [],
    "tinyCount": 0,
-   "smallCount": 8,
+   "smallCount": 7,
    "collisions": [],
-   "lowContrast": [],
-   "lowContrastCount": 0,
-   "wordsAboveFold": 101,
+   "lowContrast": [
+    {
+     "el": "ion-label.sc-ion-label-md-h.md",
+     "text": "Home",
+     "size": 11,
+     "got": 3.12,
+     "need": 4.5
+    }
+   ],
+   "lowContrastCount": 1,
+   "wordsAboveFold": 34,
    "leftEdges": [
-    12
+    184
    ]
   },
   {
    "width": 1024,
-   "path": "/post/p_muoaz007c8fbod/poster",
+   "path": "/new",
    "rendered": true,
    "vw": 1024,
    "pageScrollsSideways": false,
    "scrollWidth": 1024,
    "overflow": [],
-   "clipped": [],
-   "tinyTargets": [],
-   "tinyCount": 0,
-   "smallCount": 3,
+   "clipped": [
+    {
+     "el": "span.sr-only",
+     "text": "Start dictation",
+     "needs": 95,
+     "has": 1
+    }
+   ],
+   "tinyTargets": [
+    {
+     "el": "button",
+     "text": "Start fresh",
+     "w": 82,
+     "h": 16,
+     "x": 705,
+     "y": 290,
+     "right": 787
+    }
+   ],
+   "tinyCount": 1,
+   "smallCount": 12,
    "collisions": [],
-   "lowContrast": [],
-   "lowContrastCount": 0,
-   "wordsAboveFold": 51,
-   "leftEdges": []
+   "lowContrast": [
+    {
+     "el": "button.post-button",
+     "text": "Post",
+     "size": 15,
+     "got": 3.12,
+     "need": 4.5
+    },
+    {
+     "el": "span",
+     "text": "Missing & Found",
+     "size": 14,
+     "got": 4.03,
+     "need": 4.5
+    },
+    {
+     "el": "span",
+     "text": "We kept what you typed. Carry ",
+     "size": 13.5,
+     "got": 4.03,
+     "need": 4.5
+    },
+    {
+     "el": "button",
+     "text": "Start fresh",
+     "size": 13.5,
+     "got": 4.03,
+     "need": 4.5
+    },
+    {
+     "el": "span",
+     "text": "Generate",
+     "size": 14,
+     "got": 2.79,
+     "need": 4.5
+    }
+   ],
+   "lowContrastCount": 5,
+   "wordsAboveFold": 106,
+   "leftEdges": [
+    226
+   ]
   },
   {
    "width": 1024,
-   "path": "/user/u_muoayt355ps7hv",
+   "path": "/user/u_mwqyy2cfz1mumc",
    "rendered": true,
    "vw": 1024,
    "pageScrollsSideways": false,
@@ -2340,16 +3929,277 @@
    "clipped": [],
    "tinyTargets": [],
    "tinyCount": 0,
-   "smallCount": 12,
+   "smallCount": 7,
    "collisions": [],
-   "lowContrast": [],
-   "lowContrastCount": 0,
-   "wordsAboveFold": 70,
+   "lowContrast": [
+    {
+     "el": "a.lf-btn.lf-btn--sm",
+     "text": "Be on the lookout",
+     "size": 14,
+     "got": 3.12,
+     "need": 4.5
+    },
+    {
+     "el": "button.quickbtn.safe",
+     "text": "I am safe",
+     "size": 14,
+     "got": 3.28,
+     "need": 4.5
+    }
+   ],
+   "lowContrastCount": 2,
+   "wordsAboveFold": 57,
    "leftEdges": [
-    0,
-    172
+    0
    ]
   }
  ],
- "problems": []
+ "problems": [
+  "no field .location-grid select on /new?demo=0&data=local",
+  "no field input[placeholder=\"e.g. Soweto\"] on /new?demo=0&data=local",
+  {
+   "width": 320,
+   "path": "/home",
+   "bad": [
+    "off the edge: ion-tab-button.md.tab-has-label, ion-tab-button.md.tab-has-label"
+   ]
+  },
+  {
+   "width": 320,
+   "path": "/spotlight",
+   "bad": [
+    "off the edge: ion-tab-button.md.tab-has-label, ion-tab-button.md.tab-has-label",
+    "3 low-contrast text runs"
+   ]
+  },
+  {
+   "width": 320,
+   "path": "/me",
+   "bad": [
+    "4 low-contrast text runs"
+   ]
+  },
+  {
+   "width": 320,
+   "path": "/new",
+   "bad": [
+    "clipped text: Start dictation",
+    "5 low-contrast text runs"
+   ]
+  },
+  {
+   "width": 320,
+   "path": "/notifications",
+   "bad": [
+    "off the edge: ion-tab-button.md.tab-has-label, ion-tab-button.md.tab-has-label"
+   ]
+  },
+  {
+   "width": 320,
+   "path": "/ask-lula",
+   "bad": [
+    "nothing rendered",
+    "off the edge: ion-tab-button.md.tab-has-label, ion-tab-button.md.tab-has-label"
+   ]
+  },
+  {
+   "width": 320,
+   "path": "/new",
+   "bad": [
+    "clipped text: Start dictation",
+    "5 low-contrast text runs"
+   ]
+  },
+  {
+   "width": 360,
+   "path": "/spotlight",
+   "bad": [
+    "3 low-contrast text runs"
+   ]
+  },
+  {
+   "width": 360,
+   "path": "/me",
+   "bad": [
+    "4 low-contrast text runs"
+   ]
+  },
+  {
+   "width": 360,
+   "path": "/new",
+   "bad": [
+    "clipped text: Start dictation",
+    "5 low-contrast text runs"
+   ]
+  },
+  {
+   "width": 360,
+   "path": "/ask-lula",
+   "bad": [
+    "nothing rendered"
+   ]
+  },
+  {
+   "width": 360,
+   "path": "/new",
+   "bad": [
+    "clipped text: Start dictation",
+    "5 low-contrast text runs"
+   ]
+  },
+  {
+   "width": 390,
+   "path": "/spotlight",
+   "bad": [
+    "3 low-contrast text runs"
+   ]
+  },
+  {
+   "width": 390,
+   "path": "/me",
+   "bad": [
+    "4 low-contrast text runs"
+   ]
+  },
+  {
+   "width": 390,
+   "path": "/new",
+   "bad": [
+    "clipped text: Start dictation",
+    "5 low-contrast text runs"
+   ]
+  },
+  {
+   "width": 390,
+   "path": "/ask-lula",
+   "bad": [
+    "nothing rendered"
+   ]
+  },
+  {
+   "width": 390,
+   "path": "/new",
+   "bad": [
+    "clipped text: Start dictation",
+    "5 low-contrast text runs"
+   ]
+  },
+  {
+   "width": 414,
+   "path": "/spotlight",
+   "bad": [
+    "3 low-contrast text runs"
+   ]
+  },
+  {
+   "width": 414,
+   "path": "/me",
+   "bad": [
+    "4 low-contrast text runs"
+   ]
+  },
+  {
+   "width": 414,
+   "path": "/new",
+   "bad": [
+    "clipped text: Start dictation",
+    "5 low-contrast text runs"
+   ]
+  },
+  {
+   "width": 414,
+   "path": "/ask-lula",
+   "bad": [
+    "nothing rendered"
+   ]
+  },
+  {
+   "width": 414,
+   "path": "/new",
+   "bad": [
+    "clipped text: Start dictation",
+    "5 low-contrast text runs"
+   ]
+  },
+  {
+   "width": 768,
+   "path": "/spotlight",
+   "bad": [
+    "3 low-contrast text runs"
+   ]
+  },
+  {
+   "width": 768,
+   "path": "/me",
+   "bad": [
+    "4 low-contrast text runs",
+    "left edges: 44/60/72/0"
+   ]
+  },
+  {
+   "width": 768,
+   "path": "/new",
+   "bad": [
+    "clipped text: Start dictation",
+    "1 tiny target(s): Start fresh(82x16)",
+    "5 low-contrast text runs"
+   ]
+  },
+  {
+   "width": 768,
+   "path": "/ask-lula",
+   "bad": [
+    "nothing rendered"
+   ]
+  },
+  {
+   "width": 768,
+   "path": "/new",
+   "bad": [
+    "clipped text: Start dictation",
+    "1 tiny target(s): Start fresh(82x16)",
+    "5 low-contrast text runs"
+   ]
+  },
+  {
+   "width": 1024,
+   "path": "/spotlight",
+   "bad": [
+    "3 low-contrast text runs"
+   ]
+  },
+  {
+   "width": 1024,
+   "path": "/me",
+   "bad": [
+    "4 low-contrast text runs",
+    "left edges: 172/188/200/0"
+   ]
+  },
+  {
+   "width": 1024,
+   "path": "/new",
+   "bad": [
+    "clipped text: Start dictation",
+    "1 tiny target(s): Start fresh(82x16)",
+    "5 low-contrast text runs"
+   ]
+  },
+  {
+   "width": 1024,
+   "path": "/ask-lula",
+   "bad": [
+    "nothing rendered"
+   ]
+  },
+  {
+   "width": 1024,
+   "path": "/new",
+   "bad": [
+    "clipped text: Start dictation",
+    "1 tiny target(s): Start fresh(82x16)",
+    "5 low-contrast text runs"
+   ]
+  }
+ ]
 }
