@@ -13,7 +13,7 @@ import { IconComponent } from './icon.component';
   imports: [IconComponent],
   template: `
     <span class="disc" [style.width.px]="size()" [style.height.px]="size()" [style.background]="color()" [class.ring]="ring()">
-      <lf-icon [name]="glyph()" [size]="size() * 0.58" [weight]="2.3" [filled]="filled()" />
+      <lf-icon [name]="glyph()" [size]="size() * 0.58" weight="regular" [filled]="filled()" />
     </span>
   `,
   styles: [`

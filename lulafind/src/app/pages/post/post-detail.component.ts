@@ -82,7 +82,7 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
         <article class="post">
           @if (p()!.repostOf) {
             <div class="reposted">
-              <lf-icon name="repost" [size]="14" [weight]="2.4" />
+              <lf-icon name="repost" [size]="14" [weight]="'bold'" />
               <strong>{{ reposterLine() }}</strong>
             </div>
           }
@@ -256,7 +256,7 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
                 <strong>{{ leads().length }} {{ leads().length === 1 ? 'lead' : 'leads' }}</strong>
                 · newest: {{ leads()[0].sighting ? leads()[0].sighting!.place : shortBody(leads()[0]) }}
               </span>
-              @if (verified()) { <span class="leads__tick"><lf-icon name="check" [size]="12" [weight]="3" /> checked</span> }
+              @if (verified()) { <span class="leads__tick"><lf-icon name="check" [size]="12" [weight]="'bold'" /> checked</span> }
               <lf-icon name="chevronRight" [size]="15" />
             </button>
           }
@@ -283,7 +283,7 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
           <section class="journey" aria-label="What has happened on this case">
             <button class="journey__head" type="button" (click)="journeyOpen.set(!journeyOpen())"
                     [attr.aria-expanded]="journeyOpen()">
-              <lf-icon name="steps" [size]="16" [weight]="2.2" />
+              <lf-icon name="steps" [size]="16" [weight]="'regular'" />
               <span class="journey__title">Journey</span>
               <span class="journey__count">{{ journey().length }} {{ journey().length === 1 ? 'event' : 'events' }}</span>
               <lf-icon [name]="journeyOpen() ? 'chevronUp' : 'chevronDown'" [size]="16" />
@@ -292,7 +292,7 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
               <ol class="journey__list">
                 @for (e of journey(); track e.key) {
                   <li [attr.data-tone]="e.tone">
-                    <span class="journey__dot"><lf-icon [name]="e.icon" [size]="12" [weight]="3" /></span>
+                    <span class="journey__dot"><lf-icon [name]="e.icon" [size]="12" [weight]="'bold'" /></span>
                     <div class="journey__body">
                       <strong>{{ e.title }}</strong>
                       @if (e.detail) { <span>{{ e.detail }}</span> }
@@ -315,7 +315,7 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
             -->
             <section class="after" aria-label="Finishing the case">
               <header class="after__head">
-                <span class="after__tick"><lf-icon name="check" [size]="15" [weight]="3" /></span>
+                <span class="after__tick"><lf-icon name="check" [size]="15" [weight]="'bold'" /></span>
                 <div>
                   <h2>{{ p()!.outcome.whereaboutsFound || 'Found' }}. The case is closed.</h2>
                   <!-- The count is the number of rows below, not a number written by hand. -->
@@ -357,7 +357,7 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
             </section>
           } @else {
             <p class="closed">
-              <lf-icon name="check" [size]="15" [weight]="3" />
+              <lf-icon name="check" [size]="15" [weight]="'bold'" />
               <span>Found. The family confirmed it. To take the case off the police circulation list, complete a <strong>SAPS 92</strong> with the investigating officer.</span>
             </p>
           }
@@ -571,7 +571,7 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
                         <div class="sighting"><lf-icon name="pin" [size]="13" /> {{ c.sighting.place }} · {{ provinceName(c.sighting.province) }}@if (c.sighting.note) { · {{ c.sighting.note }} }</div>
                       }
                       @if (c.sighting && p()!.sightingVerified; as v) {
-                        <div class="checked"><lf-icon name="check" [size]="13" [weight]="3" /> Checked against {{ v.source }}@if (v.note) { · {{ v.note }} }</div>
+                        <div class="checked"><lf-icon name="check" [size]="13" [weight]="'bold'" /> Checked against {{ v.source }}@if (v.note) { · {{ v.note }} }</div>
                       }
                       @if (mod.isAdmin() && (c.sighting || c.isLead)) {
                         <div class="edit__row">

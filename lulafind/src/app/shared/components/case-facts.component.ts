@@ -44,7 +44,7 @@ import { alreadySaid } from '../../core/utils/format';
       }
       @if (isLiveCase(p)) {
         <div class="case-line" [attr.data-urgency]="caseUrgency(p)">
-          <lf-icon name="clock" [size]="13" [weight]="2.2" />
+          <lf-icon name="clock" [size]="13" [weight]="'regular'" />
           <strong>{{ caseAge(p) }}</strong>
           <span>open</span>
           @if ((p.lookingIds?.length ?? 0) > 0) {

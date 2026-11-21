@@ -33,7 +33,7 @@ const POST_KINDS = new Set<Notification['kind']>([
       <div class="page-title" [hidden]="!unreadCount()">
         @if (unreadCount()) {
           <button class="lf-btn lf-btn--sm" type="button" (click)="readAll()">
-            <lf-icon name="check" [size]="16" [weight]="2.4" /> Mark all as read
+            <lf-icon name="check" [size]="16" [weight]="'bold'" /> Mark all as read
           </button>
         }
       </div>

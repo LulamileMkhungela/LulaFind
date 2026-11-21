@@ -84,7 +84,7 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
           -->
           <a class="impact" routerLink="/progress" [attr.aria-label]="'Your impact: level ' + level().level.level + ', ' + level().level.name">
             <span class="impact__ring">
-              <lf-icon name="sparkle" [size]="18" [weight]="2.2" />
+              <lf-icon name="sparkle" [size]="18" [weight]="'regular'" />
             </span>
             <div class="impact__body">
               <div class="impact__top">

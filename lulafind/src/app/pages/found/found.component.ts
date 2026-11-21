@@ -39,7 +39,7 @@ import { DAY, HOUR, timeAgo } from '../../core/utils/format';
         @for (p of found(); track p.id) {
           <a class="card" [routerLink]="'/post/' + p.id">
             <div class="card__top">
-              <span class="tick"><lf-icon name="check" [size]="14" [weight]="3" /></span>
+              <span class="tick"><lf-icon name="check" [size]="14" [weight]="'bold'" /></span>
               <span class="card__type">{{ typeLabel(p) }} · found</span>
               <span class="card__when">{{ timeAgo(p.updatedAt) }}</span>
             </div>

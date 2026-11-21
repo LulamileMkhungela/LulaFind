@@ -46,7 +46,7 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
       @if (post.repostOf) {
         <!-- LinkedIn puts the reposter's line above everything else on a reshare. -->
         <div class="fb-reposted">
-          <lf-icon name="repost" [size]="14" [weight]="2.4" />
+          <lf-icon name="repost" [size]="14" [weight]="'bold'" />
           <span><strong>{{ reposterLine() }}</strong></span>
         </div>
       }
@@ -144,7 +144,7 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
           or the place-and-time line for the same 390px.
         -->
         <span class="fb-kind-chip" [attr.data-tone]="kindTone()" [class.is-found]="post.status === 'found'">
-          <lf-icon [name]="meta().icon" [size]="11" [weight]="2.4" />{{ kindLabel() }}
+          <lf-icon [name]="meta().icon" [size]="11" [weight]="'bold'" />{{ kindLabel() }}
         </span>
         @if (showHeading()) { <h3 class="fb-post-title">{{ post.title }}</h3> }
         <!-- The facts lead: where, when, how long - what a person scanning a
@@ -246,13 +246,20 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
         <span class="fb-stats-bar sr-only" aria-hidden="true">{{ compact(post.upvotes) }} reactions · {{ compact(post.commentCount) }} comments · {{ compact(post.shares) }} reposts</span>
       }
 
-      <!-- The composer, X-style: your face, a field that says what tapping
-           does, then the reply shortcut. Tapping anywhere opens the post with
-           its comment field focused. -->
+      <!--
+        The composer, X-style: your face, then a field that says what tapping
+        does. The whole row is one button that opens the post with its comment
+        field focused.
+
+        Nothing sits at the right of the field. A face glyph used to sit there
+        and it was a lie twice over: it looked like an emoji picker, and it was
+        inside the button, so tapping it opened the post instead of doing
+        nothing. The app has no picker on purpose - the phone keyboard already
+        has emoji - so the affordance is gone with it.
+      -->
       <button class="fb-comment-cta" type="button" [routerLink]="'/post/' + post.id" [queryParams]="{ comment: 1 }">
         <lf-avatar [src]="myAvatar()" [name]="myName()" [size]="30" />
         <span class="fb-comment-cta__pill">Write a comment…</span>
-        <span class="fb-comment-cta__ic" aria-hidden="true"><lf-icon name="smile" [size]="18" /></span>
       </button>
 
       <!-- LinkedIn's comment preview: the most-relevant comment sits under the
@@ -517,11 +524,6 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
     }
     .fb-comment-cta:hover .fb-comment-cta__pill,
     .fb-comment-cta:active .fb-comment-cta__pill { background: var(--lf-hover); }
-    .fb-comment-cta__ic {
-      flex: none; width: 32px; height: 32px; border-radius: 50%;
-      display: grid; place-items: center; color: var(--lf-muted);
-    }
-    .fb-comment-cta:hover .fb-comment-cta__ic { background: var(--lf-hover); }
 
     .fb-chat-cta {
       display: flex; align-items: center; justify-content: center; gap: 8px;

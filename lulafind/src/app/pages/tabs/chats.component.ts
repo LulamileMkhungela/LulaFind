@@ -37,15 +37,15 @@ import { timeAgo } from '../../core/utils/format';
       } @else {
         <div class="head">
           <div class="search">
-            <lf-icon name="search" [size]="16" [weight]="2.2" />
+            <lf-icon name="search" [size]="16" [weight]="'regular'" />
             <input #q type="search" enterkeyhint="search" autocomplete="off" [placeholder]="'Search messages'"
                    [value]="query()" (input)="query.set($any($event.target).value)" aria-label="Search your chats" />
             @if (query()) {
-              <button class="clear" type="button" (click)="clear(q)" aria-label="Clear search"><lf-icon name="x" [size]="14" [weight]="2.4" /></button>
+              <button class="clear" type="button" (click)="clear(q)" aria-label="Clear search"><lf-icon name="x" [size]="14" [weight]="'bold'" /></button>
             }
           </div>
           <button class="new" type="button" (click)="goDiscover()" aria-label="Find someone to message">
-            <lf-icon name="plus" [size]="20" [weight]="2.4" />
+            <lf-icon name="plus" [size]="20" [weight]="'bold'" />
           </button>
         </div>
 

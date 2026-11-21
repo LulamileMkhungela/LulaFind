@@ -16,6 +16,7 @@ import { DataService } from './services/data.service';
 import { feedWithRails } from './utils/feed';
 import { ChatService } from './services/chat.service';
 import { emptyFilter } from './models/types';
+import { strokeFor } from './theme/icon-registry';
 import { FilterBarComponent } from '../shared/components/filter-bar.component';
 import { PostCardComponent } from '../shared/components/post-card.component';
 import { RepostSheetComponent } from '../shared/components/repost-sheet.component';
@@ -2833,6 +2834,51 @@ describe('What you can do to a message', () => {
     f.detectChanges();
     expect(f.componentInstance.shown().length).toBe(3);
     f.destroy();
+  });
+});
+
+describe('One icon set, at every size', () => {
+  /**
+   * Two ways the set drifted before, both visible on a phone:
+   *
+   *  - a face glyph sat inside the card's comment button, looking like an emoji
+   *    picker that the app deliberately does not have;
+   *  - stroke widths were written as raw numbers next to each size, so a 13px
+   *    tick and a 24px tab glyph ended up at different visual weights - two sets
+   *    on one screen.
+   */
+  it('scales the stroke to the glyph, so small icons do not look twice as heavy', () => {
+    const small = strokeFor(13, 'regular');
+    const large = strokeFor(24, 'regular');
+    expect(small).toBeLessThan(large);
+    // A 13px glyph may carry a little more relative weight than a 24px one -
+    // enough to read - but not the 1.6x that made it look like a second set.
+    expect(small / 13).toBeLessThan((large / 24) * 1.45);
+    // The three weights stay ordered at any size.
+    expect(strokeFor(20, 'thin')).toBeLessThan(strokeFor(20, 'regular'));
+    expect(strokeFor(20, 'regular')).toBeLessThan(strokeFor(20, 'bold'));
+    // A raw number still wins, for the rare one-off.
+    expect(strokeFor(18, 2.4)).toBe(2.4);
+  });
+
+  it('keeps the comment bar free of a picker it does not have', () => {
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      imports: [PostCardComponent],
+      providers: [provideRouter(ROUTES), provideIonicAngular(), { provide: LULA_API, useValue: new MockApi(new LocalDb(true)) }]
+    });
+    const f = TestBed.createComponent(PostCardComponent);
+    const db = new LocalDb(true);
+    const post = db.post('p_thato');
+    if (!post) throw new Error('fixture p_thato is missing');
+    f.componentInstance.post = post;
+    f.detectChanges();
+    const el = f.nativeElement as HTMLElement;
+    const bar = el.querySelector('.fb-comment-cta');
+    expect(bar).toBeTruthy();
+    // No face at the end of a field that only opens the post.
+    expect(el.querySelector('.fb-comment-cta__ic')).toBeFalsy();
+    expect(el.querySelector('lf-icon[name="smile"]')).toBeFalsy();
   });
 });
 

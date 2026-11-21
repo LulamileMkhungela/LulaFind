@@ -77,7 +77,7 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
             </a>
           } @else {
             <button class="mine-card mine-card--new" (click)="openCreate()">
-              <span class="disc"><lf-icon name="plus" [size]="22" [weight]="2.4" /></span>
+              <span class="disc"><lf-icon name="plus" [size]="22" [weight]="'regular'" /></span>
               <div>
                 <span class="lf-tiny lf-muted">No spotlight for your surname yet</span>
                 <strong>Start the {{ mySurname() }} spotlight</strong>
