@@ -11,6 +11,8 @@ const PATHS: Record<string, string> = {
   user: 'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z',
   bell: 'M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0',
   /** Solid bell (Material-style) - used when the person has unread alerts and the glyph is filled. */
+  /** A bell with a slash: this community's alerts are silenced, membership is not. */
+  bellOff: 'M18 8a6 6 0 0 0-9.3-5M6 6.3A6 6 0 0 0 6 8c0 7-3 9-3 9h13M13.7 21a2 2 0 0 1-3.4 0M2.5 2.5l19 19',
   bellFilled: 'M12 22a2.2 2.2 0 0 0 2.15-1.75H9.85A2.2 2.2 0 0 0 12 22zm7-5.4v.4H5v-.4l1.9-1.9v-4.35c0-3.2 1.7-5.9 4.6-6.6v-.8a1.5 1.5 0 0 1 3 0v.8c2.9.7 4.6 3.4 4.6 6.6v4.35l1.9 1.9z',
   heart: 'M20.8 5.6a5 5 0 0 0-7.1 0L12 7.3l-1.7-1.7a5 5 0 1 0-7.1 7.1L12 21l8.8-8.3a5 5 0 0 0 0-7.1z',
   share: 'M4 12v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7M16 6l-4-4-4 4M12 2v14',

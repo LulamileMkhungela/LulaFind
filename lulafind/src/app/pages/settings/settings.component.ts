@@ -81,7 +81,7 @@ import { SUPPORT_EMAIL, SUPPORT_NAME } from '../../core/config';
         </ion-item>
         <ion-item>
           <ion-label><strong>Missing children only</strong><br />
-            <span class="lf-muted lf-small">Silence everything except urgent child cases</span></ion-label>
+            <span class="lf-muted lf-small">For new case alerts: silence everything except urgent child cases</span></ion-label>
           <ion-toggle [checked]="s().pushMissingOnly" (ionChange)="set({ pushMissingOnly: $any($event.detail).checked })"></ion-toggle>
         </ion-item>
         <ion-item>
@@ -96,6 +96,24 @@ import { SUPPORT_EMAIL, SUPPORT_NAME } from '../../core/config';
             <span class="lf-muted lf-small">How far from your last location you still want case alerts</span></ion-label>
           <ion-range [min]="5" [max]="200" [step]="5" [value]="s().pushRadiusKm"
                      (ionInput)="set({ pushRadiusKm: $any($event.detail).value })"></ion-range>
+        </ion-item>
+        <!--
+          Two different alert streams meet on this screen, so say which is which:
+          the switches above shape *new case* alerts for everyone, while a
+          Spotlight's own alerts are turned off on that Spotlight's page, and a
+          case you follow is managed on the case itself.
+        -->
+        <ion-item lines="none">
+          <ion-label class="lf-small">
+            <strong>Spotlight alerts</strong><br />
+            <span class="lf-muted">Each new post in a Spotlight you belong to. Turn it off on that Spotlight's page.</span>
+          </ion-label>
+        </ion-item>
+        <ion-item lines="none">
+          <ion-label class="lf-small">
+            <strong>Cases you follow</strong><br />
+            <span class="lf-muted">A new lead, a sighting, or the person found. Follow and unfollow on the case itself.</span>
+          </ion-label>
         </ion-item>
       </section>
 

@@ -326,6 +326,20 @@ export interface UserProfile {
   spotlightIds: string[];
   /** Posts this person saved. Kept on the profile so it follows them to any phone. */
   savedPostIds?: string[];
+  /**
+   * Cases this person follows. Kept on the profile for the same reason as
+   * savedPostIds: a person who followed a case on their phone must still be
+   * following it when they open the app on another device.
+   */
+  followedCaseIds?: string[];
+  /**
+   * Spotlights whose alerts this member has silenced.
+   *
+   * Muted, not left: the person still belongs to the community and can read and
+   * post there - they only stop being told about every new post in it. Leaving
+   * was the only way to stop the noise before, which also took away posting.
+   */
+  mutedSpotlightIds?: string[];
   /** LulaFind staff / moderator - can remove posts and people */
   isAdmin: boolean;
   /** blocked by an admin: cannot post, vote, comment or chat */

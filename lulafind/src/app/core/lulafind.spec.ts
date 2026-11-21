@@ -1241,6 +1241,58 @@ describe('Reports and admin', () => {
   });
 });
 
+describe('Following a case, and muting a Spotlight', () => {
+  beforeEach(bed);
+
+  it('keeps a followed case on the account, not only on this phone', async () => {
+    const data = svc<DataService>(DataService);
+    const auth = svc<AuthService>(AuthService);
+    signInAs('u_lerato');
+    await data.toggleFollowCase('p_thato');
+    expect(data.isFollowingCase('p_thato')).toBe(true);
+    // The profile carries it, so another phone (or a reinstall) still follows it.
+    expect(auth.user()!.followedCaseIds).toContain('p_thato');
+    expect(db.user('u_lerato')!.followedCaseIds).toContain('p_thato');
+
+    await data.toggleFollowCase('p_thato');
+    expect(auth.user()!.followedCaseIds ?? []).not.toContain('p_thato');
+  });
+
+  it('tells a Spotlight member about a new post there, and stops when they mute it', async () => {
+    const data = svc<DataService>(DataService);
+    await data.refresh(); // the Spotlights must be loaded before membership means anything
+    signInAs('u_kabelo'); // in the Mokoena Spotlight, not the author
+    const ids = () => new Set(db.notifications('u_kabelo').map((n) => n.id));
+    const newOnes = (before: Set<string>) => db.notifications('u_kabelo').filter((n) => !before.has(n.id));
+
+    const before = ids();
+    await data.notifyPostNetwork({ ...db.post('p_thato')!, id: 'spot-a', spotlightId: 'sp_mokoena' } as Post);
+    expect(newOnes(before).length).toBeGreaterThan(0);
+
+    // Mute: membership stays, the alert stops.
+    await data.toggleSpotlightAlerts('sp_mokoena');
+    expect(data.isSpotlightMuted('sp_mokoena')).toBe(true);
+    expect(svc<AuthService>(AuthService).user()!.mutedSpotlightIds).toContain('sp_mokoena');
+    expect(data.isMember('sp_mokoena')).toBe(true);
+
+    const afterMute = ids();
+    await data.notifyPostNetwork({ ...db.post('p_thato')!, id: 'spot-b', spotlightId: 'sp_mokoena' } as Post);
+    expect(newOnes(afterMute).length).toBe(0);
+  });
+
+  it('still tells a muted member when the case they follow changes', async () => {
+    const data = svc<DataService>(DataService);
+    await data.refresh();
+    signInAs('u_kabelo');
+    await data.toggleSpotlightAlerts('sp_mokoena');
+    await data.toggleFollowCase('case-followed');
+    const before = new Set(db.notifications('u_kabelo').map((n) => n.id));
+    await data.notifyPostNetwork({ ...db.post('p_thato')!, id: 'case-followed', spotlightId: 'sp_mokoena' } as Post);
+    // The mute silences the chatter, not the case in their follow list.
+    expect(db.notifications('u_kabelo').some((n) => !before.has(n.id) && n.postId === 'case-followed')).toBe(true);
+  });
+});
+
 describe('Where to look first', () => {
   const base = {
     status: 'active' as const,

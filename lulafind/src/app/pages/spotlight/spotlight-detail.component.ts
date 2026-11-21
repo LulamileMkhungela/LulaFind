@@ -45,6 +45,13 @@ import { cover } from '../../core/data/seed';
             </div>
             @if (sp()!.about) { <p class="about">{{ sp()!.about }}</p> }
             <div class="acts">
+              @if (member()) {
+                <p class="lf-small lf-muted alert-note">
+                  {{ alertsMuted()
+                    ? 'Alerts are off for this Spotlight. You can still read and post here.'
+                    : 'You are told about every new post here. Turn alerts off to stop that.' }}
+                </p>
+              }
               @if (!member()) {
                 <button class="lf-btn lf-btn--primary lf-btn--sm" (click)="join()">
                   <lf-icon name="plus" [size]="15" /> Join this community
@@ -54,6 +61,15 @@ import { cover } from '../../core/data/seed';
                 <span class="lf-chip lf-chip--success"><lf-icon name="check" [size]="12" /> you are a member</span>
                 <button class="lf-btn lf-btn--primary lf-btn--sm" aria-label="Post here to this Spotlight" (click)="postHere()">
                   <lf-icon name="plus" [size]="15" /> Post here
+                </button>
+                <!--
+                  Mute is not Leave. Someone who joined a busy surname community
+                  can silence its alerts without losing the right to post there.
+                -->
+                <button class="lf-btn lf-btn--ghost lf-btn--sm" (click)="toggleAlerts()"
+                        [attr.aria-pressed]="alertsMuted()">
+                  <lf-icon [name]="alertsMuted() ? 'bellOff' : 'bell'" [size]="15" />
+                  {{ alertsMuted() ? 'Alerts off' : 'Alerts on' }}
                 </button>
                 @if (!owner()) {
                   <button class="lf-btn lf-btn--ghost lf-btn--sm" (click)="leave()">Leave</button>
@@ -128,6 +144,7 @@ import { cover } from '../../core/data/seed';
     .stats div { display: flex; flex-direction: column; }
     .stats strong { font-size: 17px; }
     .stats span { font-size: 11.5px; color: var(--lf-muted); }
+    .alert-note { flex-basis: 100%; margin: 2px 0 0; }
     .acts { display: flex; gap: 8px; flex-wrap: wrap; }
     .pills { display: flex; gap: 8px; padding: 4px var(--lf-gap) 0; overflow-x: auto; }
     .pill { flex: none; height: 32px; padding: 0 12px; border: 0; border-radius: 999px; cursor: pointer; font: inherit;
@@ -190,6 +207,7 @@ export class SpotlightDetailComponent implements OnInit {
   }
 
   readonly signedIn = computed(() => this.auth.signedIn());
+  readonly alertsMuted = computed(() => this.data.isSpotlightMuted(this.sp()?.id ?? null));
   readonly member = computed(() => {
     const me = this.auth.viewerId;
     return !!me && !!this.sp() && this.sp()!.memberIds.includes(me);
@@ -315,6 +333,26 @@ export class SpotlightDetailComponent implements OnInit {
       await this.router.navigate(['/spotlight']);
     } catch (e: unknown) {
       const t = await this.toast.create({ message: e instanceof Error ? e.message : 'Could not delete', duration: 2600, position: 'bottom' });
+      await t.present();
+    }
+  }
+
+  /** Stop or resume the alerts from this Spotlight, without leaving it. */
+  async toggleAlerts(): Promise<void> {
+    const sp = this.sp();
+    if (!sp) return;
+    try {
+      const on = await this.data.toggleSpotlightAlerts(sp.id);
+      const t = await this.toast.create({
+        message: on
+          ? `Alerts are on for ${sp.surname} again.`
+          : `Alerts are off for ${sp.surname}. You can still read and post here.`,
+        duration: 2400,
+        position: 'bottom'
+      });
+      await t.present();
+    } catch (e: any) {
+      const t = await this.toast.create({ message: e?.message ?? 'Could not change alerts', duration: 2600, position: 'bottom' });
       await t.present();
     }
   }
