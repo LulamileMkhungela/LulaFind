@@ -271,19 +271,21 @@ describe('Components render', () => {
     expect(html).toContain('fb-clamp');
     expect(html).toContain('see more');
     expect(html).toContain('fb-stats-bar');
-    // Line 1 is where it is, then what kind of post it is; line 2 is when, then
-    // the audience icon. The old standalone chip under the avatar is gone.
+    // The kind tags the post itself; the line under the name is where and
+    // when, and it keeps the province even when a town is known.
     expect(html).toContain('fb-kind');
     expect(html).toContain('Missing person');
     expect(html).toContain('Gauteng');
     expect(html).not.toContain('fb-chips');
-    // The card carries LinkedIn's action bar: react (with its label), Comment,
-    // Repost, Send - each with an icon and a word. Follow and … share one
-    // right-hand column above it.
-    expect(html).toContain('fb-actions');
-    expect(html).toContain('Comment');
-    expect(html).toContain('Repost');
-    expect(html).toContain('Send');
+    // The card carries the X-shaped action row: react, comment and repost on
+    // the left with their counts, the reaction stack and Send grouped right.
+    // Each action keeps a real accessible name even where the glyph is all
+    // that is drawn.
+    expect(html).toContain('x-bar');
+    for (const label of ['Comment', 'Repost', 'Send']) {
+      expect(html).toContain(`aria-label="${label}"`);
+    }
+    expect(html).toContain('Choose a reaction');
     expect(html).not.toContain('fb-actions-row');
     expect(html).toContain('fb-head-actions');
     expect(html).toContain('fb-more-btn');
@@ -310,19 +312,24 @@ describe('Components render', () => {
     f.detectChanges();
 
     const el = f.nativeElement as HTMLElement;
-    const text = (el.textContent ?? '').replace(/\s+/g, ' ').trim();
 
     // The reaction stack shows the kinds people actually gave: two Likes, then Support.
-    expect(el.querySelectorAll('.fb-stack lf-reaction-icon').length).toBe(2);
-    // Counts, with LinkedIn's separator: "3 ... 2 comments · 1 repost".
-    expect(text).toContain('3');
-    expect(text).toContain('2 comments');
-    expect(text).toContain('1 repost');
-    expect(el.querySelector('.fb-stats-right .fb-dot')).toBeTruthy();
-    // The four actions, each with its word.
-    const actions = [...el.querySelectorAll('.fb-act')].map((b) => (b.textContent ?? '').trim());
-    expect(actions.slice(0, 4)).toEqual(['Like', 'Comment', 'Repost', 'Send']);
-    expect(el.querySelector('.fb-actions button lf-icon[name="chat"]')).toBeTruthy();
+    expect(el.querySelectorAll('.x-avatars lf-reaction-icon').length).toBe(2);
+    // X's row rides the count on its own action: reactions, comments, reposts.
+    const counts = [...el.querySelectorAll('.x-act__count')].map((c) => (c.textContent ?? '').trim());
+    expect(counts).toEqual(['2', '1']);
+    // The reaction's own count rides its button, exactly where X puts it.
+    expect(el.querySelector('lf-reaction-button .count')?.textContent?.trim()).toBe('3');
+    // The four ways to act are all reachable, each with its own name.
+    const names = [...el.querySelectorAll('.x-bar [aria-label], .x-bar lf-reaction-button .btn')]
+      .map((b) => b.getAttribute('aria-label') ?? '');
+    expect(names.join(' ')).toContain('Comment');
+    expect(names.join(' ')).toContain('Repost');
+    expect(names.join(' ')).toContain('Send');
+    expect(names.join(' ')).toContain('Choose a reaction');
+    // The summary survives for anything that reads the numbers as one line.
+    expect(el.querySelector('.fb-stats-bar')?.textContent).toContain('2 comments');
+    expect(el.querySelector('.fb-stats-bar')?.textContent).toContain('1 repost');
   });
 
   it('leaves the long text boxes uncapped and gives every one of them the phone keyboard features', async () => {
@@ -429,8 +436,9 @@ describe('Components render', () => {
     await f.whenStable();
 
     const el = f.nativeElement as HTMLElement;
-    // The count opens the sheet, exactly as LinkedIn's does.
-    const opener = el.querySelector('.fb-stats-likes [role="button"]') as HTMLElement;
+    // The reaction stack opens the sheet: the faces are the "who", so tapping
+    // them is the natural way in.
+    const opener = el.querySelector('.x-avatars') as HTMLElement;
     expect(opener).toBeTruthy();
     opener.click();
     f.detectChanges();
@@ -1059,12 +1067,14 @@ describe('Components render', () => {
     await settle(f);
     const el = f.nativeElement as HTMLElement;
 
-    // The bar exists in the markup, not only in the component's handlers.
-    const labels = [...el.querySelectorAll('.fb-actions .fb-act')].map((b) => b.textContent?.trim());
-    expect(labels, 'LinkedIn calls the first action Like').toContain('Like');
-    expect(labels).toContain('Comment');
-    expect(labels).toContain('Repost');
-    expect(labels).toContain('Send');
+    // The bar exists in the markup, not only in the component's handlers. The
+    // reaction still calls itself Like (in its accessible name and its tray),
+    // and the other three carry their own names.
+    const names = [...el.querySelectorAll('.x-bar button')].map((b) => b.getAttribute('aria-label') ?? b.textContent ?? '');
+    expect(names.join(' '), 'the default reaction is still called Like').toContain('Like');
+    expect(names.join(' ')).toContain('Comment');
+    expect(names.join(' ')).toContain('Repost');
+    expect(names.join(' ')).toContain('Send');
 
     // A keyboard tap on React emits the reaction the app records, and Comment
     // opens the post's comments - the two things a feed post must be able to
@@ -1074,12 +1084,12 @@ describe('Components render', () => {
     const comments: number[] = [];
     f.componentInstance.vote.subscribe((v) => votes.push(v));
     f.componentInstance.comment.subscribe(() => comments.push(1));
-    const reactBtn = el.querySelector('.fb-actions lf-reaction-button .btn') as HTMLButtonElement;
+    const reactBtn = el.querySelector('.x-bar lf-reaction-button .btn') as HTMLButtonElement;
     reactBtn.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
     f.detectChanges();
     expect(el.querySelectorAll('.tray .opt').length).toBe(4);
     (el.querySelector('.tray .opt[data-key="like"]') as HTMLButtonElement).click();
-    ([...el.querySelectorAll('.fb-actions .fb-act')][1] as HTMLButtonElement).click();
+    (el.querySelector('.x-bar button[aria-label="Comment"]') as HTMLButtonElement).click();
     expect(votes).toEqual(['like']);
     expect(comments.length).toBe(1);
   });
