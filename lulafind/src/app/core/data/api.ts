@@ -182,6 +182,16 @@ export abstract class LulaApi {
   abstract pushNotification(n: Notification): Promise<void>;
   abstract markNotificationsRead(userId: string): Promise<void>;
 
+  /**
+   * Grant or withdraw a verification badge.
+   *
+   * A badge is a fact LulaFind grants, not a switch the account owns, so it
+   * cannot be written through `saveUser`. In Supabase the grant lives in
+   * `lula_verifications` and only a writable admin can call the RPC; the local
+   * engines apply the same rule so the demo shows what production does.
+   */
+  abstract setVerified(userId: string, verified: boolean, note?: string): Promise<void>;
+
   /* moderation reports */
   /** The backend is the durable queue; RLS limits this to the reporter or an admin. */
   abstract reportsFor(userId: string): Promise<UserReport[]>;
@@ -335,6 +345,16 @@ export class MockApi implements LulaApi {
 
   async reportsFor(userId: string) { return this.db.reportsFor(userId); }
   async saveReport(report: UserReport) { this.db.saveReport(report); }
+
+  /**
+   * The device store cannot see who is asking; `ModerationService` is the gate
+   * here, and in Supabase the database is (RLS on the record plus a grant row).
+   */
+  async setVerified(userId: string, verified: boolean, _note?: string) {
+    const u = this.db.user(userId);
+    if (!u) throw new Error('That person no longer has an account');
+    this.db.upsertUser({ ...u, verified });
+  }
 
   /* No device tokens in mock mode - there is no FCM in a browser tab. */
   async savePushToken(_token: string, _platform: string, _appVersion: string): Promise<void> {}

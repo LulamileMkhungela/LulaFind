@@ -187,7 +187,9 @@ export const seedUsers = (): UserProfile[] => {
 
   return [
     demo,
-    mk('u_sipho', 'Sipho Ndlela', 'sipho.ndlela', 'Ndlela', 'KZN', 'Durban North', 'Ndlela family page admin. Search volunteer.'),
+    mk('u_sipho', 'Sipho Ndlela', 'sipho.ndlela', 'Ndlela', 'KZN', 'Durban North', 'Ndlela family page admin. Search volunteer.', {
+      verified: true
+    }),
     mk('u_lerato', 'Lerato Mahlangu', 'lerato.m', 'Mahlangu', 'GP', 'Mamelodi, Pretoria', 'Social worker. GBV advocate.'),
     mk('u_pieter', 'Pieter van Wyk', 'pieter.vw', 'van Wyk', 'WC', 'Bellville, Cape Town', 'CPF member, Table View.', {
       checkIn: {
@@ -209,7 +211,16 @@ export const seedUsers = (): UserProfile[] => {
         liveShareOn: false
       }
     }),
-    mk('u_naledi', 'Naledi Dlamini', 'naledi.d', 'Dlamini', 'MP', 'Nelspruit', 'Nurse. Missing-persons volunteer since 2019.'),
+    /*
+     * Verified fixtures. These two stand in for accounts that were granted a
+     * badge through Admin -> People -> Verify (see supabase/schema.sql,
+     * lula_verifications): a volunteer with a public track record and a
+     * community page admin. Ordinary members are not verified - the badge is
+     * granted, not handed out with a profile.
+     */
+    mk('u_naledi', 'Naledi Dlamini', 'naledi.d', 'Dlamini', 'MP', 'Nelspruit', 'Nurse. Missing-persons volunteer since 2019.', {
+      verified: true
+    }),
     mk('u_johan', 'Johan Botha', 'johan.b', 'Botha', 'FS', 'Bloemfontein', 'Farm community watch.'),
     mk('u_zanele', 'Zanele Mthembu', 'zanele.m', 'Mthembu', 'LP', 'Polokwane', 'Teacher. Runs a school safety WhatsApp group.'),
     mk('u_kabelo', 'Kabelo Nkosi', 'kabelo.n', 'Nkosi', 'GP', 'Alexandra', 'Photographer. I document searches.', {

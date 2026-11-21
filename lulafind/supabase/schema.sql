@@ -193,6 +193,97 @@ returns boolean language sql stable security definer set search_path = pg_catalo
     and person = public.lula_uid();
 $$;
 
+-- ---------------------------------------------------------------------------
+-- Verification badges
+--
+-- A badge is a fact about an account, not a setting the account owns. profiles
+-- live in `records` where the row's owner is allowed to write their own payload
+-- (name, bio, town, privacy...), so a plain `payload->>'verified'` would be a
+-- flag any member could set on themselves - and that is exactly what a badge
+-- must never be. Two things make it a granted fact instead:
+--
+--   * `lula_verified(u)` answers only from lula_verifications, a second row the
+--     member has no write access to (service role / an admin only);
+--   * the trigger below rejects any client write that would change `verified`
+--     or the matching row in lula_verifications, so a stale app build cannot
+--     flip the badge either.
+--
+-- The public profile view reads lula_verified(), so a badge is honest by
+-- construction: no grant, no badge.
+-- ---------------------------------------------------------------------------
+create table if not exists public.lula_verifications (
+  user_id text primary key,
+  note text not null default '',
+  at bigint not null default floor(extract(epoch from clock_timestamp()) * 1000)::bigint,
+  granted_by text not null default ''
+);
+
+alter table public.lula_verifications enable row level security;
+revoke all on public.lula_verifications from public, anon, authenticated;
+
+create or replace function public.lula_verified(person text)
+returns boolean language sql stable security definer set search_path = pg_catalog as $$
+  select person is not null
+    and exists (select 1 from public.lula_verifications v where v.user_id = person);
+$$;
+revoke all on function public.lula_verified(text) from public;
+grant execute on function public.lula_verified(text) to anon, authenticated;
+
+-- A member may not write the flag, and may not forge the grant row either.
+-- SECURITY INVOKER on purpose: a definer-rights trigger sees current_user as
+-- the function owner (postgres) and would wave every write through.
+create or replace function public.lula_guard_verification()
+returns trigger language plpgsql security invoker set search_path = pg_catalog as $$
+begin
+  if current_user in ('postgres', 'service_role') or public.lula_is_admin() then
+    return new;
+  end if;
+  if new.collection = 'users' and old.payload->'verified' is distinct from new.payload->'verified' then
+    -- Claiming a badge is a hard error: no client may hand itself one.
+    if coalesce((new.payload->>'verified'), 'false') = 'true' then
+      raise exception 'A verification badge is granted by LulaFind, not set by the account';
+    end if;
+    -- Dropping one is a stale copy, not an attack: keep the grant as stored, so
+    -- saving a setting never silently removes a badge the server granted.
+    new.payload := jsonb_set(new.payload, '{verified}', coalesce(old.payload->'verified', 'false'::jsonb), true);
+  end if;
+  return new;
+end;
+$$;
+drop trigger if exists lula_guard_verification on public.records;
+create trigger lula_guard_verification before update on public.records
+for each row execute function public.lula_guard_verification();
+
+-- Admin action: grant or withdraw a badge. The note and the granter are kept,
+-- so "why is this person verified?" has an answer.
+create or replace function public.lula_set_verified(person_id text, granted boolean, note text default '')
+returns void language plpgsql security definer set search_path = pg_catalog as $$
+begin
+  if not public.lula_is_admin() then
+    raise exception 'Only LulaFind admins can verify an account';
+  end if;
+  if person_id is null or not exists (
+    select 1 from public.records where collection = 'users' and id = person_id
+  ) then
+    raise exception 'That person no longer has an account';
+  end if;
+  if granted then
+    insert into public.lula_verifications(user_id, note, granted_by)
+    values (person_id, coalesce(note, ''), coalesce(public.lula_uid(), ''))
+    on conflict (user_id) do update set note = excluded.note, granted_by = excluded.granted_by;
+    -- Keep the profile payload in step for older clients that read it directly.
+    update public.records set payload = payload || '{"verified":true}'::jsonb
+    where collection = 'users' and id = person_id;
+  else
+    delete from public.lula_verifications where user_id = person_id;
+    update public.records set payload = payload || '{"verified":false}'::jsonb
+    where collection = 'users' and id = person_id;
+  end if;
+end;
+$$;
+revoke all on function public.lula_set_verified(text, boolean, text) from public, anon;
+grant execute on function public.lula_set_verified(text, boolean, text) to authenticated;
+
 create or replace function public.lula_follows_accepted(follower text, following text)
 returns boolean language sql stable security definer set search_path = pg_catalog as $$
   select public.lula_is_self(follower)
@@ -369,7 +460,8 @@ select
     'town', case when show_location then coalesce(payload->'town', '""'::jsonb) else '""'::jsonb end,
     'surname', payload->'surname',
     'createdAt', payload->'createdAt',
-    'verified', coalesce(payload->'verified', 'false'::jsonb),
+    -- Granted, never self-declared: the badge comes from lula_verifications.
+    'verified', public.lula_verified(id),
     'anonymous', coalesce(payload->'anonymous', 'false'::jsonb),
     'findableProfile', coalesce(payload->'findableProfile', 'false'::jsonb),
     'safetyBeacon', coalesce(payload->'safetyBeacon', 'false'::jsonb),

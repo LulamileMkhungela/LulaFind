@@ -1214,6 +1214,26 @@ describe('Reports and admin', () => {
     void auth;
   });
 
+  it('grants and withdraws a verification badge, and nobody else can', async () => {
+    const mod = svc<ModerationService>(ModerationService);
+    const data = svc<DataService>(DataService);
+    const api = TestBed.inject(LULA_API);
+    signInAs('u_lerato');
+    await expect(mod.setVerified('u_lerato', true, 'me')).rejects.toThrow(/admins/i);
+    expect((await api.user('u_lerato'))!.verified).toBe(false);
+
+    signInAs('u_demo');
+    await mod.setVerified('u_lerato', true, 'Runs the Mamelodi search desk');
+    expect((await api.user('u_lerato'))!.verified).toBe(true);
+    // The badge is a fact about the account, so the next refresh carries it into
+    // the feed's author lookup - which is what the card renders.
+    await data.refresh();
+    expect(data.authorOf('u_lerato')?.verified).toBe(true);
+
+    await mod.setVerified('u_lerato', false, 'Badge withdrawn');
+    expect((await api.user('u_lerato'))!.verified).toBe(false);
+  });
+
   it('will not let one admin remove another admin', async () => {
     const mod = svc<ModerationService>(ModerationService);
     signInAs('u_demo');

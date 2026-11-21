@@ -466,6 +466,21 @@ export class FirebaseApi implements LulaApi {
   async saveReport(report: UserReport): Promise<void> {
     await this.set(`reports/${report.id}`, report as unknown as Record<string, unknown>);
   }
+  /**
+   * Firestore has no second table to hold "this badge was granted", so the
+   * grant is written onto the profile document and the rules in
+   * docs/FIRESTORE_RULES.md only let an admin change `verified`. The note is
+   * kept, so "why is this person verified?" has an answer there too.
+   */
+  async setVerified(userId: string, verified: boolean, note?: string): Promise<void> {
+    const u = await this.user(userId);
+    if (!u) throw new Error('That person no longer has an account');
+    await this.set(`users/${userId}`, {
+      ...(u as unknown as Record<string, unknown>),
+      verified,
+      verifiedNote: verified ? (note ?? '').trim() : ''
+    });
+  }
   async markNotificationsRead(userId: string) {
     const items = await this.getList<Notification>(this.col(`notifications/${userId}/items`));
     for (const n of items) await this.set(`notifications/${userId}/items/${n.id}`, { ...n, read: true });

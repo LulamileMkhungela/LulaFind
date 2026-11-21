@@ -642,6 +642,24 @@ export class SupabaseApi implements LulaApi {
     await this.upsert('users', u, u.id);
   }
 
+  /**
+   * A badge is granted, not saved with the profile.
+   *
+   * The profile row is writable by its owner, so `verified` cannot ride along in
+   * `saveUser` - the database rejects that outright. The grant goes through
+   * `lula_set_verified`, which only a JWT-carried admin may call and which
+   * records who granted it and why.
+   */
+  async setVerified(userId: string, verified: boolean, note = ''): Promise<void> {
+    const { error } = await this.client.rpc('lula_set_verified', {
+      person_id: userId,
+      granted: verified,
+      note: note.trim()
+    });
+    if (error) throw new Error(error.message);
+    this.rx.next(++this.tick);
+  }
+
   async deleteUser(id: string): Promise<void> {
     await this.remove('users', id);
   }

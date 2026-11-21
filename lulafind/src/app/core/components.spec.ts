@@ -261,13 +261,21 @@ describe('Components render', () => {
     await f.whenStable();
     const html: string = (f.nativeElement as HTMLElement).innerHTML;
     expect(html).toContain('Follow');
-    // Card anatomy: headline under the name, three-line clamp with a muted
-    // ellipsis, then the meta lines and the stats line. The default reaction is the
-    // one LinkedIn's button is - Like - and it reads as its own name, never a
-    // yes/no vote. "Have an idea" lives in the tray, not on the button.
+    // Card anatomy: the name with the granted badge, one quiet line of where
+    // and when, three-line clamp with a muted ellipsis, then the stats line.
+    // The default reaction is the one LinkedIn's button is - Like - and it
+    // reads as its own name, never a yes/no vote. "Have an idea" lives in the
+    // tray, not on the button.
     expect(html).toContain('Like');
     expect(html).not.toContain('No idea');
-    expect(html).toContain('Community organiser');
+    // Two header lines only: the person's bio belongs on their profile, not
+    // stacked as a third line under their name on every card.
+    expect(html).not.toContain('fb-headline');
+    expect(html).not.toContain('Community organiser');
+    // The seeded demo account is verified, so the granted badge renders with a
+    // name a screen reader can read.
+    expect(html).toContain('fb-verified');
+    expect(html).toContain('aria-label="Verified member"');
     expect(html).toContain('fb-clamp');
     expect(html).toContain('see more');
     expect(html).toContain('fb-stats-bar');
@@ -2026,6 +2034,11 @@ describe('Admin screen', () => {
     expect(html).toContain('Suspend');
     // another admin has no Remove button of their own
     expect(html).toContain('admin');
+    // A badge is granted from here: the control exists, and the verified
+    // accounts in the list carry the same mark the feed draws.
+    expect(html).toContain('Verify member');
+    expect(html).toContain('Withdraw badge');
+    expect(html).toContain('aria-label="Verified member"');
   });
 
   it('filters people when you type in the search bar', async () => {

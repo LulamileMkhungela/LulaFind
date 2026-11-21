@@ -63,12 +63,14 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
               </span>
             }
           </div>
-          @if (authorHeadline()) { <span class="fb-headline">{{ authorHeadline() }}</span> }
-          <!-- Where and when, then who can see it: one quiet line, the way a
-               timeline reads it. -->
+          <!-- Where and when, then who can see it: one quiet line under the
+               name. Two lines of header in total - the person's own bio stays
+               on their profile and in the hover card, where it is the subject
+               rather than a third line stacked under a name. -->
           <div class="fb-sub-meta">
             <span class="fb-sub-meta__text">{{ whereWhen() }}</span>
-            <lf-icon [name]="audienceIcon()" [size]="12" [attr.title]="audienceTitle()" [attr.aria-label]="audienceTitle()" />
+            <lf-icon class="fb-audience" [name]="audienceIcon()" [size]="12"
+                     [attr.title]="audienceTitle()" [attr.aria-label]="audienceTitle()" />
           </div>
         </div>
         <!-- Follow and the … sit in one right-hand column so they share a line
@@ -298,11 +300,6 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
     .fb-author-row { display: flex; align-items: center; gap: 4px; min-width: 0; min-height: 24px; }
     .fb-author-name { font-weight: 600; font-size: 14px; color: var(--ion-text-color);
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    /* LinkedIn's second header line: who the person is, one line, muted. */
-    .fb-headline {
-      display: block; font-size: 12px; color: var(--lf-muted); line-height: 1.3;
-      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    }
     /* LinkedIn clamps feed text to three lines and ends it in a muted ellipsis. */
     .fb-clamp {
       display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
@@ -339,8 +336,15 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
       white-space: nowrap;
       overflow: hidden;
     }
-    .fb-sub-meta__text { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+    /*
+     * The text does not grow: it takes the width it needs and the audience
+     * glyph follows immediately, so a short line like "Soweto · 2h" ends in
+     * the globe instead of stranding it at the right edge of the card. Only
+     * when the words would run past the column does the text ellipsize.
+     */
+    .fb-sub-meta__text { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
     .fb-sub-meta .fb-dot, .fb-sub-meta > lf-icon { flex: 0 0 auto; }
+    .fb-sub-meta > .fb-audience { margin-left: 1px; }
     /*
      * Follow and … share this column, centred on the name's line. The column is
      * the height of one line of text; the … keeps a 32px tap target by bleeding
@@ -639,10 +643,6 @@ export class PostCardComponent implements OnInit, OnChanges, AfterViewChecked {
    * changes nothing. Ask the element instead.
    */
   readonly textOverflows = signal(false);
-
-  /** LinkedIn's second header line: the poster's own line about themselves. */
-  readonly authorHeadline = computed(() =>
-    this.post?.anonymous && !this.isMine() ? '' : (this.author?.bio ?? '').trim());
 
   /** "You reposted this" / "Thabo Nkosi reposted this" - LinkedIn's reshare line. */
   reposterLine(): string {

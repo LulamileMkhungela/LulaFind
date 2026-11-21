@@ -71,6 +71,52 @@ await check('public profile exposes impact totals and still hides private fields
   assert.equal(hidden.karma, 0);
 });
 
+// ── verification badges: granted, never self-declared ──
+await check('a member cannot set the verified flag on their own row', async () => {
+  await identity('a');
+  await assert.rejects(
+    db.query(`update public.records set payload = payload || '{"verified":true}'::jsonb where collection = 'users' and id = 'a'`),
+    /granted by LulaFind/
+  );
+});
+
+await check('editing other profile fields still works', async () => {
+  await identity('a');
+  await db.query(`update public.records set payload = payload || '{"bio":"Volunteer searcher"}'::jsonb where collection = 'users' and id = 'a'`);
+  const open = (await db.query(`select payload from public.lula_user_profiles_public where id = 'a'`)).rows[0].payload;
+  assert.equal(open.bio, 'Volunteer searcher');
+  assert.equal(open.verified, false);
+});
+
+await check('an admin grant makes the badge appear on the public profile', async () => {
+  await identity('mod');
+  await db.query(`select public.lula_set_verified('a', true, 'Verified community searcher')`);
+  const open = (await db.query(`select payload from public.lula_user_profiles_public where id = 'a'`)).rows[0].payload;
+  assert.equal(open.verified, true);
+  // the grant table itself is not readable by clients - only the answer is
+  await assert.rejects(db.query(`select * from public.lula_verifications where user_id = 'a'`), /permission denied/);
+});
+
+await check('a member cannot grant a badge to anyone', async () => {
+  await identity('b');
+  await assert.rejects(db.query(`select public.lula_set_verified('b', true, 'me')`), /admins/);
+});
+
+await check('a stale copy that drops the badge cannot remove the grant', async () => {
+  await identity('a');
+  await db.query(`update public.records set payload = payload || '{"verified":false,"bio":"still here"}'::jsonb where collection = 'users' and id = 'a'`);
+  const open = (await db.query(`select payload from public.lula_user_profiles_public where id = 'a'`)).rows[0].payload;
+  assert.equal(open.verified, true, 'the grant survives a write that does not know about it');
+  assert.equal(open.bio, 'still here');
+});
+
+await check('an admin can withdraw the badge', async () => {
+  await identity('mod');
+  await db.query(`select public.lula_set_verified('a', false)`);
+  const open = (await db.query(`select payload from public.lula_user_profiles_public where id = 'a'`)).rows[0].payload;
+  assert.equal(open.verified, false);
+});
+
 await check('anonymous cannot execute coordination', () => assert.rejects(command(null, open), /permission denied/));
 await check('unrelated member cannot open a board', () => assert.rejects(command('a', open), /Only the case owner/));
 await check('suspended member denied', () => assert.rejects(command('suspended', open), /not available/));

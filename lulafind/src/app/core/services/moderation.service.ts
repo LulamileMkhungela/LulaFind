@@ -283,6 +283,35 @@ export class ModerationService {
     });
   }
 
+  /**
+   * Grant or withdraw the verification badge.
+   *
+   * Moderators are not admins: a badge says "LulaFind vouches for this
+   * account", so only the owner/admin role can give or take one. The reason is
+   * recorded with the grant, so the answer to "why is this person verified?"
+   * never depends on somebody's memory.
+   */
+  async setVerified(userId: string, verified: boolean, note: string): Promise<void> {
+    this.requireAdmin();
+    const u = await this.api.user(userId);
+    if (!u) throw new Error('That person no longer has an account');
+    await this.api.setVerified(userId, verified, note.trim());
+    this.persist();
+    await this.api.pushNotification({
+      id: uid('n'),
+      userId,
+      kind: 'moderation',
+      title: verified ? 'Your account is verified' : 'Your verification was withdrawn',
+      body: verified
+        ? note.trim() || 'LulaFind verified your account. Your posts now carry the badge.'
+        : note.trim() || 'LulaFind withdrew the badge from your account.',
+      at: Date.now(),
+      read: false,
+      route: null,
+      postId: null
+    });
+  }
+
   /** Admin deletes a person and everything they posted. */
   async removeUser(userId: string, note: string): Promise<void> {
     this.requireAdmin();

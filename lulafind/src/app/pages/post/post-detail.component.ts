@@ -91,12 +91,18 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
             <a class="who" [routerLink]="authorLink()">
               <lf-avatar [src]="authorAvatar()" [name]="authorName()" [size]="48" [status]="p()!.anonymous && !isMine() ? null : data.statusOf(author())" />
               <span class="who__text">
-                <strong>{{ authorName() }}</strong>
+                <strong>{{ authorName() }}
+                  @if (authorVerified()) {
+                    <span class="verified" role="img" title="Verified member" aria-label="Verified member">
+                      <lf-icon name="award" [size]="13" [filled]="true" />
+                    </span>
+                  }
+                </strong>
                 <span class="headline">{{ authorHeadline() }}</span>
                 <span class="meta">
                   {{ timeAgo(p()!.createdAt) }}
                   @if (p()!.editedAt) { · <span class="edited" [attr.title]="'Edited ' + timeAgo(p()!.editedAt)">Edited</span> }
-                  · {{ provinceName(p()!.province) }} · <lf-icon name="globe" [size]="11" />
+                  · {{ provinceName(p()!.province) }} <lf-icon name="globe" [size]="11" [attr.title]="audienceTitle()" [attr.aria-label]="audienceTitle()" />
                 </span>
               </span>
             </a>
@@ -752,6 +758,7 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
     .who__text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
     .who__text strong { font-size: 16px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .headline { font-size: 13px; color: var(--lf-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .verified { display: inline-flex; vertical-align: -2px; margin-left: 3px; color: var(--lf-primary); }
     .meta { display: inline-flex; align-items: center; gap: 4px; font-size: 12.5px; color: var(--lf-muted); }
     .edited { font-style: normal; }
     .follow { align-self: center; height: 32px; padding: 0 12px; border: 0; background: transparent; color: var(--lf-primary);
@@ -1120,6 +1127,14 @@ export class PostDetailComponent implements OnInit {
     this.p()?.anonymous && !this.isMine() ? 'Anonymous' : this.author()?.displayName ?? 'Member');
   readonly authorHeadline = computed(() =>
     this.p()?.anonymous && !this.isMine() ? '' : this.author()?.bio ?? '');
+  /** The same honest badge the card draws: the profile's own flag, nothing inferred. */
+  readonly authorVerified = computed(() =>
+    this.p()?.anonymous && !this.isMine() ? false : this.author()?.verified === true);
+  /** Who the post is visible to - read off the post, the words the glyph stands for. */
+  audienceTitle(): string {
+    const a = this.p()?.audience;
+    return a === 'followers' ? 'Visible to followers' : a === 'surname' ? 'Visible in a Spotlight community' : 'Visible to anyone';
+  }
   readonly authorAvatar = computed(() => this.data.avatarFor(this.p()?.anonymous && !this.isMine() ? null : this.author()));
   readonly authorLink = computed(() => (this.p()?.anonymous && !this.isMine() ? ['/post', this.p()!.id] : ['/user', this.p()?.authorId ?? '']));
   readonly myAvatar = computed(() => this.data.avatarFor(this.auth.user()));

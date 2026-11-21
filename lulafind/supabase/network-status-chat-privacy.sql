@@ -54,7 +54,8 @@ select
     'town', case when show_location then coalesce(payload->'town', '""'::jsonb) else '""'::jsonb end,
     'surname', payload->'surname',
     'createdAt', payload->'createdAt',
-    'verified', coalesce(payload->'verified', 'false'::jsonb),
+    -- Granted, never self-declared (see lula_verifications in schema.sql).
+    'verified', public.lula_verified(id),
     'anonymous', coalesce(payload->'anonymous', 'false'::jsonb),
     'findableProfile', coalesce(payload->'findableProfile', 'false'::jsonb),
     'safetyBeacon', coalesce(payload->'safetyBeacon', 'false'::jsonb),
