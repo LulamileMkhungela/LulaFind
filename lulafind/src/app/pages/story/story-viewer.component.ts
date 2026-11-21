@@ -56,8 +56,17 @@ const HOLD_MS = 420;
         @if (isOwner()) {
           <section class="owner-insights" [class.open]="insightsOpen()">
             <button class="insights-toggle" type="button" (click)="toggleInsights()" [attr.aria-expanded]="insightsOpen()">
-              <span class="insights-summary"><lf-icon name="eye" [size]="17" /><strong>{{ story()!.viewers.length }} viewed</strong><i></i><lf-icon name="comment" [size]="16" /><strong>{{ story()!.replies.length }} private {{ story()!.replies.length === 1 ? 'reply' : 'replies' }}</strong></span>
-              <lf-icon [name]="insightsOpen() ? 'chevronDown' : 'chevronRight'" [size]="17" />
+              <!--
+                Each count is one unbreakable box (glyph + word), so the eye and
+                the bubble sit on the number they count instead of drifting onto
+                their own line at a narrow width.
+              -->
+              <span class="insights-summary">
+                <span class="insights-count"><lf-icon name="eye" [size]="17" /><strong>{{ story()!.viewers.length }} viewed</strong></span>
+                <i></i>
+                <span class="insights-count"><lf-icon name="comment" [size]="16" /><strong>{{ story()!.replies.length }} private {{ story()!.replies.length === 1 ? 'reply' : 'replies' }}</strong></span>
+              </span>
+              <lf-icon class="insights-chevron" [name]="insightsOpen() ? 'chevronDown' : 'chevronRight'" [size]="17" />
             </button>
             @if (insightsOpen()) {
               <div class="insight-scroll">
@@ -129,7 +138,10 @@ const HOLD_MS = 420;
     .image-count { position: absolute; z-index: 3; top: 12px; right: 12px; padding: 4px 8px; border-radius: 999px; background: rgba(0,0,0,.42); font-size: 10px; }
     .owner-insights { position: relative; z-index: 3; flex: 0 0 auto; max-height: 42vh; display: flex; flex-direction: column; border-radius: 13px 13px 0 0; background: rgba(255,255,255,.97); color: #1c1e21; backdrop-filter: blur(16px); box-shadow: 0 -4px 18px rgba(0,0,0,.12); }
     .insights-toggle { display: flex; align-items: center; justify-content: space-between; min-height: 42px; padding: 0 14px; border: 0; border-bottom: 1px solid #e4e6eb; background: transparent; color: #1c1e21; }
-    .insights-summary { display: flex; align-items: center; gap: 6px; color: #65676b; font-size: 10.5px; }
+    .insights-toggle { gap: 8px; }
+    .insights-summary { display: flex; align-items: center; flex-wrap: wrap; gap: 2px 6px; min-width: 0; color: #65676b; font-size: 10.5px; }
+    .insights-count { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+    .insights-chevron { flex: none; margin-left: auto; }
     .insights-summary strong { color: #1c1e21; font-size: 10.5px; }
     .insights-summary i { width: 3px; height: 3px; border-radius: 50%; background: #8a8d91; margin: 0 2px; }
     .insight-scroll { overflow-y: auto; padding: 8px 13px 10px; }

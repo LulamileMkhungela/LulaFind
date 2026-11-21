@@ -68,10 +68,19 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
                on their profile and in the hover card, where it is the subject
                rather than a third line stacked under a name. -->
           <div class="fb-sub-meta">
-            <span class="fb-sub-meta__place">{{ whereLine() }}</span>
-            <span class="fb-sub-meta__when">{{ whenLine() }}</span>
-            <lf-icon class="fb-audience" [name]="audienceIcon()" [size]="12"
-                     [attr.title]="audienceTitle()" [attr.aria-label]="audienceTitle()" />
+            @if (whereLine()) { <span class="fb-sub-meta__place">{{ whereLine() }}</span> }
+            <!--
+              The time and its audience glyph are one unbreakable, non-shrinking
+              box. Whatever happens to the place name, the glyph rides with the
+              words it describes instead of being left at the end of a clipped
+              line - which is what it looked like when only the whole row was
+              allowed to ellipsize.
+            -->
+            <span class="fb-sub-meta__tail">
+              <span class="fb-sub-meta__when" [class.fb-sub-meta__when--after-place]="!!whereLine()">{{ whenLine() }}</span>
+              <lf-icon class="fb-audience" [name]="audienceIcon()" [size]="12"
+                       [attr.title]="audienceTitle()" [attr.aria-label]="audienceTitle()" />
+            </span>
           </div>
         </div>
         <!-- Follow and the … sit in one right-hand column so they share a line
@@ -108,7 +117,7 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
               <div>
                 <strong [lfUserHover]="post.repostOf ? original()?.authorId ?? '' : ''">{{ originalName() }}</strong>
                 @if (originalHeadline(o)) { <span>{{ originalHeadline(o) }}</span> }
-                <span class="fb-embed__when">{{ timeAgo(o.createdAt) }}@if (o.editedAt) { · Edited } · <lf-icon name="globe" [size]="11" /></span>
+                <span class="fb-embed__when">{{ timeAgo(o.createdAt) }}@if (o.editedAt) { · Edited } · <span class="fb-embed__aud">{{ audienceTitle() }} <lf-icon name="globe" [size]="11" /></span></span>
               </div>
             </div>
             <h3 class="fb-post-title">{{ o.title }}</h3>
@@ -349,11 +358,12 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
       min-width: 0;
     }
     .fb-sub-meta__place { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+    .fb-sub-meta__tail {
+      flex: 0 0 auto; display: inline-flex; align-items: center; gap: 4px;
+    }
     /* The separator rides with the time, so a clipped place never leaves a dot behind. */
-    .fb-sub-meta__when { flex: 0 0 auto; }
-    .fb-sub-meta__when::before { content: '·'; margin-right: 4px; opacity: .7; }
-    .fb-sub-meta > lf-icon { flex: 0 0 auto; }
-    .fb-sub-meta > .fb-audience { margin-left: 0; align-self: center; }
+    .fb-sub-meta__when--after-place::before { content: '·'; margin-right: 4px; opacity: .7; }
+    .fb-audience { flex: 0 0 auto; }
     /*
      * Follow and … share this column, centred on the name's line. The column is
      * the height of one line of text; the … keeps a 32px tap target by bleeding

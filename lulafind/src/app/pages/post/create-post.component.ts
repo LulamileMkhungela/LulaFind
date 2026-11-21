@@ -232,15 +232,27 @@ interface MissingField { key: string; label: string; }
           <lf-avatar [src]="userAvatar()" [name]="userName()" [size]="40" />
           <div class="author-meta">
             <strong>{{ userName() }}</strong>
-            <label class="audience-picker" aria-label="Who can see this post">
+            <!--
+              The picker speaks one short word at a time. It used to put the
+              whole explanation ("Spotlight (join one first)") inside the
+              selected option, which a select box cannot ellipsize: the text was
+              painted cut off, so the globe sat several characters away from the
+              word it belonged to. The reason, when there is one, is now a line
+              under the row.
+            -->
+            <label class="audience-picker" [attr.title]="audienceTitle()">
               <lf-icon [name]="audienceIcon()" [size]="13" />
-              <select [value]="f().audience" (change)="setAudience($any($event.target).value)">
+              <select [value]="f().audience" (change)="setAudience($any($event.target).value)"
+                      aria-label="Who can see this post">
                 <option value="public">Public</option>
                 <option value="followers">Followers</option>
-                <option value="surname" [disabled]="!mySpotlights().length">{{ mySpotlights().length ? 'Spotlight' : 'Spotlight (join one first)' }}</option>
+                <option value="surname" [disabled]="!mySpotlights().length">Spotlight</option>
               </select>
               <lf-icon name="chevronDown" [size]="12" />
             </label>
+            @if (f().audience === 'surname' && !mySpotlights().length) {
+              <p class="audience-note">Join a Spotlight to share with one surname community.</p>
+            }
           </div>
         </div>
 
@@ -630,8 +642,22 @@ interface MissingField { key: string; label: string; }
     .author-row { display: flex; align-items: center; gap: 10px; padding: 0 0 12px; }
     .author-meta { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
     .author-meta > strong { font-size: 14px; }
-    .audience-picker { display: inline-flex; align-items: center; gap: 4px; min-height: 34px; padding: 4px 8px; border-radius: 5px; background: var(--fb-soft); color: var(--fb-text); font-size: 13px; font-weight: 600; }
-    .audience-picker select, .spotlight-picker select { border: 0; outline: 0; background: transparent; color: inherit; font: inherit; appearance: none; cursor: pointer; min-height: 26px; }
+    .audience-picker { display: inline-flex; align-items: center; gap: 4px; min-height: 34px; padding: 4px 8px; border-radius: 5px; background: var(--fb-soft); color: var(--fb-text); font-size: 13px; font-weight: 600; max-width: 100%; }
+    /*
+     * The picker labels the glyph: it is always the short word, never a
+     * sentence. A native select is as wide as its widest option, so showing
+     * "Public" left a gap where "Spotlight" would be, and the chevron sat far
+     * to the right of the word. field-sizing makes it hug the word it is
+     * actually showing; browsers without it keep a sane maximum.
+     */
+    .audience-picker select {
+      border: 0; outline: 0; background: transparent; color: inherit; font: inherit;
+      appearance: none; cursor: pointer; min-height: 26px; max-width: 8rem;
+      field-sizing: content;
+    }
+    .audience-picker lf-icon { flex: none; }
+    .audience-note { margin: 6px 0 0 50px; color: var(--fb-muted); font-size: 13px; line-height: 1.35; }
+    .spotlight-picker select { border: 0; outline: 0; background: transparent; color: inherit; font: inherit; appearance: none; cursor: pointer; min-height: 26px; }
     .spotlight-picker { display: flex; gap: 8px; align-items: center; min-height: 36px; padding: 0 10px; margin: 0 0 12px 50px; border: 1px solid var(--fb-line); border-radius: 7px; color: var(--fb-muted); font-size: 14px; }
     .spotlight-picker select { flex: 1; color: var(--fb-text); }
     .inline-note { margin: 0 0 12px 50px; color: var(--fb-muted); font-size: 14px; line-height: 1.4; }
@@ -1509,6 +1535,12 @@ export class CreatePostComponent implements OnInit, OnDestroy {
   audienceIcon(): string {
     const audience = this.f().audience;
     return audience === 'public' ? 'globe' : audience === 'followers' ? 'users' : 'award';
+  }
+
+  /** The same words the feed card uses for the same three choices. */
+  audienceTitle(): string {
+    const audience = this.f().audience;
+    return audience === 'public' ? 'Visible to anyone' : audience === 'followers' ? 'Visible to followers' : 'Visible in a Spotlight community';
   }
 
   categoryLabel(): string {

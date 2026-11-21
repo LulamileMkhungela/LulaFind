@@ -100,9 +100,16 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
                 </strong>
                 <span class="headline">{{ authorHeadline() }}</span>
                 <span class="meta">
-                  {{ timeAgo(p()!.createdAt) }}
-                  @if (p()!.editedAt) { · <span class="edited" [attr.title]="'Edited ' + timeAgo(p()!.editedAt)">Edited</span> }
-                  · {{ provinceName(p()!.province) }} <lf-icon name="globe" [size]="11" [attr.title]="audienceTitle()" [attr.aria-label]="audienceTitle()" />
+                  <span class="meta__when">
+                    {{ timeAgo(p()!.createdAt) }}
+                    @if (p()!.editedAt) { · <span class="edited" [attr.title]="'Edited ' + timeAgo(p()!.editedAt)">Edited</span> }
+                  </span>
+                  <!-- The place and its audience glyph are one pair, so the glyph
+                       can never wrap onto a line of its own away from its words. -->
+                  <span class="meta__where">
+                    {{ provinceName(p()!.province) }}
+                    <lf-icon name="globe" [size]="11" [attr.title]="audienceTitle()" [attr.aria-label]="audienceTitle()" />
+                  </span>
                 </span>
               </span>
             </a>
@@ -759,7 +766,9 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
     .who__text strong { font-size: 16px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .headline { font-size: 13px; color: var(--lf-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .verified { display: inline-flex; vertical-align: -2px; margin-left: 3px; color: var(--lf-primary); }
-    .meta { display: inline-flex; align-items: center; gap: 4px; font-size: 12.5px; color: var(--lf-muted); }
+    .meta { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 2px 4px; font-size: 12.5px; color: var(--lf-muted); min-width: 0; }
+    .meta__when, .meta__where { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+    .meta__when::after { content: '·'; margin-left: 4px; opacity: .7; }
     .edited { font-style: normal; }
     .follow { align-self: center; height: 32px; padding: 0 12px; border: 0; background: transparent; color: var(--lf-primary);
       font: inherit; font-size: 15px; font-weight: 600; cursor: pointer; }
