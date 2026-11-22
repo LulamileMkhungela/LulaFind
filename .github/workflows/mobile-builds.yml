@@ -14,12 +14,14 @@ on:
       - arena/01a0fc52-lulafind
       - arena/01a1032d-lulafind
       - arena/01a109c7-lulafind
+      - arena/f2738992-lulafind
     paths:
       - 'lulafind/src/**'
       - 'lulafind/android/**'
       - 'lulafind/ios/**'
       - 'lulafind/package.json'
       - 'lulafind/capacitor.config.ts'
+      - 'lulafind/angular.json'
       - '.github/workflows/mobile-builds.yml'
   workflow_dispatch:
 
