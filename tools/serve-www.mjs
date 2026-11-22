@@ -5,7 +5,10 @@
  *
  *   npx ng build && node tools/serve-www.mjs [port] [dir]
  *
- * `dir` defaults to lulafind/www; pass it to serve a build made elsewhere.
+ * `dir` defaults to lulafind/www/browser - where `ng build` now writes the
+ * entry point (angular.json's outputPath browser is 'browser', which is also
+ * what capacitor.config.ts's webDir points at). Serving lulafind/www itself
+ * finds no index.html and answers nothing but 404s.
  */
 import { createServer } from 'node:http';
 import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs';
@@ -15,7 +18,7 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = process.argv[3]
   ? fileURLToPath(new URL(`file://${process.argv[3]}/`))
-  : fileURLToPath(new URL('../lulafind/www/', import.meta.url));
+  : fileURLToPath(new URL('../lulafind/www/browser/', import.meta.url));
 const PORT = Number(process.argv[2] ?? 4300);
 
 const TYPES = {
