@@ -220,6 +220,18 @@ export class LocalDb {
     for (const l of this.db.lookouts ?? []) {
       if (l.askedAt === undefined) { l.askedAt = null; touched = true; }
     }
+    /*
+     * 'pet' is now 'announcement'.
+     *
+     * A lost dog and a found wallet are the same act - announcing something the
+     * neighbourhood should know - so the separate type went. Posts written
+     * before that change keep pointing at a type that no longer exists, which
+     * would drop them out of every filter; this moves them over on first load
+     * rather than leaving them stranded in the database.
+     */
+    for (const p of this.db.posts) {
+      if ((p.type as string) === 'pet') { p.type = 'announcement'; touched = true; }
+    }
     if (touched) this.persist();
   }
 

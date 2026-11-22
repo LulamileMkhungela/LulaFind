@@ -31,9 +31,9 @@ const blankForm = (): ComposerForm => ({
 });
 
 const CATEGORIES: { key: PostType; label: string; icon: string }[] = [
-  { key: 'missing', label: 'Missing person', icon: 'search' },
+  { key: 'missing', label: 'Missing & Found', icon: 'search' },
   { key: 'khumbulekhaya', label: 'Home Sweet Home', icon: 'home' },
-  { key: 'pet', label: 'Lost pet', icon: 'paw' },
+  { key: 'announcement', label: 'Announcement', icon: 'megaphone' },
   { key: 'sighting', label: 'Sighting', icon: 'pin' }
 ];
 
@@ -99,8 +99,8 @@ function templateForType(type: PostType): string {
       return 'Full name:\nAge:\nGender:\nLocation (town/suburb, province):\nWhen last seen:\nWhat happened:';
     case 'khumbulekhaya':
       return 'Full name:\nAge:\nLocation last seen (town/suburb, province):\nWhen they left:\nWhat happened:';
-    case 'pet':
-      return 'Pet name:\nAge:\nGender:\nLocation (town/suburb, province):\nWhen last seen:\nWhat happened:';
+    case 'announcement':
+      return 'What I am announcing (lost or found):\nWhat it is:\nWhere:\nWhen:\nHow people can help:';
     case 'sighting':
       return 'Location (town/suburb, province):\nWhen seen:\nWhat I personally saw:';
     default:
@@ -232,15 +232,27 @@ interface MissingField { key: string; label: string; }
           <lf-avatar [src]="userAvatar()" [name]="userName()" [size]="40" />
           <div class="author-meta">
             <strong>{{ userName() }}</strong>
-            <label class="audience-picker" aria-label="Who can see this post">
+            <!--
+              The picker speaks one short word at a time. It used to put the
+              whole explanation ("Spotlight (join one first)") inside the
+              selected option, which a select box cannot ellipsize: the text was
+              painted cut off, so the globe sat several characters away from the
+              word it belonged to. The reason, when there is one, is now a line
+              under the row.
+            -->
+            <label class="audience-picker" [attr.title]="audienceTitle()">
               <lf-icon [name]="audienceIcon()" [size]="13" />
-              <select [value]="f().audience" (change)="setAudience($any($event.target).value)">
+              <select [value]="f().audience" (change)="setAudience($any($event.target).value)"
+                      aria-label="Who can see this post">
                 <option value="public">Public</option>
                 <option value="followers">Followers</option>
-                <option value="surname" [disabled]="!mySpotlights().length">{{ mySpotlights().length ? 'Spotlight' : 'Spotlight (join one first)' }}</option>
+                <option value="surname" [disabled]="!mySpotlights().length">Spotlight</option>
               </select>
               <lf-icon name="chevronDown" [size]="12" />
             </label>
+            @if (f().audience === 'surname' && !mySpotlights().length) {
+              <p class="audience-note">Join a Spotlight to share with one surname community.</p>
+            }
           </div>
         </div>
 
@@ -539,10 +551,20 @@ interface MissingField { key: string; label: string; }
                     }
                   }
 
-                  @if (type() === 'pet') {
-                    <div class="section-heading compact"><strong>Pet details</strong><span>Optional</span></div>
-                    <label class="field full"><span>Pet's name</span><input placeholder="Name and breed" [value]="s().name" (input)="patchSubject({ name: $any($event.target).value })" /></label>
-                    <label class="field full"><span>Colour, collar or identifying marks</span><input placeholder="A short description" [value]="s().distinguishing" (input)="patchSubject({ distinguishing: $any($event.target).value })" /></label>
+                  @if (type() === 'announcement') {
+                    <div class="section-heading compact"><strong>What are you announcing?</strong><span>Your words</span></div>
+                    <!--
+                      An announcement is an open field on purpose. A lost dog, a
+                      found wallet, a water cut, a funeral notice - the app does
+                      not know which of these the person needs to say, so it asks
+                      for what it is and lets them write the rest.
+                    -->
+                    <label class="field full"><span>What is it? <small>(optional)</small></span>
+                      <input placeholder="A lost dog, a found wallet, a notice for the street" [value]="s().name" (input)="patchSubject({ name: $any($event.target).value })" />
+                    </label>
+                    <label class="field full"><span>Anything that identifies it <small>(optional)</small></span>
+                      <input placeholder="Colour, collar, a mark, a reference" [value]="s().distinguishing" (input)="patchSubject({ distinguishing: $any($event.target).value })" />
+                    </label>
                   }
 
                   @if (type() === 'sighting') {
@@ -554,12 +576,10 @@ interface MissingField { key: string; label: string; }
                   @if (type() !== 'sighting') {
                     <label class="field full"><span>Last seen near</span><input placeholder="Neighbourhood or public place" [value]="f().lastSeenWhere" (input)="patch({ lastSeenWhere: $any($event.target).value })" /></label>
                   }
-                  @if (type() !== 'pet' && type() !== 'sighting') {
+                  @if (type() !== 'announcement' && type() !== 'sighting') {
                     <label class="field full"><span>SAPS case number <small>(optional)</small></span><input placeholder="Police case reference" [value]="f().caseNumber" (input)="patch({ caseNumber: $any($event.target).value })" /></label>
                   }
-                  @if (type() === 'pet') {
-                    <label class="field full"><span>Last seen near</span><input placeholder="Neighbourhood or public place" [value]="f().lastSeenWhere" (input)="patch({ lastSeenWhere: $any($event.target).value })" /></label>
-                  }
+
                   @if (type() === 'khumbulekhaya') {
                     <label class="field full"><span>What might the family want them to know?</span><input placeholder="Optional — don't assume they want to come home" [value]="khumbuReason()" (input)="setKhumbu($any($event.target).value)" /></label>
                     <label class="switch-row"><input type="checkbox" [checked]="f().askWanted" (change)="patch({ askWanted: $any($event.target).checked })" /><span><strong>Ask the community if they are being looked for</strong><small>People can answer yes or no.</small></span></label>
@@ -630,8 +650,22 @@ interface MissingField { key: string; label: string; }
     .author-row { display: flex; align-items: center; gap: 10px; padding: 0 0 12px; }
     .author-meta { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
     .author-meta > strong { font-size: 14px; }
-    .audience-picker { display: inline-flex; align-items: center; gap: 4px; min-height: 34px; padding: 4px 8px; border-radius: 5px; background: var(--fb-soft); color: var(--fb-text); font-size: 13px; font-weight: 600; }
-    .audience-picker select, .spotlight-picker select { border: 0; outline: 0; background: transparent; color: inherit; font: inherit; appearance: none; cursor: pointer; min-height: 26px; }
+    .audience-picker { display: inline-flex; align-items: center; gap: 4px; min-height: 34px; padding: 4px 8px; border-radius: 5px; background: var(--fb-soft); color: var(--fb-text); font-size: 13px; font-weight: 600; max-width: 100%; }
+    /*
+     * The picker labels the glyph: it is always the short word, never a
+     * sentence. A native select is as wide as its widest option, so showing
+     * "Public" left a gap where "Spotlight" would be, and the chevron sat far
+     * to the right of the word. field-sizing makes it hug the word it is
+     * actually showing; browsers without it keep a sane maximum.
+     */
+    .audience-picker select {
+      border: 0; outline: 0; background: transparent; color: inherit; font: inherit;
+      appearance: none; cursor: pointer; min-height: 26px; max-width: 8rem;
+      field-sizing: content;
+    }
+    .audience-picker lf-icon { flex: none; }
+    .audience-note { margin: 6px 0 0 50px; color: var(--fb-muted); font-size: 13px; line-height: 1.35; }
+    .spotlight-picker select { border: 0; outline: 0; background: transparent; color: inherit; font: inherit; appearance: none; cursor: pointer; min-height: 26px; }
     .spotlight-picker { display: flex; gap: 8px; align-items: center; min-height: 36px; padding: 0 10px; margin: 0 0 12px 50px; border: 1px solid var(--fb-line); border-radius: 7px; color: var(--fb-muted); font-size: 14px; }
     .spotlight-picker select { flex: 1; color: var(--fb-text); }
     .inline-note { margin: 0 0 12px 50px; color: var(--fb-muted); font-size: 14px; line-height: 1.4; }
@@ -639,7 +673,15 @@ interface MissingField { key: string; label: string; }
     .section-heading { display: flex; align-items: center; justify-content: space-between; margin: 0 0 9px; color: var(--fb-text); font-size: 15px; }
     .section-heading span { color: var(--fb-muted); font-size: 13px; font-weight: 500; }
     .category-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }
-    .category { position: relative; display: flex; align-items: center; gap: 9px; min-height: 40px; padding: 7px 10px; border: 1px solid var(--fb-line); border-radius: 8px; background: var(--lf-card); color: var(--fb-text); text-align: left; font-size: 14px; font-weight: 600; cursor: pointer; transition: background .16s ease, border-color .16s ease, transform .16s ease; }
+    /*
+     * "Missing & Found" is two words and a symbol where "Missing person" was
+     * two words: on a 390px phone the chip had no room for the third line and
+     * clipped it. The label may wrap to two lines, the row grows to fit them,
+     * and the padding stays tight enough that the second column still fits.
+     */
+    .category { position: relative; display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 8px 9px 8px 8px; border: 1px solid var(--fb-line); border-radius: 8px; background: var(--lf-card); color: var(--fb-text); text-align: left; font-size: 13.5px; font-weight: 600; line-height: 1.2; cursor: pointer; transition: background .16s ease, border-color .16s ease, transform .16s ease; }
+    .category span { min-width: 0; overflow-wrap: anywhere; }
+    .category .selected-check { position: absolute; top: 4px; right: 4px; }
     .category lf-icon { color: var(--fb-blue); }
     .category.selected { border-color: var(--lf-primary); background: var(--lf-primary-soft); color: var(--lf-primary-soft-text); }
     .category:active { transform: scale(.98); }
@@ -1029,7 +1071,7 @@ export class CreatePostComponent implements OnInit, OnDestroy {
 
   protected readonly canAddDetails = computed(() => {
     const t = this.type();
-    return t === 'missing' || t === 'khumbulekhaya' || t === 'pet' || t === 'sighting';
+    return t === 'missing' || t === 'khumbulekhaya' || t === 'announcement' || t === 'sighting';
   });
 
   /* ------------------------- dictation ------------------------- */
@@ -1511,6 +1553,12 @@ export class CreatePostComponent implements OnInit, OnDestroy {
     return audience === 'public' ? 'globe' : audience === 'followers' ? 'users' : 'award';
   }
 
+  /** The same words the feed card uses for the same three choices. */
+  audienceTitle(): string {
+    const audience = this.f().audience;
+    return audience === 'public' ? 'Visible to anyone' : audience === 'followers' ? 'Visible to followers' : 'Visible in a Spotlight community';
+  }
+
   categoryLabel(): string {
     return this.categories.find((category) => category.key === this.type())?.label ?? 'Post';
   }
@@ -1519,7 +1567,7 @@ export class CreatePostComponent implements OnInit, OnDestroy {
     switch (this.type()) {
       case 'missing': return 'Share the important details. Where were they last seen? What might help someone recognise them?';
       case 'khumbulekhaya': return 'Tell the family what they need to know. Keep in mind they may not want to return home.';
-      case 'pet': return 'Describe when and where your pet went missing and how people can help.';
+      case 'announcement': return 'Say what you lost or found, where, and how people can help. Your own words are the whole point.';
       case 'sighting': return 'Share only what you personally saw, when and where. Avoid guesses or naming suspects.';
       default: return 'Write a short update for your community…';
     }
@@ -1529,7 +1577,7 @@ export class CreatePostComponent implements OnInit, OnDestroy {
     switch (this.type()) {
       case 'missing': return 'Add person and case details';
       case 'khumbulekhaya': return 'Add family context';
-      case 'pet': return 'Add pet details';
+      case 'announcement': return 'Add the details';
       case 'sighting': return 'Add sighting details';
       default: return 'Add more details';
     }
@@ -1604,7 +1652,7 @@ export class CreatePostComponent implements OnInit, OnDestroy {
       ? (f.lastSeenAt ? new Date(f.lastSeenAt).getTime() : null)
       : values.when;
     const subject = this.editing() ? (() => {
-      const personType = type === 'missing' || type === 'khumbulekhaya' || type === 'pet';
+      const personType = type === 'missing' || type === 'khumbulekhaya' || type === 'announcement';
       return personType ? {
         name: s.name.trim(), age: s.age ? Number(s.age) : null, gender: s.gender,
         height: s.height.trim(), build: '', skinTone: '', hair: s.hair.trim(), eyes: '',

@@ -49,32 +49,42 @@ import { ReactionIconComponent } from './reaction-icon.component';
       } @else {
         <lf-icon name="thumbup" [size]="21" />
       }
-      <span class="label sr-only">{{ label() }}</span>
+      <!--
+        The word is the target, not a screen-reader extra: "Like" says what the
+        control does before it is pressed. In compact mode the card's action row
+        draws the glyph-and-count instead, so the word stays for assistive tech.
+      -->
+      <span class="label" [class.sr-only]="compact()">{{ label() }}</span>
+      @if (countLabel()) { <span class="count">{{ countLabel() }}</span> }
     </button>
   `,
   styles: [`
     /* This button takes the slack in the action row; the short labels beside
        it take only what they need. */
-    :host { position: relative; display: block; flex: 1 1 auto; min-width: 0; }
+    :host { position: relative; display: block; flex: 0 0 auto; min-width: 0; }
     .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
     .btn {
-      width: 100%; height: 40px; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-      border: 0; border-radius: 4px; background: transparent; color: var(--lf-muted);
+      height: 34px; padding: 0 7px; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+      border: 0; border-radius: 999px; background: transparent; color: var(--lf-muted);
       font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap;
-      min-width: 0; padding: 0 2px;
+      min-width: 0;
       -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; touch-action: manipulation;
     }
     .btn:hover, .btn:active { background: var(--lf-hover); }
-    .btn .label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+    .btn:active { transform: scale(.94); }
+    /* X's row is glyph-and-count, tight to the icon. */
+    :host(.x-act) .btn, .btn--compact { gap: 4px; }
+    @media (prefers-reduced-motion: reduce) { .btn:active { transform: none; } }
+    .btn .label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .btn .count { font-size: 12.5px; font-weight: 600; font-variant-numeric: tabular-nums; }
+    .btn .label.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); }
+    /* The icon keeps its size when the label steps down: a 10px word next to a
+       shrunken glyph reads as a broken row. */
+    .btn lf-icon, .btn lf-reaction-icon { flex: none; }
     /* On phones the label steps down so the words stay whole next to
        Comment / Repost / Send. */
     @media (max-width: 430px) { .btn { font-size: 13px; gap: 4px; } }
     @media (max-width: 360px) { .btn { font-size: 11.5px; gap: 3px; } }
-    @media (max-width: 340px) {
-      /* The very small phones: the label steps down rather than losing a word. */
-      .btn { font-size: 10px; gap: 2px; padding: 0; }
-      .btn lf-icon svg { width: 17px; height: 17px; }
-    }
     .btn.on { color: var(--tone); }
     .scrim { position: fixed; inset: 0; z-index: 40; }
     .tray {
@@ -99,6 +109,19 @@ export class ReactionButtonComponent {
 
   /** Your current reaction on the post, or null. */
   readonly value = input<VoteValue>(null);
+  /**
+   * Glyph only. The feed card's action row is X-shaped - a small glyph with the
+   * count beside it - so the word is not drawn there; the accessible name still
+   * carries it.
+   */
+  readonly compact = input(false);
+  /**
+   * The number beside the glyph, already compacted ("1.2k"). Drawn by this
+   * component rather than projected from the card, because a projected node
+   * needs an `<ng-content>` inside the button and the count must sit between
+   * the glyph and the tap target's edge.
+   */
+  readonly countLabel = input('');
   readonly react = output<ReactionKind>();
 
   protected readonly reactions = REACTIONS;

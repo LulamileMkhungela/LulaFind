@@ -26,7 +26,7 @@ import { AuthService } from '../../core/services/auth.service';
         </div>
         <div class="fb-story-plus-wrap">
           <div class="fb-story-plus-btn">
-            <lf-icon name="plus" [size]="18" [weight]="2.5" />
+            <lf-icon name="plus" [size]="18" [weight]="'bold'" />
           </div>
           <span class="fb-story-create-label">Create story</span>
         </div>

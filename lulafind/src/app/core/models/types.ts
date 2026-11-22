@@ -34,11 +34,17 @@ export const provinceName = (c?: ProvinceCode | string): string =>
 /**
  * What a case can be about.
  *
- * 'vehicle' and 'pet' exist because a hijacking or a lost dog reaches the same
- * neighbourhood, on the same phone, in the same hour as a missing person - and
- * every other South African search app already treats them as first-class.
+ * 'vehicle' and 'announcement' exist because a hijacking or a community notice
+ * reaches the same neighbourhood, on the same phone, in the same hour as a
+ * missing person - and every other South African search app already treats
+ * them as first-class.
+ *
+ * 'pet' was a type of its own until it became clear what a lost dog and a found
+ * phone actually have in common: they are both an announcement. One place to
+ * say "I have lost this" or "I have found this", with a field for whatever the
+ * thing is, beats a growing list of types. Old pet posts are migrated to it.
  */
-export type PostType = 'missing' | 'khumbulekhaya' | 'story' | 'sighting' | 'vehicle' | 'pet' | 'danger';
+export type PostType = 'missing' | 'khumbulekhaya' | 'story' | 'sighting' | 'vehicle' | 'announcement' | 'danger';
 
 /** What someone saw at a dangerous place. A place, not a suspect. */
 export type DangerKind = 'violence' | 'robbery' | 'hijacking' | 'unrest' | 'fire' | 'other';
@@ -266,12 +272,54 @@ export interface CheckIn {
  * published from another device can still be matched to the right area - exactly
  * how AMBER-style alerts are geographically targeted.
  */
+/**
+ * One place a person wants to be told about.
+ *
+ * South Africa does not hand a person one location - someone in Soweto is also
+ * in Gauteng, also near Johannesburg, and their family surname is spread across
+ * Pretoria and Durban. So this is a list, not a single province, and the place
+ * can be named three ways:
+ *
+ *   province - one of the nine (Gauteng)
+ *   metro    - a metropolitan municipality (City of Johannesburg)
+ *   local    - a district or a town/city inside it (Soweto, Pretoria)
+ *
+ * `key` is what is stored and compared (a stable slug); `label` is what the
+ * person reads back on the settings screen.
+ */
+export interface AlertArea {
+  kind: 'province' | 'metro' | 'city';
+  key: string;
+  label: string;
+}
+
+/**
+ * A surname to be told about, and the places worth being told about it in.
+ *
+ * "Mokoena" alone is half of Gauteng; "Mokoena in Soweto and Pretoria" is a
+ * message someone can act on. Areas are chosen by the member, not inferred.
+ */
+export interface SurnameWatch {
+  /** The surname as typed, matched case-insensitively against the case name. */
+  surname: string;
+  areas: AlertArea[];
+}
+
 export interface AlertPrefs {
   enabled: boolean;
   /** Silence everything except cases where the missing person is under 18. */
   childrenOnly: boolean;
+  /**
+   * Kept for the case-alert radius, and as the fallback when no areas are
+   * chosen. `province` used to be the only geographic control; the member now
+   * picks several places instead, so this is 'all' unless they narrow it.
+   */
   province: ProvinceCode | 'all';
   radiusKm: number;
+  /** Places to be told about. Empty means "wherever the case is". */
+  areas?: AlertArea[];
+  /** Surnames to watch, each with its own places. */
+  surnames?: SurnameWatch[];
 }
 
 export interface UserProfile {
@@ -326,6 +374,20 @@ export interface UserProfile {
   spotlightIds: string[];
   /** Posts this person saved. Kept on the profile so it follows them to any phone. */
   savedPostIds?: string[];
+  /**
+   * Cases this person follows. Kept on the profile for the same reason as
+   * savedPostIds: a person who followed a case on their phone must still be
+   * following it when they open the app on another device.
+   */
+  followedCaseIds?: string[];
+  /**
+   * Spotlights whose alerts this member has silenced.
+   *
+   * Muted, not left: the person still belongs to the community and can read and
+   * post there - they only stop being told about every new post in it. Leaving
+   * was the only way to stop the noise before, which also took away posting.
+   */
+  mutedSpotlightIds?: string[];
   /** LulaFind staff / moderator - can remove posts and people */
   isAdmin: boolean;
   /** blocked by an admin: cannot post, vote, comment or chat */
@@ -823,6 +885,15 @@ export interface Notification {
   read: boolean;
   route: string | null;
   postId: string | null;
+  /**
+   * Why this alert exists, when it is not obvious from the kind.
+   *
+   * 'case_follow' means "you follow this case" - the only reason a person who
+   * muted a Spotlight still hears about a post there. The bell uses it to keep
+   * a notice honest: an unfollowed case stops alerting without taking the other
+   * notifications about that post away with it.
+   */
+  reason?: 'case_follow';
 }
 
 export interface Tip {
@@ -863,15 +934,21 @@ export const FEED_TABS: { key: FeedFilter['type']; label: string; icon: string }
   { key: 'missing', label: 'Missing people', icon: 'search' },
   { key: 'khumbulekhaya', label: 'Home Sweet Home', icon: 'home' },
   { key: 'sighting', label: 'Sightings', icon: 'pin' },
-  { key: 'pet', label: 'Lost pets', icon: 'paw' }
+  { key: 'announcement', label: 'Announcements', icon: 'megaphone' }
 ];
 
 export const POST_TYPE_META: Record<PostType, { label: string; tone: string; icon: string; verb: string }> = {
-  missing: { label: 'Missing person', tone: 'danger', icon: 'search', verb: 'Report missing' },
+  /**
+   * One category for a person who is missing *and* one who has been found.
+   * They were always the same thing seen from two sides - a case with a status -
+   * and splitting them made families hunt for the right button at the worst
+   * possible moment. The status on the post says which side you are on.
+   */
+  missing: { label: 'Missing & Found', tone: 'danger', icon: 'search', verb: 'Report missing or found' },
   khumbulekhaya: { label: 'Home Sweet Home', tone: 'warm', icon: 'home', verb: 'Remember home' },
   sighting: { label: 'Sighting', tone: 'info', icon: 'pin', verb: 'Report sighting' },
   vehicle: { label: 'Hijacked or stolen vehicle', tone: 'warn', icon: 'car', verb: 'Report a vehicle' },
-  pet: { label: 'Lost pet', tone: 'neutral', icon: 'paw', verb: 'Report a lost pet' },
+  announcement: { label: 'Announcement', tone: 'neutral', icon: 'megaphone', verb: 'Post an announcement' },
   story: { label: 'Story / status', tone: 'neutral', icon: 'book', verb: 'Share story' },
   danger: { label: 'Danger nearby', tone: 'danger', icon: 'alert', verb: 'Warn people' }
 };

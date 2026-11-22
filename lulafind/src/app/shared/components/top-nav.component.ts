@@ -38,7 +38,7 @@ import { BackStackService } from '../../core/services/back-stack.service';
         @if (title() || backTo()) {
           <ion-buttons slot="start">
             <button class="lf-round-btn" type="button" (click)="back()" aria-label="Go back">
-              <lf-icon name="arrowLeft" [size]="20" [weight]="2.4" />
+              <lf-icon name="arrowLeft" [size]="20" [weight]="'bold'" />
             </button>
           </ion-buttons>
           <ion-title>{{ title() }}</ion-title>
@@ -46,7 +46,7 @@ import { BackStackService } from '../../core/services/back-stack.service';
           <div class="row">
             @if (!isHome()) {
               <button class="lf-round-btn row-back" type="button" (click)="back()" aria-label="Go back">
-                <lf-icon name="arrowLeft" [size]="20" [weight]="2.4" />
+                <lf-icon name="arrowLeft" [size]="20" [weight]="'bold'" />
               </button>
             }
             @if (signedIn()) {
@@ -66,7 +66,7 @@ import { BackStackService } from '../../core/services/back-stack.service';
                 key) - no custom keypad to fight with.
               -->
               <form class="search" role="search" (submit)="submitSearch($event)">
-                <lf-icon name="search" [size]="17" [weight]="2.2" />
+                <lf-icon name="search" [size]="17" [weight]="'regular'" />
                 <input #searchInput name="q" type="search" enterkeyhint="search"
                        autocomplete="off" autocorrect="on" autocapitalize="none" spellcheck="false"
                        [value]="query()"
@@ -76,11 +76,11 @@ import { BackStackService } from '../../core/services/back-stack.service';
                        aria-label="Search LulaFind" />
                 @if (query()) {
                   <button class="clear" type="button" (click)="clearSearch($event)" aria-label="Clear search">
-                    <lf-icon name="x" [size]="15" [weight]="2.4" />
+                    <lf-icon name="x" [size]="15" [weight]="'bold'" />
                   </button>
                 }
               </form>
-              <a class="nav-ico create-link" routerLink="/new" aria-label="Create a post"><lf-icon name="plus" [size]="24" /></a>
+              <a class="nav-ico create-link" routerLink="/new" aria-label="Create a post" title="Create a post"><lf-icon name="plus" [size]="24" /></a>
             }
           </div>
         }

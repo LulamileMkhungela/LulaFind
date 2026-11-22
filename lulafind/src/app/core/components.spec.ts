@@ -16,6 +16,7 @@ import { DataService } from './services/data.service';
 import { feedWithRails } from './utils/feed';
 import { ChatService } from './services/chat.service';
 import { emptyFilter } from './models/types';
+import { strokeFor } from './theme/icon-registry';
 import { FilterBarComponent } from '../shared/components/filter-bar.component';
 import { PostCardComponent } from '../shared/components/post-card.component';
 import { RepostSheetComponent } from '../shared/components/repost-sheet.component';
@@ -261,29 +262,44 @@ describe('Components render', () => {
     await f.whenStable();
     const html: string = (f.nativeElement as HTMLElement).innerHTML;
     expect(html).toContain('Follow');
-    // Card anatomy: headline under the name, three-line clamp with a muted
-    // ellipsis, then the meta lines and the stats line. The default reaction is the
-    // one LinkedIn's button is - Like - and it reads as its own name, never a
-    // yes/no vote. "Have an idea" lives in the tray, not on the button.
+    // Card anatomy: the name with the granted badge, one quiet line of where
+    // and when, three-line clamp with a muted ellipsis, then the stats line.
+    // The default reaction is the one LinkedIn's button is - Like - and it
+    // reads as its own name, never a yes/no vote. "Have an idea" lives in the
+    // tray, not on the button.
     expect(html).toContain('Like');
     expect(html).not.toContain('No idea');
-    expect(html).toContain('Community organiser');
+    // Two header lines only: the person's bio belongs on their profile, not
+    // stacked as a third line under their name on every card.
+    expect(html).not.toContain('fb-headline');
+    expect(html).not.toContain('Community organiser');
+    // The seeded demo account is verified, so the granted badge renders with a
+    // name a screen reader can read.
+    expect(html).toContain('fb-verified');
+    expect(html).toContain('aria-label="Verified member"');
     expect(html).toContain('fb-clamp');
     expect(html).toContain('see more');
     expect(html).toContain('fb-stats-bar');
-    // Line 1 is where it is, then what kind of post it is; line 2 is when, then
-    // the audience icon. The old standalone chip under the avatar is gone.
+    // The kind tags the post itself; the line under the name is where and when.
+    // It leads with the town, because "Umlazi, Durban, KwaZulu-Natal" cost more
+    // width than a card with a Follow button has - the place name was being cut
+    // and the globe pushed away from the words it describes.
     expect(html).toContain('fb-kind');
-    expect(html).toContain('Missing person');
-    expect(html).toContain('Gauteng');
+    // The category is one now: a card does not say missing *or* found, the case does.
+    expect(html).toContain('Missing &amp; Found');
+    expect(html).toContain('fb-sub-meta__place');
+    expect(html).toContain('Orlando West, Soweto');
+    expect(html).toContain('fb-sub-meta__when');
     expect(html).not.toContain('fb-chips');
-    // The card carries LinkedIn's action bar: react (with its label), Comment,
-    // Repost, Send - each with an icon and a word. Follow and … share one
-    // right-hand column above it.
-    expect(html).toContain('fb-actions');
-    expect(html).toContain('Comment');
-    expect(html).toContain('Repost');
-    expect(html).toContain('Send');
+    // The card carries the X-shaped action row: react, comment and repost on
+    // the left with their counts, the reaction stack and Send grouped right.
+    // Each action keeps a real accessible name even where the glyph is all
+    // that is drawn.
+    expect(html).toContain('x-bar');
+    for (const label of ['Comment', 'Repost', 'Send']) {
+      expect(html).toContain(`aria-label="${label}"`);
+    }
+    expect(html).toContain('Choose a reaction');
     expect(html).not.toContain('fb-actions-row');
     expect(html).toContain('fb-head-actions');
     expect(html).toContain('fb-more-btn');
@@ -310,19 +326,24 @@ describe('Components render', () => {
     f.detectChanges();
 
     const el = f.nativeElement as HTMLElement;
-    const text = (el.textContent ?? '').replace(/\s+/g, ' ').trim();
 
     // The reaction stack shows the kinds people actually gave: two Likes, then Support.
-    expect(el.querySelectorAll('.fb-stack lf-reaction-icon').length).toBe(2);
-    // Counts, with LinkedIn's separator: "3 ... 2 comments · 1 repost".
-    expect(text).toContain('3');
-    expect(text).toContain('2 comments');
-    expect(text).toContain('1 repost');
-    expect(el.querySelector('.fb-stats-right .fb-dot')).toBeTruthy();
-    // The four actions, each with its word.
-    const actions = [...el.querySelectorAll('.fb-act')].map((b) => (b.textContent ?? '').trim());
-    expect(actions.slice(0, 4)).toEqual(['Like', 'Comment', 'Repost', 'Send']);
-    expect(el.querySelector('.fb-actions button lf-icon[name="chat"]')).toBeTruthy();
+    expect(el.querySelectorAll('.x-avatars lf-reaction-icon').length).toBe(2);
+    // X's row rides the count on its own action: reactions, comments, reposts.
+    const counts = [...el.querySelectorAll('.x-act__count')].map((c) => (c.textContent ?? '').trim());
+    expect(counts).toEqual(['2', '1']);
+    // The reaction's own count rides its button, exactly where X puts it.
+    expect(el.querySelector('lf-reaction-button .count')?.textContent?.trim()).toBe('3');
+    // The four ways to act are all reachable, each with its own name.
+    const names = [...el.querySelectorAll('.x-bar [aria-label], .x-bar lf-reaction-button .btn')]
+      .map((b) => b.getAttribute('aria-label') ?? '');
+    expect(names.join(' ')).toContain('Comment');
+    expect(names.join(' ')).toContain('Repost');
+    expect(names.join(' ')).toContain('Send');
+    expect(names.join(' ')).toContain('Choose a reaction');
+    // The summary survives for anything that reads the numbers as one line.
+    expect(el.querySelector('.fb-stats-bar')?.textContent).toContain('2 comments');
+    expect(el.querySelector('.fb-stats-bar')?.textContent).toContain('1 repost');
   });
 
   it('leaves the long text boxes uncapped and gives every one of them the phone keyboard features', async () => {
@@ -429,8 +450,9 @@ describe('Components render', () => {
     await f.whenStable();
 
     const el = f.nativeElement as HTMLElement;
-    // The count opens the sheet, exactly as LinkedIn's does.
-    const opener = el.querySelector('.fb-stats-likes [role="button"]') as HTMLElement;
+    // The reaction stack opens the sheet: the faces are the "who", so tapping
+    // them is the natural way in.
+    const opener = el.querySelector('.x-avatars') as HTMLElement;
     expect(opener).toBeTruthy();
     opener.click();
     f.detectChanges();
@@ -1059,12 +1081,14 @@ describe('Components render', () => {
     await settle(f);
     const el = f.nativeElement as HTMLElement;
 
-    // The bar exists in the markup, not only in the component's handlers.
-    const labels = [...el.querySelectorAll('.fb-actions .fb-act')].map((b) => b.textContent?.trim());
-    expect(labels, 'LinkedIn calls the first action Like').toContain('Like');
-    expect(labels).toContain('Comment');
-    expect(labels).toContain('Repost');
-    expect(labels).toContain('Send');
+    // The bar exists in the markup, not only in the component's handlers. The
+    // reaction still calls itself Like (in its accessible name and its tray),
+    // and the other three carry their own names.
+    const names = [...el.querySelectorAll('.x-bar button')].map((b) => b.getAttribute('aria-label') ?? b.textContent ?? '');
+    expect(names.join(' '), 'the default reaction is still called Like').toContain('Like');
+    expect(names.join(' ')).toContain('Comment');
+    expect(names.join(' ')).toContain('Repost');
+    expect(names.join(' ')).toContain('Send');
 
     // A keyboard tap on React emits the reaction the app records, and Comment
     // opens the post's comments - the two things a feed post must be able to
@@ -1074,12 +1098,12 @@ describe('Components render', () => {
     const comments: number[] = [];
     f.componentInstance.vote.subscribe((v) => votes.push(v));
     f.componentInstance.comment.subscribe(() => comments.push(1));
-    const reactBtn = el.querySelector('.fb-actions lf-reaction-button .btn') as HTMLButtonElement;
+    const reactBtn = el.querySelector('.x-bar lf-reaction-button .btn') as HTMLButtonElement;
     reactBtn.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
     f.detectChanges();
     expect(el.querySelectorAll('.tray .opt').length).toBe(4);
     (el.querySelector('.tray .opt[data-key="like"]') as HTMLButtonElement).click();
-    ([...el.querySelectorAll('.fb-actions .fb-act')][1] as HTMLButtonElement).click();
+    (el.querySelector('.x-bar button[aria-label="Comment"]') as HTMLButtonElement).click();
     expect(votes).toEqual(['like']);
     expect(comments.length).toBe(1);
   });
@@ -1339,7 +1363,10 @@ describe('Components render', () => {
     await f.whenStable();
     const html: string = (f.nativeElement as HTMLElement).innerHTML;
     expect(html).toContain('What are you posting?');
-    expect(html).toContain('Missing person');
+    // One category for both sides of a case, and announcements where the pet
+    // type used to be.
+    expect(html).toContain('Missing &amp; Found');
+    expect(html).toContain('Announcement');
     expect(f.componentInstance.mySpotlights().map((s: any) => s.surname)).toEqual(['Mokoena']);
 
     f.componentInstance.setType('missing');
@@ -2016,6 +2043,11 @@ describe('Admin screen', () => {
     expect(html).toContain('Suspend');
     // another admin has no Remove button of their own
     expect(html).toContain('admin');
+    // A badge is granted from here: the control exists, and the verified
+    // accounts in the list carry the same mark the feed draws.
+    expect(html).toContain('Verify member');
+    expect(html).toContain('Withdraw badge');
+    expect(html).toContain('aria-label="Verified member"');
   });
 
   it('filters people when you type in the search bar', async () => {
@@ -2806,6 +2838,51 @@ describe('What you can do to a message', () => {
     f.detectChanges();
     expect(f.componentInstance.shown().length).toBe(3);
     f.destroy();
+  });
+});
+
+describe('One icon set, at every size', () => {
+  /**
+   * Two ways the set drifted before, both visible on a phone:
+   *
+   *  - a face glyph sat inside the card's comment button, looking like an emoji
+   *    picker that the app deliberately does not have;
+   *  - stroke widths were written as raw numbers next to each size, so a 13px
+   *    tick and a 24px tab glyph ended up at different visual weights - two sets
+   *    on one screen.
+   */
+  it('scales the stroke to the glyph, so small icons do not look twice as heavy', () => {
+    const small = strokeFor(13, 'regular');
+    const large = strokeFor(24, 'regular');
+    expect(small).toBeLessThan(large);
+    // A 13px glyph may carry a little more relative weight than a 24px one -
+    // enough to read - but not the 1.6x that made it look like a second set.
+    expect(small / 13).toBeLessThan((large / 24) * 1.45);
+    // The three weights stay ordered at any size.
+    expect(strokeFor(20, 'thin')).toBeLessThan(strokeFor(20, 'regular'));
+    expect(strokeFor(20, 'regular')).toBeLessThan(strokeFor(20, 'bold'));
+    // A raw number still wins, for the rare one-off.
+    expect(strokeFor(18, 2.4)).toBe(2.4);
+  });
+
+  it('keeps the comment bar free of a picker it does not have', () => {
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      imports: [PostCardComponent],
+      providers: [provideRouter(ROUTES), provideIonicAngular(), { provide: LULA_API, useValue: new MockApi(new LocalDb(true)) }]
+    });
+    const f = TestBed.createComponent(PostCardComponent);
+    const db = new LocalDb(true);
+    const post = db.post('p_thato');
+    if (!post) throw new Error('fixture p_thato is missing');
+    f.componentInstance.post = post;
+    f.detectChanges();
+    const el = f.nativeElement as HTMLElement;
+    const bar = el.querySelector('.fb-comment-cta');
+    expect(bar).toBeTruthy();
+    // No face at the end of a field that only opens the post.
+    expect(el.querySelector('.fb-comment-cta__ic')).toBeFalsy();
+    expect(el.querySelector('lf-icon[name="smile"]')).toBeFalsy();
   });
 });
 

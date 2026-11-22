@@ -16,6 +16,7 @@ import {
 import { RewardService } from './reward.service';
 import { avatar, cover, hueOf, scene } from '../data/seed';
 import { HOUR, DAY, compact, uid } from '../utils/format';
+import { caseInArea, surnameMatches } from '../data/places';
 import { helpersOf, helpSummary } from '../utils/aftercare';
 import { withTimeout } from '../utils/net';
 import { AuthService } from './auth.service';
@@ -167,7 +168,44 @@ export class DataService {
   /** people who follow the signed-in account */
   readonly followerIds = signal<string[]>([]);
 
-  readonly unreadNotifications = computed(() => this.notifications().filter((n) => !n.read).length);
+  /**
+   * The bell as the member asked to see it.
+   *
+   * Muting a Spotlight, or unfollowing a case, has to apply to the alerts that
+   * are already there - a switch that only governs future posts leaves
+   * yesterday's rows sitting in the list, which reads as "that did nothing".
+   * Hidden here rather than deleted: the account's history stays whole, and
+   * turning alerts back on does not take anything away.
+   */
+  readonly visibleNotifications = computed(() => {
+    const muted = this.mutedSpotlightIds();
+    const followed = this.followedCaseIds();
+    return this.notifications().filter((n) => {
+      if (!n.postId) return true;
+      // A case the person stepped away from: its follow alerts go quiet.
+      if (!n.read && !followed.includes(n.postId) && this.isFollowAlert(n)) return false;
+      if (!muted.length) return true;
+      // A Spotlight post they muted - unless it is about a case they follow.
+      const post = this.post(n.postId);
+      if (post?.spotlightId && muted.includes(post.spotlightId) && !followed.includes(n.postId)) return false;
+      return true;
+    });
+  });
+
+  /**
+   * True for the alert this app writes when a followed case gets news.
+   *
+   * Matched on the wording the fan-out uses, because those rows share the
+   * 'missing' and 'spotlight' kinds with case alerts from the whole province -
+   * kind alone would hide those too.
+   */
+  private isFollowAlert(n: Notification): boolean {
+    if (n.reason === 'case_follow') return true;
+    // Alerts written before the reason field existed carry it in their words.
+    return n.body.startsWith('You follow this case');
+  }
+
+  readonly unreadNotifications = computed(() => this.visibleNotifications().filter((n) => !n.read).length);
   /**
    * The viewer's own posts, whatever stage they are at.
    *
@@ -461,13 +499,48 @@ export class DataService {
 
   async loadCommentsFor(postId: string): Promise<void> {
     if (!postId || this.cardComments()[postId]) return;
-    try {
-      const list = await this.api.commentsFor(postId);
-      this.cardComments.update((all) => ({ ...all, [postId]: list }));
-    } catch {
+    // One request per post for the whole page, not one flight each.
+    return this.loadCommentsForMany([postId]).then(() => undefined);
+  }
+
+  private commentQueue = new Set<string>();
+  private commentFlush: ReturnType<typeof setTimeout> | null = null;
+
+  /**
+   * Queue the comment previews a screen is about to show.
+   *
+   * Cards mount one after another, so asking per card sent one request per
+   * post at almost the same moment. Everything asked for within a frame is
+   * collected here and fetched together, in parallel, with one shared view of
+   * what is already cached - the screen fills its previews in one round-trip
+   * instead of twenty.
+   */
+  primeComments(postIds: string[]): void {
+    const missing = postIds.filter((id) => id && !this.cardComments()[id]);
+    if (!missing.length) return;
+    for (const id of missing) this.commentQueue.add(id);
+    if (this.commentFlush) return;
+    this.commentFlush = setTimeout(() => {
+      this.commentFlush = null;
+      const batch = [...this.commentQueue];
+      this.commentQueue.clear();
+      void this.loadCommentsForMany(batch);
+    }, 16);
+  }
+
+  /** Fetch several posts' comments at once. Already-loaded posts are skipped. */
+  async loadCommentsForMany(postIds: string[]): Promise<void> {
+    const wanted = [...new Set(postIds)].filter((id) => id && !this.cardComments()[id]);
+    if (!wanted.length) return;
+    const loaded = await Promise.all(wanted.map(async (id) => {
+      try { return [id, await this.api.commentsFor(id)] as const; }
       // A preview under a card is not worth an error banner; the counts the
       // card already has stay as they were and tapping still opens the post.
-    }
+      catch { return null; }
+    }));
+    const found: Record<string, Comment[]> = {};
+    for (const entry of loaded) if (entry) found[entry[0]] = entry[1];
+    if (Object.keys(found).length) this.cardComments.update((all) => ({ ...all, ...found }));
   }
 
   /** Forget a post's prefetched comments, e.g. after a comment is deleted. */
@@ -500,6 +573,11 @@ export class DataService {
     if (request !== this.staticSeq) return;
     void this.loadLookouts();
     this.spotlights.set(spots);
+    // Mute choices ride on the profile, so they are known as soon as the account
+    // is - not only after the Spotlight's own page has been opened. The bell
+    // filters on them, so a mute must hold before that page is ever visited.
+    const mutedNow = this.auth.user()?.mutedSpotlightIds;
+    if (Array.isArray(mutedNow)) this.mutedSpotlightIds.set(mutedNow);
     const me = this.auth.viewerId;
     // The story rail only ever shows the first handful, and each story costs an
     // extra view query. Keep the first eight visible stories so a long history
@@ -1269,8 +1347,45 @@ export class DataService {
       if (p) this.rememberWatch([p]);
     }
     this.persistViewerPrefs();
+    // The account copy is what makes a follow survive a new phone. A failed
+    // write must not undo the local choice - it is re-sent with the next save.
+    await this.auth.updateProfile({ followedCaseIds: next }).catch(() => undefined);
+    // Unfollowing stops the news: the unread alerts about this case have no
+    // reason to stay, and a person who unfollowed should not open the bell to
+    // the thing they just stepped away from.
     return !has;
   }
+
+  /* ---------------------- muted Spotlights ---------------------- */
+
+  /** Spotlights whose alerts this member has silenced (they are still a member). */
+  readonly mutedSpotlightIds = signal<string[]>([]);
+
+  isSpotlightMuted(id: string | null | undefined): boolean {
+    return !!id && this.mutedSpotlightIds().includes(id);
+  }
+
+  /**
+   * Stop, or resume, the alerts from one Spotlight.
+   *
+   * Deliberately separate from leaving it: leaving removes posting rights too,
+   * which is far more than "I do not want a bell entry for every post here".
+   * The fan-out in notifyPostNetwork skips muted members, and this choice rides
+   * on the profile so it travels to another phone.
+   */
+  async toggleSpotlightAlerts(spotlightId: string): Promise<boolean> {
+    const me = this.auth.user();
+    if (!me) throw new Error('Sign in to change Spotlight alerts');
+    if (!this.isMember(spotlightId)) throw new Error('Join the community before you choose its alerts');
+    const muted = this.isSpotlightMuted(spotlightId);
+    const next = muted
+      ? this.mutedSpotlightIds().filter((x) => x !== spotlightId)
+      : [spotlightId, ...this.mutedSpotlightIds()];
+    this.mutedSpotlightIds.set(next);
+    await this.auth.updateProfile({ mutedSpotlightIds: next }).catch(() => undefined);
+    return !muted;
+  }
+
 
   isFollowingCase(postId: string): boolean {
     return this.followedCaseIds().includes(postId);
@@ -1513,12 +1628,18 @@ export class DataService {
       this.savedIds.set(fromProfile ?? (Array.isArray(local) ? local : []));
       const rawFollowed = localStorage.getItem(this.followedKey);
       const followed = rawFollowed ? (JSON.parse(rawFollowed) as string[]) : [];
-      this.followedCaseIds.set(Array.isArray(followed) ? followed : []);
+      const fromProfileFollows = untracked(() => this.auth.user()?.followedCaseIds) ?? null;
+      this.followedCaseIds.set(Array.isArray(fromProfileFollows)
+        ? fromProfileFollows
+        : (Array.isArray(followed) ? followed : []));
+      const muted = untracked(() => this.auth.user()?.mutedSpotlightIds) ?? [];
+      this.mutedSpotlightIds.set(Array.isArray(muted) ? muted : []);
       this.lastVisitAt.set(Number(localStorage.getItem(this.visitKey) ?? 0) || 0);
     } catch {
       this.hiddenIds.set([]);
       this.savedIds.set(fromProfile ?? []);
       this.followedCaseIds.set([]);
+      this.mutedSpotlightIds.set([]);
       this.lastVisitAt.set(0);
     }
   }
@@ -2349,9 +2470,54 @@ export class DataService {
       }
     }
     recipients.delete(author.id);
-    if (!recipients.size) return;
 
     const isSpotlightPost = !!post.spotlightId && !!spotlightName;
+    const isCase = post.type === 'missing' || post.type === 'khumbulekhaya';
+    // The mute list and the follow list live on the profile, so read people once
+    // - and only when either list can matter here.
+    const people = (post.spotlightId || isCase)
+      ? (await this.api.users().catch(() => [] as UserProfile[]))
+      : [];
+
+    /**
+     * A person can act on a case without being a member: follow it and you are
+     * told about it wherever it is posted, including inside a Spotlight you
+     * muted. The alert must also name the case - a generic "someone posted in
+     * the Khumalo Spotlight" tells a follower nothing about the case they are
+     * watching. Followers are therefore taken out of the generic fan-out and
+     * given this one instead, so nobody gets the same news twice.
+     */
+    const caseFollowers = new Set<string>();
+    if (isCase) {
+      const who = post.subject?.name?.trim() || post.title;
+      const title = isSpotlightPost
+        ? `New case in the ${spotlightName} Spotlight: ${who}`
+        : `New case: ${who}`;
+      const body = isSpotlightPost
+        ? `You follow this case. ${author.displayName} posted it in the ${spotlightName} Spotlight.`
+        : `You follow this case. ${author.displayName} just posted it.`;
+      for (const u of people) {
+        if (u.id === author.id || !(u.followedCaseIds ?? []).includes(post.id)) continue;
+        caseFollowers.add(u.id);
+        recipients.delete(u.id);
+        await this.api.pushNotification({
+          id: uid('n'), userId: u.id, kind: 'missing', title, body, reason: 'case_follow',
+          at: Date.now(), read: false, route: `/post/${post.id}`, postId: post.id
+        });
+      }
+    }
+
+    // Members who muted this Spotlight still belong to it - they keep their
+    // membership and their posting rights and can read and post there. Only the
+    // per-post alert is skipped, and a case they follow has already reached them.
+    if (post.spotlightId) {
+      for (const u of people) {
+        if (!(u.mutedSpotlightIds ?? []).includes(post.spotlightId) || caseFollowers.has(u.id)) continue;
+        recipients.delete(u.id);
+      }
+    }
+    if (!recipients.size) return;
+
     const title = isSpotlightPost
       ? `${author.displayName} posted in the ${spotlightName} Spotlight`
       : `${author.displayName} shared a new post`;
@@ -2374,6 +2540,7 @@ export class DataService {
     const child = isChildCase(post);
     const users = await this.api.users().catch(() => [] as UserProfile[]);
     const place = [post.town, provinceName(post.province)].filter(Boolean).join(', ');
+    const who = post.subject?.name?.trim() || 'Someone';
     let sent = 0;
     for (const u of users) {
       if (u.id === post.authorId || u.suspended) continue;
@@ -2381,9 +2548,41 @@ export class DataService {
       if (prefs) {
         if (!prefs.enabled) continue;
         if (prefs.childrenOnly && !child) continue;
-        if (prefs.province !== 'all' && prefs.province !== post.province) continue;
+        // Areas chosen by the member replace the single province check: a case
+        // that lands in none of the places they picked is not their news.
+        if (prefs.areas?.length) {
+          if (!prefs.areas.some((a) => caseInArea(a, post))) continue;
+        } else if (prefs.province !== 'all' && prefs.province !== post.province) {
+          continue;
+        }
       } else if (u.province && u.province !== post.province) {
         // No saved preferences: province-level alerts, never a silent drop.
+        continue;
+      }
+
+      /**
+       * A watched surname is the loudest thing a person can ask for, so it gets
+       * its own message and is not subject to the area rule twice: the surname
+       * already carries the places the member attached to it ("Mokoena in
+       * Soweto and Pretoria"). Naming it - "A Mokoena case in Soweto" - is the
+       * whole point; a generic "a new missing case" buries the reason.
+       */
+      const watch = (prefs?.surnames ?? []).find((w) =>
+        surnameMatches(w.surname, post) && (!w.areas.length || w.areas.some((a) => caseInArea(a, post)))
+      );
+      if (watch) {
+        await this.api.pushNotification({
+          id: uid('n'),
+          userId: u.id,
+          kind: 'missing',
+          title: `A ${watch.surname} case${post.town ? ` in ${post.town.split(',')[0]}` : ''}`,
+          body: `${who} · ${place}. You asked to be told about the ${watch.surname} surname here.`,
+          at: Date.now(),
+          read: false,
+          route: `/post/${post.id}`,
+          postId: post.id
+        });
+        sent++;
         continue;
       }
       await this.api.pushNotification({
@@ -2391,7 +2590,7 @@ export class DataService {
         userId: u.id,
         kind: 'missing',
         title: child ? 'A child is missing nearby' : 'A new missing case nearby',
-        body: `${post.subject?.name?.trim() || 'Someone'} · ${place}. Open the case for the poster.`,
+        body: `${who} · ${place}. Open the case for the poster.`,
         at: Date.now(),
         read: false,
         route: `/post/${post.id}`,

@@ -157,8 +157,9 @@ async function signUp(name, email, password) {
   await sleep(400);
   await fill('input[type="email"]', email);
   await tap('Continue');
-  await waitForText(/Select your province/);
-  await fill('select.snap-select', 'GP');
+  // Step 5 asks for 18 + the terms only; province is collected in onboarding,
+  // so there is no province field on this screen to fill.
+  await waitForText(/Finish creating your account/);
   await tick('18 or older');
   await tick('I agree to the Terms');
   await tap('Agree and continue');
@@ -204,12 +205,26 @@ async function tapAlert(label) {
   return ok;
 }
 
+/*
+ * Sign-out lives in Settings -> the account section, not on the profile: the
+ * profile is what a person shows someone, so the destructive controls moved
+ * behind a deliberate tap. This journey still asked /me for the button for a
+ * while after that move; the tap quietly failed, the session stayed live, and
+ * every later "log in as someone else" step landed on /home instead of /auth.
+ * Each later step then blamed a field that was never on screen.
+ */
+/** What the alert/sheet is offering, so a confirmation can be detected. */
+async function alertText() {
+  return page.evaluate(() => Array.from(document.querySelectorAll('ion-alert, ion-action-sheet'))
+    .map((a) => (a.innerText || a.textContent || '').replace(/\s+/g, ' ').trim()).join(' | '));
+}
+
 async function signOut() {
-  await goto('/me');
+  await goto('/settings');
   await tap('Sign out');
-  await sleep(600);
-  await tapAlert('Sign out');
   await sleep(1200);
+  // No confirmation dialog: signing out is reversible and the app does not ask.
+  if (await alertText()) await tapAlert('Sign out');
   if (!/\/auth/.test(page.url())) {
     /* Nothing else should be holding the session - say so instead of pretending. */
     problems.push(`sign out did not return to the sign-in screen (at ${page.url().replace(BASE, '')})`);

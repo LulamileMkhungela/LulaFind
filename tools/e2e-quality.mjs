@@ -336,8 +336,8 @@ await fill('input[placeholder="At least 8 characters"]', A.pass);
 await tap('Continue', { exact: true });
 await fill('input[type="email"]', A.email);
 await tap('Continue', { exact: true });
-await waitForText(/Select your province/, 6000);
-await fill('select.snap-select', 'GP');
+// Step 5 is the 18 + terms gate; province is asked for in onboarding.
+await waitForText(/Finish creating your account/, 6000);
 await tick('18 or older');
 await tick('I agree to the Terms');
 await tap('Agree and continue', { exact: true });
@@ -350,7 +350,7 @@ console.log('  signed up:', page.url().replace(BASE, ''));
 
 const userId = await page.evaluate(() => JSON.parse(localStorage.getItem('lulafind.db.snapshot') || '{}').users?.[0]?.id ?? null);
 await goto('/new', 1600);
-await tap('Missing person');
+await tap('Missing & Found');
 await fill('textarea[data-field="body"]', 'Nandi left for the taxi rank at 06:10 on Tuesday morning and has not been seen since. She was wearing a blue jacket and black takkies. Her phone went off near the rank at 06:40.');
 await fill('.location-grid select', 'GP');
 await fill('input[placeholder="e.g. Soweto"]', 'Soweto');

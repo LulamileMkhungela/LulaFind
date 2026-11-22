@@ -22,10 +22,10 @@ import { alreadySaid } from '../../core/utils/format';
   imports: [IconComponent],
   template: `
     @if (post(); as p) {
-      @if (p.type === 'pet') {
+      @if (p.type === 'announcement') {
         <div class="fact-row">
-          <lf-icon name="paw" [size]="14" />
-          <span><strong>Lost pet:</strong> {{ p.subject?.name || 'Pet' }}</span>
+          <lf-icon name="megaphone" [size]="14" />
+          <span><strong>{{ p.status === 'found' ? 'Found:' : 'Lost:' }}</strong> {{ p.subject?.name || 'Announcement' }}</span>
         </div>
       } @else if (p.subject?.name && !said(p, p.subject.name)) {
         <div class="fact-row">
@@ -44,7 +44,7 @@ import { alreadySaid } from '../../core/utils/format';
       }
       @if (isLiveCase(p)) {
         <div class="case-line" [attr.data-urgency]="caseUrgency(p)">
-          <lf-icon name="clock" [size]="13" [weight]="2.2" />
+          <lf-icon name="clock" [size]="13" [weight]="'regular'" />
           <strong>{{ caseAge(p) }}</strong>
           <span>open</span>
           @if ((p.lookingIds?.length ?? 0) > 0) {

@@ -82,7 +82,7 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
         <article class="post">
           @if (p()!.repostOf) {
             <div class="reposted">
-              <lf-icon name="repost" [size]="14" [weight]="2.4" />
+              <lf-icon name="repost" [size]="14" [weight]="'bold'" />
               <strong>{{ reposterLine() }}</strong>
             </div>
           }
@@ -91,12 +91,25 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
             <a class="who" [routerLink]="authorLink()">
               <lf-avatar [src]="authorAvatar()" [name]="authorName()" [size]="48" [status]="p()!.anonymous && !isMine() ? null : data.statusOf(author())" />
               <span class="who__text">
-                <strong>{{ authorName() }}</strong>
+                <strong>{{ authorName() }}
+                  @if (authorVerified()) {
+                    <span class="verified" role="img" title="Verified member" aria-label="Verified member">
+                      <lf-icon name="award" [size]="13" [filled]="true" />
+                    </span>
+                  }
+                </strong>
                 <span class="headline">{{ authorHeadline() }}</span>
                 <span class="meta">
-                  {{ timeAgo(p()!.createdAt) }}
-                  @if (p()!.editedAt) { · <span class="edited" [attr.title]="'Edited ' + timeAgo(p()!.editedAt)">Edited</span> }
-                  · {{ provinceName(p()!.province) }} · <lf-icon name="globe" [size]="11" />
+                  <span class="meta__when">
+                    {{ timeAgo(p()!.createdAt) }}
+                    @if (p()!.editedAt) { · <span class="edited" [attr.title]="'Edited ' + timeAgo(p()!.editedAt)">Edited</span> }
+                  </span>
+                  <!-- The place and its audience glyph are one pair, so the glyph
+                       can never wrap onto a line of its own away from its words. -->
+                  <span class="meta__where">
+                    {{ provinceName(p()!.province) }}
+                    <lf-icon name="globe" [size]="11" [attr.title]="audienceTitle()" [attr.aria-label]="audienceTitle()" />
+                  </span>
                 </span>
               </span>
             </a>
@@ -243,7 +256,7 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
                 <strong>{{ leads().length }} {{ leads().length === 1 ? 'lead' : 'leads' }}</strong>
                 · newest: {{ leads()[0].sighting ? leads()[0].sighting!.place : shortBody(leads()[0]) }}
               </span>
-              @if (verified()) { <span class="leads__tick"><lf-icon name="check" [size]="12" [weight]="3" /> checked</span> }
+              @if (verified()) { <span class="leads__tick"><lf-icon name="check" [size]="12" [weight]="'bold'" /> checked</span> }
               <lf-icon name="chevronRight" [size]="15" />
             </button>
           }
@@ -270,7 +283,7 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
           <section class="journey" aria-label="What has happened on this case">
             <button class="journey__head" type="button" (click)="journeyOpen.set(!journeyOpen())"
                     [attr.aria-expanded]="journeyOpen()">
-              <lf-icon name="steps" [size]="16" [weight]="2.2" />
+              <lf-icon name="steps" [size]="16" [weight]="'regular'" />
               <span class="journey__title">Journey</span>
               <span class="journey__count">{{ journey().length }} {{ journey().length === 1 ? 'event' : 'events' }}</span>
               <lf-icon [name]="journeyOpen() ? 'chevronUp' : 'chevronDown'" [size]="16" />
@@ -279,7 +292,7 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
               <ol class="journey__list">
                 @for (e of journey(); track e.key) {
                   <li [attr.data-tone]="e.tone">
-                    <span class="journey__dot"><lf-icon [name]="e.icon" [size]="12" [weight]="3" /></span>
+                    <span class="journey__dot"><lf-icon [name]="e.icon" [size]="12" [weight]="'bold'" /></span>
                     <div class="journey__body">
                       <strong>{{ e.title }}</strong>
                       @if (e.detail) { <span>{{ e.detail }}</span> }
@@ -302,7 +315,7 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
             -->
             <section class="after" aria-label="Finishing the case">
               <header class="after__head">
-                <span class="after__tick"><lf-icon name="check" [size]="15" [weight]="3" /></span>
+                <span class="after__tick"><lf-icon name="check" [size]="15" [weight]="'bold'" /></span>
                 <div>
                   <h2>{{ p()!.outcome.whereaboutsFound || 'Found' }}. The case is closed.</h2>
                   <!-- The count is the number of rows below, not a number written by hand. -->
@@ -344,7 +357,7 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
             </section>
           } @else {
             <p class="closed">
-              <lf-icon name="check" [size]="15" [weight]="3" />
+              <lf-icon name="check" [size]="15" [weight]="'bold'" />
               <span>Found. The family confirmed it. To take the case off the police circulation list, complete a <strong>SAPS 92</strong> with the investigating officer.</span>
             </p>
           }
@@ -558,7 +571,7 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
                         <div class="sighting"><lf-icon name="pin" [size]="13" /> {{ c.sighting.place }} · {{ provinceName(c.sighting.province) }}@if (c.sighting.note) { · {{ c.sighting.note }} }</div>
                       }
                       @if (c.sighting && p()!.sightingVerified; as v) {
-                        <div class="checked"><lf-icon name="check" [size]="13" [weight]="3" /> Checked against {{ v.source }}@if (v.note) { · {{ v.note }} }</div>
+                        <div class="checked"><lf-icon name="check" [size]="13" [weight]="'bold'" /> Checked against {{ v.source }}@if (v.note) { · {{ v.note }} }</div>
                       }
                       @if (mod.isAdmin() && (c.sighting || c.isLead)) {
                         <div class="edit__row">
@@ -752,7 +765,10 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
     .who__text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
     .who__text strong { font-size: 16px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .headline { font-size: 13px; color: var(--lf-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .meta { display: inline-flex; align-items: center; gap: 4px; font-size: 12.5px; color: var(--lf-muted); }
+    .verified { display: inline-flex; vertical-align: -2px; margin-left: 3px; color: var(--lf-primary); }
+    .meta { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 2px 4px; font-size: 12.5px; color: var(--lf-muted); min-width: 0; }
+    .meta__when, .meta__where { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+    .meta__when::after { content: '·'; margin-left: 4px; opacity: .7; }
     .edited { font-style: normal; }
     .follow { align-self: center; height: 32px; padding: 0 12px; border: 0; background: transparent; color: var(--lf-primary);
       font: inherit; font-size: 15px; font-weight: 600; cursor: pointer; }
@@ -1120,6 +1136,14 @@ export class PostDetailComponent implements OnInit {
     this.p()?.anonymous && !this.isMine() ? 'Anonymous' : this.author()?.displayName ?? 'Member');
   readonly authorHeadline = computed(() =>
     this.p()?.anonymous && !this.isMine() ? '' : this.author()?.bio ?? '');
+  /** The same honest badge the card draws: the profile's own flag, nothing inferred. */
+  readonly authorVerified = computed(() =>
+    this.p()?.anonymous && !this.isMine() ? false : this.author()?.verified === true);
+  /** Who the post is visible to - read off the post, the words the glyph stands for. */
+  audienceTitle(): string {
+    const a = this.p()?.audience;
+    return a === 'followers' ? 'Visible to followers' : a === 'surname' ? 'Visible in a Spotlight community' : 'Visible to anyone';
+  }
   readonly authorAvatar = computed(() => this.data.avatarFor(this.p()?.anonymous && !this.isMine() ? null : this.author()));
   readonly authorLink = computed(() => (this.p()?.anonymous && !this.isMine() ? ['/post', this.p()!.id] : ['/user', this.p()?.authorId ?? '']));
   readonly myAvatar = computed(() => this.data.avatarFor(this.auth.user()));
@@ -1588,7 +1612,7 @@ export class PostDetailComponent implements OnInit {
   headlineOf(id: string): string { return this.data.authorOf(id)?.bio ?? ''; }
   avatarOf(id: string): string { return this.data.avatarFor(this.data.authorOf(id)); }
   liked(c: Comment): boolean { const me = this.me(); return !!me && (c.likedIds ?? []).includes(me); }
-  canLead(): boolean { const t = this.p()?.type; return !!t && !this.isMine() && (t === 'missing' || t === 'sighting' || t === 'pet' || t === 'khumbulekhaya'); }
+  canLead(): boolean { const t = this.p()?.type; return !!t && !this.isMine() && (t === 'missing' || t === 'sighting' || t === 'announcement' || t === 'khumbulekhaya'); }
 
   toggleSort(): void { this.sort.set(this.sort() === 'relevant' ? 'recent' : 'relevant'); }
 

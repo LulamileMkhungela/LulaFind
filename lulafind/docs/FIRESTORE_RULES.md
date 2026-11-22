@@ -41,7 +41,10 @@ service cloud.firestore {
       allow create: if isSelf(uid);
       allow update: if isSelf(uid)
         && request.resource.data.karma == resource.data.karma   // karma is server-set
-        && request.resource.data.followers == resource.data.followers;
+        && request.resource.data.followers == resource.data.followers
+        && request.resource.data.verified == resource.data.verified;  // a badge is granted, never self-set
+      // an admin may grant or withdraw the badge (see ModerationService.setVerified)
+      allow update: if isAdmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['verified', 'verifiedNote']);
       allow delete: if isSelf(uid);            // store-required account deletion
     }
 

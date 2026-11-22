@@ -3,10 +3,10 @@ import { dayMonth } from './format';
 
 /** The stamp across the top of the poster, picked from the category. */
 export const isPosterType = (type: PostType): boolean =>
-  type === 'missing' || type === 'pet' || type === 'khumbulekhaya';
+  type === 'missing' || type === 'announcement' || type === 'khumbulekhaya';
 
 export const posterKicker = (type: PostType): string =>
-  type === 'pet' ? 'LOST PET'
+  type === 'announcement' ? 'ANNOUNCEMENT'
   : type === 'sighting' ? 'SIGHTING'
   : type === 'khumbulekhaya' ? 'LEFT HOME'
   : type === 'missing' ? 'MISSING'
@@ -55,7 +55,7 @@ export function publicPoster(post: Post): { lines: string[]; withheld: string | 
   const where = whereLine(post);
   if (where) lines.push(`Last seen: ${where}${post.lastSeenAt ? ` · ${dayMonth(post.lastSeenAt)}` : ''}`);
   if (post.subject?.clothing) lines.push(`Wearing: ${post.subject.clothing}`);
-  if (post.type === 'pet') {
+  if (post.type === 'announcement') {
     const brief = post.body.replace(/\s+/g, ' ').trim().slice(0, 180);
     if (brief) lines.push(brief);
   }
@@ -83,7 +83,7 @@ export function publicPoster(post: Post): { lines: string[]; withheld: string | 
 export const POSTER_W = 1080;
 export const POSTER_H = 1350;
 
-export type PosterTemplateId = 'signal' | 'aurora' | 'editorial' | 'beacon' | 'ubuntu' | 'noir' | 'halo' | 'pulse';
+export type PosterTemplateId = 'signal' | 'aurora' | 'editorial' | 'beacon' | 'ubuntu' | 'noir' | 'halo' | 'pulse' | 'notice';
 
 export interface PosterTemplate { id: PosterTemplateId; name: string; tagline: string; swatch: [string, string, string]; }
 
@@ -95,7 +95,15 @@ export const POSTER_TEMPLATES: PosterTemplate[] = [
   { id: 'ubuntu', name: 'Ubuntu', tagline: 'Proudly South African', swatch: ['#0c2f2a', '#f4b400', '#e0392d'] },
   { id: 'noir', name: 'Noir', tagline: 'Full-bleed photo, cinematic', swatch: ['#000000', '#ffffff', '#c7c7c7'] },
   { id: 'halo', name: 'Halo', tagline: 'AI-gradient glass card', swatch: ['#0a0a1f', '#7c5cff', '#22d3ee'] },
-  { id: 'pulse', name: 'Pulse', tagline: 'Neon grid, glowing type', swatch: ['#05060a', '#00e5ff', '#ff2d9b'] }
+  { id: 'pulse', name: 'Pulse', tagline: 'Neon grid, glowing type', swatch: ['#05060a', '#00e5ff', '#ff2d9b'] },
+  /*
+   * The one the community organisations actually use: a dark header bar, the
+   * photograph beside a panel of labelled facts, a red "any information" band
+   * and the police numbers. Families arrive at LulaFind already having seen
+   * posters like this on Facebook; giving them that shape means their poster
+   * does not look like it came from an app nobody has heard of.
+   */
+  { id: 'notice', name: 'Notice', tagline: 'Police-appeal style, your photo and facts', swatch: ['#0e1116', '#e0392d', '#f4b400'] }
 ];
 
 export interface PosterContent {
@@ -114,17 +122,17 @@ export function posterContent(post: Post, link: string, withPhoto: string | null
     return { kicker: '', name: '', ageLine: '', facts: [], contact: '', link: '', foot: '', photo: null };
   }
   const s = post.subject;
-  const kicker = post.type === 'pet' ? 'LOST PET' : post.type === 'khumbulekhaya' ? 'HAVE YOU SEEN' : 'MISSING';
-  const name = (s?.name || (post.type === 'pet' ? 'Pet' : 'Someone we love')).trim();
+  const kicker = post.type === 'announcement' ? 'ANNOUNCEMENT' : post.type === 'khumbulekhaya' ? 'HAVE YOU SEEN' : 'MISSING';
+  const name = (s?.name || (post.type === 'announcement' ? 'Announcement' : 'Someone we love')).trim();
   const bits: string[] = [];
   if (s?.age != null) bits.push(`${s.age} years old`);
-  if (s?.gender && s.gender !== 'unknown' && post.type !== 'pet') bits.push(s.gender === 'female' ? 'Female' : s.gender === 'male' ? 'Male' : 'Other');
+  if (s?.gender && s.gender !== 'unknown' && post.type !== 'announcement') bits.push(s.gender === 'female' ? 'Female' : s.gender === 'male' ? 'Male' : 'Other');
   const facts: { label: string; value: string }[] = [];
   const where = whereLine(post);
   if (where) facts.push({ label: 'LAST SEEN', value: where });
   if (post.lastSeenAt) facts.push({ label: 'WHEN', value: dayMonth(post.lastSeenAt) });
-  if (s?.clothing) facts.push({ label: post.type === 'pet' ? 'MARKS' : 'WEARING', value: s.clothing });
-  else if (post.type === 'pet' && s?.distinguishing) facts.push({ label: 'MARKS', value: s.distinguishing });
+  if (s?.clothing) facts.push({ label: post.type === 'announcement' ? 'DETAILS' : 'WEARING', value: s.clothing });
+  else if (post.type === 'announcement' && s?.distinguishing) facts.push({ label: 'DETAILS', value: s.distinguishing });
   if (post.caseNumber) facts.push({ label: 'SAPS CASE', value: post.caseNumber });
   const contact = post.contactVisibleTo === 'everyone' && post.contactValue
     ? `${post.contactLabel || 'Contact'}: ${post.contactValue}` : 'Message the family on LulaFind';
@@ -379,18 +387,80 @@ function editorial(c: Ctx, p: PosterContent, img: HTMLImageElement | null): void
   c.fillText(p.name, 80, 300);
   if (p.ageLine) { c.fillStyle = '#5a5245'; c.font = `italic 500 40px ${SERIF}`; c.fillText(p.ageLine, 80, 360); }
 
-  const px = 80, py = 410, pw = 470, ph = 620;
+  // The photo used to finish at y=1030 with its red band hanging over the
+  // contact rule at 1090 - the band and the "IF YOU HAVE SEEN THEM" line
+  // touched on every Editorial poster. It now ends at 1040, with a gap either
+  // side of the rule, whatever the photo's size.
+  const px = 80, py = 410, pw = 470, ph = 630;
   if (img) { c.save(); c.beginPath(); c.rect(px, py, pw, ph); c.clip(); cover(c, img, px, py, pw, ph); c.restore(); }
   else noPhoto(c, px, py, pw, ph, 0, '#d8d0c0', '#c2b8a4', '#f6f2ea');
   c.strokeStyle = '#141414'; c.lineWidth = 3; c.strokeRect(px, py, pw, ph);
-  c.fillStyle = '#d6402a'; c.fillRect(px + 24, py + ph - 24, pw, 24);
+  c.fillStyle = '#d6402a'; c.fillRect(px, py + ph - 22, pw, 22);
 
   // Ends above the 1090 rule and the contact block.
-  facts(c, p.facts, 600, py + 30, 400, '#d6402a', '#141414', 30, 4, 1082);
+  facts(c, p.facts, 600, py + 30, 400, '#d6402a', '#141414', 30, 4, 1060);
   c.fillStyle = '#141414'; c.fillRect(80, 1090, 920, 4);
   c.font = `800 26px ${SANS}`; c.fillStyle = '#d6402a'; spaced(c, true); c.fillText('IF YOU HAVE SEEN THEM', 80, 1145); spaced(c, false);
   c.fillStyle = '#141414'; fitOneLine(c, p.contact, 920, 46, 800, SANS, 26); c.fillText(p.contact, 80, 1205);
   footer(c, p, '#5a5245', POSTER_H - 104);
+}
+
+/* ---- 9. Notice: the community-appeal shape - bar, photo, fact panel, red band ---- */
+function notice(c: Ctx, p: PosterContent, img: HTMLImageElement | null): void {
+  const INK = '#0e1116', RED = '#e0392d', PAPER = '#f4f1ea', GOLD = '#f4b400';
+  c.fillStyle = PAPER; c.fillRect(0, 0, POSTER_W, POSTER_H);
+
+  // Header bar: the first thing read on a phone at arm's length.
+  c.fillStyle = INK; c.fillRect(0, 0, POSTER_W, 160);
+  c.textAlign = 'left'; c.fillStyle = '#fff';
+  fitOneLine(c, p.kicker.toUpperCase(), 900, 112, 960, SANS, 56);
+  c.fillText(p.kicker.toUpperCase(), 56, 126);
+  c.fillStyle = RED; c.fillRect(0, 160, POSTER_W, 12);
+
+  // Photo on the left, the facts panel on the right - two columns, like the
+  // posters families already share. Both run down to the band at 900, so the
+  // sheet has no dead quarter at the bottom.
+  const px = 56, py = 206, pw = 440, ph = 660;
+  if (img) { c.save(); rr(c, px, py, pw, ph, 12); c.clip(); cover(c, img, px, py, pw, ph); c.restore(); }
+  else noPhoto(c, px, py, pw, ph, 12, '#d9d5cc', '#c7c2b7', PAPER);
+  c.strokeStyle = INK; c.lineWidth = 4; rr(c, px, py, pw, ph, 12); c.stroke();
+
+  let y = py + 44;
+  c.fillStyle = RED; c.font = `800 46px ${SANS}`;
+  y = para(c, p.name, 540, y, 484, 46, 1.1, 2, 800, SANS);
+  if (p.ageLine) { c.fillStyle = '#5b564d'; c.font = `600 27px ${SANS}`; c.fillText(p.ageLine, 540, y + 34); y += 48; }
+  c.fillStyle = INK; c.fillRect(540, y + 20, 484, 3); y += 56;
+
+  const rows = p.facts.slice(0, 4);
+  for (const f of rows) {
+    if (y > py + ph - 30) break;
+    c.fillStyle = RED; c.beginPath(); c.arc(556, y + 10, 14, 0, Math.PI * 2); c.fill();
+    c.fillStyle = '#fff'; c.font = `800 17px ${SANS}`; c.fillText('!', 551, y + 17);
+    c.fillStyle = '#7a756c'; c.font = `700 19px ${SANS}`;
+    if ('letterSpacing' in c) (c as unknown as { letterSpacing: string }).letterSpacing = '2px';
+    c.fillText(f.label, 582, y + 8);
+    if ('letterSpacing' in c) (c as unknown as { letterSpacing: string }).letterSpacing = '0px';
+    c.fillStyle = INK; c.font = `700 29px ${SANS}`;
+    y = para(c, f.value, 582, y + 44, 442, 29, 1.22, 2, 700, SANS);
+    y += 22;
+  }
+
+  // The band: who to call. Red because that is the colour the eye finds first.
+  c.fillStyle = RED; c.fillRect(0, 900, POSTER_W, 210);
+  c.fillStyle = '#fff'; c.font = `800 34px ${SANS}`;
+  c.fillText('IF YOU HAVE ANY INFORMATION PLEASE CONTACT:', 56, 968, 968);
+  fitOneLine(c, p.contact, 968, 52, 800, SANS, 26);
+  c.fillText(p.contact, 56, 1052);
+
+  // The footer carries the source, not a slogan: a poster nobody can check is
+  // a poster people stop trusting.
+  c.fillStyle = INK; c.fillRect(0, 1110, POSTER_W, 240);
+  c.fillStyle = GOLD; c.font = `800 30px ${SANS}`;
+  c.fillText('Every share counts.', 56, 1178);
+  c.fillStyle = '#fff'; c.font = `600 26px ${SANS}`;
+  c.fillText(p.foot, 56, 1232, 968);
+  c.font = `700 26px ${SANS}`;
+  c.fillText(`Read more: ${p.link || 'LulaFind'}`, 56, 1284, 968);
 }
 
 /* ---- 4. Beacon: hazard yellow, chunky black type ---- */
@@ -587,7 +657,7 @@ function pulse(c: Ctx, p: PosterContent, img: HTMLImageElement | null): void {
 }
 
 const DRAW: Record<PosterTemplateId, (c: Ctx, p: PosterContent, i: HTMLImageElement | null) => void> = {
-  signal, aurora, editorial, beacon, ubuntu, noir, halo, pulse
+  signal, aurora, editorial, beacon, ubuntu, noir, halo, pulse, notice
 };
 
 export function drawPoster(canvas: HTMLCanvasElement, id: PosterTemplateId, content: PosterContent, img: HTMLImageElement | null): void {

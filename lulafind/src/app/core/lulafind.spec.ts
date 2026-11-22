@@ -517,7 +517,7 @@ describe('EscalationService - a note is not a dispatch', () => {
   it('does not offer a fake Amber Alert, Pink Drive, or an unverified NGO', () => {
     const esc = svc<EscalationService>(EscalationService);
     const child: Post = { ...db.post('p_thato')! };
-    const pet: Post = { ...db.post('p_thato')!, type: 'pet' };
+    const pet: Post = { ...db.post('p_thato')!, type: 'announcement' };
     const ids = (post: Post) => esc.partnersFor(post).map((p) => p.id);
     expect(ids(child)).not.toContain('amber-sa');
     expect(ids(child)).not.toContain('pink-drive');
@@ -649,7 +649,7 @@ describe('Home Sweet Home flow', () => {
     const home = data.broughtHome();
     expect(home.some((p) => p.id === 'p_found')).toBe(true);
     expect(home.some((p) => p.type === 'vehicle')).toBe(false);
-    expect(home.some((p) => p.type === 'pet')).toBe(true);
+    expect(home.some((p) => p.type === 'announcement')).toBe(true);
     expect(home.every((p) => p.status === 'found')).toBe(true);
   });
 
@@ -1214,10 +1214,169 @@ describe('Reports and admin', () => {
     void auth;
   });
 
+  it('grants and withdraws a verification badge, and nobody else can', async () => {
+    const mod = svc<ModerationService>(ModerationService);
+    const data = svc<DataService>(DataService);
+    const api = TestBed.inject(LULA_API);
+    signInAs('u_lerato');
+    await expect(mod.setVerified('u_lerato', true, 'me')).rejects.toThrow(/admins/i);
+    expect((await api.user('u_lerato'))!.verified).toBe(false);
+
+    signInAs('u_demo');
+    await mod.setVerified('u_lerato', true, 'Runs the Mamelodi search desk');
+    expect((await api.user('u_lerato'))!.verified).toBe(true);
+    // The badge is a fact about the account, so the next refresh carries it into
+    // the feed's author lookup - which is what the card renders.
+    await data.refresh();
+    expect(data.authorOf('u_lerato')?.verified).toBe(true);
+
+    await mod.setVerified('u_lerato', false, 'Badge withdrawn');
+    expect((await api.user('u_lerato'))!.verified).toBe(false);
+  });
+
   it('will not let one admin remove another admin', async () => {
     const mod = svc<ModerationService>(ModerationService);
     signInAs('u_demo');
     await expect(mod.removeUser('u_mod', 'no')).rejects.toThrow(/another admin/i);
+  });
+});
+
+describe('Following a case, and muting a Spotlight', () => {
+  beforeEach(bed);
+
+  it('keeps a followed case on the account, not only on this phone', async () => {
+    const data = svc<DataService>(DataService);
+    const auth = svc<AuthService>(AuthService);
+    signInAs('u_lerato');
+    await data.toggleFollowCase('p_thato');
+    expect(data.isFollowingCase('p_thato')).toBe(true);
+    // The profile carries it, so another phone (or a reinstall) still follows it.
+    expect(auth.user()!.followedCaseIds).toContain('p_thato');
+    expect(db.user('u_lerato')!.followedCaseIds).toContain('p_thato');
+
+    await data.toggleFollowCase('p_thato');
+    expect(auth.user()!.followedCaseIds ?? []).not.toContain('p_thato');
+  });
+
+  it('tells a Spotlight member about a new post there, and stops when they mute it', async () => {
+    const data = svc<DataService>(DataService);
+    await data.refresh(); // the Spotlights must be loaded before membership means anything
+    signInAs('u_kabelo'); // in the Mokoena Spotlight, not the author
+    const ids = () => new Set(db.notifications('u_kabelo').map((n) => n.id));
+    const newOnes = (before: Set<string>) => db.notifications('u_kabelo').filter((n) => !before.has(n.id));
+
+    const before = ids();
+    await data.notifyPostNetwork({ ...db.post('p_thato')!, id: 'spot-a', spotlightId: 'sp_mokoena' } as Post);
+    expect(newOnes(before).length).toBeGreaterThan(0);
+
+    // Mute: membership stays, the alert stops.
+    await data.toggleSpotlightAlerts('sp_mokoena');
+    expect(data.isSpotlightMuted('sp_mokoena')).toBe(true);
+    expect(svc<AuthService>(AuthService).user()!.mutedSpotlightIds).toContain('sp_mokoena');
+    expect(data.isMember('sp_mokoena')).toBe(true);
+
+    const afterMute = ids();
+    await data.notifyPostNetwork({ ...db.post('p_thato')!, id: 'spot-b', spotlightId: 'sp_mokoena' } as Post);
+    expect(newOnes(afterMute).length).toBe(0);
+  });
+
+  it('still tells a muted member when the case they follow changes - by name, not as chatter', async () => {
+    const data = svc<DataService>(DataService);
+    await data.refresh();
+    signInAs('u_kabelo');
+    await data.toggleSpotlightAlerts('sp_mokoena');
+    await data.toggleFollowCase('case-followed');
+    const before = new Set(db.notifications('u_kabelo').map((n) => n.id));
+    await data.notifyPostNetwork({ ...db.post('p_thato')!, id: 'case-followed', spotlightId: 'sp_mokoena' } as Post);
+
+    const fresh = db.notifications('u_kabelo').filter((n) => !before.has(n.id) && n.postId === 'case-followed');
+    // The mute silences the chatter, not the case in their follow list...
+    expect(fresh.length).toBe(1);
+    // ...and the alert says which case, instead of "someone posted in a Spotlight".
+    expect(fresh[0].reason).toBe('case_follow');
+    expect(fresh[0].title).toContain('New case');
+    expect(fresh[0].title).toContain(db.post('p_thato')!.subject!.name);
+    expect(fresh[0].title).not.toContain('posted in the');
+  });
+
+  it('drops a muted Spotlight out of the bell, and a Spotlight alert for a case no longer followed', async () => {
+    const data = svc<DataService>(DataService);
+    await data.refresh();
+    signInAs('u_kabelo');
+    await data.toggleSpotlightAlerts('sp_mokoena');
+    // An alert the member already has from before they muted it.
+    db.pushNotification({
+      id: 'n-old', userId: 'u_kabelo', kind: 'spotlight', title: 'Someone posted in Mokoena',
+      body: 'Old news', at: Date.now(), read: false, route: '/post/p_thato', postId: 'p_thato'
+    });
+    // A follow alert for a case they have now stepped away from.
+    db.pushNotification({
+      id: 'n-follow', userId: 'u_kabelo', kind: 'missing', title: 'New case', body: 'You follow this case.',
+      at: Date.now(), read: false, route: '/post/p_lindiwe', postId: 'p_lindiwe', reason: 'case_follow'
+    } as never);
+    // The Mokoena Spotlight's own post, still reachable through data for the filter.
+    const visible = data.visibleNotifications().map((n) => n.id);
+    expect(visible).not.toContain('n-old');
+    expect(visible).not.toContain('n-follow');
+  });
+});
+
+describe('Surname alerts, in the places a person picks', () => {
+  beforeEach(bed);
+
+  it('names the surname when a case matches it in a chosen place', async () => {
+    const data = svc<DataService>(DataService);
+    signInAs('u_sipho'); // KZN, not the author
+    const auth = svc<AuthService>(AuthService);
+    await data.saveAlertPrefs({
+      enabled: true, childrenOnly: false, province: 'all', radiusKm: 50,
+      areas: [{ kind: 'province', key: 'GP', label: 'Gauteng' }],
+      surnames: [{ surname: 'Mokoena', areas: [{ kind: 'city', key: 'soweto', label: 'Soweto' }] }]
+    });
+    expect(auth.user()!.alertPrefs!.surnames![0].surname).toBe('Mokoena');
+
+    const before = new Set(db.notifications('u_sipho').map((n) => n.id));
+    await data.alertCase(db.post('p_thato')!); // Thato Mokoena, Orlando West, Soweto
+    const fresh = db.notifications('u_sipho').filter((n) => !before.has(n.id));
+    // The reason is in the sentence: "A Mokoena case", not "a new missing case".
+    const watch = fresh.find((n) => n.title.includes('Mokoena'));
+    expect(watch).toBeTruthy();
+    expect(watch!.body).toContain('surname');
+  });
+
+  it('stays quiet for a surname outside the places it was pinned to', async () => {
+    const data = svc<DataService>(DataService);
+    signInAs('u_sipho');
+    await data.saveAlertPrefs({
+      enabled: true, childrenOnly: false, province: 'all', radiusKm: 50,
+      areas: [{ kind: 'province', key: 'GP', label: 'Gauteng' }],
+      // Mokoena, but only in a place this case is not.
+      surnames: [{ surname: 'Mokoena', areas: [{ kind: 'city', key: 'pretoria', label: 'Pretoria' }] }]
+    });
+    const before = new Set(db.notifications('u_sipho').map((n) => n.id));
+    await data.alertCase(db.post('p_thato')!);
+    const fresh = db.notifications('u_sipho').filter((n) => !before.has(n.id));
+    // Their Gauteng area still earns the ordinary alert - what must not happen
+    // is the surname one, which would claim the case is in a place it is not.
+    expect(fresh.some((n) => n.title.includes('Mokoena'))).toBe(false);
+  });
+
+  it('does not fire for a surname that is only part of another word', async () => {
+    const data = svc<DataService>(DataService);
+    signInAs('u_sipho');
+    // The surname is a fragment of a longer one, in both the name and the title.
+    const post = { ...db.post('p_thato')!, id: 'p_surname_edge', title: 'Help find Thabo Mokoenane, 14',
+      subject: { ...db.post('p_thato')!.subject!, name: 'Thabo Mokoenane' } };
+    await data.saveAlertPrefs({
+      enabled: true, childrenOnly: false, province: 'all', radiusKm: 50,
+      areas: [{ kind: 'province', key: 'GP', label: 'Gauteng' }],
+      surnames: [{ surname: 'Mokoena', areas: [] }]
+    });
+    const before = new Set(db.notifications('u_sipho').map((n) => n.id));
+    await data.alertCase(post);
+    const fresh = db.notifications('u_sipho').filter((n) => !before.has(n.id));
+    // A provincial alert is fine; what must not happen is a "Mokoena case".
+    expect(fresh.some((n) => n.title.includes('Mokoena'))).toBe(false);
   });
 });
 
@@ -1399,10 +1558,10 @@ describe('Competitor-parity features', () => {
       province: 'GP' as const, town: 'Roodepoort', audience: 'public' as const
     };
     const pet = await data.createPost({
-      ...base, type: 'pet', title: 'Brown Labrador "Bongani" - last seen Brixton',
+      ...base, type: 'announcement', title: 'Brown Labrador "Bongani" - last seen Brixton',
       body: 'Slipped his collar at the park. Red collar with a tag, very friendly, answers to Bongani.'
     });
-    expect(pet.type).toBe('pet');
+    expect(pet.type).toBe('announcement');
 
     for (const type of ['vehicle', 'danger', 'story'] as const) {
       await expect(data.createPost({ ...base, type, title: 'x', body: 'y' })).rejects.toThrow(/no longer available/);

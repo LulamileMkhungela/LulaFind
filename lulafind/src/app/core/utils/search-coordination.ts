@@ -15,7 +15,7 @@ export interface SearchCommand {
 export function coordinateSearch(post: Post, command: SearchCommand, actor: string, coordinator: boolean, now = Date.now()): Post {
   if (!actor) throw new Error('Sign in to coordinate a search.');
   if (command.action === 'refresh') return post;
-  if (post.status !== 'active' || !['missing', 'khumbulekhaya', 'pet'].includes(post.type)) {
+  if (post.status !== 'active' || !['missing', 'khumbulekhaya', 'announcement'].includes(post.type)) {
     throw new Error('Only an active search case can have a search board.');
   }
   const party = post.searchParty;

@@ -3,6 +3,35 @@
  * No icon-font, no network request - renders identically in the browser,
  * in the Android webview and in the iOS WKWebView.
  */
+/**
+ * One stroke weight, drawn for the size it is shown at.
+ *
+ * A flat 1.5px on a 24px glyph is 6% of its width; the same 1.5px on an 11px
+ * glyph is 14% - twice as heavy. That is why a screen with mixed sizes read as
+ * two different icon sets. The stroke is therefore a *share* of the glyph, the
+ * way X and Material draw their sets:
+ *
+ *   stroke = clamp(size * 0.085, 1.1, 2.4) x the weight's factor
+ *
+ * The floor and ceiling exist because a 9px tick at a true 0.77px would break up
+ * on a 1x phone, and a 96px illustration does not want a 8px line. Measured
+ * across every screen, the relative weight now stays inside 1.6x instead of 2.2x.
+ */
+export type IconWeight = 'thin' | 'regular' | 'bold';
+
+const RATIO = 0.085;
+const MIN_STROKE = 1.1;
+const MAX_STROKE = 2.4;
+const FACTOR: Record<IconWeight, number> = { thin: 0.85, regular: 1, bold: 1.15 };
+
+/** The stroke for one glyph: a number for exact control, a class for the set. */
+export function strokeFor(size: number, weight: number | string | IconWeight): number {
+  if (typeof weight === 'number') return weight;
+  const factor = FACTOR[(weight as IconWeight)] ?? FACTOR.regular;
+  const raw = Math.max(MIN_STROKE, Math.min(MAX_STROKE, (size || 20) * RATIO)) * factor;
+  return Math.round(Math.max(MIN_STROKE, Math.min(MAX_STROKE, raw)) * 10) / 10;
+}
+
 const PATHS: Record<string, string> = {
   home: 'M3 10.5 12 3l9 7.5V21a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z',
   search: 'M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM21 21l-4.3-4.3',
@@ -11,6 +40,8 @@ const PATHS: Record<string, string> = {
   user: 'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z',
   bell: 'M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0',
   /** Solid bell (Material-style) - used when the person has unread alerts and the glyph is filled. */
+  /** A bell with a slash: this community's alerts are silenced, membership is not. */
+  bellOff: 'M18 8a6 6 0 0 0-9.3-5M6 6.3A6 6 0 0 0 6 8c0 7-3 9-3 9h13M13.7 21a2 2 0 0 1-3.4 0M2.5 2.5l19 19',
   bellFilled: 'M12 22a2.2 2.2 0 0 0 2.15-1.75H9.85A2.2 2.2 0 0 0 12 22zm7-5.4v.4H5v-.4l1.9-1.9v-4.35c0-3.2 1.7-5.9 4.6-6.6v-.8a1.5 1.5 0 0 1 3 0v.8c2.9.7 4.6 3.4 4.6 6.6v4.35l1.9 1.9z',
   heart: 'M20.8 5.6a5 5 0 0 0-7.1 0L12 7.3l-1.7-1.7a5 5 0 1 0-7.1 7.1L12 21l8.8-8.3a5 5 0 0 0 0-7.1z',
   share: 'M4 12v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7M16 6l-4-4-4 4M12 2v14',
@@ -74,12 +105,13 @@ const PATHS: Record<string, string> = {
   more: 'M12 13a1 1 0 1 0 0-2 1 1 0 0 0 0 2zM19 13a1 1 0 1 0 0-2 1 1 0 0 0 0 2zM5 13a1 1 0 1 0 0-2 1 1 0 0 0 0 2z',
   download: 'M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3',
   menu: 'M3 6h18M3 12h18M3 18h18',
-  smile: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM8 14s1.5 2 4 2 4-2 4-2M9 9h.01M15 9h.01',
+  /** A face, drawn as a stroke like the rest of the set - not a solid blob. */
+  smile: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM8.5 14.5a4.5 4.5 0 0 0 7 0M9 9.5h.01M15 9.5h.01',
   /** Messenger-style bubble with the zig-zag. */
   messenger: 'M12 2.5C6.5 2.5 2.5 6.4 2.5 11.3c0 2.6 1.1 4.8 3 6.4V21l3.1-1.7c1.1.3 2.2.5 3.4.5 5.5 0 9.5-3.9 9.5-8.8S17.5 2.5 12 2.5zM6.8 13.6l3-4.6 2.6 2.2 3.8-2.2-3 4.6-2.6-2.2z',
   back: 'M19 12H5M12 19l-7-7 7-7',
   repost: 'M17 1l4 4-4 4M3 11V9a4 4 0 0 1 4-4h14M7 23l-4-4 4-4M21 13v2a4 4 0 0 1-4 4H3',
-  sad: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM16 16.5s-1.4-2-4-2-4 2-4 2M9 9.5h.01M15 9.5h.01',
+  sad: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM8.5 16a4.5 4.5 0 0 1 7 0M9 9.5h.01M15 9.5h.01',
   palette: 'M12 22a10 10 0 1 1 10-10c0 3-2 4-4 4h-2a2 2 0 0 0-1.4 3.4A2 2 0 0 1 12 22zM7.5 12.5h.01M9.5 7.5h.01M14.5 7.5h.01M17.5 11.5h.01',
   layout: 'M3 3h18v18H3zM3 9h18M9 21V9',
   wand: 'M15 4V2M15 16v-2M8 9h2M20 9h2M17.8 11.8 19 13M17.8 6.2 19 5M3 21l9-9M12.2 6.2 11 5',

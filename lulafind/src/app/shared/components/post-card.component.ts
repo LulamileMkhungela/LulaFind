@@ -46,36 +46,41 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
       @if (post.repostOf) {
         <!-- LinkedIn puts the reposter's line above everything else on a reshare. -->
         <div class="fb-reposted">
-          <lf-icon name="repost" [size]="14" [weight]="2.4" />
+          <lf-icon name="repost" [size]="14" [weight]="'bold'" />
           <span><strong>{{ reposterLine() }}</strong></span>
         </div>
       }
 
       <header class="fb-card-header" [routerLink]="authorRoute()">
-        <lf-avatar [src]="authorAvatar()" [name]="authorName()" [size]="48"
+        <lf-avatar [src]="authorAvatar()" [name]="authorName()" [size]="44"
                    [status]="authorStatus()" />
         <div class="fb-author-meta">
           <div class="fb-author-row">
             <span class="fb-author-name" [lfUserHover]="post.authorId">{{ authorName() }}</span>
-          </div>
-          @if (authorHeadline()) { <span class="fb-headline">{{ authorHeadline() }}</span> }
-          <!-- Line 1: where it is, then what kind of post it is. -->
-          <div class="fb-sub-meta">
-            <span>{{ provinceName(post.province) }}</span>
-            <span class="fb-dot">·</span>
-            <span class="fb-kind" [class.fb-kind--success]="post.status === 'found'">
-              <lf-icon [name]="meta().icon" [size]="12" /> {{ statusLabel() }}
-            </span>
-          </div>
-          <!-- Line 2: when, then who can see it. -->
-          <div class="fb-sub-meta">
-            <span>{{ timeAgo(post.createdAt) }}</span>
-            @if (post.editedAt) {
-              <span class="fb-dot">·</span>
-              <span class="fb-edited" [attr.title]="'Edited ' + timeAgo(post.editedAt)">Edited</span>
+            @if (authorVerified()) {
+              <span class="fb-verified" role="img" title="Verified member" aria-label="Verified member">
+                <lf-icon name="award" [size]="13" [filled]="true" />
+              </span>
             }
-            <span class="fb-dot">·</span>
-            <lf-icon [name]="audienceIcon()" [size]="12" [attr.title]="audienceTitle()" [attr.aria-label]="audienceTitle()" />
+          </div>
+          <!-- Where and when, then who can see it: one quiet line under the
+               name. Two lines of header in total - the person's own bio stays
+               on their profile and in the hover card, where it is the subject
+               rather than a third line stacked under a name. -->
+          <div class="fb-sub-meta">
+            @if (whereLine()) { <span class="fb-sub-meta__place">{{ whereLine() }}</span> }
+            <!--
+              The time and its audience glyph are one unbreakable, non-shrinking
+              box. Whatever happens to the place name, the glyph rides with the
+              words it describes instead of being left at the end of a clipped
+              line - which is what it looked like when only the whole row was
+              allowed to ellipsize.
+            -->
+            <span class="fb-sub-meta__tail">
+              <span class="fb-sub-meta__when" [class.fb-sub-meta__when--after-place]="!!whereLine()">{{ whenLine() }}</span>
+              <lf-icon class="fb-audience" [name]="audienceIcon()" [size]="12"
+                       [attr.title]="audienceTitle()" [attr.aria-label]="audienceTitle()" />
+            </span>
           </div>
         </div>
         <!-- Follow and the … sit in one right-hand column so they share a line
@@ -112,7 +117,7 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
               <div>
                 <strong [lfUserHover]="post.repostOf ? original()?.authorId ?? '' : ''">{{ originalName() }}</strong>
                 @if (originalHeadline(o)) { <span>{{ originalHeadline(o) }}</span> }
-                <span class="fb-embed__when">{{ timeAgo(o.createdAt) }}@if (o.editedAt) { · Edited } · <lf-icon name="globe" [size]="11" /></span>
+                <span class="fb-embed__when">{{ timeAgo(o.createdAt) }}@if (o.editedAt) { · Edited } · <span class="fb-embed__aud">{{ audienceTitle() }} <lf-icon name="globe" [size]="11" /></span></span>
               </div>
             </div>
             <h3 class="fb-post-title">{{ o.title }}</h3>
@@ -131,7 +136,19 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
         }
       } @else {
       <div class="fb-card-body" [routerLink]="'/post/' + post.id">
+        <!--
+          The kind of post is the one fact that changes how everything below is
+          read ("sighting" and "missing" are not the same request), so it tags
+          the post itself rather than the author: a tinted chip on its own line
+          above the title. It never competes with a long name, a Follow button
+          or the place-and-time line for the same 390px.
+        -->
+        <span class="fb-kind-chip" [attr.data-tone]="kindTone()" [class.is-found]="post.status === 'found'">
+          <lf-icon [name]="meta().icon" [size]="11" [weight]="'bold'" />{{ kindLabel() }}
+        </span>
         @if (showHeading()) { <h3 class="fb-post-title">{{ post.title }}</h3> }
+        <!-- The facts lead: where, when, how long - what a person scanning a
+             feed needs before they decide to read the paragraph. -->
         <lf-case-facts [post]="post" />
         <p class="fb-post-text" #bodyEl [class.fb-clamp]="!expanded()">{{ post.body }}</p>
         @if (!expanded() && textOverflows()) {
@@ -188,44 +205,62 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
       }
       }
 
-      <!-- Reaction summary, like LinkedIn: the top reactions, then the count. Real counts only. -->
-      @if (post.upvotes > 0 || post.commentCount > 0 || post.shares > 0) {
-        <div class="fb-stats-bar" [routerLink]="'/post/' + post.id">
-          <div class="fb-stats-likes">
-            @if (post.upvotes > 0) {
-              <span class="fb-stack" role="button" tabindex="0" aria-label="See who reacted" (click)="openReactions($event)" (keydown.enter)="openReactions($event)">
-                @for (k of topKinds(); track k) { <lf-reaction-icon [kind]="k" [size]="18" [ring]="true" /> }
-              </span>
-              <span role="button" tabindex="0" (click)="openReactions($event)" (keydown.enter)="openReactions($event)">{{ compact(post.upvotes) }}</span>
-            }
-          </div>
-          <div class="fb-stats-right">
-            @if (post.commentCount > 0) { <span>{{ compact(post.commentCount) }} {{ post.commentCount === 1 ? 'comment' : 'comments' }}</span> }
-            @if (post.commentCount > 0 && post.shares > 0) { <span class="fb-dot">·</span> }
-            @if (post.shares > 0) { <span>{{ compact(post.shares) }} {{ post.shares === 1 ? 'repost' : 'reposts' }}</span> }
-          </div>
+      <!--
+        The action row, drawn the way X draws the row under a post: the things
+        you can do to it on the left, the counts as their own small labels, the
+        things you can do with it (repost, send) grouped at the right. Nothing
+        is stretched across the card, so no icon ends up stranded on the far
+        side of a 390px phone.
+      -->
+      <div class="x-bar" (click)="$event.stopPropagation()">
+        <div class="x-bar__group">
+          <lf-reaction-button class="x-act" [value]="myReaction()" [compact]="true"
+                              [countLabel]="post.upvotes > 0 ? compact(post.upvotes) : ''"
+                              (react)="onReact($event)" />
+          <button class="x-act" type="button" (click)="comment.emit()" aria-label="Comment" title="Comment">
+            <lf-icon name="comment" [size]="18.5" />
+            @if (post.commentCount > 0) { <span class="x-act__count">{{ compact(post.commentCount) }}</span> }
+          </button>
+          <button class="x-act" type="button" (click)="onRepost()" aria-label="Repost" title="Repost">
+            <lf-icon name="repost" [size]="18.5" />
+            @if (post.shares > 0) { <span class="x-act__count">{{ compact(post.shares) }}</span> }
+          </button>
         </div>
+        <div class="x-bar__right">
+          <!-- The people behind the number, as a tiny stack: the left group
+               already carries the count, so it is not printed twice. -->
+          @if (post.upvotes > 0) {
+            <button class="x-avatars" type="button" (click)="openReactions($event)" [attr.aria-label]="'See who reacted: ' + post.upvotes">
+              @for (k of topKinds(); track k) { <lf-reaction-icon [kind]="k" [size]="16" [ring]="true" /> }
+            </button>
+          }
+          <button class="x-act" type="button" (click)="onSend()" aria-label="Send" title="Send">
+            <lf-icon name="send" [size]="18" />
+          </button>
+        </div>
+      </div>
+
+      <!-- Kept for anything that counts the summary line; the row above carries
+           the same numbers per action instead of one stretched bar. -->
+      @if (post.upvotes > 0 || post.commentCount > 0 || post.shares > 0) {
+        <span class="fb-stats-bar sr-only" aria-hidden="true">{{ compact(post.upvotes) }} reactions · {{ compact(post.commentCount) }} comments · {{ compact(post.shares) }} reposts</span>
       }
 
-      <!-- The action bar this component's own header describes: react (hold
-           for the tray) - Comment - Repost - Send. It went missing from the
-           markup, so a post in the feed had no way to be reacted to or
-           commented on even though every handler below still existed. -->
-      <div class="fb-actions" (click)="$event.stopPropagation()">
-        <lf-reaction-button class="fb-act" [value]="myReaction()" (react)="onReact($event)" />
-        <button class="fb-act" type="button" (click)="comment.emit()" aria-label="Comment" title="Comment">
-          <lf-icon name="comment" [size]="20" /><span class="sr-only">Comment</span>
-        </button>
-        <button class="fb-act" type="button" (click)="onRepost()" aria-label="Repost" title="Repost">
-          <lf-icon name="repost" [size]="20" /><span class="sr-only">Repost</span>
-        </button>
-        <button class="fb-act" type="button" (click)="onSend()" aria-label="Send" title="Send">
-          <lf-icon name="send" [size]="19" /><span class="sr-only">Send</span>
-        </button>
-        @if (post.chatEnabled && !isMine() && !post.repostOf && !post.anonymous) {
-          <button class="fb-act" type="button" (click)="chat.emit()" [attr.aria-label]="chatLabel()" [attr.title]="chatLabel()"><lf-icon name="chat" [size]="20" /></button>
-        }
-      </div>
+      <!--
+        The composer, X-style: your face, then a field that says what tapping
+        does. The whole row is one button that opens the post with its comment
+        field focused.
+
+        Nothing sits at the right of the field. A face glyph used to sit there
+        and it was a lie twice over: it looked like an emoji picker, and it was
+        inside the button, so tapping it opened the post instead of doing
+        nothing. The app has no picker on purpose - the phone keyboard already
+        has emoji - so the affordance is gone with it.
+      -->
+      <button class="fb-comment-cta" type="button" [routerLink]="'/post/' + post.id" [queryParams]="{ comment: 1 }">
+        <lf-avatar [src]="myAvatar()" [name]="myName()" [size]="30" />
+        <span class="fb-comment-cta__pill">Write a comment…</span>
+      </button>
 
       <!-- LinkedIn's comment preview: the most-relevant comment sits under the
            action bar, so the conversation is visible without opening the post. -->
@@ -268,6 +303,8 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
       display: block; padding: 8px 16px 0; font-size: 12px; line-height: 1.3;
       color: var(--lf-muted); text-decoration: none;
     }
+    .fb-card { border-radius: 10px; border: 1px solid var(--lf-line-soft); overflow: hidden; }
+    @media (min-width: 700px) { .fb-card { border-radius: 12px; } }
     .fb-activity strong { font-weight: 600; color: inherit; }
     .fb-card-header {
       display: flex;
@@ -280,11 +317,6 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
     .fb-author-row { display: flex; align-items: center; gap: 4px; min-width: 0; min-height: 24px; }
     .fb-author-name { font-weight: 600; font-size: 14px; color: var(--ion-text-color);
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    /* LinkedIn's second header line: who the person is, one line, muted. */
-    .fb-headline {
-      display: block; font-size: 12px; color: var(--lf-muted); line-height: 1.3;
-      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    }
     /* LinkedIn clamps feed text to three lines and ends it in a muted ellipsis. */
     .fb-clamp {
       display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
@@ -311,18 +343,34 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
      * their width, so "KwaZulu-Natal · Missing person" reads as
      * "KwaZulu-Nata… · Missing person" rather than "Missing / person".
      */
+    /*
+     * One quiet line: where, when, then who can see it - and the glyph sits
+     * against the words because nothing in this row grows to fill the width.
+     *
+     * The line used to keep everything on one unbreakable row, so a long place
+     * name ("Umlazi, Durban, KwaZulu-Natal") ate the width, the time was cut to
+     * an ellipsis and the globe stayed pinned at the far edge of the text, which
+     * is exactly the gap this row is meant to avoid. The place ellipsizes to
+     * nothing first; the time and the glyph keep their full width and stay
+     * together.
+     */
     .fb-sub-meta {
       display: flex;
-      align-items: center;
-      gap: 2px;
+      align-items: baseline;
+      gap: 4px;
       font-size: 12.5px;
       color: var(--lf-muted);
-      margin-top: 2px;
+      margin-top: 4px;
       white-space: nowrap;
-      overflow: hidden;
+      min-width: 0;
     }
-    .fb-sub-meta > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-    .fb-sub-meta .fb-dot, .fb-sub-meta > lf-icon { flex: 0 0 auto; }
+    .fb-sub-meta__place { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+    .fb-sub-meta__tail {
+      flex: 0 0 auto; display: inline-flex; align-items: center; gap: 4px;
+    }
+    /* The separator rides with the time, so a clipped place never leaves a dot behind. */
+    .fb-sub-meta__when--after-place::before { content: '·'; margin-right: 4px; opacity: .7; }
+    .fb-audience { flex: 0 0 auto; }
     /*
      * Follow and … share this column, centred on the name's line. The column is
      * the height of one line of text; the … keeps a 32px tap target by bleeding
@@ -347,6 +395,42 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
     /* The post kind now rides in the meta line, not in a chip under the avatar. */
     .fb-kind { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 3px; font-weight: 600; }
     .fb-kind--success { color: var(--lf-ubuntu); }
+    /*
+     * The kind chip. It sits on the name's line and answers the one question
+     * that changes how the rest of the card is read. The tint comes from the
+     * post's own tone, so a danger warning and a lost pet never look alike,
+     * and it shrinks to an icon-only disc before it would clip the name.
+     */
+    .fb-kind-chip {
+      display: inline-flex;
+      margin: 0 0 8px;
+      align-items: center;
+      gap: 4px;
+      min-width: 0;
+      padding: 2px 8px 2px 6px;
+      border-radius: 999px;
+      font-size: 11.5px;
+      font-weight: 700;
+      line-height: 1.5;
+      letter-spacing: .1px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      --tone: var(--lf-primary);
+      color: color-mix(in srgb, var(--tone) 78%, var(--ion-text-color));
+      background: color-mix(in srgb, var(--tone) 13%, transparent);
+    }
+    .fb-kind-chip lf-icon { flex: none; }
+    .fb-kind-chip[data-tone="danger"] { --tone: var(--lf-signal); }
+    .fb-kind-chip[data-tone="warm"] { --tone: var(--lf-marigold); }
+    .fb-kind-chip[data-tone="warn"] { --tone: var(--lf-marigold); }
+    .fb-kind-chip[data-tone="info"] { --tone: var(--lf-primary); }
+    .fb-kind-chip[data-tone="success"],
+    .fb-kind-chip.is-found { --tone: var(--lf-ubuntu); }
+    .fb-kind-chip[data-tone="neutral"] { --tone: var(--lf-muted); }
+    /* The chip keeps its own words; the place-and-time after it is what
+       ellipsizes. A chip that clips to "Missing perso" is worse than a place
+       that ends in "…" - the kind is the part nobody can infer. */
 
 
     .fb-card-body { padding: 8px 16px 12px; cursor: pointer; }
@@ -357,8 +441,10 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
      * clock alone changes colour, and only while time is doing damage.
      */
     .fb-post-title { font-size: 17px; font-weight: 700; color: var(--ion-text-color); margin: 0 0 6px; line-height: 1.3; }
-    .fb-post-text { font-size: 14.5px; color: var(--ion-text-color); line-height: 1.4; margin: 6px 0 0; white-space: pre-line; }
-    .fb-readmore { background: none; border: 0; color: var(--lf-muted); font-family: inherit; font-weight: 400; font-size: 14.5px; cursor: pointer; padding: 0; margin-top: 2px; }
+    .fb-kind-chip + .fb-post-title { margin-top: 0; }
+    .fb-post-text { font-size: 15px; color: var(--ion-text-color); line-height: 1.45; margin: 6px 0 0; white-space: pre-line; }
+    .fb-verified { display: inline-flex; color: var(--lf-primary); flex: none; }
+    .fb-readmore { background: none; border: 0; color: var(--lf-link); font-family: inherit; font-weight: 400; font-size: 14.5px; cursor: pointer; padding: 0; margin-top: 2px; }
     .fb-readmore:hover { text-decoration: underline; }
 
     .fb-media { width: 100%; overflow: hidden; background: var(--lf-card-2); cursor: pointer; }
@@ -377,84 +463,67 @@ export type ChatState = 'off' | 'locked-follow' | 'open';
       font-size: 30px; font-weight: 700;
     }
 
-    .fb-stats-bar {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 10px;
-      margin: 0 16px;
-      padding: 8px 0;
-      border-top: 0;
-      font-size: 13px;
-      color: var(--lf-muted);
-      cursor: pointer;
+    /*
+     * The X row. Actions sit at the left edge of the card, counts ride with
+     * their own glyph, and the two "do something with it" actions sit at the
+     * right - so nothing is ever stretched to the far side of the card.
+     */
+    .x-bar {
+      display: flex; align-items: center; justify-content: space-between; gap: 6px;
+      margin: 2px 8px 6px; padding: 2px 0 0;
+      border-top: 1px solid var(--lf-line-soft);
     }
-    .fb-stats-likes { display: flex; align-items: center; gap: 6px; }
-    .fb-stack { display: inline-flex; }
-    .fb-stack lf-reaction-icon + lf-reaction-icon { margin-left: -5px; }
-    .fb-edited { font-style: normal; }
-    .fb-card-body--thoughts { padding-bottom: 8px; }
-    /* LinkedIn's line above a reshared post. */
-    .fb-reposted {
-      display: flex; align-items: center; gap: 7px;
-      padding: 12px 16px 0;
-      color: var(--lf-muted);
-      font-size: 13.5px;
-      line-height: 1.2;
+    .x-bar__group, .x-bar__right { display: flex; align-items: center; gap: 2px; min-width: 0; }
+    .x-act {
+      display: inline-flex; align-items: center; justify-content: center; gap: 4px;
+      height: 34px; padding: 0 8px; border: 0; border-radius: 999px;
+      background: transparent; color: var(--lf-muted);
+      font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer;
+      white-space: nowrap; -webkit-tap-highlight-color: transparent;
     }
-    .fb-reposted strong { font-weight: 600; color: var(--ion-text-color); }
+    .x-act:hover, .x-act:active { background: var(--lf-hover); }
+    .x-act:active { transform: scale(.95); }
+    .x-act__count { font-size: 12.5px; font-weight: 600; font-variant-numeric: tabular-nums; }
+    /* The tiny reaction stack, at the right of the row - the "who" behind the numbers. */
+    .x-avatars { display: inline-flex; align-items: center; padding: 0 4px; border: 0; background: transparent; cursor: pointer; }
+    .x-avatars lf-reaction-icon + lf-reaction-icon { margin-left: -4px; }
+    @media (prefers-reduced-motion: reduce) { .x-act:active { transform: none; } }
+    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 
-    .fb-embed { display: block; margin: 4px 16px 12px; padding: 12px; border: 1px solid var(--lf-line); border-radius: 8px;
-      color: inherit; text-decoration: none; background: transparent; }
-    .fb-embed:hover { background: var(--lf-hover); }
-    .fb-embed__head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
-    .fb-embed__head div { display: flex; flex-direction: column; min-width: 0; }
-    .fb-embed__head strong { font-size: 14px; font-weight: 600; }
-    .fb-embed__head span { font-size: 12px; color: var(--lf-muted); }
-    .fb-embed__head .fb-embed__when { display: inline-flex; align-items: center; gap: 4px; }
-    .fb-embed__text { margin: 0; font-size: 14px; line-height: 1.35; color: var(--ion-text-color);
-      display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; white-space: pre-line; }
-    .fb-embed__img { display: block; width: calc(100% + 24px); margin: 10px -12px -12px; max-height: 260px; object-fit: cover; border-radius: 0 0 8px 8px; }
-    .fb-embed__poster { object-fit: contain; background: #111; }
-    .fb-embed--gone { display: flex; align-items: center; gap: 8px; color: var(--lf-muted); font-size: 14px; }
-    .fb-media { border-radius: 0; }
-    .fb-like-icon {
-      width: 18px; height: 18px; border-radius: 50%;
-      background: linear-gradient(180deg, #18afff, #0062df); color: #fff;
-      display: inline-flex; align-items: center; justify-content: center;
-      box-shadow: 0 0 0 2px var(--lf-card);
-    }
-    .fb-stats-right { display: flex; align-items: center; gap: 6px; }
-    /* The comment preview under the action bar, LinkedIn's most-relevant comment. */
+    /* The comment preview: a real comment, drawn as text - not as a link. */
     .fb-comment {
       display: flex; gap: 8px; align-items: flex-start;
       margin: 0 16px; padding: 10px 0 12px;
-      border-top: 1px solid var(--lf-line);
-      color: inherit; text-decoration: none;
+      border-top: 1px solid var(--lf-line-soft);
+      color: var(--ion-text-color); text-decoration: none;
     }
     .fb-comment__body { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 2px; }
-    .fb-comment__who { font-size: 13.5px; font-weight: 600; }
+    .fb-comment__who { font-size: 13.5px; font-weight: 700; color: var(--ion-text-color); }
     .fb-comment__text {
-      margin: 0; font-size: 13.5px; line-height: 1.4;
+      margin: 0; font-size: 13.5px; line-height: 1.4; color: var(--ion-text-color);
       display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
     }
     .fb-comment__meta { font-size: 12.5px; color: var(--lf-muted); display: flex; align-items: center; gap: 5px; }
 
-    /* React - Comment - Repost - Send, the bar LinkedIn puts under every post. */
-    .fb-actions {
-      display: flex; align-items: center; margin: 6px 8px 8px; padding-top: 2px;
-      border-top: 1px solid var(--lf-line-soft);
+    /* Your face, a pill that says what tapping does, then the shortcut icon. */
+    .fb-comment-cta {
+      width: calc(100% - 24px); margin: 0 12px 10px; padding: 0;
+      display: flex; align-items: center; gap: 8px;
+      border: 0; background: transparent; color: inherit; font: inherit; cursor: pointer;
+      text-align: left;
     }
-    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
-    .fb-actions lf-reaction-button { flex: 1 1 0; min-width: 0; }
-    .fb-act {
-      flex: 1 1 0; min-width: 0; height: 40px; border: 0; background: transparent; color: var(--lf-muted);
-      font-family: inherit; font-size: 13.5px; font-weight: 600; cursor: pointer; border-radius: 6px;
-      display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    .fb-comment-cta__pill {
+      flex: 1; min-width: 0;
+      height: 34px; padding: 0 14px;
+      display: flex; align-items: center;
+      border-radius: 999px;
+      background: var(--lf-input);
+      color: var(--lf-muted);
+      font-size: 14px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
-    .fb-act:hover, .fb-act:active { background: var(--lf-hover); }
-    .fb-act.on { color: var(--lf-primary); }
-    @media (max-width: 380px) { .fb-act { font-size: 12px; gap: 4px; } }
+    .fb-comment-cta:hover .fb-comment-cta__pill,
+    .fb-comment-cta:active .fb-comment-cta__pill { background: var(--lf-hover); }
 
     .fb-chat-cta {
       display: flex; align-items: center; justify-content: center; gap: 8px;
@@ -535,6 +604,65 @@ export class PostCardComponent implements OnInit, OnChanges, AfterViewChecked {
     return (kinds.length ? kinds : [DEFAULT_REACTION]).slice(0, 3);
   });
   readonly authorAvatar = computed(() => this.data.avatarFor(this.post?.anonymous && !this.isMine() ? null : this.author));
+
+  /** A verified account carries the badge beside its name, the way X draws it. */
+  readonly authorVerified = computed(() => (this.post?.anonymous ? false : this.author?.verified === true));
+
+  /** The reader's own face, for the "Write a comment…" box. */
+  readonly myAvatar = computed(() => this.auth.userAvatar());
+  readonly myName = computed(() => this.auth.user()?.displayName ?? 'You');
+
+  /**
+   * The chip's colour follows the post's own tone, including the tones the
+   * PostType table does not carry (`found` is an outcome, not a kind).
+   */
+  readonly kindTone = computed(() => {
+    const p = this.post;
+    if (!p) return 'neutral';
+    if (p.status === 'found') return 'success';
+    return POST_TYPE_META[p.type]?.tone ?? 'neutral';
+  });
+
+  /** The chip's word: the kind, or the outcome when the case is closed. */
+  kindLabel(): string {
+    if (!this.post) return '';
+    if (this.post.status === 'found') return 'Found - home safe';
+    return POST_TYPE_META[this.post.type]?.label ?? 'Post';
+  }
+
+  /**
+   * "Orlando West, Soweto, Gauteng · 3d" - where, then when.
+   *
+   * The province is never dropped, even when a town is known: "Soweto" alone
+   * is not an answer to "how far is this from me?", and the line ellipsizes
+   * rather than losing the part that matters.
+   */
+  /**
+   * The place on its own, so a long one can be clipped without eating the time.
+   *
+   * Town first, province only when no town is known. The province used to be
+   * appended ("Umlazi, Durban, KwaZulu-Natal"), which spelled out something the
+   * facts block and the case title already say and - on a card with a Follow
+   * button - left so little width that the place name itself was cut. "Umlazi,
+   * Durban · 6d" is the whole address a reader needs above the fold.
+   */
+  whereLine(): string {
+    const p = this.post;
+    if (!p) return '';
+    return (p.town ?? '').trim() || provinceName(p.province);
+  }
+
+  /** When, and whether it was edited - never clipped; it is the short half. */
+  whenLine(): string {
+    const p = this.post;
+    if (!p) return '';
+    return `${timeAgo(p.createdAt)}${p.editedAt ? ` · edited ${timeAgo(p.editedAt)}` : ''}`;
+  }
+
+  /** The whole line as one string, for anyone who needs it as text. */
+  whereWhen(): string {
+    return [this.whereLine(), this.whenLine()].filter(Boolean).join(' · ');
+  }
   readonly authorStatus = computed(() =>
     this.post?.anonymous && !this.isMine() ? null : this.data.statusOf(this.author));
   readonly statusWord = computed(() => {
@@ -552,10 +680,6 @@ export class PostCardComponent implements OnInit, OnChanges, AfterViewChecked {
    * changes nothing. Ask the element instead.
    */
   readonly textOverflows = signal(false);
-
-  /** LinkedIn's second header line: the poster's own line about themselves. */
-  readonly authorHeadline = computed(() =>
-    this.post?.anonymous && !this.isMine() ? '' : (this.author?.bio ?? '').trim());
 
   /** "You reposted this" / "Thabo Nkosi reposted this" - LinkedIn's reshare line. */
   reposterLine(): string {
@@ -595,7 +719,7 @@ export class PostCardComponent implements OnInit, OnChanges, AfterViewChecked {
    * only when the post claims to have any. A card with no comments does no work.
    */
   private loadComment(): void {
-    if (this.post?.commentCount > 0) void this.data.loadCommentsFor(this.post.id);
+    if (this.post?.commentCount > 0) this.data.primeComments([this.post.id]);
   }
 
   /**

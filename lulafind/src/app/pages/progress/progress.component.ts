@@ -126,7 +126,7 @@ import { timeAgo } from '../../core/utils/format';
           <div class="badges">
             @for (b of allBadges(); track b.spec.id) {
               <div class="badge" [class.on]="b.earned" [attr.data-tone]="b.spec.tone">
-                <span class="badge__disc"><lf-icon [name]="b.spec.icon" [size]="20" [weight]="2.2" /></span>
+                <span class="badge__disc"><lf-icon [name]="b.spec.icon" [size]="20" [weight]="'regular'" /></span>
                 <div class="badge__text">
                   <strong>{{ b.spec.name }}</strong>
                   <span>{{ b.spec.how }}</span>

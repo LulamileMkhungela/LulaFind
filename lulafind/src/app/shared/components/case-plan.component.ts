@@ -24,7 +24,7 @@ import { CASE_STEPS, CaseStepId, CaseStepSpec, Post } from '../../core/models/ty
     @if (post().plan || editable) {
       <section class="plan" aria-label="First hours checklist">
         <button class="plan__head" type="button" (click)="open.set(!open())">
-          <lf-icon name="check" [size]="16" [weight]="2.6" />
+          <lf-icon name="check" [size]="16" [weight]="'bold'" />
           <span class="plan__title">First hours</span>
           <span class="plan__count">{{ done() }} of {{ steps.length }}</span>
           <lf-icon [name]="open() ? 'chevronUp' : 'chevronDown'" [size]="16" />
@@ -35,7 +35,7 @@ import { CASE_STEPS, CaseStepId, CaseStepSpec, Post } from '../../core/models/ty
             <button class="plan__row" type="button" [class.done]="isDone(step.id)"
                     [class.auto]="isDerived(step.id)" (click)="toggle(step)"
                     [disabled]="!editable || isDerived(step.id)">
-              <span class="plan__box">@if (isDone(step.id)) { <lf-icon name="check" [size]="13" [weight]="3" /> }</span>
+              <span class="plan__box">@if (isDone(step.id)) { <lf-icon name="check" [size]="13" [weight]="'bold'" /> }</span>
               <span class="plan__text">
                 <strong>{{ step.label }}</strong>
                 <small>{{ isDerived(step.id) ? 'Already on your post' : step.hint }}</small>

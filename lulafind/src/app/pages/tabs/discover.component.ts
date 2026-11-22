@@ -59,7 +59,7 @@ type Tab = 'following' | 'followers' | 'requests' | 'statuses';
             @if (s.key === 'requests' && data.followRequests().length) {
               <em class="lf-badge">{{ data.followRequests().length }}</em>
             }
-            <lf-icon class="sect__chev" name="chevronDown" [size]="20" [weight]="2.2" />
+            <lf-icon class="sect__chev" name="chevronDown" [size]="20" [weight]="'regular'" />
           </button>
 
           @if (isOpen(s.key)) {
@@ -73,7 +73,7 @@ type Tab = 'following' | 'followers' | 'requests' | 'statuses';
                       <button class="choice" type="button" [attr.data-key]="c.key"
                               [class.on]="myStatus() === c.key" [disabled]="saving()"
                               (click)="setStatus(c.key)">
-                        <lf-icon [name]="c.icon" [size]="20" [weight]="2.2" />
+                        <lf-icon [name]="c.icon" [size]="20" [weight]="'regular'" />
                         <span>{{ c.label }}</span>
                       </button>
                     }
@@ -100,7 +100,7 @@ type Tab = 'following' | 'followers' | 'requests' | 'statuses';
                           <div class="txt">
                             <strong>{{ r.u?.displayName ?? 'Member' }}</strong>
                             <span class="pillstatus" [attr.data-key]="r.status">
-                              <lf-icon [name]="iconFor(r.status)" [size]="13" [weight]="2.4" />
+                              <lf-icon [name]="iconFor(r.status)" [size]="13" [weight]="'bold'" />
                               {{ labelFor(r.status) }}
                             </span>
                             <span class="lf-tiny lf-muted">

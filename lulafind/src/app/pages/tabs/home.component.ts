@@ -6,6 +6,7 @@ import { IonRefresherContent } from '@ionic/angular/ion-refresher-content';
 import { IonSkeletonText } from '@ionic/angular/ion-skeleton-text';
 import { ToastController } from '@ionic/angular/toast-controller';
 import { IconComponent } from '../../shared/components/icon.component';
+import { AvatarComponent } from '../../shared/components/avatar.component';
 import { TopNavComponent } from '../../shared/components/top-nav.component';
 import { EmptyComponent } from '../../shared/components/empty.component';
 import { ChatState, PostCardComponent } from '../../shared/components/post-card.component';
@@ -25,7 +26,7 @@ import { timeAgo } from '../../core/utils/format';
   standalone: true,
   imports: [
     IonContent, IonRefresher, IonRefresherContent, IonSkeletonText,
-    TopNavComponent, IconComponent, EmptyComponent, PostCardComponent, PeopleRailComponent,
+    TopNavComponent, IconComponent, AvatarComponent, EmptyComponent, PostCardComponent, PeopleRailComponent,
     RouterLink
   ],
   template: `
@@ -114,6 +115,27 @@ import { timeAgo } from '../../core/utils/format';
         </section>
       }
       @if (data.filter().scope === 'for-you') {
+      <!--
+        The composer strip. The round + in the header writes a post, but a
+        timeline that opens straight onto other people's news with no way to
+        say anything reads as a news reader, not a social app. This is the
+        one-line version: your face, the prompt, and the three things people
+        actually post here.
+      -->
+      @if (auth.signedIn()) {
+        <div class="composer">
+          <a class="composer__ask" routerLink="/new">
+            <lf-avatar [src]="myAvatar()" [name]="myName()" [size]="38" />
+            <span class="composer__pill">{{ composerPrompt() }}</span>
+          </a>
+          <div class="composer__row">
+            <a class="composer__action" routerLink="/create/missing"><lf-icon name="search" [size]="18" />Missing</a>
+            <a class="composer__action" routerLink="/create/sighting"><lf-icon name="pin" [size]="18" />Sighting</a>
+            <a class="composer__action composer__action--danger" routerLink="/create/danger"><lf-icon name="alert" [size]="18" />Danger</a>
+          </div>
+        </div>
+      }
+
       <!-- The feed is intentionally not gated by visible chips or hidden
            local filters. For you and Network are the only scopes; privacy and
            audience rules remain enforced by the active backend. -->
@@ -168,6 +190,23 @@ import { timeAgo } from '../../core/utils/format';
        full-width row under the app bar, hairline underneath, the inactive label
        in muted grey, the active one in ink with a thick underline. No pill,
        no container - the tab *is* the row. */
+    /* The composer strip: your face, the prompt, then the three post kinds. */
+    .composer { margin: 10px var(--lf-gap) 10px; padding: 10px 12px 8px; border-radius: var(--lf-radius);
+      background: var(--lf-card); box-shadow: var(--lf-shadow); }
+    .composer__ask { display: flex; align-items: center; gap: 10px; min-height: 40px; text-decoration: none; color: inherit; }
+    .composer__pill { flex: 1; min-width: 0; height: 38px; display: flex; align-items: center; padding: 0 16px;
+      border-radius: 999px; background: var(--lf-input); color: var(--lf-muted); font-size: 14.5px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .composer__ask:active .composer__pill { background: var(--lf-hover); }
+    .composer__row { display: flex; align-items: center; gap: 3px; margin-top: 8px; padding-top: 8px;
+      border-top: 1px solid var(--lf-line-soft); }
+    .composer__action { flex: 1 1 0; min-width: 0; min-height: 36px; display: inline-flex; align-items: center;
+      justify-content: center; gap: 7px; border-radius: 6px; color: var(--lf-muted); text-decoration: none;
+      font-size: 13.5px; font-weight: 600; white-space: nowrap; }
+    .composer__action lf-icon { color: var(--lf-primary); }
+    .composer__action--danger lf-icon { color: var(--lf-signal); }
+    .composer__action:hover, .composer__action:active { background: var(--lf-hover); }
+
     .feed-scopes { position: sticky; top: 0; z-index: 10; display: flex; margin: 0; padding: 0; border: 0; border-bottom: 1px solid var(--lf-line); border-radius: 0; background: var(--lf-bg); }
     .feed-scopes button { flex: 1; min-height: 54px; margin: 0 2px -1px; padding: 0 12px; border: 0; border-bottom: 3px solid transparent; border-radius: 0; background: transparent; color: var(--lf-muted); font: inherit; font-size: 19px; font-weight: 600; letter-spacing: .1px; cursor: pointer; transition: color .15s ease, border-color .15s ease; }
     .feed-scopes button:hover { color: var(--ion-text-color); background: transparent; }
@@ -253,7 +292,6 @@ import { timeAgo } from '../../core/utils/format';
 
     @media (min-width: 700px) {
       .composer, .skel { max-width: var(--lf-maxw); margin-left: auto; margin-right: auto; border-radius: var(--lf-radius); }
-      .composer { margin-top: 12px; }
     }
   `]
 })
@@ -288,6 +326,17 @@ export class HomeComponent {
     this.catchUpOpen.set(false);
     this.data.markVisited();
   }
+  /** The reader's own face and first name, for the composer strip. */
+  readonly myAvatar = computed(() => this.auth.userAvatar());
+  readonly myName = computed(() => this.auth.user()?.displayName ?? 'You');
+  /** The prompt moves with the hour: morning asks for help, evening asks for an update. */
+  readonly composerPrompt = computed(() => {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Ask your community for help…';
+    if (hour < 18) return 'Share something that might help…';
+    return 'Update your community…';
+  });
+
   protected lookouts = inject(LookoutService);
   protected chat = inject(ChatService);
   private platform = inject(PlatformService);

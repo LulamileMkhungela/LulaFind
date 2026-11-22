@@ -57,7 +57,11 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
           <div>
             <h1 class="name">
               {{ me()!.displayName }}
-              @if (me()!.verified) { <lf-icon name="award" [size]="18" /> }
+              @if (me()!.verified) {
+                <span class="tick" role="img" title="Verified member" aria-label="Verified member">
+                  <lf-icon name="award" [size]="18" [filled]="true" />
+                </span>
+              }
             </h1>
             <div class="lf-meta">&#64;{{ me()!.handle }} · {{ location() }}</div>
             @if (contributorLabel(me()!.contributorCredits)) {
@@ -80,7 +84,7 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
           -->
           <a class="impact" routerLink="/progress" [attr.aria-label]="'Your impact: level ' + level().level.level + ', ' + level().level.name">
             <span class="impact__ring">
-              <lf-icon name="sparkle" [size]="18" [weight]="2.2" />
+              <lf-icon name="sparkle" [size]="18" [weight]="'regular'" />
             </span>
             <div class="impact__body">
               <div class="impact__top">
@@ -274,8 +278,9 @@ import { KeyboardDirective } from '../../shared/keyboard.directive';
     .cam { position: absolute; right: 2px; bottom: 6px; width: 34px; height: 34px; border-radius: 50%;
       display: flex; align-items: center; justify-content: center; background: var(--lf-card-2); color: var(--ion-text-color);
       box-shadow: 0 0 0 2px var(--lf-card); }
+    .tick { display: inline-flex; vertical-align: -3px; margin-left: 5px; color: var(--lf-primary); }
     .name { display: flex; align-items: center; gap: 6px; margin: 4px 0 2px; font-size: 24px; font-weight: 700; letter-spacing: -.3px; }
-    .name lf-icon { color: var(--lf-primary); }
+    .name .tick lf-icon { color: var(--lf-primary); }
     .bio { margin: 0; font-size: 15px; line-height: 1.34; }
     .actions { display: flex; gap: 8px; }
     .actions .lf-btn { flex: 1; white-space: nowrap; }

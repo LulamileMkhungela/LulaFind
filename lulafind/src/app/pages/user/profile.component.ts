@@ -51,7 +51,11 @@ import { cover } from '../../core/data/seed';
                [status]="checkIn()?.status ?? null" />
             <h1 class="lf-h2">
               {{ u()!.displayName }}
-              @if (u()!.verified) { <lf-icon name="award" [size]="16" /> }
+              @if (u()!.verified) {
+                <span class="tick" role="img" title="Verified member" aria-label="Verified member">
+                  <lf-icon name="award" [size]="16" [filled]="true" />
+                </span>
+              }
               @if (u()!.isAdmin) { <span class="lf-chip lf-chip--success lf-tiny">admin</span> }
               @if (u()!.suspended) { <span class="lf-chip lf-chip--danger lf-tiny">suspended</span> }
             </h1>
@@ -307,6 +311,8 @@ import { cover } from '../../core/data/seed';
     .quickbtn.help { border-color: var(--lf-signal); color: var(--lf-signal-text); }
     .quickbtn.help.on { background: var(--lf-signal); color: #fff; border-color: var(--lf-signal); }
     .quickbtn:disabled { opacity: .55; cursor: wait; }
+    /* The verified badge beside the name: the same mark the feed card draws. */
+    .tick { display: inline-flex; vertical-align: -2px; margin-left: 4px; color: var(--lf-primary); }
     /* The status tick: a small filled disc, the way a verified mark reads. */
     .statustick { display: inline-flex; align-items: center; justify-content: center;
       width: 18px; height: 18px; border-radius: 50%; color: #fff; vertical-align: -2px; }

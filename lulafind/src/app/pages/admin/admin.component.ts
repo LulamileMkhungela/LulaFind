@@ -97,9 +97,24 @@ import { timeAgo } from '../../core/utils/format';
                   <lf-avatar [src]="data.avatarFor(u)" [name]="u.displayName" [size]="42" />
                   <div class="lf-grow">
                     <strong>{{ u.displayName }}</strong>
+                    @if (u.verified) {
+                      <span class="tick" role="img" title="Verified member" aria-label="Verified member">
+                        <lf-icon name="award" [size]="13" [filled]="true" />
+                      </span>
+                    }
                     <div class="lf-meta">@@{{ u.handle }} · {{ u.email }}</div>
                     @if (u.isAdmin) { <span class="lf-chip lf-chip--success lf-tiny">admin</span> }
                     @if (u.suspended) { <span class="lf-chip lf-chip--danger lf-tiny">suspended</span> }
+                    <!--
+                      The badge control sits with the badge, not in the action
+                      row: granting verification is a fact about this account,
+                      and a fourth button there wrapped onto a line of its own.
+                    -->
+                    <button type="button" class="badge-act"
+                            [attr.aria-label]="u.verified ? 'Withdraw the verification badge from ' + u.displayName : 'Verify ' + u.displayName"
+                            (click)="toggleVerified(u)">
+                      {{ u.verified ? 'Withdraw badge' : 'Verify member' }}
+                    </button>
                   </div>
                 </div>
                 <div class="acts">
@@ -175,6 +190,14 @@ import { timeAgo } from '../../core/utils/format';
     .tab.on { background: var(--lf-primary-soft); color: var(--lf-primary-soft-text); border-color: transparent; }
     .tab .lf-badge { margin-left: 6px; }
     .acts { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+    .tick { display: inline-flex; vertical-align: -1px; margin-left: 3px; color: var(--lf-primary); }
+    .badge-act {
+      display: inline-block; margin-top: 6px; padding: 4px 2px; border: 0;
+      background: none; color: var(--lf-link); font: inherit; font-size: 12.5px;
+      font-weight: 700; cursor: pointer; text-decoration: underline;
+      text-underline-offset: 2px; text-decoration-thickness: 1px;
+    }
+    .badge-act:hover { color: var(--lf-primary); }
   `]
 })
 export class AdminComponent implements OnInit {
@@ -326,6 +349,27 @@ export class AdminComponent implements OnInit {
     await this.mod.suspendUser(u.id, note, !u.suspended);
     await this.refreshUsers();
     await this.say(u.suspended ? 'Suspension lifted' : 'Account suspended');
+  }
+
+  /**
+   * Grant or withdraw the badge, with a reason attached to the grant.
+   *
+   * This exists because a badge has to come from somewhere: before this, the
+   * only verified accounts were the ones the demo data shipped with, and a
+   * real member could never earn one.
+   */
+  async toggleVerified(u: UserProfile): Promise<void> {
+    const grant = !u.verified;
+    const note = await this.note(
+      grant ? 'Verify this account?' : 'Withdraw the badge?',
+      grant
+        ? `${u.displayName} gets the badge on every post. Say why, in one line - it is kept with the grant.`
+        : `${u.displayName} loses the badge. Say why, in one line.`
+    );
+    if (!note) return;
+    await this.mod.setVerified(u.id, grant, note);
+    await this.refreshUsers();
+    await this.say(grant ? 'Account verified' : 'Badge withdrawn');
   }
 
   async deleteUser(u: UserProfile): Promise<void> {
